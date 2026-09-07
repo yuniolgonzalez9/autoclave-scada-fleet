@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>AUTOCLAVE SCADA // FLEET COMMAND SYSTEM</title>
+  <title>AUTOCLAVE SCADA // ENTERPRISE SECURITY PORTAL</title>
   
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;800&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
@@ -13,7 +13,7 @@
     :root {
       --bg-dark: #04070d;
       --bg-surface: rgba(11, 17, 31, 0.96);
-      --bg-card: rgba(15, 23, 42, 0.85);
+      --bg-card: rgba(15, 23, 42, 0.88);
       --border-glow: rgba(0, 243, 255, 0.22);
       --border-focus: #00f3ff;
       --cyan: #00f3ff;
@@ -40,17 +40,20 @@
       overflow-x: hidden;
     }
 
+    /* BARRA SUPERIOR */
     .app-bar {
       background: rgba(8, 12, 22, 0.98);
       backdrop-filter: blur(14px);
       border-bottom: 1px solid var(--border-glow);
-      padding: 12px 24px;
+      padding: 12px 20px;
       display: flex;
       justify-content: space-between;
       align-items: center;
       position: sticky;
       top: 0;
       z-index: 100;
+      flex-wrap: wrap;
+      gap: 10px;
     }
 
     .brand-title {
@@ -76,27 +79,31 @@
     .dot.online { background: var(--green); box-shadow: 0 0 10px var(--green); }
     .dot.offline { background: var(--red); box-shadow: 0 0 10px var(--red); }
 
+    /* NAVEGADOR PRINCIPAL */
     .nav-bar {
       display: flex;
       justify-content: center;
-      gap: 10px;
-      padding: 14px 20px;
-      background: rgba(8, 12, 22, 0.6);
+      gap: 8px;
+      padding: 12px 15px;
+      background: rgba(8, 12, 22, 0.65);
       border-bottom: 1px solid rgba(255,255,255,0.04);
-      flex-wrap: wrap;
+      overflow-x: auto;
+      white-space: nowrap;
+      -webkit-overflow-scrolling: touch;
     }
 
     .nav-tab {
       background: var(--bg-card);
       border: 1px solid var(--border-glow);
       color: var(--text-muted);
-      padding: 9px 18px;
+      padding: 10px 18px;
       border-radius: 6px;
       cursor: pointer;
       font-size: 0.78rem;
       font-weight: 700;
       letter-spacing: 1px;
       transition: all 0.25s ease;
+      flex-shrink: 0;
     }
 
     .nav-tab:hover { color: var(--cyan); border-color: var(--cyan); box-shadow: 0 0 12px rgba(0, 243, 255, 0.2); }
@@ -107,10 +114,11 @@
       box-shadow: 0 0 16px rgba(0, 243, 255, 0.3);
     }
 
+    /* CONTENEDOR DE ACTIVITIES */
     .activity-container {
       max-width: 1440px;
       margin: 0 auto;
-      padding: 20px;
+      padding: 16px;
       min-height: calc(100vh - 120px);
     }
 
@@ -118,7 +126,6 @@
       display: none;
       animation: activitySlideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
     }
-
     .activity.active { display: block; }
 
     @keyframes activitySlideIn {
@@ -130,7 +137,7 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 20px;
+      margin-bottom: 18px;
       padding-bottom: 12px;
       border-bottom: 1px solid var(--border-glow);
       flex-wrap: wrap;
@@ -139,7 +146,7 @@
 
     .activity-title {
       font-family: 'Orbitron', sans-serif;
-      font-size: 1.1rem;
+      font-size: 1.05rem;
       color: var(--cyan);
       letter-spacing: 1.5px;
       display: flex;
@@ -157,8 +164,8 @@
 
     .grid-fleet {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-      gap: 20px;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 18px;
     }
 
     .node-item {
@@ -184,15 +191,16 @@
       padding: 12px;
       text-align: center;
     }
-    .gauge-val { font-size: 1.6rem; font-weight: 800; color: var(--cyan); }
+    .gauge-val { font-size: 1.55rem; font-weight: 800; color: var(--cyan); }
     .gauge-val.p { color: var(--purple); }
     .gauge-lbl { font-size: 0.65rem; color: var(--text-muted); margin-top: 4px; text-transform: uppercase; }
 
+    /* BOTONES */
     .btn {
       background: rgba(0, 243, 255, 0.1);
       border: 1px solid var(--cyan);
       color: var(--cyan);
-      padding: 9px 16px;
+      padding: 11px 18px;
       border-radius: 4px;
       cursor: pointer;
       font-size: 0.75rem;
@@ -201,7 +209,9 @@
       transition: all 0.2s;
       display: inline-flex;
       align-items: center;
+      justify-content: center;
       gap: 8px;
+      min-height: 44px;
     }
     .btn:hover { background: var(--cyan); color: #000; box-shadow: 0 0 12px var(--cyan); }
     .btn-back { background: rgba(255, 255, 255, 0.06); border-color: rgba(255, 255, 255, 0.2); color: var(--text-main); }
@@ -215,17 +225,18 @@
       background: rgba(0, 0, 0, 0.5);
       border: 1px solid rgba(255, 255, 255, 0.12);
       color: var(--text-main);
-      padding: 10px 14px;
+      padding: 12px 14px;
       border-radius: 4px;
-      font-size: 0.8rem;
+      font-size: 0.85rem;
       outline: none;
       width: 100%;
-      margin-bottom: 12px;
+      margin-bottom: 14px;
+      min-height: 44px;
     }
     .input-field:focus { border-color: var(--cyan); box-shadow: 0 0 8px rgba(0, 243, 255, 0.25); }
 
-    .table-container { overflow-x: auto; }
-    table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+    .table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.78rem; min-width: 650px; }
     th {
       background: rgba(0, 243, 255, 0.05);
       color: var(--cyan);
@@ -257,35 +268,39 @@
       justify-content: space-between;
       align-items: center;
       background: rgba(0,0,0,0.3);
-      padding: 10px 14px;
+      padding: 12px 14px;
       border-radius: 4px;
       margin-bottom: 10px;
       border: 1px solid rgba(255,255,255,0.05);
+      flex-wrap: wrap;
+      gap: 10px;
     }
-    .dynamic-field-row input[type="checkbox"] {
-      width: 20px;
-      height: 20px;
-      accent-color: var(--cyan);
-      cursor: pointer;
-    }
-    .dynamic-field-row input[type="number"] {
-      width: 130px;
-      text-align: right;
-      margin-bottom: 0;
-    }
+    .dynamic-field-row input[type="checkbox"] { width: 24px; height: 24px; accent-color: var(--cyan); cursor: pointer; }
+    .dynamic-field-row input[type="number"] { width: 130px; text-align: right; margin-bottom: 0; }
 
     .role-badge { padding: 3px 8px; border-radius: 4px; font-size: 0.65rem; font-weight: 800; }
     .role-super { background: rgba(255, 0, 85, 0.2); color: var(--red); border: 1px solid var(--red); }
     .role-tech  { background: rgba(0, 243, 255, 0.2); color: var(--cyan); border: 1px solid var(--cyan); }
     .role-oper  { background: rgba(0, 255, 136, 0.2); color: var(--green); border: 1px solid var(--green); }
+
+    /* RESPONSIVE MÓVIL */
+    @media (max-width: 768px) {
+      .app-bar { padding: 10px 14px; }
+      .brand-title { font-size: 1rem; }
+      .activity-container { padding: 12px; }
+      .grid-fleet { grid-template-columns: 1fr; }
+      .gauge-grid { grid-template-columns: 1fr 1fr; }
+      .dynamic-field-row { flex-direction: column; align-items: flex-start; }
+      .dynamic-field-row input[type="number"] { width: 100%; text-align: left; }
+    }
   </style>
 </head>
 <body>
 
   <!-- BARRA SUPERIOR (APP BAR) -->
-  <header class="app-bar">
-    <div style="display: flex; align-items: center; gap: 15px;">
-      <button id="btnGlobalBack" class="btn btn-back" style="display: none;" onclick="goBackActivity()">← VOLVER</button>
+  <header class="app-bar" id="topAppBar" style="display: none;">
+    <div style="display: flex; align-items: center; gap: 12px;">
+      <button id="btnGlobalBack" class="btn btn-back" style="display: none; padding: 6px 12px; min-height: 36px;" onclick="goBackActivity()">← VOLVER</button>
       <div class="brand-title">AUTOCLAVE SCADA // HUB</div>
       <span class="status-badge">
         <span class="dot" id="mqttDot"></span>
@@ -293,20 +308,20 @@
       </span>
     </div>
     
-    <div style="display: flex; align-items: center; gap: 14px;">
+    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
       <div class="status-badge" style="border-color: var(--border-glow);">
-        USUARIO: <span id="currentUserName" style="color: var(--cyan); font-weight: 800; margin-left: 4px;">ADMIN</span>
-        <span id="currentUserRoleBadge" class="role-badge role-super" style="margin-left: 6px;">SUPERADMIN</span>
+        <span id="currentUserName" style="color: var(--cyan); font-weight: 800;">ADMIN</span>
+        <span id="currentUserRoleBadge" class="role-badge role-super" style="margin-left: 5px;">SUPERADMIN</span>
       </div>
-      <button class="btn btn-warn" style="padding: 4px 8px; font-size: 0.68rem;" onclick="openActivity('act-auth')">ACCESO</button>
+      <button class="btn btn-danger" style="padding: 6px 12px; font-size: 0.7rem; min-height: 36px;" onclick="cerrarSesionManual()">SALIR [CERRAR]</button>
       <div class="status-badge">
-        EN LÍNEA: <span id="fleetCount" style="color: var(--green); font-weight: 800; margin-left: 5px;">0</span>
+        EN LÍNEA: <span id="fleetCount" style="color: var(--green); font-weight: 800; margin-left: 4px;">0</span>
       </div>
     </div>
   </header>
 
   <!-- NAVEGADOR DE ACTIVIDADES -->
-  <nav class="nav-bar">
+  <nav class="nav-bar" id="mainNavBar" style="display: none;">
     <button class="nav-tab active" onclick="openActivity('act-telemetry')">⚡ TELEMETRÍA</button>
     <button class="nav-tab" onclick="openActivity('act-fleet-mgmt')">🏢 GESTIÓN DE EQUIPOS</button>
     <button class="nav-tab" onclick="openActivity('act-fota')">🚀 FOTA HUB (ACTUALIZACIONES)</button>
@@ -317,9 +332,96 @@
   <main class="activity-container">
 
     <!-- ==================================================================== -->
+    <!-- ACTIVITY 0: PANTALLA INICIAL DE INICIO DE SESIÓN (LOGIN FIRST)       -->
+    <!-- ==================================================================== -->
+    <section id="act-login" class="activity active">
+      <div style="max-width: 440px; margin: 40px auto;" class="card">
+        <div style="text-align: center; margin-bottom: 25px;">
+          <div style="font-family: 'Orbitron'; font-size: 1.3rem; color: var(--cyan); letter-spacing: 2px;">AUTOCLAVE SCADA</div>
+          <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 6px;">PORTAL DE ACCESO Y TELEMETRÍA CLÍNICA</div>
+        </div>
+
+        <label style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-bottom: 6px;">SELECCIONAR USUARIO REGISTRADO:</label>
+        <select id="loginUserSelect" class="input-field" onchange="seleccionarUsuarioRegistrado(this.value)">
+          <option value="">-- Seleccionar o escribir usuario --</option>
+        </select>
+
+        <label style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-bottom: 6px;">USUARIO / ID:</label>
+        <input type="text" id="loginUserInput" class="input-field" placeholder="Ingresa tu usuario" required>
+
+        <label style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-bottom: 6px;">PIN / CONTRASEÑA:</label>
+        <input type="password" id="loginPassInput" class="input-field" placeholder="Contraseña o clave temporal" required>
+
+        <button class="btn" style="width: 100%; padding: 14px; margin-top: 6px;" onclick="procesarInicioSesion()">
+          🔐 INICIAR SESIÓN
+        </button>
+
+        <div style="text-align: center; margin-top: 20px;">
+          <button class="btn btn-back" style="width: 100%; padding: 10px; font-size: 0.72rem;" onclick="abrirRecuperacion()">
+            ❓ ¿Olvidaste o perdiste tu acceso? (Recuperar Clave)
+          </button>
+        </div>
+
+        <div id="loginFeedback" style="display: none; padding: 10px; border-radius: 4px; font-size: 0.75rem; text-align: center; margin-top: 15px;"></div>
+      </div>
+    </section>
+
+    <!-- ==================================================================== -->
+    <!-- ACTIVITY RECOVERY: RECUPERACIÓN DE CLAVE CON CÓDIGO TEMPORAL POR CORREO-->
+    <!-- ==================================================================== -->
+    <section id="act-recovery" class="activity">
+      <div style="max-width: 440px; margin: 40px auto;" class="card">
+        <div style="font-family: 'Orbitron'; font-size: 1.1rem; color: var(--cyan); text-align: center; margin-bottom: 8px;">
+          RECUPERACIÓN DE ACCESO
+        </div>
+        <p style="font-size: 0.72rem; color: var(--text-muted); text-align: center; margin-bottom: 20px;">
+          Se generará una contraseña temporal de un solo uso que será enviada a: <br>
+          <span style="color: var(--cyan); font-weight: 700;">yuniolgonzalez9@gmail.com</span>
+        </p>
+
+        <label style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-bottom: 6px;">USUARIO A RECUPERAR:</label>
+        <input type="text" id="recovUser" class="input-field" placeholder="Ej: admin">
+
+        <button class="btn" id="btnSendRecovery" style="width: 100%; padding: 14px; margin-top: 10px;" onclick="solicitarCodigoRecuperacion()">
+          📩 GENERAR Y ENVIAR CONTRASEÑA TEMPORAL
+        </button>
+
+        <button class="btn btn-back" style="width: 100%; padding: 10px; margin-top: 12px;" onclick="openActivity('act-login')">
+          ← VOLVER AL LOGIN
+        </button>
+
+        <div id="recovFeedback" style="display: none; padding: 12px; border-radius: 4px; font-size: 0.75rem; text-align: center; margin-top: 15px;"></div>
+      </div>
+    </section>
+
+    <!-- ==================================================================== -->
+    <!-- ACTIVITY FORCE CHANGE PASS: CAMBIO OBLIGATORIO TRAS USAR CLAVE TEMPORAL-->
+    <!-- ==================================================================== -->
+    <section id="act-change-pass" class="activity">
+      <div style="max-width: 440px; margin: 40px auto;" class="card">
+        <div style="font-family: 'Orbitron'; font-size: 1.1rem; color: var(--amber); text-align: center; margin-bottom: 8px;">
+          ⚠️ ACTUALIZAR CONTRASEÑA
+        </div>
+        <p style="font-size: 0.72rem; color: var(--text-muted); text-align: center; margin-bottom: 20px;">
+          Has ingresado con una contraseña temporal de un solo uso. Debes establecer una nueva contraseña permanente para continuar.
+        </p>
+
+        <label style="font-size: 0.72rem; color: var(--text-muted);">NUEVA CONTRASEÑA:</label>
+        <input type="password" id="newPassInput" class="input-field" placeholder="Mínimo 4 caracteres">
+
+        <label style="font-size: 0.72rem; color: var(--text-muted);">CONFIRMAR NUEVA CONTRASEÑA:</label>
+        <input type="password" id="confirmPassInput" class="input-field" placeholder="Repite la contraseña">
+
+        <button class="btn" style="width: 100%; padding: 14px; margin-top: 10px;" onclick="guardarNuevaContrasenaObligatoria()">
+          💾 GUARDAR NUEVA CONTRASEÑA Y ENTRAR
+        </button>
+      </div>
+    </section>
+
+    <!-- ==================================================================== -->
     <!-- ACTIVITY 1: TELEMETRÍA (MONITOR DE FLOTA)                            -->
     <!-- ==================================================================== -->
-    <section id="act-telemetry" class="activity active">
+    <section id="act-telemetry" class="activity">
       <div class="activity-header">
         <div class="activity-title">FLOTA DE AUTOCLAVES REGISTRADOS Y EN LÍNEA</div>
         <div style="font-size: 0.72rem; color: var(--text-muted);">TOPIC: autoclave_med_2026/+/telemetria</div>
@@ -428,7 +530,7 @@
     </section>
 
     <!-- ==================================================================== -->
-    <!-- ACTIVITY 3: FOTA HUB (EQUIPOS REGISTRADOS ONLINE Y OFFLINE)         -->
+    <!-- ACTIVITY 3: FOTA HUB                                                -->
     <!-- ==================================================================== -->
     <section id="act-fota" class="activity">
       <div class="activity-header">
@@ -453,11 +555,11 @@
         <div class="card">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
             <div style="font-family: 'Orbitron'; font-size: 0.85rem; color: var(--cyan);">SELECCIONAR DISPOSITIVOS:</div>
-            <div style="display: flex; gap: 6px;">
+            <div style="display: flex; gap: 6px; flex-wrap: wrap;">
               <button class="btn" style="padding: 3px 6px; font-size: 0.65rem;" onclick="filterFotaList('ALL')">TODOS</button>
               <button class="btn" style="padding: 3px 6px; font-size: 0.65rem;" onclick="filterFotaList('ONLINE')">SOLO ONLINE</button>
               <button class="btn" style="padding: 3px 6px; font-size: 0.65rem;" onclick="filterFotaList('OFFLINE')">SOLO OFFLINE</button>
-              <button class="btn btn-warn" style="padding: 3px 6px; font-size: 0.65rem;" onclick="toggleSelectAllFota()">INVERTIR SELECCIÓN</button>
+              <button class="btn btn-warn" style="padding: 3px 6px; font-size: 0.65rem;" onclick="toggleSelectAllFota()">INVERTIR</button>
             </div>
           </div>
 
@@ -471,7 +573,7 @@
     </section>
 
     <!-- ==================================================================== -->
-    <!-- ACTIVITY 4: GESTIÓN DE FLOTA (AGREGAR / ELIMINAR / EDITAR)          -->
+    <!-- ACTIVITY 4: GESTIÓN DE FLOTA (AGREGAR MANUALMENTE)                  -->
     <!-- ==================================================================== -->
     <section id="act-fleet-mgmt" class="activity">
       <div class="activity-header">
@@ -479,7 +581,6 @@
       </div>
 
       <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 20px;">
-        <!-- FORMULARIO MANUAL PARA AGREGAR EQUIPO -->
         <div class="card">
           <div style="font-family: 'Orbitron'; font-size: 0.85rem; color: var(--cyan); margin-bottom: 15px;">
             + REGISTRAR EQUIPO MANUALMENTE
@@ -501,7 +602,6 @@
           </form>
         </div>
 
-        <!-- TABLA COMPLETA DE EQUIPOS -->
         <div class="card">
           <div class="table-container">
             <table>
@@ -591,30 +691,54 @@
       </div>
     </section>
 
-    <!-- ==================================================================== -->
-    <!-- ACTIVITY 7: AUTENTICACIÓN / LOGIN                                   -->
-    <!-- ==================================================================== -->
-    <section id="act-auth" class="activity">
-      <div style="max-width: 420px; margin: 60px auto;" class="card">
-        <div style="font-family: 'Orbitron'; font-size: 1.1rem; color: var(--cyan); text-align: center; margin-bottom: 8px;">CONTROL DE ACCESO</div>
-        <div style="font-size: 0.72rem; color: var(--text-muted); text-align: center; margin-bottom: 25px;">INGRESA TUS CREDENCIALES</div>
-        <input type="text" id="loginUser" class="input-field" placeholder="Usuario / ID">
-        <input type="password" id="loginPass" class="input-field" placeholder="PIN / Contraseña">
-        <button class="btn" style="width: 100%; padding: 14px; margin-top: 10px;" onclick="procesarLogin()">INGRESAR</button>
-        <button class="btn btn-back" style="width: 100%; padding: 10px; margin-top: 8px;" onclick="goBackActivity()">CANCELAR</button>
-        <div id="loginError" style="color: var(--red); font-size: 0.75rem; margin-top: 12px; text-align: center; display: none;">Credenciales inválidas.</div>
-      </div>
-    </section>
-
   </main>
 
   <script>
     // =========================================================================
-    // 1. NAVEGACIÓN SPA ROBUSTA (ACTIVITIES)
+    // 1. GESTIÓN DE SESIÓN & CONTROL DE INACTIVIDAD (5 MINUTOS)
     // =========================================================================
-    let activityStack = ['act-telemetry'];
+    let activityStack = ['act-login'];
     let currentInspectedMAC = null;
+    let usuarioActual = null; // null si no ha iniciado sesión
+    let temporizadorInactividad = null;
+    const TIEMPO_LIMITE_INACTIVIDAD = 5 * 60 * 1000; // 5 minutos en milisegundos
 
+    function reiniciarTemporizadorInactividad() {
+      if (temporizadorInactividad) clearTimeout(temporizadorInactividad);
+      if (usuarioActual) {
+        temporizadorInactividad = setTimeout(() => {
+          cerrarSesionPorInactividad();
+        }, TIEMPO_LIMITE_INACTIVIDAD);
+      }
+    }
+
+    // Monitoreo continuo de actividad del usuario (mouse, teclado, táctil, scroll)
+    ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'].forEach(evt => {
+      window.addEventListener(evt, reiniciarTemporizadorInactividad, { passive: true });
+    });
+
+    function cerrarSesionPorInactividad() {
+      alert("⚠️ Tu sesión se ha cerrado automáticamente por inactividad (5 minutos).");
+      cerrarSesionManual();
+    }
+
+    window.cerrarSesionManual = function() {
+      usuarioActual = null;
+      currentInspectedMAC = null;
+      if (temporizadorInactividad) clearTimeout(temporizadorInactividad);
+      
+      document.getElementById("topAppBar").style.display = "none";
+      document.getElementById("mainNavBar").style.display = "none";
+      document.getElementById("loginPassInput").value = "";
+      
+      activityStack = ['act-login'];
+      renderActivity('act-login');
+      cargarListaUsuariosLogin();
+    };
+
+    // =========================================================================
+    // 2. NAVEGACIÓN SPA NATIVA (ACTIVITIES)
+    // =========================================================================
     window.openActivity = function(actId) {
       if (activityStack[activityStack.length - 1] !== actId) {
         activityStack.push(actId);
@@ -647,15 +771,14 @@
     }
 
     // =========================================================================
-    // 2. BASE DE DATOS LOCAL Y PRECARGA DE EQUIPOS REGISTRADOS
+    // 3. BASE DE DATOS LOCAL (INDEXEDDB)
     // =========================================================================
     let db;
-    let usuarioActual = { user: "admin", rol: "SUPERADMIN" };
-    const fleet = {}; // Todos los dispositivos conocidos (registrados + detectados)
+    const fleet = {};
 
     function initDB() {
       return new Promise((resolve, reject) => {
-        const req = indexedDB.open("AutoclaveFleetSystemDB_v3", 1);
+        const req = indexedDB.open("AutoclaveEnterpriseSecureDB_v4", 1);
         req.onupgradeneeded = (e) => {
           db = e.target.result;
           if (!db.objectStoreNames.contains("asignaciones")) db.createObjectStore("asignaciones", { keyPath: "mac" });
@@ -668,17 +791,26 @@
         };
         req.onsuccess = (e) => {
           db = e.target.result;
-          
-          // Crear usuario admin inicial
+          // Usuario maestro de arranque
           const tx = db.transaction(["usuarios"], "readwrite");
           tx.objectStore("usuarios").get("admin").onsuccess = (ev) => {
-            if (!ev.target.result) tx.objectStore("usuarios").add({ user: "admin", pass: "1234", rol: "SUPERADMIN", fecha: new Date().toISOString() });
+            if (!ev.target.result) {
+              tx.objectStore("usuarios").add({
+                user: "admin",
+                pass: "1234",
+                rol: "SUPERADMIN",
+                email: "yuniolgonzalez9@gmail.com",
+                otp: null,
+                otpExpires: 0,
+                otpUsado: false,
+                fecha: new Date().toISOString()
+              });
+            }
           };
 
-          // Precargar todos los dispositivos guardados de sesiones anteriores
           cargarEquiposGuardados();
+          cargarListaUsuariosLogin();
           cargarUsuariosUI();
-          aplicarPermisosRol();
           resolve(db);
         };
         req.onerror = (e) => reject(e.target.error);
@@ -693,7 +825,7 @@
           if (!fleet[item.mac]) {
             fleet[item.mac] = {
               mac: item.mac,
-              lastSeen: 0, // Inicia offline hasta que el ESP32 envíe telemetría
+              lastSeen: 0,
               datos: {},
               esquema: null,
               meta: {
@@ -710,7 +842,213 @@
     }
 
     // =========================================================================
-    // 3. COMUNICACIÓN MQTT ROBUSTA (TOLERANCIA DE 20 SEGUNDOS)
+    // 4. AUTENTICACIÓN, SELECTOR DE USUARIO Y RECUPERACIÓN OTP
+    // =========================================================================
+    function cargarListaUsuariosLogin() {
+      if (!db) return;
+      const tx = db.transaction(["usuarios"], "readonly");
+      tx.objectStore("usuarios").getAll().onsuccess = (e) => {
+        const users = e.target.result || [];
+        const sel = document.getElementById("loginUserSelect");
+        sel.innerHTML = `<option value="">-- Seleccionar usuario registrado --</option>`;
+        users.forEach(u => {
+          sel.innerHTML += `<option value="${u.user}">${u.user.toUpperCase()} (${u.rol})</option>`;
+        });
+      };
+    }
+
+    window.seleccionarUsuarioRegistrado = function(val) {
+      if (val) {
+        document.getElementById("loginUserInput").value = val;
+        document.getElementById("loginPassInput").focus();
+      }
+    };
+
+    window.procesarInicioSesion = function() {
+      const u = document.getElementById("loginUserInput").value.trim();
+      const p = document.getElementById("loginPassInput").value.trim();
+      const fb = document.getElementById("loginFeedback");
+
+      if (!u || !p) {
+        mostrarFeedback(fb, "Por favor completa usuario y contraseña.", "var(--red)");
+        return;
+      }
+
+      const tx = db.transaction(["usuarios"], "readwrite");
+      const store = tx.objectStore("usuarios");
+      store.get(u).onsuccess = (e) => {
+        const user = e.target.result;
+        if (!user) {
+          mostrarFeedback(fb, "El usuario no existe en la base de datos.", "var(--red)");
+          return;
+        }
+
+        const ahora = Date.now();
+
+        // 1. Acceso mediante Contraseña Temporal (OTP)
+        if (user.otp && p === user.otp) {
+          if (user.otpUsado) {
+            mostrarFeedback(fb, "Esta contraseña temporal ya fue utilizada anteriormente.", "var(--red)");
+            return;
+          }
+          if (ahora > user.otpExpires) {
+            mostrarFeedback(fb, "La contraseña temporal ha expirado (validez: 15 min).", "var(--red)");
+            return;
+          }
+
+          // Marcar OTP como consumido y forzar cambio de contraseña
+          user.otpUsado = true;
+          user.otp = null;
+          store.put(user);
+
+          usuarioActual = user;
+          openActivity('act-change-pass');
+          return;
+        }
+
+        // 2. Acceso mediante Contraseña Regular
+        if (user.pass === p) {
+          iniciarSesionExitosa(user);
+        } else {
+          mostrarFeedback(fb, "Contraseña incorrecta.", "var(--red)");
+        }
+      };
+    };
+
+    function iniciarSesionExitosa(user) {
+      usuarioActual = user;
+      document.getElementById("currentUserName").innerText = user.user.toUpperCase();
+      const b = document.getElementById("currentUserRoleBadge");
+      b.innerText = user.rol;
+      b.className = "role-badge " + (user.rol === "SUPERADMIN" ? "role-super" : user.rol === "TECNICO" ? "role-tech" : "role-oper");
+
+      // Mostrar interfaz del SCADA
+      document.getElementById("topAppBar").style.display = "flex";
+      document.getElementById("mainNavBar").style.display = "flex";
+      aplicarPermisosRol();
+      reiniciarTemporizadorInactividad();
+
+      guardarReporte("CONEXION", "SISTEMA", usuarioActual.rol, `Inicio de sesión de ${user.user}`);
+      
+      activityStack = ['act-telemetry'];
+      renderActivity('act-telemetry');
+    }
+
+    function mostrarFeedback(el, msg, color) {
+      el.style.display = "block";
+      el.style.color = color;
+      el.style.border = `1px solid ${color}`;
+      el.style.background = "rgba(0,0,0,0.4)";
+      el.innerText = msg;
+    }
+
+    // RECUPERACIÓN CON ENVÍO REAL A yuniolgonzalez9@gmail.com
+    window.abrirRecuperacion = function() {
+      document.getElementById("recovUser").value = document.getElementById("loginUserInput").value;
+      document.getElementById("recovFeedback").style.display = "none";
+      openActivity('act-recovery');
+    };
+
+    window.solicitarCodigoRecuperacion = function() {
+      const u = document.getElementById("recovUser").value.trim();
+      const fb = document.getElementById("recovFeedback");
+      const btn = document.getElementById("btnSendRecovery");
+
+      if (!u) {
+        mostrarFeedback(fb, "Ingresa el nombre del usuario a recuperar.", "var(--red)");
+        return;
+      }
+
+      const tx = db.transaction(["usuarios"], "readwrite");
+      const store = tx.objectStore("usuarios");
+      store.get(u).onsuccess = (e) => {
+        const user = e.target.result;
+        if (!user) {
+          mostrarFeedback(fb, "El usuario ingresado no existe.", "var(--red)");
+          return;
+        }
+
+        // Generar OTP aleatorio de 6 caracteres alfanuméricos
+        const otpCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+        user.otp = otpCode;
+        user.otpExpires = Date.now() + (15 * 60 * 1000); // 15 minutos
+        user.otpUsado = false;
+        store.put(user);
+
+        btn.disabled = true;
+        btn.innerText = "⏳ ENVIANDO A yuniolgonzalez9@gmail.com...";
+
+        // Transmisión directa por correo vía FormSubmit API
+        fetch("https://formsubmit.co/ajax/yuniolgonzalez9@gmail.com", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+          },
+          body: JSON.stringify({
+            _subject: "🔐 CLAVE TEMPORAL - AUTOCLAVE SCADA FLEET",
+            Usuario: user.user,
+            Rol: user.rol,
+            Contraseña_Temporal_Un_Solo_Uso: otpCode,
+            Validez: "15 Minutos",
+            Instrucciones: "Ingresa con esta contraseña temporal. El sistema te pedirá cambiarla de inmediato por una nueva."
+          })
+        })
+        .then(res => res.json())
+        .then(() => {
+          btn.disabled = false;
+          btn.innerText = "📩 GENERAR Y ENVIAR CONTRASEÑA TEMPORAL";
+          mostrarFeedback(fb, `¡Código enviado a yuniolgonzalez9@gmail.com! Revisa tu bandeja de entrada o spam. Código temporal generado: [ ${otpCode} ]`, "var(--green)");
+        })
+        .catch(() => {
+          btn.disabled = false;
+          btn.innerText = "📩 GENERAR Y ENVIAR CONTRASEÑA TEMPORAL";
+          // Respaldo visual en pantalla en caso de fallo de red exterior
+          mostrarFeedback(fb, `Código temporal generado con éxito: [ ${otpCode} ]. Úsalo en el login antes de 15 minutos.`, "var(--cyan)");
+        });
+      };
+    };
+
+    window.guardarNuevaContrasenaObligatoria = function() {
+      const p1 = document.getElementById("newPassInput").value.trim();
+      const p2 = document.getElementById("confirmPassInput").value.trim();
+
+      if (p1.length < 4) return alert("La contraseña debe tener al menos 4 caracteres.");
+      if (p1 !== p2) return alert("Las contraseñas no coinciden.");
+
+      const tx = db.transaction(["usuarios"], "readwrite");
+      const store = tx.objectStore("usuarios");
+      store.get(usuarioActual.user).onsuccess = (e) => {
+        const user = e.target.result;
+        user.pass = p1;
+        user.otp = null;
+        user.otpUsado = false;
+        store.put(user);
+        
+        tx.oncomplete = () => {
+          alert("¡Contraseña actualizada permanentemente! Ingresando al SCADA...");
+          iniciarSesionExitosa(user);
+        };
+      };
+    };
+
+    function aplicarPermisosRol() {
+      const esAdmin = usuarioActual && usuarioActual.rol === "SUPERADMIN";
+      const esTech = usuarioActual && (usuarioActual.rol === "TECNICO" || esAdmin);
+
+      document.getElementById("tabNavUsers").style.display = esAdmin ? "block" : "none";
+      document.getElementById("btnVaciarLogs").style.display = esAdmin ? "inline-flex" : "none";
+      document.getElementById("btnExecuteFota").disabled = !esTech;
+      document.getElementById("btnExecuteFota").style.opacity = esTech ? "1" : "0.4";
+      const bg = document.getElementById("btnGuardarDinamico");
+      if (bg) {
+        bg.disabled = !esTech;
+        bg.style.opacity = esTech ? "1" : "0.4";
+      }
+    }
+
+    // =========================================================================
+    // 5. COMUNICACIÓN MQTT ROBUSTA (TOLERANCIA 20 SEGUNDOS)
     // =========================================================================
     let mqttClient;
 
@@ -767,7 +1105,7 @@
 
     function procesarTelemetriaReal(mac, data) {
       inicializarDispositivoSiNoExiste(mac);
-      fleet[mac].lastSeen = Date.now(); // Actualiza marca de tiempo real
+      fleet[mac].lastSeen = Date.now();
       fleet[mac].datos = data;
 
       if (data.alarma_cod && data.alarma_cod > 0) {
@@ -801,13 +1139,12 @@
       renderFleetDashboard();
     }
 
-    // Tolerancia ampliada a 20 segundos para evitar falsas desconexiones
     function isOnline(dev) {
       return dev && dev.lastSeen && (Date.now() - dev.lastSeen) < 20000;
     }
 
     // =========================================================================
-    // 4. RENDERIZADO DEL MONITOR SIN RECONSTRUIR EL DOM
+    // 6. RENDERIZADO DEL MONITOR PRINCIPAL
     // =========================================================================
     function renderFleetDashboard() {
       const container = document.getElementById("fleetLiveContainer");
@@ -881,7 +1218,7 @@
     }
 
     // =========================================================================
-    // 5. DETALLE COMPLETO Y ELIMINACIÓN
+    // 7. DETALLE DEL EQUIPO Y CONTROL DINÁMICO
     // =========================================================================
     window.abrirDetalleEquipo = function(mac) {
       try {
@@ -913,7 +1250,7 @@
     };
 
     window.eliminarEquipoTotal = function(mac) {
-      if (usuarioActual.rol === "OPERADOR") return alert("Permiso denegado: rol OPERADOR.");
+      if (usuarioActual && usuarioActual.rol === "OPERADOR") return alert("Permiso denegado: rol OPERADOR.");
       if (confirm(`¿ELIMINAR PERMANENTEMENTE el autoclave ${mac} de la plataforma?`)) {
         const tx = db.transaction(["asignaciones"], "readwrite");
         tx.objectStore("asignaciones").delete(mac);
@@ -1000,7 +1337,7 @@
           </div>
         `).join("");
       } else {
-        containerMenus.innerHTML = `<div style="color: var(--text-muted); padding: 20px; text-align: center;">Esperando que el equipo envíe su paquete de esquema vía MQTT...</div>`;
+        containerMenus.innerHTML = `<div style="color: var(--text-muted); padding: 20px; text-align: center;">Esperando que el equipo transmita su esquema vía MQTT...</div>`;
       }
     }
 
@@ -1041,7 +1378,7 @@
 
     window.guardarParametrosDinamicos = function() {
       if (!currentInspectedMAC) return;
-      if (usuarioActual.rol === "OPERADOR") return alert("Permiso denegado: rol OPERADOR.");
+      if (usuarioActual && usuarioActual.rol === "OPERADOR") return alert("Permiso denegado: rol OPERADOR.");
 
       const payload = {};
       document.querySelectorAll(".dyn-input-field").forEach(input => {
@@ -1121,7 +1458,7 @@
     };
 
     // =========================================================================
-    // 6. FOTA HUB (EQUIPOS REGISTRADOS ONLINE Y OFFLINE)
+    // 8. FOTA HUB (EQUIPOS ONLINE Y OFFLINE)
     // =========================================================================
     let currentFotaFilter = 'ALL';
 
@@ -1167,7 +1504,7 @@
     };
 
     window.ejecutarFotaSeleccionados = function() {
-      if (usuarioActual.rol === "OPERADOR") return alert("Permiso denegado para FOTA.");
+      if (usuarioActual && usuarioActual.rol === "OPERADOR") return alert("Permiso denegado para FOTA.");
       const seleccionados = Array.from(document.querySelectorAll(".fota-target-check:checked")).map(c => c.value);
       if (!seleccionados.length) return alert("Selecciona al menos un equipo de la lista.");
 
@@ -1192,7 +1529,7 @@
     };
 
     // =========================================================================
-    // 7. GESTIÓN DE FLOTA (AGREGAR MANUALMENTE & TABLA)
+    // 9. GESTIÓN DE FLOTA (AGREGAR / ELIMINAR / EDITAR)
     // =========================================================================
     window.registrarEquipoManual = function() {
       const mac = document.getElementById("addMac").value.trim().toUpperCase().replace(/[:\-]/g, '');
@@ -1247,8 +1584,8 @@
             <td style="color:var(--purple);">${meta.modelo}</td>
             <td>${item.fw || 'v3.2'}</td>
             <td>
-              <button class="btn" style="padding:4px 8px;" onclick="abrirDetalleEquipo('${mac}')">⚙️ VER</button>
-              <button class="btn btn-danger" style="padding:4px 8px; margin-left:6px;" onclick="eliminarEquipoTotal('${mac}')">🗑️</button>
+              <button class="btn" style="padding:4px 8px; min-height:30px;" onclick="abrirDetalleEquipo('${mac}')">⚙️ VER</button>
+              <button class="btn btn-danger" style="padding:4px 8px; min-height:30px; margin-left:6px;" onclick="eliminarEquipoTotal('${mac}')">🗑️</button>
             </td>
           </tr>
         `;
@@ -1256,7 +1593,7 @@
     }
 
     // =========================================================================
-    // 8. REPORTES & AUDITORÍA
+    // 10. REPORTES & AUDITORÍA
     // =========================================================================
     function guardarReporte(tipo, mac, modelo, mensaje, telemetria = {}) {
       if (!db) return;
@@ -1306,14 +1643,14 @@
             <td style="color:var(--purple);">${r.modelo}</td>
             <td>${r.telemetria?.temp !== undefined ? `T:${r.telemetria.temp}°C | P:${r.telemetria.presion}b` : '--'}</td>
             <td>${r.mensaje}</td>
-            <td><button class="btn" style="padding:2px 6px; font-size:0.65rem;" onclick="abrirDetalleEquipo('${r.mac}')">VER</button></td>
+            <td><button class="btn" style="padding:2px 6px; font-size:0.65rem; min-height:26px;" onclick="abrirDetalleEquipo('${r.mac}')">VER</button></td>
           </tr>
         `).join("");
       };
     }
 
     window.confirmarVaciarDB = function() {
-      if (usuarioActual.rol !== "SUPERADMIN") return alert("Permiso denegado.");
+      if (usuarioActual && usuarioActual.rol !== "SUPERADMIN") return alert("Permiso denegado.");
       if (confirm("¿ELIMINAR TODA LA AUDITORÍA?")) {
         const tx = db.transaction(["reportes"], "readwrite");
         tx.objectStore("reportes").clear();
@@ -1340,58 +1677,32 @@
     };
 
     // =========================================================================
-    // 9. USUARIOS Y AUTENTICACIÓN
+    // 11. GESTIÓN DE USUARIOS
     // =========================================================================
-    window.procesarLogin = function() {
-      const u = document.getElementById("loginUser").value.trim();
-      const p = document.getElementById("loginPass").value.trim();
-
-      const tx = db.transaction(["usuarios"], "readonly");
-      tx.objectStore("usuarios").get(u).onsuccess = (e) => {
-        const user = e.target.result;
-        if (user && user.pass === p) {
-          usuarioActual = user;
-          document.getElementById("currentUserName").innerText = user.user.toUpperCase();
-          const b = document.getElementById("currentUserRoleBadge");
-          b.innerText = user.rol;
-          b.className = "role-badge " + (user.rol === "SUPERADMIN" ? "role-super" : user.rol === "TECNICO" ? "role-tech" : "role-oper");
-          aplicarPermisosRol();
-          goBackActivity();
-        } else {
-          document.getElementById("loginError").style.display = "block";
-        }
-      };
-    };
-
-    function aplicarPermisosRol() {
-      const esAdmin = usuarioActual.rol === "SUPERADMIN";
-      const esTech = usuarioActual.rol === "TECNICO" || esAdmin;
-
-      document.getElementById("tabNavUsers").style.display = esAdmin ? "block" : "none";
-      document.getElementById("btnVaciarLogs").style.display = esAdmin ? "inline-flex" : "none";
-      document.getElementById("btnExecuteFota").disabled = !esTech;
-      document.getElementById("btnExecuteFota").style.opacity = esTech ? "1" : "0.4";
-      const bg = document.getElementById("btnGuardarDinamico");
-      if (bg) {
-        bg.disabled = !esTech;
-        bg.style.opacity = esTech ? "1" : "0.4";
-      }
-    }
-
     window.crearUsuario = function() {
-      if (usuarioActual.rol !== "SUPERADMIN") return alert("Permiso denegado.");
+      if (usuarioActual && usuarioActual.rol !== "SUPERADMIN") return alert("Permiso denegado.");
       const user = document.getElementById("uUser").value.trim();
       const pass = document.getElementById("uPass").value.trim();
       const rol = document.getElementById("uRol").value;
 
       if (!user || pass.length < 4) return alert("PIN mínimo de 4 caracteres.");
       const tx = db.transaction(["usuarios"], "readwrite");
-      tx.objectStore("usuarios").add({ user, pass, rol, fecha: new Date().toISOString() });
+      tx.objectStore("usuarios").add({
+        user,
+        pass,
+        rol,
+        email: "yuniolgonzalez9@gmail.com",
+        otp: null,
+        otpExpires: 0,
+        otpUsado: false,
+        fecha: new Date().toISOString()
+      });
       tx.oncomplete = () => {
         alert("Usuario creado.");
         document.getElementById("uUser").value = "";
         document.getElementById("uPass").value = "";
         cargarUsuariosUI();
+        cargarListaUsuariosLogin();
       };
       tx.onerror = () => alert("El usuario ya existe.");
     };
@@ -1405,7 +1716,7 @@
             <td style="font-weight:700; color:var(--cyan);">${u.user}</td>
             <td><span class="role-badge ${u.rol === 'SUPERADMIN' ? 'role-super' : u.rol === 'TECNICO' ? 'role-tech' : 'role-oper'}">${u.rol}</span></td>
             <td>${new Date(u.fecha).toLocaleDateString()}</td>
-            <td>${u.user !== 'admin' ? `<button class="btn btn-danger" style="padding:2px 6px; font-size:0.65rem;" onclick="eliminarUsuario('${u.user}')">X</button>` : '--'}</td>
+            <td>${u.user !== 'admin' ? `<button class="btn btn-danger" style="padding:2px 6px; font-size:0.65rem; min-height:26px;" onclick="eliminarUsuario('${u.user}')">X</button>` : '--'}</td>
           </tr>
         `).join("");
       };
@@ -1415,19 +1726,24 @@
       if (confirm(`¿Eliminar ${u}?`)) {
         const tx = db.transaction(["usuarios"], "readwrite");
         tx.objectStore("usuarios").delete(u);
-        tx.oncomplete = () => cargarUsuariosUI();
+        tx.oncomplete = () => {
+          cargarUsuariosUI();
+          cargarListaUsuariosLogin();
+        };
       }
     };
 
-    // Refresco seguro de estados online (1.5 segundos)
+    // Refresco periódico de estados de conexión (1.5 segundos)
     setInterval(() => {
       renderFleetDashboard();
       if (activityStack[activityStack.length - 1] === 'act-fota') renderFotaLiveList();
     }, 1500);
 
+    // Arranque inicial en pantalla de Login
     window.addEventListener("load", () => {
       initDB();
       initMQTT();
+      renderActivity('act-login');
     });
   </script>
 </body>
