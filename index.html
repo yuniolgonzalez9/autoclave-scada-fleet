@@ -2,15 +2,16 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   
-  <!-- METAS PARA MODO APP NATIVA (PWA / STANDALONE) -->
+  <!-- MANIFIESTO PWA PARA MODO APP NATIVA -->
+  <link rel="manifest" href="manifest.json">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#04070d">
   
-  <title>AUTOCLAVE SCADA // NATIVE APP EXPERIENCE</title>
+  <title>AUTOCLAVE SCADA // FLEET COMMAND</title>
   
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;800&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
@@ -32,8 +33,15 @@
       --text-muted: #64748b;
     }
 
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'JetBrains Mono', monospace; }
+    * { 
+      box-sizing: border-box; 
+      margin: 0; 
+      padding: 0; 
+      font-family: 'JetBrains Mono', monospace; 
+      -webkit-tap-highlight-color: transparent;
+    }
     
+    /* BLOQUEO DE GESTOS LATERALES DEL NAVEGADOR (EVITA CIERRES ACCIDENTALES) */
     html, body {
       background-color: var(--bg-dark);
       background-image: 
@@ -44,12 +52,15 @@
       background-size: 100% 100%, 100% 100%, 30px 30px, 30px 30px;
       color: var(--text-main);
       min-height: 100vh;
-      overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
-      user-select: none; /* Sensación de app nativa */
+      width: 100vw;
+      overflow-x: hidden;
+      overscroll-behavior: none; /* BLOQUEA EL PULL-TO-REFRESH Y EL GESTO DE ATRÁS */
+      overscroll-behavior-x: none;
+      overscroll-behavior-y: none;
+      touch-action: pan-y; /* SOLO PERMITE DESPLAZAMIENTO VERTICAL */
+      user-select: none;
     }
 
-    /* BARRA SUPERIOR */
     .app-bar {
       background: #080d1a;
       border-bottom: 1px solid var(--border-glow);
@@ -88,7 +99,6 @@
     .dot.online { background: var(--green); box-shadow: 0 0 8px var(--green); }
     .dot.offline { background: var(--red); box-shadow: 0 0 8px var(--red); }
 
-    /* NAVEGADOR HORIZONTAL DESLIZABLE */
     .nav-bar {
       display: flex;
       gap: 8px;
@@ -180,7 +190,6 @@
       border-radius: 6px;
       padding: 16px;
       cursor: pointer;
-      transition: border-color 0.15s ease;
       width: 100%;
     }
     .node-item:hover { border-color: var(--cyan); }
@@ -264,20 +273,20 @@
       gap: 8px;
     }
 
-    /* TOAST DE RESTRICCIÓN DE SALIDA */
+    /* AVISO FLOTANTE DE PROTECCIÓN */
     .toast-overlay {
       position: fixed;
       bottom: 24px;
       left: 50%;
       transform: translateX(-50%);
       background: rgba(15, 23, 42, 0.95);
-      border: 1px solid var(--amber);
-      color: var(--amber);
+      border: 1px solid var(--cyan);
+      color: var(--cyan);
       padding: 12px 24px;
       border-radius: 30px;
       font-size: 0.8rem;
       font-weight: 700;
-      box-shadow: 0 0 25px rgba(255, 170, 0, 0.35);
+      box-shadow: 0 0 25px rgba(0, 243, 255, 0.35);
       z-index: 9999;
       display: none;
       text-align: center;
@@ -300,8 +309,8 @@
 </head>
 <body>
 
-  <!-- TOAST DE SALIDA -->
-  <div id="toastApp" class="toast-overlay">⚠️ Presiona "Atrás" una vez más para salir del sistema</div>
+  <!-- AVISO TOAST -->
+  <div id="toastApp" class="toast-overlay">⛔ Salida protegida. Usa el botón SALIR para desconectar.</div>
 
   <!-- BARRA SUPERIOR -->
   <header class="app-bar" id="topAppBar" style="display: none;">
@@ -315,7 +324,7 @@
     </div>
     
     <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-      <button id="btnInstallPwa" class="btn" style="min-height: 36px; padding: 6px 10px; font-size: 0.68rem; display: none;" onclick="instalarAppNativa()">📲 INSTALAR APP</button>
+      <button class="btn" style="min-height: 36px; padding: 6px 10px; font-size: 0.68rem;" onclick="alternarPantallaCompleta()">⛶ PANTALLA COMPLETA</button>
       <div class="status-badge" style="border-color: var(--border-glow);">
         <span id="currentUserName" style="color: var(--cyan); font-weight: 800;">ADMIN</span>
         <span id="currentUserRoleBadge" class="role-badge role-super" style="margin-left: 5px;">SUPERADMIN</span>
@@ -337,7 +346,7 @@
   <main class="activity-container">
 
     <!-- ==================================================================== -->
-    <!-- ACTIVITY 0: LOGIN INICIAL                                            -->
+    <!-- ACTIVITY 0: LOGIN                                                    -->
     <!-- ==================================================================== -->
     <section id="act-login" class="activity active">
       <div style="max-width: 440px; margin: 30px auto;" class="card">
@@ -358,7 +367,7 @@
         <input type="password" id="loginPassInput" class="input-field" placeholder="Contraseña" required>
 
         <button class="btn" style="width: 100%; margin-top: 6px;" onclick="procesarInicioSesion()">
-          🔐 INICIAR SESIÓN
+          🔐 INICIAR SESIÓN Y EXPANDIR
         </button>
 
         <div style="text-align: center; margin-top: 18px;">
@@ -408,7 +417,7 @@
           MODIFICAR CONTRASEÑA
         </div>
         <p style="font-size: 0.72rem; color: var(--text-muted); text-align: center; margin-bottom: 18px;">
-          Ingresa y confirma tu nueva clave. La contraseña anterior será destruida de forma inmediata.
+          Ingresa y confirma tu nueva clave. La contraseña anterior será destruida de inmediato.
         </p>
 
         <label style="font-size: 0.72rem; color: var(--text-muted);">NUEVA CONTRASEÑA:</label>
@@ -428,7 +437,7 @@
     </section>
 
     <!-- ==================================================================== -->
-    <!-- ACTIVITY 1: TELEMETRÍA EN VIVO                                      -->
+    <!-- ACTIVITY 1: TELEMETRÍA                                              -->
     <!-- ==================================================================== -->
     <section id="act-telemetry" class="activity">
       <div class="activity-header">
@@ -666,31 +675,38 @@
 
   <script>
     // =========================================================================
-    // 1. GESTIÓN NATIVA DE NAVEGACIÓN ANDROID ("ATRÁS" & DOBLE TOQUE PARA SALIR)
+    // 1. TRAMPA DE HISTORIAL INFINITA (EL BOTÓN ATRÁS NUNCA CIERRA LA APP)
     // =========================================================================
     let activityStack = ['act-login'];
     let currentInspectedMAC = null;
     let usuarioActual = null;
-    let temporizadorInactividad = null;
-    const TIEMPO_LIMITE_INACTIVIDAD = 30 * 60 * 1000; // 30 minutos de inactividad
-    let ultimoToqueAtras = 0;
 
-    // Integración directa con History API de los teléfonos
+    // Asegurar que siempre haya estados hacia adelante para que "Atrás" nunca salga
+    function fijarHistorialInfinito() {
+      history.pushState({ app: 'scada' }, '', window.location.href);
+    }
+    fijarHistorialInfinito();
+
     window.openActivity = function(actId) {
       if (activityStack[activityStack.length - 1] !== actId) {
         activityStack.push(actId);
-        history.pushState({ activity: actId }, '', '#' + actId);
+        fijarHistorialInfinito();
       }
       renderActivity(actId);
     };
 
     window.goBackActivity = function() {
       if (activityStack.length > 1) {
-        history.back(); // Emula retroceso nativo
+        activityStack.pop();
+        const prevAct = activityStack[activityStack.length - 1];
+        renderActivity(prevAct);
       }
     };
 
+    // Interceptar de raíz cualquier retroceso del teléfono
     window.addEventListener('popstate', (event) => {
+      fijarHistorialInfinito(); // Reinyecta el estado para atrapar al navegador
+
       if (!usuarioActual) {
         renderActivity('act-login');
         return;
@@ -701,23 +717,20 @@
         const prevAct = activityStack[activityStack.length - 1];
         renderActivity(prevAct);
       } else {
-        // Estamos en la raíz: restringir salida con doble toque
-        const ahora = Date.now();
-        if (ahora - ultimoToqueAtras < 2500) {
-          // Segundo toque en menos de 2.5s: permitir salida al navegador
-        } else {
-          ultimoToqueAtras = ahora;
-          history.pushState({ activity: 'act-telemetry' }, '', '#act-telemetry');
-          mostrarToastAtras();
-        }
+        // Está en la raíz: BLOQUEO TOTAL DE SALIDA
+        const toast = document.getElementById("toastApp");
+        toast.style.display = "block";
+        setTimeout(() => { toast.style.display = "none"; }, 2500);
       }
     });
 
-    function mostrarToastAtras() {
-      const toast = document.getElementById("toastApp");
-      toast.style.display = "block";
-      setTimeout(() => { toast.style.display = "none"; }, 2500);
-    }
+    // Preguntar confirmación si el usuario intenta cerrar la pestaña en PC
+    window.addEventListener('beforeunload', (e) => {
+      if (usuarioActual) {
+        e.preventDefault();
+        e.returnValue = '¿Deseas salir del SCADA?';
+      }
+    });
 
     function renderActivity(actId) {
       document.querySelectorAll('.activity').forEach(a => a.classList.remove('active'));
@@ -736,47 +749,45 @@
     }
 
     // =========================================================================
-    // 2. SESIÓN PERSISTENTE AL RECARGAR (NO SE CIERRA POR ACTUALIZAR)
+    // 2. MODO PANTALLA COMPLETA TOTAL (ELIMINA BARRAS DE NAVEGADOR)
     // =========================================================================
-    function reiniciarTemporizadorInactividad() {
-      if (temporizadorInactividad) clearTimeout(temporizadorInactividad);
-      if (usuarioActual) {
-        temporizadorInactividad = setTimeout(() => {
-          alert("⚠️ Sesión cerrada automáticamente por 30 minutos de inactividad.");
-          cerrarSesionManual();
-        }, TIEMPO_LIMITE_INACTIVIDAD);
+    window.alternarPantallaCompleta = function() {
+      const el = document.documentElement;
+      if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+        if (el.requestFullscreen) el.requestFullscreen();
+        else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+      } else {
+        if (document.exitFullscreen) document.exitFullscreen();
+        else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
       }
-    }
+    };
 
-    ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'].forEach(evt => {
-      window.addEventListener(evt, reiniciarTemporizadorInactividad, { passive: true });
-    });
-
+    // =========================================================================
+    // 3. PERSISTENCIA DE SESIÓN AL RECARGAR PÁGINA
+    // =========================================================================
     window.cerrarSesionManual = function() {
       usuarioActual = null;
       currentInspectedMAC = null;
       localStorage.removeItem("scada_logged_user");
-      if (temporizadorInactividad) clearTimeout(temporizadorInactividad);
       
       document.getElementById("topAppBar").style.display = "none";
       document.getElementById("mainNavBar").style.display = "none";
       document.getElementById("loginPassInput").value = "";
       
       activityStack = ['act-login'];
-      history.replaceState({ activity: 'act-login' }, '', '#login');
       renderActivity('act-login');
       cargarListaUsuariosLogin();
     };
 
     // =========================================================================
-    // 3. BASE DE DATOS LOCAL CON SINCRONIZACIÓN DOBLE
+    // 4. BASE DE DATOS LOCAL
     // =========================================================================
     let db;
     const fleet = {};
 
     function initDB() {
       return new Promise((resolve, reject) => {
-        const req = indexedDB.open("AutoclaveFastFleetDB_v6", 1);
+        const req = indexedDB.open("AutoclaveKioskDB_v7", 1);
         req.onupgradeneeded = (e) => {
           db = e.target.result;
           if (!db.objectStoreNames.contains("asignaciones")) db.createObjectStore("asignaciones", { keyPath: "mac" });
@@ -812,8 +823,6 @@
           cargarEquiposGuardados();
           cargarListaUsuariosLogin();
           cargarUsuariosUI();
-          
-          // COMPROBAR SI YA HABÍA SESIÓN INICIADA AL RECARGAR PÁGINA
           verificarSesionPersistente();
           resolve(db);
         };
@@ -826,7 +835,6 @@
       if (sesionGuardada) {
         try {
           const userObj = JSON.parse(sesionGuardada);
-          // Validar con la clave actual en almacenamiento
           const passActual = localStorage.getItem("scada_pass_" + userObj.user) || userObj.pass;
           userObj.pass = passActual;
           iniciarSesionExitosa(userObj, true);
@@ -860,7 +868,7 @@
     }
 
     // =========================================================================
-    // 4. AUTENTICACIÓN, CAMBIO DE CLAVE Y RECUPERACIÓN REAL
+    // 5. AUTENTICACIÓN
     // =========================================================================
     function cargarListaUsuariosLogin() {
       if (!db) return;
@@ -887,6 +895,13 @@
       const p = document.getElementById("loginPassInput").value.trim();
       const fb = document.getElementById("loginFeedback");
 
+      // Expandir a pantalla completa al entrar
+      try {
+        if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+          document.documentElement.requestFullscreen().catch(()=>{});
+        }
+      } catch(e) {}
+
       if (!u || !p) {
         mostrarFeedback(fb, "Por favor completa usuario y contraseña.", "var(--red)");
         return;
@@ -903,16 +918,9 @@
 
         const ahora = Date.now();
 
-        // 1. Verificación OTP
         if (user.otp && p === user.otp) {
-          if (user.otpUsado) {
-            mostrarFeedback(fb, "Este código temporal ya fue usado.", "var(--red)");
-            return;
-          }
-          if (ahora > user.otpExpires) {
-            mostrarFeedback(fb, "El código temporal ha expirado.", "var(--red)");
-            return;
-          }
+          if (user.otpUsado) return mostrarFeedback(fb, "Código temporal ya utilizado.", "var(--red)");
+          if (ahora > user.otpExpires) return mostrarFeedback(fb, "El código temporal ha expirado.", "var(--red)");
 
           user.otpUsado = true;
           user.otp = null;
@@ -923,7 +931,6 @@
           return;
         }
 
-        // 2. Verificación Regular
         const passAlmacenada = localStorage.getItem("scada_pass_" + user.user) || user.pass;
 
         if (passAlmacenada === p) {
@@ -950,14 +957,12 @@
       document.getElementById("topAppBar").style.display = "flex";
       document.getElementById("mainNavBar").style.display = "flex";
       aplicarPermisosRol();
-      reiniciarTemporizadorInactividad();
 
       if (!esRestauracion) {
         guardarReporte("CONEXION", "SISTEMA", usuarioActual.rol, `Inicio de sesión de ${user.user}`);
       }
       
       activityStack = ['act-telemetry'];
-      history.replaceState({ activity: 'act-telemetry' }, '', '#telemetria');
       renderActivity('act-telemetry');
     }
 
@@ -980,13 +985,13 @@
       const fb = document.getElementById("recovFeedback");
       const btn = document.getElementById("btnSendRecovery");
 
-      if (!u) return mostrarFeedback(fb, "Ingresa el usuario a recuperar.", "var(--red)");
+      if (!u) return mostrarFeedback(fb, "Ingresa el usuario.", "var(--red)");
 
       const tx = db.transaction(["usuarios"], "readwrite");
       const store = tx.objectStore("usuarios");
       store.get(u).onsuccess = (e) => {
         const user = e.target.result;
-        if (!user) return mostrarFeedback(fb, "El usuario ingresado no existe.", "var(--red)");
+        if (!user) return mostrarFeedback(fb, "El usuario no existe.", "var(--red)");
 
         const otpCode = Math.random().toString(36).substring(2, 8).toUpperCase();
         user.otp = otpCode;
@@ -1015,7 +1020,7 @@
         .catch(() => {
           btn.disabled = false;
           btn.innerText = "📩 GENERAR Y ENVIAR CÓDIGO";
-          mostrarFeedback(fb, `Código temporal: [ ${otpCode} ]. Úsalo en el login.`, "var(--cyan)");
+          mostrarFeedback(fb, `Código generado: [ ${otpCode} ]. Úsalo en el login.`, "var(--cyan)");
         });
       };
     };
@@ -1024,16 +1029,10 @@
       const p1 = document.getElementById("newPassInput").value.trim();
       const p2 = document.getElementById("confirmPassInput").value.trim();
 
-      if (!usuarioActual || !usuarioActual.user) {
-        alert("Sesión no válida. Inicia sesión de nuevo.");
-        cerrarSesionManual();
-        return;
-      }
-
-      if (p1.length < 4) return alert("La contraseña debe tener al menos 4 caracteres.");
+      if (!usuarioActual || !usuarioActual.user) return alert("Sesión no válida.");
+      if (p1.length < 4) return alert("Mínimo 4 caracteres.");
       if (p1 !== p2) return alert("Las contraseñas no coinciden.");
 
-      // Destrucción inmediata de la clave anterior en ambos almacenes
       localStorage.setItem("scada_pass_" + usuarioActual.user, p1);
 
       const tx = db.transaction(["usuarios"], "readwrite");
@@ -1050,7 +1049,7 @@
           localStorage.setItem("scada_logged_user", JSON.stringify(usuarioActual));
           document.getElementById("newPassInput").value = "";
           document.getElementById("confirmPassInput").value = "";
-          alert("¡Contraseña actualizada permanentemente! La clave anterior fue destruida.");
+          alert("¡Contraseña actualizada permanentemente!");
           iniciarSesionExitosa(user);
         };
       };
@@ -1072,7 +1071,7 @@
     }
 
     // =========================================================================
-    // 5. COMUNICACIÓN MQTT INSTANTÁNEA
+    // 6. MQTT Y TELEMETRÍA
     // =========================================================================
     let mqttClient;
 
@@ -1168,7 +1167,7 @@
     }
 
     // =========================================================================
-    // 6. RENDERIZADO DEL MONITOR
+    // 7. RENDERIZADO DEL MONITOR
     // =========================================================================
     function renderFleetDashboard() {
       const container = document.getElementById("fleetLiveContainer");
@@ -1239,7 +1238,7 @@
     }
 
     // =========================================================================
-    // 7. DETALLE DEL EQUIPO
+    // 8. DETALLE Y CONTROL DEL EQUIPO
     // =========================================================================
     window.abrirDetalleEquipo = function(mac) {
       try {
@@ -1271,22 +1270,21 @@
     };
 
     window.eliminarEquipoTotal = function(mac) {
-      if (usuarioActual && usuarioActual.rol === "OPERADOR") return alert("Permiso denegado: rol OPERADOR.");
-      if (confirm(`¿ELIMINAR PERMANENTEMENTE el autoclave ${mac} de la plataforma?`)) {
+      if (usuarioActual && usuarioActual.rol === "OPERADOR") return alert("Permiso denegado.");
+      if (confirm(`¿ELIMINAR el autoclave ${mac}?`)) {
         const tx = db.transaction(["asignaciones"], "readwrite");
         tx.objectStore("asignaciones").delete(mac);
         tx.oncomplete = () => {
           delete fleet[mac];
           const c = document.getElementById(`card-${mac}`);
           if (c) c.remove();
-          
           actualizarSelectoresGlobales();
           renderFleetDashboard();
           renderFleetMgmtTable();
           if (activityStack[activityStack.length - 1] === 'act-device-detail') {
             goBackActivity();
           }
-          alert("Dispositivo eliminado del sistema.");
+          alert("Dispositivo eliminado.");
         };
       }
     };
@@ -1358,7 +1356,7 @@
           </div>
         `).join("");
       } else {
-        containerMenus.innerHTML = `<div style="color: var(--text-muted); padding: 20px; text-align: center;">Esperando que el equipo transmita su esquema...</div>`;
+        containerMenus.innerHTML = `<div style="color: var(--text-muted); padding: 20px; text-align: center;">Esperando esquema del equipo...</div>`;
       }
     }
 
@@ -1399,7 +1397,7 @@
 
     window.guardarParametrosDinamicos = function() {
       if (!currentInspectedMAC) return;
-      if (usuarioActual && usuarioActual.rol === "OPERADOR") return alert("Permiso denegado: rol OPERADOR.");
+      if (usuarioActual && usuarioActual.rol === "OPERADOR") return alert("Permiso denegado.");
 
       const payload = {};
       document.querySelectorAll(".dyn-input-field").forEach(input => {
@@ -1479,7 +1477,7 @@
     };
 
     // =========================================================================
-    // 8. FOTA HUB
+    // 9. FOTA HUB
     // =========================================================================
     let currentFotaFilter = 'ALL';
 
@@ -1525,9 +1523,9 @@
     };
 
     window.ejecutarFotaSeleccionados = function() {
-      if (usuarioActual && usuarioActual.rol === "OPERADOR") return alert("Permiso denegado para FOTA.");
+      if (usuarioActual && usuarioActual.rol === "OPERADOR") return alert("Permiso denegado.");
       const seleccionados = Array.from(document.querySelectorAll(".fota-target-check:checked")).map(c => c.value);
-      if (!seleccionados.length) return alert("Selecciona al menos un equipo de la lista.");
+      if (!seleccionados.length) return alert("Selecciona al menos un equipo.");
 
       const version = document.getElementById("fotaVersionInput").value;
       const url = document.getElementById("fotaUrlInput").value;
@@ -1550,7 +1548,7 @@
     };
 
     // =========================================================================
-    // 9. GESTIÓN MANUAL DE FLOTA
+    // 10. GESTIÓN FLOTA
     // =========================================================================
     window.registrarEquipoManual = function() {
       const mac = document.getElementById("addMac").value.trim().toUpperCase().replace(/[:\-]/g, '');
@@ -1578,7 +1576,7 @@
         actualizarSelectoresGlobales();
         renderFleetDashboard();
         renderFleetMgmtTable();
-        alert("¡Equipo registrado con éxito en la flota!");
+        alert("¡Equipo registrado con éxito!");
       };
     };
 
@@ -1613,7 +1611,7 @@
     }
 
     // =========================================================================
-    // 10. REPORTES & AUDITORÍA
+    // 11. REPORTES & AUDITORÍA
     // =========================================================================
     function guardarReporte(tipo, mac, modelo, mensaje, telemetria = {}) {
       if (!db) return;
@@ -1697,7 +1695,7 @@
     };
 
     // =========================================================================
-    // 11. GESTIÓN DE USUARIOS
+    // 12. GESTIÓN USUARIOS
     // =========================================================================
     window.crearUsuario = function() {
       if (usuarioActual && usuarioActual.rol !== "SUPERADMIN") return alert("Permiso denegado.");
@@ -1721,7 +1719,7 @@
         fecha: new Date().toISOString()
       });
       tx.oncomplete = () => {
-        alert("Usuario creado exitosamente.");
+        alert("Usuario creado.");
         document.getElementById("uUser").value = "";
         document.getElementById("uPass").value = "";
         cargarUsuariosUI();
@@ -1739,7 +1737,7 @@
             <td style="font-weight:700; color:var(--cyan);">${u.user}</td>
             <td><span class="role-badge ${u.rol === 'SUPERADMIN' ? 'role-super' : u.rol === 'TECNICO' ? 'role-tech' : 'role-oper'}">${u.rol}</span></td>
             <td>${new Date(u.fecha).toLocaleDateString()}</td>
-            <td>${u.user !== 'admin' ? `<button class="btn btn-danger" style="padding:2px 6px; font-size:0.65rem; min-height:26px;" onclick="eliminarUsuario('${u.user}')">X</button>` : '--'}</td>
+            <td>${u.user !== 'admin' ? `<button class="btn btn-danger" style="min-height:28px; padding:2px 8px; font-size:0.65rem;" onclick="eliminarUsuario('${u.user}')">X</button>` : '--'}</td>
           </tr>
         `).join("");
       };
@@ -1758,28 +1756,11 @@
     };
 
     // =========================================================================
-    // 12. PWA INSTALABLE COMO APP
+    // 13. REGISTRO DE SERVICE WORKER (PWA NATIVA)
     // =========================================================================
-    let deferredPrompt = null;
-    window.addEventListener('beforeinstallprompt', (e) => {
-      e.preventDefault();
-      deferredPrompt = e;
-      document.getElementById("btnInstallPwa").style.display = "inline-flex";
-    });
-
-    window.instalarAppNativa = function() {
-      if (deferredPrompt) {
-        deferredPrompt.prompt();
-        deferredPrompt.userChoice.then((choiceResult) => {
-          if (choiceResult.outcome === 'accepted') {
-            document.getElementById("btnInstallPwa").style.display = "none";
-          }
-          deferredPrompt = null;
-        });
-      } else {
-        alert("En tu navegador Chrome/Edge presiona los 3 puntos (⋮) arriba a la derecha y selecciona 'Instalar aplicación' o 'Agregar a la pantalla principal'.");
-      }
-    };
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').catch(()=>{});
+    }
 
     setInterval(() => {
       renderFleetDashboard();
