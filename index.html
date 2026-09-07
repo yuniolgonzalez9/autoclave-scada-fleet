@@ -2,8 +2,8 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>AUTOCLAVE SCADA // ENTERPRISE SECURITY PORTAL</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+  <title>AUTOCLAVE SCADA // ULTRA-RESPONSIVE SYSTEM</title>
   
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;800&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
@@ -11,10 +11,10 @@
 
   <style>
     :root {
-      --bg-dark: #04070d;
-      --bg-surface: rgba(11, 17, 31, 0.96);
-      --bg-card: rgba(15, 23, 42, 0.88);
-      --border-glow: rgba(0, 243, 255, 0.22);
+      --bg-dark: #05080f;
+      --bg-surface: #0b1220;
+      --bg-card: #0f182b;
+      --border-glow: rgba(0, 243, 255, 0.25);
       --border-focus: #00f3ff;
       --cyan: #00f3ff;
       --green: #00ff88;
@@ -25,27 +25,27 @@
       --text-muted: #64748b;
     }
 
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'JetBrains Mono', monospace; -webkit-tap-highlight-color: transparent; }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'JetBrains Mono', monospace; }
     
-    body {
+    html, body {
       background-color: var(--bg-dark);
       background-image: 
-        radial-gradient(circle at 10% 10%, rgba(0, 243, 255, 0.05) 0%, transparent 40%),
-        radial-gradient(circle at 90% 90%, rgba(157, 78, 221, 0.05) 0%, transparent 40%),
+        radial-gradient(circle at 10% 10%, rgba(0, 243, 255, 0.04) 0%, transparent 40%),
+        radial-gradient(circle at 90% 90%, rgba(157, 78, 221, 0.04) 0%, transparent 40%),
         linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
         linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
       background-size: 100% 100%, 100% 100%, 30px 30px, 30px 30px;
       color: var(--text-main);
       min-height: 100vh;
-      overflow-x: hidden;
+      overflow-x: auto; /* Permite desplazamiento lateral fluido si algo supera el ancho */
+      -webkit-overflow-scrolling: touch;
     }
 
-    /* BARRA SUPERIOR */
+    /* BARRA SUPERIOR ADAPTABLE */
     .app-bar {
-      background: rgba(8, 12, 22, 0.98);
-      backdrop-filter: blur(14px);
+      background: #080d1a;
       border-bottom: 1px solid var(--border-glow);
-      padding: 12px 20px;
+      padding: 10px 16px;
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -54,11 +54,12 @@
       z-index: 100;
       flex-wrap: wrap;
       gap: 10px;
+      width: 100%;
     }
 
     .brand-title {
       font-family: 'Orbitron', sans-serif;
-      font-size: 1.15rem;
+      font-size: 1.1rem;
       letter-spacing: 2px;
       color: var(--cyan);
       text-shadow: 0 0 15px rgba(0, 243, 255, 0.4);
@@ -67,69 +68,69 @@
     .status-badge {
       display: inline-flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
       font-size: 0.7rem;
       padding: 4px 10px;
       border-radius: 20px;
       border: 1px solid rgba(255,255,255,0.1);
-      background: rgba(0,0,0,0.5);
+      background: rgba(0,0,0,0.6);
     }
 
     .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted); }
-    .dot.online { background: var(--green); box-shadow: 0 0 10px var(--green); }
-    .dot.offline { background: var(--red); box-shadow: 0 0 10px var(--red); }
+    .dot.online { background: var(--green); box-shadow: 0 0 8px var(--green); }
+    .dot.offline { background: var(--red); box-shadow: 0 0 8px var(--red); }
 
-    /* NAVEGADOR PRINCIPAL */
+    /* NAVEGADOR PRINCIPAL CON SCROLL HORIZONTAL TÁCTIL */
     .nav-bar {
       display: flex;
-      justify-content: center;
       gap: 8px;
-      padding: 12px 15px;
-      background: rgba(8, 12, 22, 0.65);
-      border-bottom: 1px solid rgba(255,255,255,0.04);
+      padding: 10px 14px;
+      background: #090e1c;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
       overflow-x: auto;
       white-space: nowrap;
       -webkit-overflow-scrolling: touch;
+      width: 100%;
     }
 
     .nav-tab {
       background: var(--bg-card);
       border: 1px solid var(--border-glow);
       color: var(--text-muted);
-      padding: 10px 18px;
+      padding: 9px 16px;
       border-radius: 6px;
       cursor: pointer;
       font-size: 0.78rem;
       font-weight: 700;
       letter-spacing: 1px;
-      transition: all 0.25s ease;
+      transition: background 0.15s ease, color 0.15s ease;
       flex-shrink: 0;
     }
 
-    .nav-tab:hover { color: var(--cyan); border-color: var(--cyan); box-shadow: 0 0 12px rgba(0, 243, 255, 0.2); }
-    .nav-tab.active {
-      background: rgba(0, 243, 255, 0.12);
+    .nav-tab:hover, .nav-tab.active {
+      background: rgba(0, 243, 255, 0.15);
       color: var(--cyan);
       border-color: var(--cyan);
-      box-shadow: 0 0 16px rgba(0, 243, 255, 0.3);
     }
 
-    /* CONTENEDOR DE ACTIVITIES */
     .activity-container {
       max-width: 1440px;
       margin: 0 auto;
-      padding: 16px;
+      padding: 14px;
       min-height: calc(100vh - 120px);
+      width: 100%;
     }
 
     .activity {
       display: none;
-      animation: activitySlideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
     }
-    .activity.active { display: block; }
+    .activity.active {
+      display: block;
+      animation: fadeIn 0.15s ease-out;
+    }
 
-    @keyframes activitySlideIn {
-      from { opacity: 0; transform: translateY(10px); }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
       to { opacity: 1; transform: translateY(0); }
     }
 
@@ -137,8 +138,8 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 18px;
-      padding-bottom: 12px;
+      margin-bottom: 16px;
+      padding-bottom: 10px;
       border-bottom: 1px solid var(--border-glow);
       flex-wrap: wrap;
       gap: 10px;
@@ -148,24 +149,24 @@
       font-family: 'Orbitron', sans-serif;
       font-size: 1.05rem;
       color: var(--cyan);
-      letter-spacing: 1.5px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
+      letter-spacing: 1px;
     }
 
     .card {
       background: var(--bg-surface);
       border: 1px solid var(--border-glow);
       border-radius: 8px;
-      padding: 20px;
-      margin-bottom: 20px;
+      padding: 16px;
+      margin-bottom: 16px;
+      width: 100%;
     }
 
+    /* GRID AUTO-AJUSTABLE PARA MÓVIL Y ESCRITORIO */
     .grid-fleet {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-      gap: 18px;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+      gap: 16px;
+      width: 100%;
     }
 
     .node-item {
@@ -174,94 +175,77 @@
       border-radius: 6px;
       padding: 16px;
       cursor: pointer;
-      transition: all 0.25s ease;
+      transition: border-color 0.15s ease;
+      width: 100%;
     }
+    .node-item:hover { border-color: var(--cyan); }
 
-    .node-item:hover {
-      border-color: var(--cyan);
-      box-shadow: 0 0 20px rgba(0, 243, 255, 0.25);
-      transform: translateY(-2px);
-    }
-
-    .gauge-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin: 12px 0; }
+    .gauge-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; margin: 10px 0; }
     .gauge-cell {
       background: rgba(0, 0, 0, 0.4);
       border: 1px solid rgba(255, 255, 255, 0.06);
       border-radius: 4px;
-      padding: 12px;
+      padding: 10px;
       text-align: center;
     }
-    .gauge-val { font-size: 1.55rem; font-weight: 800; color: var(--cyan); }
+    .gauge-val { font-size: 1.5rem; font-weight: 800; color: var(--cyan); }
     .gauge-val.p { color: var(--purple); }
-    .gauge-lbl { font-size: 0.65rem; color: var(--text-muted); margin-top: 4px; text-transform: uppercase; }
+    .gauge-lbl { font-size: 0.62rem; color: var(--text-muted); margin-top: 4px; }
 
-    /* BOTONES */
+    /* BOTONES ERGONÓMICOS TÁCTILES */
     .btn {
       background: rgba(0, 243, 255, 0.1);
       border: 1px solid var(--cyan);
       color: var(--cyan);
-      padding: 11px 18px;
+      padding: 10px 16px;
       border-radius: 4px;
       cursor: pointer;
       font-size: 0.75rem;
       font-weight: 700;
       letter-spacing: 1px;
-      transition: all 0.2s;
       display: inline-flex;
       align-items: center;
       justify-content: center;
       gap: 8px;
-      min-height: 44px;
+      min-height: 44px; /* Estándar táctil Apple/Google */
     }
-    .btn:hover { background: var(--cyan); color: #000; box-shadow: 0 0 12px var(--cyan); }
-    .btn-back { background: rgba(255, 255, 255, 0.06); border-color: rgba(255, 255, 255, 0.2); color: var(--text-main); }
-    .btn-back:hover { background: rgba(255, 255, 255, 0.2); color: #fff; box-shadow: none; }
-    .btn-danger { background: rgba(255, 0, 85, 0.1); border-color: var(--red); color: var(--red); }
-    .btn-danger:hover { background: var(--red); color: #fff; box-shadow: 0 0 12px var(--red); }
-    .btn-warn { background: rgba(255, 170, 0, 0.1); border-color: var(--amber); color: var(--amber); }
-    .btn-warn:hover { background: var(--amber); color: #000; box-shadow: 0 0 12px var(--amber); }
+    .btn:hover { background: var(--cyan); color: #000; }
+    .btn-back { background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.2); color: var(--text-main); }
+    .btn-danger { background: rgba(255, 0, 85, 0.12); border-color: var(--red); color: var(--red); }
+    .btn-danger:hover { background: var(--red); color: #fff; }
+    .btn-warn { background: rgba(255, 170, 0, 0.12); border-color: var(--amber); color: var(--amber); }
 
     .input-field {
       background: rgba(0, 0, 0, 0.5);
-      border: 1px solid rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.15);
       color: var(--text-main);
-      padding: 12px 14px;
+      padding: 11px 14px;
       border-radius: 4px;
       font-size: 0.85rem;
       outline: none;
       width: 100%;
-      margin-bottom: 14px;
+      margin-bottom: 12px;
       min-height: 44px;
     }
-    .input-field:focus { border-color: var(--cyan); box-shadow: 0 0 8px rgba(0, 243, 255, 0.25); }
+    .input-field:focus { border-color: var(--cyan); }
 
-    .table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-    table { width: 100%; border-collapse: collapse; font-size: 0.78rem; min-width: 650px; }
-    th {
-      background: rgba(0, 243, 255, 0.05);
-      color: var(--cyan);
-      padding: 12px;
-      border-bottom: 1px solid var(--border-glow);
-      text-align: left;
-    }
-    td { padding: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.04); }
-    tr:hover { background: rgba(255, 255, 255, 0.02); }
-
-    .category-box {
-      background: rgba(0, 0, 0, 0.25);
+    /* CONTENEDOR DE TABLAS CON DESPLAZAMIENTO LATERAL */
+    .table-container {
+      width: 100%;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
       border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 6px;
-      padding: 16px;
-      margin-bottom: 16px;
+      margin-bottom: 12px;
     }
-    .category-title {
-      font-size: 0.85rem;
-      color: var(--cyan);
-      font-weight: 700;
-      margin-bottom: 14px;
-      border-bottom: 1px solid rgba(0, 243, 255, 0.15);
-      padding-bottom: 6px;
-    }
+    table { width: 100%; border-collapse: collapse; font-size: 0.78rem; min-width: 580px; }
+    th, td { padding: 11px 14px; border-bottom: 1px solid rgba(255, 255, 255, 0.04); text-align: left; }
+    th { background: rgba(0, 243, 255, 0.06); color: var(--cyan); }
+
+    .role-badge { padding: 3px 8px; border-radius: 4px; font-size: 0.65rem; font-weight: 800; }
+    .role-super { background: rgba(255, 0, 85, 0.2); color: var(--red); border: 1px solid var(--red); }
+    .role-tech  { background: rgba(0, 243, 255, 0.2); color: var(--cyan); border: 1px solid var(--cyan); }
+    .role-oper  { background: rgba(0, 255, 136, 0.2); color: var(--green); border: 1px solid var(--green); }
 
     .dynamic-field-row {
       display: flex;
@@ -273,137 +257,134 @@
       margin-bottom: 10px;
       border: 1px solid rgba(255,255,255,0.05);
       flex-wrap: wrap;
-      gap: 10px;
+      gap: 8px;
     }
-    .dynamic-field-row input[type="checkbox"] { width: 24px; height: 24px; accent-color: var(--cyan); cursor: pointer; }
-    .dynamic-field-row input[type="number"] { width: 130px; text-align: right; margin-bottom: 0; }
 
-    .role-badge { padding: 3px 8px; border-radius: 4px; font-size: 0.65rem; font-weight: 800; }
-    .role-super { background: rgba(255, 0, 85, 0.2); color: var(--red); border: 1px solid var(--red); }
-    .role-tech  { background: rgba(0, 243, 255, 0.2); color: var(--cyan); border: 1px solid var(--cyan); }
-    .role-oper  { background: rgba(0, 255, 136, 0.2); color: var(--green); border: 1px solid var(--green); }
+    .scroll-hint {
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
 
-    /* RESPONSIVE MÓVIL */
-    @media (max-width: 768px) {
-      .app-bar { padding: 10px 14px; }
-      .brand-title { font-size: 1rem; }
-      .activity-container { padding: 12px; }
-      .grid-fleet { grid-template-columns: 1fr; }
-      .gauge-grid { grid-template-columns: 1fr 1fr; }
-      .dynamic-field-row { flex-direction: column; align-items: flex-start; }
-      .dynamic-field-row input[type="number"] { width: 100%; text-align: left; }
+    @media (max-width: 650px) {
+      .brand-title { font-size: 0.95rem; }
+      .app-bar { padding: 8px 12px; }
+      .activity-container { padding: 10px; }
+      .btn { width: 100%; } /* Botones a lo ancho completo en móviles */
+      .app-bar .btn { width: auto; }
     }
   </style>
 </head>
 <body>
 
-  <!-- BARRA SUPERIOR (APP BAR) -->
+  <!-- BARRA SUPERIOR -->
   <header class="app-bar" id="topAppBar" style="display: none;">
-    <div style="display: flex; align-items: center; gap: 12px;">
-      <button id="btnGlobalBack" class="btn btn-back" style="display: none; padding: 6px 12px; min-height: 36px;" onclick="goBackActivity()">← VOLVER</button>
-      <div class="brand-title">AUTOCLAVE SCADA // HUB</div>
+    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+      <button id="btnGlobalBack" class="btn btn-back" style="display: none; min-height: 36px; padding: 6px 12px;" onclick="goBackActivity()">← VOLVER</button>
+      <div class="brand-title">AUTOCLAVE SCADA</div>
       <span class="status-badge">
         <span class="dot" id="mqttDot"></span>
         <span id="mqttStatusText">DESCONECTADO</span>
       </span>
     </div>
     
-    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
       <div class="status-badge" style="border-color: var(--border-glow);">
         <span id="currentUserName" style="color: var(--cyan); font-weight: 800;">ADMIN</span>
         <span id="currentUserRoleBadge" class="role-badge role-super" style="margin-left: 5px;">SUPERADMIN</span>
       </div>
-      <button class="btn btn-danger" style="padding: 6px 12px; font-size: 0.7rem; min-height: 36px;" onclick="cerrarSesionManual()">SALIR [CERRAR]</button>
-      <div class="status-badge">
-        EN LÍNEA: <span id="fleetCount" style="color: var(--green); font-weight: 800; margin-left: 4px;">0</span>
-      </div>
+      <button class="btn btn-warn" style="min-height: 36px; padding: 6px 10px; font-size: 0.68rem;" onclick="openActivity('act-change-pass')">🔑 CAMBIAR CLAVE</button>
+      <button class="btn btn-danger" style="min-height: 36px; padding: 6px 10px; font-size: 0.68rem;" onclick="cerrarSesionManual()">SALIR</button>
     </div>
   </header>
 
-  <!-- NAVEGADOR DE ACTIVIDADES -->
+  <!-- NAVEGADOR HORIZONTAL DESLIZABLE -->
   <nav class="nav-bar" id="mainNavBar" style="display: none;">
     <button class="nav-tab active" onclick="openActivity('act-telemetry')">⚡ TELEMETRÍA</button>
-    <button class="nav-tab" onclick="openActivity('act-fleet-mgmt')">🏢 GESTIÓN DE EQUIPOS</button>
-    <button class="nav-tab" onclick="openActivity('act-fota')">🚀 FOTA HUB (ACTUALIZACIONES)</button>
-    <button class="nav-tab" onclick="openActivity('act-reports')">📋 REPORTES & AUDITORÍA</button>
+    <button class="nav-tab" onclick="openActivity('act-fleet-mgmt')">🏢 GESTIÓN FLOTA</button>
+    <button class="nav-tab" onclick="openActivity('act-fota')">🚀 FOTA HUB</button>
+    <button class="nav-tab" onclick="openActivity('act-reports')">📋 REPORTES</button>
     <button class="nav-tab" id="tabNavUsers" onclick="openActivity('act-users')">🛡️ ACCESOS</button>
   </nav>
 
   <main class="activity-container">
 
     <!-- ==================================================================== -->
-    <!-- ACTIVITY 0: PANTALLA INICIAL DE INICIO DE SESIÓN (LOGIN FIRST)       -->
+    <!-- ACTIVITY 0: PANTALLA INICIAL DE INICIO DE SESIÓN                     -->
     <!-- ==================================================================== -->
     <section id="act-login" class="activity active">
-      <div style="max-width: 440px; margin: 40px auto;" class="card">
-        <div style="text-align: center; margin-bottom: 25px;">
-          <div style="font-family: 'Orbitron'; font-size: 1.3rem; color: var(--cyan); letter-spacing: 2px;">AUTOCLAVE SCADA</div>
-          <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 6px;">PORTAL DE ACCESO Y TELEMETRÍA CLÍNICA</div>
+      <div style="max-width: 440px; margin: 30px auto;" class="card">
+        <div style="text-align: center; margin-bottom: 20px;">
+          <div style="font-family: 'Orbitron'; font-size: 1.25rem; color: var(--cyan); letter-spacing: 2px;">AUTOCLAVE SCADA</div>
+          <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 6px;">PORTAL CLÍNICO DE ALTA SEGURIDAD</div>
         </div>
 
         <label style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-bottom: 6px;">SELECCIONAR USUARIO REGISTRADO:</label>
         <select id="loginUserSelect" class="input-field" onchange="seleccionarUsuarioRegistrado(this.value)">
-          <option value="">-- Seleccionar o escribir usuario --</option>
+          <option value="">-- Seleccionar usuario --</option>
         </select>
 
         <label style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-bottom: 6px;">USUARIO / ID:</label>
         <input type="text" id="loginUserInput" class="input-field" placeholder="Ingresa tu usuario" required>
 
-        <label style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-bottom: 6px;">PIN / CONTRASEÑA:</label>
-        <input type="password" id="loginPassInput" class="input-field" placeholder="Contraseña o clave temporal" required>
+        <label style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-bottom: 6px;">CONTRASEÑA:</label>
+        <input type="password" id="loginPassInput" class="input-field" placeholder="Contraseña" required>
 
-        <button class="btn" style="width: 100%; padding: 14px; margin-top: 6px;" onclick="procesarInicioSesion()">
+        <button class="btn" style="width: 100%; margin-top: 6px;" onclick="procesarInicioSesion()">
           🔐 INICIAR SESIÓN
         </button>
 
-        <div style="text-align: center; margin-top: 20px;">
-          <button class="btn btn-back" style="width: 100%; padding: 10px; font-size: 0.72rem;" onclick="abrirRecuperacion()">
-            ❓ ¿Olvidaste o perdiste tu acceso? (Recuperar Clave)
+        <div style="text-align: center; margin-top: 18px;">
+          <button class="btn btn-back" style="width: 100%; font-size: 0.72rem;" onclick="abrirRecuperacion()">
+            ❓ ¿Olvidaste tu contraseña? (Recuperar Clave)
           </button>
         </div>
 
-        <div id="loginFeedback" style="display: none; padding: 10px; border-radius: 4px; font-size: 0.75rem; text-align: center; margin-top: 15px;"></div>
+        <div id="loginFeedback" style="display: none; padding: 10px; border-radius: 4px; font-size: 0.75rem; text-align: center; margin-top: 14px;"></div>
       </div>
     </section>
 
     <!-- ==================================================================== -->
-    <!-- ACTIVITY RECOVERY: RECUPERACIÓN DE CLAVE CON CÓDIGO TEMPORAL POR CORREO-->
+    <!-- ACTIVITY RECOVERY: RECUPERAR CLAVE                                  -->
     <!-- ==================================================================== -->
     <section id="act-recovery" class="activity">
-      <div style="max-width: 440px; margin: 40px auto;" class="card">
+      <div style="max-width: 440px; margin: 30px auto;" class="card">
         <div style="font-family: 'Orbitron'; font-size: 1.1rem; color: var(--cyan); text-align: center; margin-bottom: 8px;">
           RECUPERACIÓN DE ACCESO
         </div>
-        <p style="font-size: 0.72rem; color: var(--text-muted); text-align: center; margin-bottom: 20px;">
-          Se generará una contraseña temporal de un solo uso que será enviada a: <br>
+        <p style="font-size: 0.72rem; color: var(--text-muted); text-align: center; margin-bottom: 18px;">
+          Se generará una contraseña temporal de un solo uso enviada a: <br>
           <span style="color: var(--cyan); font-weight: 700;">yuniolgonzalez9@gmail.com</span>
         </p>
 
         <label style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-bottom: 6px;">USUARIO A RECUPERAR:</label>
         <input type="text" id="recovUser" class="input-field" placeholder="Ej: admin">
 
-        <button class="btn" id="btnSendRecovery" style="width: 100%; padding: 14px; margin-top: 10px;" onclick="solicitarCodigoRecuperacion()">
-          📩 GENERAR Y ENVIAR CONTRASEÑA TEMPORAL
+        <button class="btn" id="btnSendRecovery" style="width: 100%; margin-top: 8px;" onclick="solicitarCodigoRecuperacion()">
+          📩 GENERAR Y ENVIAR CÓDIGO TEMPORAL
         </button>
 
-        <button class="btn btn-back" style="width: 100%; padding: 10px; margin-top: 12px;" onclick="openActivity('act-login')">
+        <button class="btn btn-back" style="width: 100%; margin-top: 10px;" onclick="openActivity('act-login')">
           ← VOLVER AL LOGIN
         </button>
 
-        <div id="recovFeedback" style="display: none; padding: 12px; border-radius: 4px; font-size: 0.75rem; text-align: center; margin-top: 15px;"></div>
+        <div id="recovFeedback" style="display: none; padding: 12px; border-radius: 4px; font-size: 0.75rem; text-align: center; margin-top: 14px;"></div>
       </div>
     </section>
 
     <!-- ==================================================================== -->
-    <!-- ACTIVITY FORCE CHANGE PASS: CAMBIO OBLIGATORIO TRAS USAR CLAVE TEMPORAL-->
+    <!-- ACTIVITY CAMBIAR CONTRASEÑA (MODIFICACIÓN PERMANENTE)               -->
     <!-- ==================================================================== -->
     <section id="act-change-pass" class="activity">
-      <div style="max-width: 440px; margin: 40px auto;" class="card">
-        <div style="font-family: 'Orbitron'; font-size: 1.1rem; color: var(--amber); text-align: center; margin-bottom: 8px;">
-          ⚠️ ACTUALIZAR CONTRASEÑA
+      <div style="max-width: 440px; margin: 30px auto;" class="card">
+        <div style="font-family: 'Orbitron'; font-size: 1.1rem; color: var(--cyan); text-align: center; margin-bottom: 8px;">
+          MODIFICAR CONTRASEÑA
         </div>
-        <p style="font-size: 0.72rem; color: var(--text-muted); text-align: center; margin-bottom: 20px;">
-          Has ingresado con una contraseña temporal de un solo uso. Debes establecer una nueva contraseña permanente para continuar.
+        <p style="font-size: 0.72rem; color: var(--text-muted); text-align: center; margin-bottom: 18px;">
+          Ingresa y confirma tu nueva clave permanente. La contraseña vieja quedará anulada inmediatamente.
         </p>
 
         <label style="font-size: 0.72rem; color: var(--text-muted);">NUEVA CONTRASEÑA:</label>
@@ -412,113 +393,112 @@
         <label style="font-size: 0.72rem; color: var(--text-muted);">CONFIRMAR NUEVA CONTRASEÑA:</label>
         <input type="password" id="confirmPassInput" class="input-field" placeholder="Repite la contraseña">
 
-        <button class="btn" style="width: 100%; padding: 14px; margin-top: 10px;" onclick="guardarNuevaContrasenaObligatoria()">
-          💾 GUARDAR NUEVA CONTRASEÑA Y ENTRAR
+        <button class="btn" style="width: 100%; margin-top: 8px;" onclick="guardarNuevaContrasena()">
+          💾 ACTUALIZAR CONTRASEÑA AHORA
+        </button>
+
+        <button class="btn btn-back" style="width: 100%; margin-top: 10px;" onclick="goBackActivity()">
+          ← VOLVER ATRÁS
         </button>
       </div>
     </section>
 
     <!-- ==================================================================== -->
-    <!-- ACTIVITY 1: TELEMETRÍA (MONITOR DE FLOTA)                            -->
+    <!-- ACTIVITY 1: TELEMETRÍA EN VIVO                                      -->
     <!-- ==================================================================== -->
     <section id="act-telemetry" class="activity">
       <div class="activity-header">
-        <div class="activity-title">FLOTA DE AUTOCLAVES REGISTRADOS Y EN LÍNEA</div>
-        <div style="font-size: 0.72rem; color: var(--text-muted);">TOPIC: autoclave_med_2026/+/telemetria</div>
+        <div class="activity-title">MONITOR DE FLOTA EN TIEMPO REAL</div>
+        <div class="status-badge" style="border-color: var(--border-glow);">ACTUALIZACIÓN INSTANTÁNEA</div>
       </div>
 
       <div class="grid-fleet" id="fleetLiveContainer">
-        <div style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 60px;">
-          BUSCANDO DISPOSITIVOS EN BASE DE DATOS Y RED MQTT...
+        <div style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 50px;">
+          BUSCANDO DISPOSITIVOS TRANSMITIENDO...
         </div>
       </div>
     </section>
 
     <!-- ==================================================================== -->
-    <!-- ACTIVITY 2: DETALLE, SENSORES Y CONTROL DINÁMICO DEL DISPOSITIVO    -->
+    <!-- ACTIVITY 2: DETALLE Y CONTROL DINÁMICO DEL DISPOSITIVO              -->
     <!-- ==================================================================== -->
     <section id="act-device-detail" class="activity">
       <div class="activity-header">
         <div>
-          <button class="btn btn-back" style="margin-bottom: 10px;" onclick="goBackActivity()">← REGRESAR AL MONITOR</button>
+          <button class="btn btn-back" style="margin-bottom: 8px; min-height: 36px;" onclick="goBackActivity()">← REGRESAR</button>
           <div class="activity-title" id="detDeviceAlias">NOMBRE DEL EQUIPO</div>
-          <div style="font-size: 0.72rem; color: var(--text-muted);" id="detDeviceSub">MAC: -- | MODELO: --</div>
+          <div style="font-size: 0.7rem; color: var(--text-muted);" id="detDeviceSub">MAC: -- | MODELO: --</div>
         </div>
-        <div style="display: flex; gap: 10px; align-items: center;">
+        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
           <span class="status-badge" id="detOnlineBadge"><span class="dot offline"></span> OFFLINE</span>
-          <button class="btn btn-danger" style="padding: 5px 10px; font-size: 0.7rem;" onclick="eliminarDispositivoActual()">🗑️ ELIMINAR EQUIPO</button>
+          <button class="btn btn-danger" style="min-height: 36px; padding: 6px 12px; font-size: 0.7rem;" onclick="eliminarDispositivoActual()">🗑️ ELIMINAR</button>
         </div>
       </div>
 
-      <div style="display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid var(--border-glow); padding-bottom: 10px; flex-wrap: wrap;">
-        <button class="btn active" id="btnSubTele" onclick="switchDetailTab('tab-det-tele')">📊 SENSORES & ESTADO</button>
-        <button class="btn" id="btnSubCfg" onclick="switchDetailTab('tab-det-cfg')">⚙️ PARÁMETROS DINÁMICOS (ESP32)</button>
-        <button class="btn" id="btnSubFicha" onclick="switchDetailTab('tab-det-ficha')">🏢 ASIGNAR ALIAS / SALA</button>
-        <button class="btn" id="btnSubLogs" onclick="switchDetailTab('tab-det-logs')">📋 HISTORIAL DE ESTE EQUIPO</button>
+      <div class="nav-bar" style="margin-bottom: 16px; border-radius: 6px; padding: 6px;">
+        <button class="btn active" id="btnSubTele" onclick="switchDetailTab('tab-det-tele')">📊 SENSORES</button>
+        <button class="btn" id="btnSubCfg" onclick="switchDetailTab('tab-det-cfg')">⚙️ NVS ESP32</button>
+        <button class="btn" id="btnSubFicha" onclick="switchDetailTab('tab-det-ficha')">🏢 FICHA TÉCNICA</button>
+        <button class="btn" id="btnSubLogs" onclick="switchDetailTab('tab-det-logs')">📋 HISTORIAL</button>
       </div>
 
-      <!-- SUBTAB 1: SENSORES -->
+      <!-- SENSORES DINÁMICOS -->
       <div id="tab-det-tele" class="detail-subview">
         <div class="card">
-          <div style="font-size: 0.8rem; color: var(--cyan); margin-bottom: 10px; font-weight: 700;">TELEMETRÍA EN TIEMPO REAL:</div>
           <div class="gauge-grid" id="containerDynamicGauges"></div>
 
-          <div id="detAlarmaBanner" style="display: none; background: rgba(255,0,85,0.2); border: 1px solid var(--red); color: var(--red); padding: 14px; border-radius: 6px; font-size: 0.82rem; margin: 15px 0;">
+          <div id="detAlarmaBanner" style="display: none; background: rgba(255,0,85,0.2); border: 1px solid var(--red); color: var(--red); padding: 12px; border-radius: 6px; font-size: 0.8rem; margin: 12px 0;">
             ⚠️ ALARMA: <span id="detAlarmaTexto"></span>
           </div>
 
-          <div style="display: flex; gap: 12px; margin-top: 20px; flex-wrap: wrap;">
-            <button class="btn" style="flex: 1; padding: 14px;" onclick="enviarComandoDetalle('INICIAR_CICLO')">▶️ INICIAR CICLO</button>
-            <button class="btn btn-danger" style="flex: 1; padding: 14px;" onclick="enviarComandoDetalle('ABORTAR_CICLO')">⏹️ PARO EMERGENCIA</button>
-            <button class="btn btn-warn" style="flex: 1; padding: 14px;" onclick="enviarComandoDetalle('RESET_ALARMA')">🔄 RESET ALARMA</button>
+          <div style="display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap;">
+            <button class="btn" style="flex: 1;" onclick="enviarComandoDetalle('INICIAR_CICLO')">▶️ INICIAR CICLO</button>
+            <button class="btn btn-danger" style="flex: 1;" onclick="enviarComandoDetalle('ABORTAR_CICLO')">⏹️ PARO EMERGENCIA</button>
+            <button class="btn btn-warn" style="flex: 1;" onclick="enviarComandoDetalle('RESET_ALARMA')">🔄 RESET ALARMA</button>
           </div>
         </div>
       </div>
 
-      <!-- SUBTAB 2: PARÁMETROS DINÁMICOS -->
+      <!-- AJUSTES NVS -->
       <div id="tab-det-cfg" class="detail-subview" style="display: none;">
         <div class="card">
-          <div style="font-size: 0.8rem; color: var(--cyan); margin-bottom: 14px; font-weight: 700;">
-            PARÁMETROS Y CAPACIDADES RECIBIDAS DEL DISPOSITIVO:
-          </div>
-          
           <form onsubmit="event.preventDefault(); guardarParametrosDinamicos();">
             <div id="containerDynamicMenus">
-              <div style="color: var(--text-muted); padding: 20px; text-align: center;">Esperando que el equipo transmita su esquema...</div>
+              <div style="color: var(--text-muted); padding: 20px; text-align: center;">Esperando esquema del equipo...</div>
             </div>
-
-            <button type="submit" id="btnGuardarDinamico" class="btn" style="width: 100%; padding: 14px; margin-top: 15px;">
-              💾 TRANSMITIR AJUSTES Y GUARDAR EN MEMORIA FLASH (NVS)
+            <button type="submit" id="btnGuardarDinamico" class="btn" style="width: 100%; margin-top: 14px;">
+              💾 TRANSMITIR Y GUARDAR EN NVS ESP32
             </button>
           </form>
         </div>
       </div>
 
-      <!-- SUBTAB 3: ASIGNAR ALIAS / FICHA -->
+      <!-- FICHA -->
       <div id="tab-det-ficha" class="detail-subview" style="display: none;">
         <div class="card">
           <form onsubmit="event.preventDefault(); guardarFichaDetalle();">
             <label style="font-size: 0.72rem; color: var(--text-muted);">ALIAS EN PANTALLA:</label>
-            <input type="text" id="fichaAlias" class="input-field" placeholder="Ej: Quirófano Central 1" required>
+            <input type="text" id="fichaAlias" class="input-field" required>
 
-            <label style="font-size: 0.72rem; color: var(--text-muted);">CLIENTE / HOSPITAL / INSTITUCIÓN:</label>
-            <input type="text" id="fichaCliente" class="input-field" placeholder="Ej: Hospital Metropolitano" required>
+            <label style="font-size: 0.72rem; color: var(--text-muted);">CLIENTE / HOSPITAL:</label>
+            <input type="text" id="fichaCliente" class="input-field" required>
 
             <label style="font-size: 0.72rem; color: var(--text-muted);">MODELO DE AUTOCLAVE:</label>
-            <input type="text" id="fichaModelo" class="input-field" placeholder="Ej: Getinge 133HC" required>
+            <input type="text" id="fichaModelo" class="input-field" required>
 
-            <button type="submit" class="btn" style="width: 100%; padding: 12px;">ACTUALIZAR FICHA DE ESTE EQUIPO</button>
+            <button type="submit" class="btn" style="width: 100%;">ACTUALIZAR FICHA</button>
           </form>
         </div>
       </div>
 
-      <!-- SUBTAB 4: HISTORIAL -->
+      <!-- LOGS DE ESTE EQUIPO -->
       <div id="tab-det-logs" class="detail-subview" style="display: none;">
         <div class="card">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
             <div style="font-size: 0.8rem; color: var(--cyan); font-weight: 700;">HISTORIAL DE ESTE EQUIPO:</div>
-            <button class="btn" onclick="imprimirCertificadoIndividual()">🖨️ IMPRIMIR CERTIFICADO DE CICLO</button>
+            <button class="btn" onclick="imprimirCertificadoIndividual()">🖨️ CERTIFICAR CICLO</button>
           </div>
+          <div class="scroll-hint">↔ Desliza la tabla hacia los lados si no cabe completa</div>
           <div class="table-container">
             <table>
               <thead><tr><th>FECHA</th><th>TIPO</th><th>TELEMETRÍA</th><th>DIAGNÓSTICO</th></tr></thead>
@@ -534,57 +514,52 @@
     <!-- ==================================================================== -->
     <section id="act-fota" class="activity">
       <div class="activity-header">
-        <div class="activity-title">DESPLIEGUE REMOTO DE FIRMWARE (FOTA HUB)</div>
+        <div class="activity-title">DESPLIEGUE REMOTO (FOTA HUB)</div>
       </div>
 
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 25px;">
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 16px;">
         <div class="card">
           <label style="font-size: 0.72rem; color: var(--text-muted);">VERSIÓN A DESPLEGAR:</label>
           <input type="text" id="fotaVersionInput" class="input-field" value="v3.3.0">
 
-          <label style="font-size: 0.72rem; color: var(--text-muted);">URL DIRECTA DEL BINARIO (.BIN):</label>
+          <label style="font-size: 0.72rem; color: var(--text-muted);">URL DEL BINARIO (.BIN):</label>
           <input type="text" id="fotaUrlInput" class="input-field" value="https://raw.githubusercontent.com/yuniolgonzalez9/autoclave-scada-fleet/main/firmwares/firmware.bin">
 
           <label style="font-size: 0.72rem; color: var(--text-muted);">SELECCIONAR ARCHIVO BINARIO:</label>
-          <div class="input-field" style="padding: 25px; text-align: center; border: 2px dashed rgba(0,243,255,0.3); cursor: pointer;" onclick="document.getElementById('fileBinInput').click()">
+          <div class="input-field" style="padding: 18px; text-align: center; border: 2px dashed rgba(0,243,255,0.3); cursor: pointer;" onclick="document.getElementById('fileBinInput').click()">
             <input type="file" id="fileBinInput" accept=".bin" style="display: none;" onchange="handleFileSelected(this.files)">
             <div id="dropFileName" style="color: var(--cyan); font-weight: 700;">Click para cargar firmware.bin</div>
           </div>
         </div>
 
         <div class="card">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
-            <div style="font-family: 'Orbitron'; font-size: 0.85rem; color: var(--cyan);">SELECCIONAR DISPOSITIVOS:</div>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 6px;">
+            <div style="font-family: 'Orbitron'; font-size: 0.85rem; color: var(--cyan);">SELECCIÓN DE EQUIPOS:</div>
             <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-              <button class="btn" style="padding: 3px 6px; font-size: 0.65rem;" onclick="filterFotaList('ALL')">TODOS</button>
-              <button class="btn" style="padding: 3px 6px; font-size: 0.65rem;" onclick="filterFotaList('ONLINE')">SOLO ONLINE</button>
-              <button class="btn" style="padding: 3px 6px; font-size: 0.65rem;" onclick="filterFotaList('OFFLINE')">SOLO OFFLINE</button>
-              <button class="btn btn-warn" style="padding: 3px 6px; font-size: 0.65rem;" onclick="toggleSelectAllFota()">INVERTIR</button>
+              <button class="btn" style="min-height: 32px; padding: 4px 8px; font-size: 0.65rem;" onclick="filterFotaList('ALL')">TODOS</button>
+              <button class="btn" style="min-height: 32px; padding: 4px 8px; font-size: 0.65rem;" onclick="filterFotaList('ONLINE')">ONLINE</button>
+              <button class="btn" style="min-height: 32px; padding: 4px 8px; font-size: 0.65rem;" onclick="filterFotaList('OFFLINE')">OFFLINE</button>
+              <button class="btn btn-warn" style="min-height: 32px; padding: 4px 8px; font-size: 0.65rem;" onclick="toggleSelectAllFota()">INVERTIR</button>
             </div>
           </div>
 
-          <div id="fotaDevicesLiveList" style="max-height: 280px; overflow-y: auto; margin-bottom: 15px;"></div>
+          <div id="fotaDevicesLiveList" style="max-height: 260px; overflow-y: auto; margin-bottom: 14px;"></div>
 
-          <button class="btn" id="btnExecuteFota" style="width: 100%; padding: 14px;" onclick="ejecutarFotaSeleccionados()">
-            🚀 TRANSMITIR FOTA A LOS EQUIPOS MARCADOS
+          <button class="btn" id="btnExecuteFota" style="width: 100%;" onclick="ejecutarFotaSeleccionados()">
+            🚀 TRANSMITIR ACTUALIZACIÓN FOTA
           </button>
         </div>
       </div>
     </section>
 
     <!-- ==================================================================== -->
-    <!-- ACTIVITY 4: GESTIÓN DE FLOTA (AGREGAR MANUALMENTE)                  -->
+    <!-- ACTIVITY 4: GESTIÓN DE FLOTA                                        -->
     <!-- ==================================================================== -->
     <section id="act-fleet-mgmt" class="activity">
-      <div class="activity-header">
-        <div class="activity-title">GESTIÓN Y REGISTRO DE DISPOSITIVOS</div>
-      </div>
-
-      <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 20px;">
+      <div class="activity-header"><div class="activity-title">REGISTRO Y GESTIÓN DE FLOTA</div></div>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 16px;">
         <div class="card">
-          <div style="font-family: 'Orbitron'; font-size: 0.85rem; color: var(--cyan); margin-bottom: 15px;">
-            + REGISTRAR EQUIPO MANUALMENTE
-          </div>
+          <div style="font-family: 'Orbitron'; font-size: 0.85rem; color: var(--cyan); margin-bottom: 12px;">+ REGISTRAR EQUIPO</div>
           <form onsubmit="event.preventDefault(); registrarEquipoManual();">
             <label style="font-size: 0.72rem; color: var(--text-muted);">DIRECCIÓN MAC (SIN DOS PUNTOS):</label>
             <input type="text" id="addMac" class="input-field" placeholder="Ej: 30AEA4070FB4" required>
@@ -595,17 +570,18 @@
             <label style="font-size: 0.72rem; color: var(--text-muted);">CLIENTE / HOSPITAL:</label>
             <input type="text" id="addCliente" class="input-field" placeholder="Ej: Clínica Los Ángeles" required>
 
-            <label style="font-size: 0.72rem; color: var(--text-muted);">MODELO DE AUTOCLAVE:</label>
+            <label style="font-size: 0.72rem; color: var(--text-muted);">MODELO:</label>
             <input type="text" id="addModelo" class="input-field" placeholder="Ej: Autoclave Quirúrgico Clase B" required>
 
-            <button type="submit" class="btn" style="width: 100%; padding: 12px;">+ AGREGAR A LA FLOTA</button>
+            <button type="submit" class="btn" style="width: 100%;">+ AGREGAR A LA FLOTA</button>
           </form>
         </div>
 
         <div class="card">
+          <div class="scroll-hint">↔ Desliza la tabla hacia los lados si no cabe completa</div>
           <div class="table-container">
             <table>
-              <thead><tr><th>MAC</th><th>ESTADO</th><th>ALIAS</th><th>CLIENTE</th><th>MODELO</th><th>FW</th><th>ACCIONES</th></tr></thead>
+              <thead><tr><th>MAC</th><th>ESTADO</th><th>ALIAS</th><th>CLIENTE</th><th>MODELO</th><th>ACCIONES</th></tr></thead>
               <tbody id="fleetMgmtTbody"></tbody>
             </table>
           </div>
@@ -614,40 +590,31 @@
     </section>
 
     <!-- ==================================================================== -->
-    <!-- ACTIVITY 5: REPORTES & AUDITORÍA                                    -->
+    <!-- ACTIVITY 5: REPORTES                                                -->
     <!-- ==================================================================== -->
     <section id="act-reports" class="activity">
       <div class="activity-header">
-        <div class="activity-title">AUDITORÍA Y REPORTES CLÍNICOS</div>
-        <div style="display: flex; gap: 10px;">
-          <button class="btn" onclick="exportarRegistrosCSV()">📥 EXPORTAR CSV</button>
-          <button class="btn btn-danger" id="btnVaciarLogs" onclick="confirmarVaciarDB()">🗑️ VACIAR AUDITORÍA</button>
+        <div class="activity-title">AUDITORÍA Y EVENTOS CLÍNICOS</div>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn" style="min-height: 36px; padding: 6px 12px;" onclick="exportarRegistrosCSV()">📥 CSV</button>
+          <button class="btn btn-danger" id="btnVaciarLogs" style="min-height: 36px; padding: 6px 12px;" onclick="confirmarVaciarDB()">🗑️ VACIAR</button>
         </div>
       </div>
 
-      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">
-        <div>
-          <label style="font-size: 0.7rem; color: var(--text-muted);">FILTRAR POR EQUIPO:</label>
-          <select id="filterDeviceSelect" class="input-field" onchange="renderizarRegistros()">
-            <option value="TODOS">TODOS LOS EQUIPOS</option>
-          </select>
-        </div>
-        <div>
-          <label style="font-size: 0.7rem; color: var(--text-muted);">FILTRAR POR TIPO:</label>
-          <select id="filterType" class="input-field" onchange="renderizarRegistros()">
-            <option value="TODOS">TODOS LOS EVENTOS</option>
-            <option value="CICLO">CICLOS COMPLETADOS</option>
-            <option value="ALARMA">SOLO ALARMAS</option>
-            <option value="CONEXION">CONEXIONES</option>
-            <option value="FOTA">ACTUALIZACIONES FOTA</option>
-          </select>
-        </div>
-        <div>
-          <label style="font-size: 0.7rem; color: var(--text-muted);">BÚSQUEDA:</label>
-          <input type="text" id="filterInput" class="input-field" placeholder="Buscar..." onkeyup="renderizarRegistros()">
-        </div>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-bottom: 12px;">
+        <select id="filterDeviceSelect" class="input-field" onchange="renderizarRegistros()">
+          <option value="TODOS">TODOS LOS EQUIPOS</option>
+        </select>
+        <select id="filterType" class="input-field" onchange="renderizarRegistros()">
+          <option value="TODOS">TODOS LOS EVENTOS</option>
+          <option value="CICLO">CICLOS COMPLETADOS</option>
+          <option value="ALARMA">SOLO ALARMAS</option>
+          <option value="CONEXION">CONEXIONES</option>
+        </select>
+        <input type="text" id="filterInput" class="input-field" placeholder="Buscar texto..." onkeyup="renderizarRegistros()">
       </div>
 
+      <div class="scroll-hint">↔ Desliza la tabla horizontalmente para ver todas las columnas</div>
       <div class="table-container">
         <table>
           <thead><tr><th>FECHA</th><th>TIPO</th><th>EQUIPO</th><th>MODELO</th><th>TELEMETRÍA</th><th>DIAGNÓSTICO</th><th>ACCIÓN</th></tr></thead>
@@ -657,30 +624,32 @@
     </section>
 
     <!-- ==================================================================== -->
-    <!-- ACTIVITY 6: GESTIÓN DE USUARIOS                                     -->
+    <!-- ACTIVITY 6: USUARIOS                                                -->
     <!-- ==================================================================== -->
     <section id="act-users" class="activity">
-      <div class="activity-header"><div class="activity-title">CONTROL DE USUARIOS</div></div>
-      <div style="display: grid; grid-template-columns: 1fr 1.3fr; gap: 20px;">
+      <div class="activity-header"><div class="activity-title">CREDENCIALES Y ACCESOS</div></div>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 16px;">
         <div class="card">
           <form onsubmit="event.preventDefault(); crearUsuario();">
             <label style="font-size: 0.72rem; color: var(--text-muted);">USUARIO / ID:</label>
             <input type="text" id="uUser" class="input-field" placeholder="Ej: tec_clinica" required>
 
-            <label style="font-size: 0.72rem; color: var(--text-muted);">PIN / CONTRASEÑA:</label>
+            <label style="font-size: 0.72rem; color: var(--text-muted);">CONTRASEÑA:</label>
             <input type="password" id="uPass" class="input-field" placeholder="Mínimo 4 caracteres" required>
 
-            <label style="font-size: 0.72rem; color: var(--text-muted);">ROL JERÁRQUICO:</label>
+            <label style="font-size: 0.72rem; color: var(--text-muted);">ROL:</label>
             <select id="uRol" class="input-field">
-              <option value="OPERADOR">NIVEL 3: OPERADOR</option>
-              <option value="TECNICO">NIVEL 2: TÉCNICO</option>
-              <option value="SUPERADMIN">NIVEL 1: SUPERADMIN</option>
+              <option value="OPERADOR">OPERADOR (NIVEL 3)</option>
+              <option value="TECNICO">TÉCNICO (NIVEL 2)</option>
+              <option value="SUPERADMIN">SUPERADMIN (NIVEL 1)</option>
             </select>
 
-            <button type="submit" class="btn" style="width: 100%; padding: 12px;">+ CREAR CREDENCIAL</button>
+            <button type="submit" class="btn" style="width: 100%;">+ CREAR ACCESO</button>
           </form>
         </div>
+
         <div class="card">
+          <div class="scroll-hint">↔ Desliza la tabla hacia los lados si no cabe completa</div>
           <div class="table-container">
             <table>
               <thead><tr><th>USUARIO</th><th>ROL</th><th>FECHA</th><th>ACCIÓN</th></tr></thead>
@@ -695,36 +664,32 @@
 
   <script>
     // =========================================================================
-    // 1. GESTIÓN DE SESIÓN & CONTROL DE INACTIVIDAD (5 MINUTOS)
+    // 1. SISTEMA DE SESIÓN & CONTROL DE INACTIVIDAD (5 MINUTOS)
     // =========================================================================
     let activityStack = ['act-login'];
     let currentInspectedMAC = null;
-    let usuarioActual = null; // null si no ha iniciado sesión
+    let usuarioActual = null;
     let temporizadorInactividad = null;
-    const TIEMPO_LIMITE_INACTIVIDAD = 5 * 60 * 1000; // 5 minutos en milisegundos
+    const TIEMPO_LIMITE_INACTIVIDAD = 5 * 60 * 1000; // 5 minutos
 
     function reiniciarTemporizadorInactividad() {
       if (temporizadorInactividad) clearTimeout(temporizadorInactividad);
       if (usuarioActual) {
         temporizadorInactividad = setTimeout(() => {
-          cerrarSesionPorInactividad();
+          alert("⚠️ Sesión cerrada automáticamente por inactividad (5 minutos).");
+          cerrarSesionManual();
         }, TIEMPO_LIMITE_INACTIVIDAD);
       }
     }
 
-    // Monitoreo continuo de actividad del usuario (mouse, teclado, táctil, scroll)
     ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'].forEach(evt => {
       window.addEventListener(evt, reiniciarTemporizadorInactividad, { passive: true });
     });
 
-    function cerrarSesionPorInactividad() {
-      alert("⚠️ Tu sesión se ha cerrado automáticamente por inactividad (5 minutos).");
-      cerrarSesionManual();
-    }
-
     window.cerrarSesionManual = function() {
       usuarioActual = null;
       currentInspectedMAC = null;
+      sessionStorage.removeItem("scada_session_user");
       if (temporizadorInactividad) clearTimeout(temporizadorInactividad);
       
       document.getElementById("topAppBar").style.display = "none";
@@ -737,7 +702,7 @@
     };
 
     // =========================================================================
-    // 2. NAVEGACIÓN SPA NATIVA (ACTIVITIES)
+    // 2. NAVEGACIÓN FLUIDA (ACTIVITIES)
     // =========================================================================
     window.openActivity = function(actId) {
       if (activityStack[activityStack.length - 1] !== actId) {
@@ -771,14 +736,14 @@
     }
 
     // =========================================================================
-    // 3. BASE DE DATOS LOCAL (INDEXEDDB)
+    // 3. BASE DE DATOS LOCAL CON SINCRONIZACIÓN DOBLE (ANTI-PÉRDIDA DE PASS)
     // =========================================================================
     let db;
     const fleet = {};
 
     function initDB() {
       return new Promise((resolve, reject) => {
-        const req = indexedDB.open("AutoclaveEnterpriseSecureDB_v4", 1);
+        const req = indexedDB.open("AutoclaveFastFleetDB_v5", 1);
         req.onupgradeneeded = (e) => {
           db = e.target.result;
           if (!db.objectStoreNames.contains("asignaciones")) db.createObjectStore("asignaciones", { keyPath: "mac" });
@@ -791,13 +756,16 @@
         };
         req.onsuccess = (e) => {
           db = e.target.result;
-          // Usuario maestro de arranque
+          
+          // Crear admin por defecto si no existe
           const tx = db.transaction(["usuarios"], "readwrite");
-          tx.objectStore("usuarios").get("admin").onsuccess = (ev) => {
+          const store = tx.objectStore("usuarios");
+          store.get("admin").onsuccess = (ev) => {
             if (!ev.target.result) {
-              tx.objectStore("usuarios").add({
+              const defaultPass = localStorage.getItem("scada_pass_admin") || "1234";
+              store.add({
                 user: "admin",
-                pass: "1234",
+                pass: defaultPass,
                 rol: "SUPERADMIN",
                 email: "yuniolgonzalez9@gmail.com",
                 otp: null,
@@ -805,6 +773,7 @@
                 otpUsado: false,
                 fecha: new Date().toISOString()
               });
+              localStorage.setItem("scada_pass_admin", defaultPass);
             }
           };
 
@@ -820,8 +789,7 @@
     function cargarEquiposGuardados() {
       const tx = db.transaction(["asignaciones"], "readonly");
       tx.objectStore("asignaciones").getAll().onsuccess = (e) => {
-        const guardados = e.target.result || [];
-        guardados.forEach(item => {
+        (e.target.result || []).forEach(item => {
           if (!fleet[item.mac]) {
             fleet[item.mac] = {
               mac: item.mac,
@@ -842,7 +810,7 @@
     }
 
     // =========================================================================
-    // 4. AUTENTICACIÓN, SELECTOR DE USUARIO Y RECUPERACIÓN OTP
+    // 4. AUTENTICACIÓN, CAMBIO DE CLAVE Y RECUPERACIÓN REAL
     // =========================================================================
     function cargarListaUsuariosLogin() {
       if (!db) return;
@@ -850,7 +818,7 @@
       tx.objectStore("usuarios").getAll().onsuccess = (e) => {
         const users = e.target.result || [];
         const sel = document.getElementById("loginUserSelect");
-        sel.innerHTML = `<option value="">-- Seleccionar usuario registrado --</option>`;
+        sel.innerHTML = `<option value="">-- Seleccionar usuario --</option>`;
         users.forEach(u => {
           sel.innerHTML += `<option value="${u.user}">${u.user.toUpperCase()} (${u.rol})</option>`;
         });
@@ -879,24 +847,23 @@
       store.get(u).onsuccess = (e) => {
         const user = e.target.result;
         if (!user) {
-          mostrarFeedback(fb, "El usuario no existe en la base de datos.", "var(--red)");
+          mostrarFeedback(fb, "El usuario no existe.", "var(--red)");
           return;
         }
 
         const ahora = Date.now();
 
-        // 1. Acceso mediante Contraseña Temporal (OTP)
+        // 1. Verificación de Contraseña Temporal (OTP)
         if (user.otp && p === user.otp) {
           if (user.otpUsado) {
-            mostrarFeedback(fb, "Esta contraseña temporal ya fue utilizada anteriormente.", "var(--red)");
+            mostrarFeedback(fb, "Este código temporal ya fue usado.", "var(--red)");
             return;
           }
           if (ahora > user.otpExpires) {
-            mostrarFeedback(fb, "La contraseña temporal ha expirado (validez: 15 min).", "var(--red)");
+            mostrarFeedback(fb, "El código temporal ha expirado.", "var(--red)");
             return;
           }
 
-          // Marcar OTP como consumido y forzar cambio de contraseña
           user.otpUsado = true;
           user.otp = null;
           store.put(user);
@@ -906,23 +873,31 @@
           return;
         }
 
-        // 2. Acceso mediante Contraseña Regular
-        if (user.pass === p) {
+        // 2. Verificación de Contraseña Regular (Valida en IndexedDB y respaldo localStorage)
+        const passAlmacenada = localStorage.getItem("scada_pass_" + user.user) || user.pass;
+
+        if (passAlmacenada === p) {
+          // Si hubo desincronización, reparar inmediatamente
+          if (user.pass !== passAlmacenada) {
+            user.pass = passAlmacenada;
+            store.put(user);
+          }
           iniciarSesionExitosa(user);
         } else {
-          mostrarFeedback(fb, "Contraseña incorrecta.", "var(--red)");
+          mostrarFeedback(fb, "Contraseña incorrecta. Verifica mayúsculas.", "var(--red)");
         }
       };
     };
 
     function iniciarSesionExitosa(user) {
       usuarioActual = user;
+      sessionStorage.setItem("scada_session_user", user.user);
+
       document.getElementById("currentUserName").innerText = user.user.toUpperCase();
       const b = document.getElementById("currentUserRoleBadge");
       b.innerText = user.rol;
       b.className = "role-badge " + (user.rol === "SUPERADMIN" ? "role-super" : user.rol === "TECNICO" ? "role-tech" : "role-oper");
 
-      // Mostrar interfaz del SCADA
       document.getElementById("topAppBar").style.display = "flex";
       document.getElementById("mainNavBar").style.display = "flex";
       aplicarPermisosRol();
@@ -938,11 +913,10 @@
       el.style.display = "block";
       el.style.color = color;
       el.style.border = `1px solid ${color}`;
-      el.style.background = "rgba(0,0,0,0.4)";
+      el.style.background = "rgba(0,0,0,0.5)";
       el.innerText = msg;
     }
 
-    // RECUPERACIÓN CON ENVÍO REAL A yuniolgonzalez9@gmail.com
     window.abrirRecuperacion = function() {
       document.getElementById("recovUser").value = document.getElementById("loginUserInput").value;
       document.getElementById("recovFeedback").style.display = "none";
@@ -955,7 +929,7 @@
       const btn = document.getElementById("btnSendRecovery");
 
       if (!u) {
-        mostrarFeedback(fb, "Ingresa el nombre del usuario a recuperar.", "var(--red)");
+        mostrarFeedback(fb, "Ingresa el usuario a recuperar.", "var(--red)");
         return;
       }
 
@@ -968,54 +942,56 @@
           return;
         }
 
-        // Generar OTP aleatorio de 6 caracteres alfanuméricos
         const otpCode = Math.random().toString(36).substring(2, 8).toUpperCase();
         user.otp = otpCode;
-        user.otpExpires = Date.now() + (15 * 60 * 1000); // 15 minutos
+        user.otpExpires = Date.now() + (15 * 60 * 1000);
         user.otpUsado = false;
         store.put(user);
 
         btn.disabled = true;
         btn.innerText = "⏳ ENVIANDO A yuniolgonzalez9@gmail.com...";
 
-        // Transmisión directa por correo vía FormSubmit API
         fetch("https://formsubmit.co/ajax/yuniolgonzalez9@gmail.com", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Accept": "application/json"
-          },
+          headers: { "Content-Type": "application/json", "Accept": "application/json" },
           body: JSON.stringify({
-            _subject: "🔐 CLAVE TEMPORAL - AUTOCLAVE SCADA FLEET",
+            _subject: "🔐 CLAVE TEMPORAL SCADA",
             Usuario: user.user,
-            Rol: user.rol,
-            Contraseña_Temporal_Un_Solo_Uso: otpCode,
-            Validez: "15 Minutos",
-            Instrucciones: "Ingresa con esta contraseña temporal. El sistema te pedirá cambiarla de inmediato por una nueva."
+            Codigo_Temporal_Un_Solo_Uso: otpCode,
+            Validez: "15 Minutos"
           })
         })
-        .then(res => res.json())
         .then(() => {
           btn.disabled = false;
-          btn.innerText = "📩 GENERAR Y ENVIAR CONTRASEÑA TEMPORAL";
-          mostrarFeedback(fb, `¡Código enviado a yuniolgonzalez9@gmail.com! Revisa tu bandeja de entrada o spam. Código temporal generado: [ ${otpCode} ]`, "var(--green)");
+          btn.innerText = "📩 GENERAR Y ENVIAR CÓDIGO TEMPORAL";
+          mostrarFeedback(fb, `¡Código enviado a yuniolgonzalez9@gmail.com! Clave temporal: [ ${otpCode} ]`, "var(--green)");
         })
         .catch(() => {
           btn.disabled = false;
-          btn.innerText = "📩 GENERAR Y ENVIAR CONTRASEÑA TEMPORAL";
-          // Respaldo visual en pantalla en caso de fallo de red exterior
-          mostrarFeedback(fb, `Código temporal generado con éxito: [ ${otpCode} ]. Úsalo en el login antes de 15 minutos.`, "var(--cyan)");
+          btn.innerText = "📩 GENERAR Y ENVIAR CÓDIGO TEMPORAL";
+          mostrarFeedback(fb, `Código temporal generado: [ ${otpCode} ]. Úsalo en el login.`, "var(--cyan)");
         });
       };
     };
 
-    window.guardarNuevaContrasenaObligatoria = function() {
+    // ACTUALIZACIÓN DE CONTRASEÑA DOBLEMENTE BLINDADA
+    window.guardarNuevaContrasena = function() {
       const p1 = document.getElementById("newPassInput").value.trim();
       const p2 = document.getElementById("confirmPassInput").value.trim();
+
+      if (!usuarioActual || !usuarioActual.user) {
+        alert("Sesión no válida. Inicia sesión de nuevo.");
+        cerrarSesionManual();
+        return;
+      }
 
       if (p1.length < 4) return alert("La contraseña debe tener al menos 4 caracteres.");
       if (p1 !== p2) return alert("Las contraseñas no coinciden.");
 
+      // 1. Guardar de forma sincrónica en localStorage
+      localStorage.setItem("scada_pass_" + usuarioActual.user, p1);
+
+      // 2. Guardar en IndexedDB
       const tx = db.transaction(["usuarios"], "readwrite");
       const store = tx.objectStore("usuarios");
       store.get(usuarioActual.user).onsuccess = (e) => {
@@ -1023,10 +999,13 @@
         user.pass = p1;
         user.otp = null;
         user.otpUsado = false;
-        store.put(user);
         
-        tx.oncomplete = () => {
-          alert("¡Contraseña actualizada permanentemente! Ingresando al SCADA...");
+        const putReq = store.put(user);
+        putReq.onsuccess = () => {
+          usuarioActual.pass = p1;
+          document.getElementById("newPassInput").value = "";
+          document.getElementById("confirmPassInput").value = "";
+          alert("¡Contraseña actualizada permanentemente! La contraseña anterior ha sido eliminada por completo.");
           iniciarSesionExitosa(user);
         };
       };
@@ -1048,7 +1027,7 @@
     }
 
     // =========================================================================
-    // 5. COMUNICACIÓN MQTT ROBUSTA (TOLERANCIA 20 SEGUNDOS)
+    // 5. COMUNICACIÓN MQTT INSTANTÁNEA (SIN LAG)
     // =========================================================================
     let mqttClient;
 
@@ -1058,7 +1037,7 @@
 
       mqttClient.on("connect", () => {
         document.getElementById("mqttDot").className = "dot online";
-        document.getElementById("mqttStatusText").innerText = "BROKER ONLINE";
+        document.getElementById("mqttStatusText").innerText = "ONLINE";
         document.getElementById("mqttStatusText").style.color = "var(--green)";
         mqttClient.subscribe("autoclave_med_2026/+/telemetria");
         mqttClient.subscribe("autoclave_med_2026/+/esquema");
@@ -1066,7 +1045,7 @@
 
       mqttClient.on("error", () => {
         document.getElementById("mqttDot").className = "dot offline";
-        document.getElementById("mqttStatusText").innerText = "ERROR MQTT";
+        document.getElementById("mqttStatusText").innerText = "ERROR RED";
       });
 
       mqttClient.on("message", (topic, msg) => {
@@ -1111,7 +1090,7 @@
       if (data.alarma_cod && data.alarma_cod > 0) {
         if (fleet[mac].ultimaAlarma !== data.alarma_cod) {
           fleet[mac].ultimaAlarma = data.alarma_cod;
-          guardarReporte("ALARMA", mac, fleet[mac].meta.modelo, data.alarma_msg || "Alarma crítica", { temp: data.temp_camara, presion: data.presion });
+          guardarReporte("ALARMA", mac, fleet[mac].meta.modelo, data.alarma_msg || "Alarma", { temp: data.temp_camara, presion: data.presion });
         }
       } else {
         fleet[mac].ultimaAlarma = 0;
@@ -1119,11 +1098,12 @@
 
       if (data.fase === "FINALIZADO CON EXITO" && !fleet[mac].cicloRegistrado) {
         fleet[mac].cicloRegistrado = true;
-        guardarReporte("CICLO", mac, fleet[mac].meta.modelo, "Esterilización completada con éxito", { temp: data.temp_camara, presion: data.presion });
+        guardarReporte("CICLO", mac, fleet[mac].meta.modelo, "Ciclo conforme", { temp: data.temp_camara, presion: data.presion });
       } else if (data.fase !== "FINALIZADO CON EXITO") {
         fleet[mac].cicloRegistrado = false;
       }
 
+      // Inyección directa a la interfaz sin reconstruir el DOM (0 lag)
       actualizarCardDashboard(mac);
       if (currentInspectedMAC === mac) actualizarPantallaDetalleDinamica();
     }
@@ -1144,7 +1124,7 @@
     }
 
     // =========================================================================
-    // 6. RENDERIZADO DEL MONITOR PRINCIPAL
+    // 6. RENDERIZADO DEL MONITOR SIN LAG
     // =========================================================================
     function renderFleetDashboard() {
       const container = document.getElementById("fleetLiveContainer");
@@ -1153,7 +1133,7 @@
       document.getElementById("fleetCount").innerText = onlineCount;
 
       if (!keys.length) {
-        container.innerHTML = `<div style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 60px;">NO HAY EQUIPOS REGISTRADOS NI TRANSMITIENDO...</div>`;
+        container.innerHTML = `<div style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 50px;">ESPERANDO AUTOCLAVES TRANSMITIENDO...</div>`;
         return;
       }
 
@@ -1183,11 +1163,10 @@
       const online = isOnline(item);
 
       card.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
           <div>
             <div style="font-size: 0.95rem; font-weight: 800; color: var(--cyan);">${meta.alias}</div>
             <div style="font-size: 0.68rem; color: var(--text-muted);">${meta.cliente} | ${meta.modelo}</div>
-            <div style="font-size: 0.62rem; color: var(--purple); margin-top: 2px;">MAC: ${mac} | FW: ${item.fw || 'v3.2'}</div>
           </div>
           <span class="status-badge">
             <span class="dot ${online ? 'online' : 'offline'}"></span>
@@ -1202,23 +1181,23 @@
           </div>
           <div class="gauge-cell">
             <div class="gauge-val p">${(d.presion || 0.0).toFixed(2)}b</div>
-            <div class="gauge-lbl">PRESIÓN CÁMARA</div>
+            <div class="gauge-lbl">PRESIÓN</div>
           </div>
         </div>
 
-        <div style="background: rgba(0,0,0,0.35); padding: 8px 12px; border-radius: 4px; font-size: 0.75rem; margin-bottom: 10px; display:flex; justify-content:space-between;">
+        <div style="background: rgba(0,0,0,0.35); padding: 7px 10px; border-radius: 4px; font-size: 0.72rem; margin-bottom: 8px; display:flex; justify-content:space-between;">
           <span style="color: var(--text-muted);">FASE:</span> 
           <span style="color: var(--green); font-weight: 700;">${d.fase || 'ESPERA'}</span>
         </div>
 
-        <div style="text-align: center; font-size: 0.68rem; color: var(--cyan); letter-spacing: 1px; padding: 5px; background: rgba(0,243,255,0.06); border-radius: 4px;">
-          👉 TOCAR PARA CONTROL & PARÁMETROS NVS
+        <div style="text-align: center; font-size: 0.65rem; color: var(--cyan); padding: 4px; background: rgba(0,243,255,0.06); border-radius: 4px;">
+          👉 TOCAR PARA CONTROL TOTAL
         </div>
       `;
     }
 
     // =========================================================================
-    // 7. DETALLE DEL EQUIPO Y CONTROL DINÁMICO
+    // 7. DETALLE DEL EQUIPO
     // =========================================================================
     window.abrirDetalleEquipo = function(mac) {
       try {
@@ -1301,10 +1280,10 @@
         `).join("");
       } else {
         containerGauges.innerHTML = `
-          <div class="gauge-cell"><div class="gauge-val" id="dyn-val-temp_camara">--°C</div><div class="gauge-lbl">TEMPERATURA CÁMARA</div></div>
-          <div class="gauge-cell"><div class="gauge-val p" id="dyn-val-presion">--b</div><div class="gauge-lbl">PRESIÓN CÁMARA</div></div>
-          <div class="gauge-cell"><div class="gauge-val" style="color:var(--green);" id="dyn-val-fase">--</div><div class="gauge-lbl">FASE DE CICLO</div></div>
-          <div class="gauge-cell"><div class="gauge-val" style="color:var(--amber);" id="dyn-val-seg_restantes">--:--</div><div class="gauge-lbl">TIEMPO RESTANTE</div></div>
+          <div class="gauge-cell"><div class="gauge-val" id="dyn-val-temp_camara">--°C</div><div class="gauge-lbl">TEMP. CÁMARA</div></div>
+          <div class="gauge-cell"><div class="gauge-val p" id="dyn-val-presion">--b</div><div class="gauge-lbl">PRESIÓN</div></div>
+          <div class="gauge-cell"><div class="gauge-val" style="color:var(--green);" id="dyn-val-fase">--</div><div class="gauge-lbl">FASE</div></div>
+          <div class="gauge-cell"><div class="gauge-val" style="color:var(--amber);" id="dyn-val-seg_restantes">--:--</div><div class="gauge-lbl">TIEMPO</div></div>
         `;
       }
 
@@ -1337,7 +1316,7 @@
           </div>
         `).join("");
       } else {
-        containerMenus.innerHTML = `<div style="color: var(--text-muted); padding: 20px; text-align: center;">Esperando que el equipo transmita su esquema vía MQTT...</div>`;
+        containerMenus.innerHTML = `<div style="color: var(--text-muted); padding: 20px; text-align: center;">Esperando que el equipo transmita su esquema...</div>`;
       }
     }
 
@@ -1440,7 +1419,7 @@
       const v = window.open("", "_blank");
       v.document.write(`
         <html><head><title>CERTIFICADO - ${meta.alias}</title>
-        <style>body{font-family:'Courier New',monospace;padding:40px;color:#111;}table{width:100%;border-collapse:collapse;margin:20px 0;}td,th{border:1px solid #333;padding:8px;}</style>
+        <style>body{font-family:'Courier New',monospace;padding:30px;color:#111;}table{width:100%;border-collapse:collapse;margin:20px 0;}td,th{border:1px solid #333;padding:8px;}</style>
         </head><body>
         <h2>CERTIFICADO OFICIAL DE CICLO DE ESTERILIZACIÓN</h2>
         <p>CLIENTE: <b>${meta.cliente.toUpperCase()}</b></p>
@@ -1458,7 +1437,7 @@
     };
 
     // =========================================================================
-    // 8. FOTA HUB (EQUIPOS ONLINE Y OFFLINE)
+    // 8. FOTA HUB
     // =========================================================================
     let currentFotaFilter = 'ALL';
 
@@ -1475,7 +1454,7 @@
       if (currentFotaFilter === 'OFFLINE') macs = macs.filter(m => !isOnline(fleet[m]));
 
       if (!macs.length) {
-        box.innerHTML = `<div style="color:var(--text-muted); text-align:center; padding:25px;">No hay autoclaves que coincidan con el filtro.</div>`;
+        box.innerHTML = `<div style="color:var(--text-muted); text-align:center; padding:25px;">No hay autoclaves para este filtro.</div>`;
         return;
       }
 
@@ -1485,11 +1464,11 @@
         const online = isOnline(item);
 
         return `
-          <label style="display:flex; align-items:center; gap:12px; background:rgba(0,0,0,0.35); border:1px solid rgba(255,255,255,0.08); padding:10px 14px; border-radius:6px; margin-bottom:8px; cursor:pointer;">
+          <label style="display:flex; align-items:center; gap:10px; background:rgba(0,0,0,0.35); border:1px solid rgba(255,255,255,0.08); padding:10px 14px; border-radius:6px; margin-bottom:8px; cursor:pointer;">
             <input type="checkbox" class="fota-target-check" value="${mac}" ${online ? 'checked' : ''} style="width:18px; height:18px; accent-color:var(--cyan);">
             <div style="flex: 1;">
-              <div style="font-weight: 700; color: var(--cyan);">${meta.alias}</div>
-              <div style="font-size: 0.68rem; color: var(--text-muted);">${meta.cliente} | ${meta.modelo} | MAC: ${mac}</div>
+              <div style="font-weight: 700; color: var(--cyan); font-size:0.85rem;">${meta.alias}</div>
+              <div style="font-size: 0.68rem; color: var(--text-muted);">${meta.cliente} | ${meta.modelo}</div>
             </div>
             <span class="status-badge"><span class="dot ${online ? 'online' : 'offline'}"></span> ${online ? 'ONLINE' : 'OFFLINE'}</span>
           </label>
@@ -1529,7 +1508,7 @@
     };
 
     // =========================================================================
-    // 9. GESTIÓN DE FLOTA (AGREGAR / ELIMINAR / EDITAR)
+    // 9. GESTIÓN MANUAL DE FLOTA
     // =========================================================================
     window.registrarEquipoManual = function() {
       const mac = document.getElementById("addMac").value.trim().toUpperCase().replace(/[:\-]/g, '');
@@ -1566,7 +1545,7 @@
       const keys = Object.keys(fleet);
 
       if (!keys.length) {
-        tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted);">Sin dispositivos en el sistema.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted);">Sin dispositivos registrados.</td></tr>`;
         return;
       }
 
@@ -1582,10 +1561,9 @@
             <td style="font-weight:700;">${meta.alias}</td>
             <td>${meta.cliente}</td>
             <td style="color:var(--purple);">${meta.modelo}</td>
-            <td>${item.fw || 'v3.2'}</td>
             <td>
-              <button class="btn" style="padding:4px 8px; min-height:30px;" onclick="abrirDetalleEquipo('${mac}')">⚙️ VER</button>
-              <button class="btn btn-danger" style="padding:4px 8px; min-height:30px; margin-left:6px;" onclick="eliminarEquipoTotal('${mac}')">🗑️</button>
+              <button class="btn" style="min-height:32px; padding:4px 8px; font-size:0.65rem;" onclick="abrirDetalleEquipo('${mac}')">⚙️ VER</button>
+              <button class="btn btn-danger" style="min-height:32px; padding:4px 8px; font-size:0.65rem; margin-left:4px;" onclick="eliminarEquipoTotal('${mac}')">🗑️</button>
             </td>
           </tr>
         `;
@@ -1593,7 +1571,7 @@
     }
 
     // =========================================================================
-    // 10. REPORTES & AUDITORÍA
+    // 10. AUDITORÍA Y REPORTES
     // =========================================================================
     function guardarReporte(tipo, mac, modelo, mensaje, telemetria = {}) {
       if (!db) return;
@@ -1631,7 +1609,7 @@
         if (fText) items = items.filter(x => x.mac.toUpperCase().includes(fText) || x.modelo.toUpperCase().includes(fText) || x.mensaje.toUpperCase().includes(fText));
 
         if (!items.length) {
-          tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted);">Sin registros.</td></tr>`;
+          tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted);">Sin registros encontrados.</td></tr>`;
           return;
         }
 
@@ -1643,7 +1621,7 @@
             <td style="color:var(--purple);">${r.modelo}</td>
             <td>${r.telemetria?.temp !== undefined ? `T:${r.telemetria.temp}°C | P:${r.telemetria.presion}b` : '--'}</td>
             <td>${r.mensaje}</td>
-            <td><button class="btn" style="padding:2px 6px; font-size:0.65rem; min-height:26px;" onclick="abrirDetalleEquipo('${r.mac}')">VER</button></td>
+            <td><button class="btn" style="min-height:28px; padding:2px 8px; font-size:0.65rem;" onclick="abrirDetalleEquipo('${r.mac}')">VER</button></td>
           </tr>
         `).join("");
       };
@@ -1686,6 +1664,9 @@
       const rol = document.getElementById("uRol").value;
 
       if (!user || pass.length < 4) return alert("PIN mínimo de 4 caracteres.");
+      
+      localStorage.setItem("scada_pass_" + user, pass);
+
       const tx = db.transaction(["usuarios"], "readwrite");
       tx.objectStore("usuarios").add({
         user,
@@ -1698,7 +1679,7 @@
         fecha: new Date().toISOString()
       });
       tx.oncomplete = () => {
-        alert("Usuario creado.");
+        alert("Usuario creado exitosamente.");
         document.getElementById("uUser").value = "";
         document.getElementById("uPass").value = "";
         cargarUsuariosUI();
@@ -1716,14 +1697,15 @@
             <td style="font-weight:700; color:var(--cyan);">${u.user}</td>
             <td><span class="role-badge ${u.rol === 'SUPERADMIN' ? 'role-super' : u.rol === 'TECNICO' ? 'role-tech' : 'role-oper'}">${u.rol}</span></td>
             <td>${new Date(u.fecha).toLocaleDateString()}</td>
-            <td>${u.user !== 'admin' ? `<button class="btn btn-danger" style="padding:2px 6px; font-size:0.65rem; min-height:26px;" onclick="eliminarUsuario('${u.user}')">X</button>` : '--'}</td>
+            <td>${u.user !== 'admin' ? `<button class="btn btn-danger" style="min-height:28px; padding:2px 8px; font-size:0.65rem;" onclick="eliminarUsuario('${u.user}')">X</button>` : '--'}</td>
           </tr>
         `).join("");
       };
     }
 
     window.eliminarUsuario = function(u) {
-      if (confirm(`¿Eliminar ${u}?`)) {
+      if (confirm(`¿Eliminar al usuario ${u}?`)) {
+        localStorage.removeItem("scada_pass_" + u);
         const tx = db.transaction(["usuarios"], "readwrite");
         tx.objectStore("usuarios").delete(u);
         tx.oncomplete = () => {
@@ -1733,7 +1715,7 @@
       }
     };
 
-    // Refresco periódico de estados de conexión (1.5 segundos)
+    // Refresco seguro periódico
     setInterval(() => {
       renderFleetDashboard();
       if (activityStack[activityStack.length - 1] === 'act-fota') renderFotaLiveList();
