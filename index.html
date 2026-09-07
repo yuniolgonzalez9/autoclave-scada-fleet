@@ -2,868 +2,1348 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>VITA-STERIL // SCADA Fleet & FOTA OS</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>AUTOCLAVE SCADA // DYNAMIC ENTERPRISE HUB</title>
   
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
-  
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;800&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <style>
     :root {
-      --bg-base: #0a0d14;
-      --bg-surface: #121722;
-      --bg-card: #181f2e;
-      --bg-input: #0e121a;
-      --border-card: #262f44;
-      --primary: #00f2c3;
-      --primary-glow: rgba(0, 242, 195, 0.25);
-      --accent-orange: #ff9f43;
-      --danger: #ff3b5c;
-      --danger-glow: rgba(255, 59, 92, 0.3);
+      --bg-dark: #05070d;
+      --bg-surface: rgba(12, 18, 32, 0.96);
+      --bg-card: rgba(16, 24, 44, 0.85);
+      --border-glow: rgba(0, 243, 255, 0.22);
+      --border-focus: #00f3ff;
+      --cyan: #00f3ff;
+      --green: #00ff88;
+      --red: #ff0055;
+      --amber: #ffaa00;
       --purple: #9d4edd;
-      --text-main: #f0f3fa;
-      --text-muted: #7e8b9f;
-      --font-mono: 'JetBrains Mono', monospace;
+      --text-main: #f1f5f9;
+      --text-muted: #64748b;
     }
 
-    * { box-sizing: border-box; }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'JetBrains Mono', monospace; -webkit-tap-highlight-color: transparent; }
+    
     body {
-      font-family: 'Inter', sans-serif;
-      background-color: var(--bg-base);
+      background-color: var(--bg-dark);
+      background-image: 
+        radial-gradient(circle at 10% 10%, rgba(0, 243, 255, 0.05) 0%, transparent 40%),
+        radial-gradient(circle at 90% 90%, rgba(157, 78, 221, 0.05) 0%, transparent 40%),
+        linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+      background-size: 100% 100%, 100% 100%, 30px 30px, 30px 30px;
       color: var(--text-main);
-      margin: 0; padding: 0; min-height: 100vh;
-      -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+      overflow-x: hidden;
     }
 
-    .app-container {
-      max-width: 1380px; margin: 0 auto; padding: 24px 20px 40px 20px;
+    /* TOP APP BAR */
+    .app-bar {
+      background: rgba(8, 12, 22, 0.98);
+      backdrop-filter: blur(14px);
+      border-bottom: 1px solid var(--border-glow);
+      padding: 12px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
     }
 
-    .navbar {
-      display: flex; justify-content: space-between; align-items: center;
-      background: var(--bg-surface); border: 1px solid var(--border-card);
-      border-radius: 14px; padding: 14px 24px; margin-bottom: 24px;
-    }
-    .brand-title { font-size: 18px; font-weight: 800; display: flex; align-items: center; gap: 10px; }
-    .brand-badge {
-      background: var(--primary-glow); color: var(--primary);
-      border: 1px solid var(--primary); font-size: 11px;
-      padding: 2px 8px; border-radius: 6px; font-family: var(--font-mono); font-weight: 700;
-    }
-    .nav-controls { display: flex; align-items: center; gap: 14px; }
-    
-    .device-select {
-      background: var(--bg-input); color: var(--text-main);
-      border: 1px solid var(--border-card); padding: 9px 14px;
-      border-radius: 8px; font-size: 14px; cursor: pointer; outline: none; min-width: 250px;
-    }
-    .device-select:focus { border-color: var(--primary); }
-
-    .btn-fota-top {
-      background: linear-gradient(135deg, #7928ca, #ff0080);
-      color: #fff; border: none; padding: 9px 16px; border-radius: 8px;
-      font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s;
-    }
-    .btn-fota-top:hover { filter: brightness(1.15); transform: translateY(-1px); }
-
-    .btn-logout {
-      background: transparent; color: var(--danger);
-      border: 1px solid rgba(255, 59, 92, 0.4); padding: 8px 14px;
-      border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;
-    }
-    .btn-logout:hover { background: var(--danger); color: #fff; }
-
-    #bannerAlarma {
-      display: none; background: linear-gradient(90deg, #ff3b5c, #d62040);
-      color: #fff; padding: 16px 20px; border-radius: 12px; margin-bottom: 24px;
-      box-shadow: 0 4px 25px var(--danger-glow); animation: alertPulse 1.2s infinite;
-    }
-    @keyframes alertPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.88; } }
-
-    .kpi-grid {
-      display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; margin-bottom: 24px;
-    }
-    .kpi-card {
-      background: var(--bg-surface); border: 1px solid var(--border-card);
-      border-radius: 14px; padding: 20px; position: relative; overflow: hidden;
-    }
-    .kpi-card::before {
-      content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: var(--primary);
-    }
-    .kpi-card.orange::before { background: var(--accent-orange); }
-    .kpi-card.blue::before { background: #00b4d8; }
-    .kpi-card.purple::before { background: var(--purple); }
-
-    .kpi-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.8px; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; }
-    .kpi-value { font-family: var(--font-mono); font-size: 32px; font-weight: 700; color: #fff; display: flex; align-items: baseline; gap: 6px; }
-    .kpi-unit { font-size: 15px; color: var(--text-muted); font-family: 'Inter', sans-serif; }
-
-    .dashboard-grid {
-      display: grid; grid-template-columns: 1.7fr 1.1fr; gap: 24px;
-    }
-    .panel-card {
-      background: var(--bg-surface); border: 1px solid var(--border-card);
-      border-radius: 14px; padding: 22px; margin-bottom: 24px;
-    }
-    .panel-title {
-      font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-muted); margin: 0 0 16px 0;
-      display: flex; align-items: center; justify-content: space-between;
+    .brand-title {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1.15rem;
+      letter-spacing: 2px;
+      color: var(--cyan);
+      text-shadow: 0 0 15px rgba(0, 243, 255, 0.4);
     }
 
-    .chart-container { position: relative; height: 320px; width: 100%; }
-
-    .action-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
-    .btn-action {
-      padding: 14px; border-radius: 10px; font-weight: 700; font-size: 14px; border: none; cursor: pointer;
-      display: flex; align-items: center; justify-content: center; gap: 8px; transition: all 0.2s;
-    }
-    .btn-start { background: linear-gradient(135deg, #00f2c3, #00bf9a); color: #0b151b; }
-    .btn-start:hover { transform: translateY(-2px); }
-    .btn-stop { background: linear-gradient(135deg, #ff3b5c, #d91c40); color: #fff; }
-    .btn-stop:hover { transform: translateY(-2px); }
-    .btn-reset { background: #252e42; color: #f0f3fa; border: 1px solid var(--border-card); }
-
-    .toggle-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
-    .toggle-card {
-      background: var(--bg-card); border: 1px solid var(--border-card); border-radius: 12px;
-      padding: 16px 18px; display: flex; align-items: center; justify-content: space-between;
-    }
-    .toggle-card.active { border-color: rgba(0, 242, 195, 0.4); background: rgba(0, 242, 195, 0.04); }
-    .toggle-name { font-size: 14px; font-weight: 700; color: #fff; }
-    .toggle-status-badge { font-size: 11px; font-family: var(--font-mono); font-weight: 700; color: var(--text-muted); }
-    .toggle-status-badge.on { color: var(--primary); }
-
-    .switch-wrap { position: relative; display: inline-block; width: 52px; height: 28px; cursor: pointer; }
-    .switch-wrap input { opacity: 0; width: 0; height: 0; }
-    .slider-toggle {
-      position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-color: #262f44; transition: .25s; border-radius: 28px;
-    }
-    .slider-toggle:before {
-      position: absolute; content: ""; height: 22px; width: 22px; left: 3px; bottom: 3px; background-color: #f0f3fa; transition: .25s; border-radius: 50%;
-    }
-    input:checked + .slider-toggle { background-color: var(--primary); box-shadow: 0 0 14px var(--primary-glow); }
-    input:checked + .slider-toggle:before { transform: translateX(24px); background-color: #0b151b; }
-
-    .stepper-card { background: var(--bg-card); border: 1px solid var(--border-card); border-radius: 12px; padding: 16px 18px; margin-top: 12px; }
-    .stepper-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-    .stepper-name { font-size: 13px; font-weight: 600; color: var(--text-muted); }
-    .stepper-val { font-family: var(--font-mono); font-size: 18px; font-weight: 700; color: #fff; }
-    .stepper-controls { display: flex; align-items: center; gap: 8px; }
-    .btn-step {
-      background: #252e42; color: #fff; border: 1px solid var(--border-card); width: 38px; height: 38px; border-radius: 8px; font-size: 18px; cursor: pointer;
-    }
-    .btn-step:hover { background: var(--primary); color: #000; }
-    .stepper-slider { flex: 1; accent-color: var(--primary); cursor: pointer; }
-
-    /* ========================================================= */
-    /* MODAL DEL CENTRO FOTA INTELIGENTE CON CATÁLOGO            */
-    /* ========================================================= */
-    #fotaModal {
-      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(10, 13, 20, 0.88); backdrop-filter: blur(8px);
-      display: none; align-items: center; justify-content: center; z-index: 2000;
-    }
-    .fota-card {
-      background: var(--bg-surface); border: 1px solid #7928ca; border-radius: 16px;
-      padding: 30px; width: 100%; max-width: 580px; box-shadow: 0 15px 50px rgba(121, 40, 202, 0.35);
-    }
-    .fota-title { font-size: 19px; font-weight: 800; color: #fff; margin-top: 0; display: flex; align-items: center; justify-content: space-between; }
-    
-    .fota-tabs { display: flex; gap: 8px; margin: 15px 0; border-bottom: 1px solid var(--border-card); padding-bottom: 10px; }
-    .fota-tab-btn {
-      background: transparent; border: none; color: var(--text-muted); padding: 8px 14px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px;
-    }
-    .fota-tab-btn.active { background: #7928ca; color: #fff; }
-
-    .fota-input, .fota-select {
-      width: 100%; background: var(--bg-input); border: 1px solid var(--border-card); padding: 11px;
-      color: #fff; border-radius: 8px; margin: 6px 0 14px 0; font-family: var(--font-mono); font-size: 13px; outline: none;
-    }
-    .fota-select:focus, .fota-input:focus { border-color: var(--primary); }
-
-    .fota-status-check {
-      background: var(--bg-card); border-radius: 10px; padding: 12px 16px; margin-bottom: 14px; font-size: 13px;
-    }
-    .fota-progress-bar {
-      width: 100%; height: 12px; background: var(--bg-input); border-radius: 6px; overflow: hidden; margin: 15px 0; display: none;
-    }
-    .fota-progress-fill {
-      height: 100%; width: 0%; background: linear-gradient(90deg, #00f2c3, #7928ca); transition: width 0.3s;
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.7rem;
+      padding: 4px 10px;
+      border-radius: 20px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(0,0,0,0.5);
     }
 
-    #loginScreen {
-      position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: var(--bg-base); display: flex; align-items: center; justify-content: center; z-index: 1000;
-    }
-    .login-modal {
-      background: var(--bg-surface); border: 1px solid var(--border-card); border-radius: 16px; padding: 36px 32px; width: 100%; max-width: 380px;
-    }
-    .login-modal input {
-      width: 100%; background: var(--bg-input); border: 1px solid var(--border-card); padding: 12px 14px; color: #fff; border-radius: 8px; margin-bottom: 14px;
-    }
-    .btn-login {
-      background: var(--primary); color: #0b151b; font-weight: 700; padding: 12px; border-radius: 8px; border: none; width: 100%; cursor: pointer;
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted); }
+    .dot.online { background: var(--green); box-shadow: 0 0 10px var(--green); }
+    .dot.offline { background: var(--red); box-shadow: 0 0 10px var(--red); }
+
+    /* NAVEGADOR PRINCIPAL */
+    .nav-bar {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      padding: 14px 20px;
+      background: rgba(8, 12, 22, 0.6);
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      flex-wrap: wrap;
     }
 
-    .pulse-dot {
-      display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--primary); box-shadow: 0 0 10px var(--primary); margin-right: 6px;
+    .nav-tab {
+      background: var(--bg-card);
+      border: 1px solid var(--border-glow);
+      color: var(--text-muted);
+      padding: 9px 18px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+      transition: all 0.25s ease;
     }
+
+    .nav-tab:hover { color: var(--cyan); border-color: var(--cyan); box-shadow: 0 0 12px rgba(0, 243, 255, 0.2); }
+    .nav-tab.active {
+      background: rgba(0, 243, 255, 0.12);
+      color: var(--cyan);
+      border-color: var(--cyan);
+      box-shadow: 0 0 16px rgba(0, 243, 255, 0.3);
+    }
+
+    /* PANTALLAS (ACTIVITIES) */
+    .activity-container {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 20px;
+      min-height: calc(100vh - 120px);
+    }
+
+    .activity {
+      display: none;
+      animation: activitySlideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    .activity.active { display: block; }
+
+    @keyframes activitySlideIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .activity-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border-glow);
+    }
+
+    .activity-title {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1.1rem;
+      color: var(--cyan);
+      letter-spacing: 1.5px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    /* CARDS */
+    .card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-glow);
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+
+    .grid-fleet {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 20px;
+    }
+
+    .node-item {
+      background: var(--bg-card);
+      border: 1px solid rgba(0, 243, 255, 0.18);
+      border-radius: 6px;
+      padding: 16px;
+      cursor: pointer;
+      transition: all 0.25s ease;
+    }
+
+    .node-item:hover {
+      border-color: var(--cyan);
+      box-shadow: 0 0 20px rgba(0, 243, 255, 0.25);
+      transform: translateY(-2px);
+    }
+
+    .gauge-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin: 12px 0; }
+    .gauge-cell {
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 4px;
+      padding: 12px;
+      text-align: center;
+    }
+    .gauge-val { font-size: 1.6rem; font-weight: 800; color: var(--cyan); }
+    .gauge-val.p { color: var(--purple); }
+    .gauge-lbl { font-size: 0.65rem; color: var(--text-muted); margin-top: 4px; text-transform: uppercase; }
+
+    /* BOTONES */
+    .btn {
+      background: rgba(0, 243, 255, 0.1);
+      border: 1px solid var(--cyan);
+      color: var(--cyan);
+      padding: 9px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn:hover { background: var(--cyan); color: #000; box-shadow: 0 0 12px var(--cyan); }
+    .btn-back { background: rgba(255, 255, 255, 0.06); border-color: rgba(255, 255, 255, 0.2); color: var(--text-main); }
+    .btn-back:hover { background: rgba(255, 255, 255, 0.2); color: #fff; box-shadow: none; }
+    .btn-danger { background: rgba(255, 0, 85, 0.1); border-color: var(--red); color: var(--red); }
+    .btn-danger:hover { background: var(--red); color: #fff; box-shadow: 0 0 12px var(--red); }
+    .btn-warn { background: rgba(255, 170, 0, 0.1); border-color: var(--amber); color: var(--amber); }
+    .btn-warn:hover { background: var(--amber); color: #000; box-shadow: 0 0 12px var(--amber); }
+
+    .input-field {
+      background: rgba(0, 0, 0, 0.5);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: var(--text-main);
+      padding: 10px 14px;
+      border-radius: 4px;
+      font-size: 0.8rem;
+      outline: none;
+      width: 100%;
+      margin-bottom: 12px;
+    }
+    .input-field:focus { border-color: var(--cyan); box-shadow: 0 0 8px rgba(0, 243, 255, 0.25); }
+
+    .table-container { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+    th {
+      background: rgba(0, 243, 255, 0.05);
+      color: var(--cyan);
+      padding: 12px;
+      border-bottom: 1px solid var(--border-glow);
+      text-align: left;
+    }
+    td { padding: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.04); }
+    tr:hover { background: rgba(255, 255, 255, 0.02); }
+
+    .category-box {
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 6px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    .category-title {
+      font-size: 0.85rem;
+      color: var(--cyan);
+      font-weight: 700;
+      margin-bottom: 14px;
+      border-bottom: 1px solid rgba(0, 243, 255, 0.15);
+      padding-bottom: 6px;
+    }
+
+    .dynamic-field-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(0,0,0,0.3);
+      padding: 10px 14px;
+      border-radius: 4px;
+      margin-bottom: 10px;
+      border: 1px solid rgba(255,255,255,0.05);
+    }
+    .dynamic-field-row input[type="checkbox"] {
+      width: 20px;
+      height: 20px;
+      accent-color: var(--cyan);
+      cursor: pointer;
+    }
+    .dynamic-field-row input[type="number"] {
+      width: 130px;
+      text-align: right;
+      margin-bottom: 0;
+    }
+
+    .role-badge { padding: 3px 8px; border-radius: 4px; font-size: 0.65rem; font-weight: 800; }
+    .role-super { background: rgba(255, 0, 85, 0.2); color: var(--red); border: 1px solid var(--red); }
+    .role-tech  { background: rgba(0, 243, 255, 0.2); color: var(--cyan); border: 1px solid var(--cyan); }
+    .role-oper  { background: rgba(0, 255, 136, 0.2); color: var(--green); border: 1px solid var(--green); }
   </style>
 </head>
 <body>
 
-  <!-- LOGIN -->
-  <div id="loginScreen">
-    <div class="login-modal">
-      <div style="text-align:center; margin-bottom:24px;">
-        <span class="brand-badge">SCADA FLEET OS</span>
-        <h2 style="margin:10px 0 4px 0; font-weight:800;">Acceso Autorizado</h2>
-        <p style="color:var(--text-muted); font-size:13px; margin:0;">Supervisión y Despliegue FOTA</p>
-      </div>
-      <form onsubmit="iniciarSesion(event)">
-        <input type="text" id="txtUser" placeholder="Usuario Operador" required autocomplete="off">
-        <input type="password" id="txtPass" placeholder="Contraseña" required>
-        <button type="submit" class="btn-login">Ingresar al Sistema</button>
-      </form>
-      <p id="lblErrorLogin" style="color:var(--danger); font-size:12px; text-align:center; display:none; margin-top:12px;">Credenciales incorrectas</p>
+  <!-- BARRA SUPERIOR (APP BAR) -->
+  <header class="app-bar">
+    <div style="display: flex; align-items: center; gap: 15px;">
+      <button id="btnGlobalBack" class="btn btn-back" style="display: none;" onclick="goBackActivity()">← VOLVER</button>
+      <div class="brand-title">AUTOCLAVE SCADA // HUB</div>
+      <span class="status-badge">
+        <span class="dot" id="mqttDot"></span>
+        <span id="mqttStatusText">DESCONECTADO</span>
+      </span>
     </div>
-  </div>
-
-  <!-- MODAL FOTA INTELIGENTE CON CATÁLOGO Y DESPLIEGUE PROGRAMADO -->
-  <div id="fotaModal">
-    <div class="fota-card">
-      <div class="fota-title">
-        <span>🚀 CENTRO DE DESPLIEGUE FOTA</span>
-        <span id="fotaTargetBadge" class="brand-badge">-</span>
-      </div>
-
-      <div class="fota-status-check" id="fotaSafetyBox">
-        Verificando estado de seguridad del equipo...
-      </div>
-
-      <!-- Selector de Versión Filtrado por Modelo -->
-      <label style="font-size:12px; font-weight:600; color:var(--text-muted);">SELECCIONAR VERSIÓN DISPONIBLE PARA ESTE MODELO:</label>
-      <select id="selFotaCatalogo" class="fota-select" onchange="seleccionarVersionCatalogo()">
-        <option value="">-- Buscando versiones compatibles... --</option>
-      </select>
-
-      <label style="font-size:12px; font-weight:600; color:var(--text-muted);">URL DEL ARCHIVO .BIN (AUTOMÁTICA O PERSONALIZADA):</label>
-      <input type="url" id="txtUrlFota" class="fota-input" placeholder="https://tu-sitio.netlify.app/firmwares/..." required>
-
-      <div class="fota-progress-bar" id="fotaProgressBar">
-        <div class="fota-progress-fill" id="fotaProgressFill"></div>
-      </div>
-      <div id="fotaProgressLabel" style="font-size:12px; font-family:var(--font-mono); color:var(--primary); text-align:center; display:none;">Descargando Firmware: 0%</div>
-
-      <!-- BOTONES DE DESPLIEGUE -->
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:18px;">
-        <button onclick="dispararFOTAInmediato()" id="btnFotaInmediato" style="background:linear-gradient(135deg, #00f2c3, #00bf9a); color:#0b151b; border:none; padding:12px; border-radius:8px; font-weight:700; cursor:pointer;">
-          ⚡ Desplegar Ahora Mismo
-        </button>
-
-        <button onclick="publicarFOTAProgramado()" id="btnFotaProgramado" style="background:linear-gradient(135deg, #7928ca, #ff0080); color:#fff; border:none; padding:12px; border-radius:8px; font-weight:700; cursor:pointer;">
-          📅 Publicar (Al Encender Mañana)
-        </button>
-      </div>
-
-      <button onclick="cerrarModalFOTA()" style="width:100%; margin-top:10px; background:#252e42; color:#fff; border:1px solid var(--border-card); padding:10px; border-radius:8px; font-weight:600; cursor:pointer;">
-        Cerrar Ventana
-      </button>
-    </div>
-  </div>
-
-  <!-- APLICACIÓN PRINCIPAL -->
-  <div id="mainDashboard" class="app-container" style="display:none;">
     
-    <header class="navbar">
-      <div class="brand-title">
-        <span class="pulse-dot"></span>
-        VITA-STERIL <span class="brand-badge">FLEET OS</span>
+    <div style="display: flex; align-items: center; gap: 14px;">
+      <div class="status-badge" style="border-color: var(--border-glow);">
+        USUARIO: <span id="currentUserName" style="color: var(--cyan); font-weight: 800; margin-left: 4px;">ADMIN</span>
+        <span id="currentUserRoleBadge" class="role-badge role-super" style="margin-left: 6px;">SUPERADMIN</span>
       </div>
-      <div class="nav-controls">
-        <select id="selCliente" class="device-select" onchange="seleccionarAutoclave()">
-          <option value="">-- Conectando con Nube MQTT... --</option>
-        </select>
-        <button onclick="abrirModalFOTA()" class="btn-fota-top">⚡ Centro FOTA</button>
-        <button onclick="cerrarSesion()" class="btn-logout">Salir</button>
-      </div>
-    </header>
-
-    <div id="bannerAlarma">
-      <div style="display:flex; justify-content:space-between; align-items:center;">
-        <div>
-          <strong style="font-size:16px;">¡PARADA DE EMERGENCIA ACTIVA!</strong>
-          <div id="txtAlarmaMsg" style="font-size:14px; margin-top:3px; opacity:0.95;">-</div>
-        </div>
-        <button onclick="mandarComando('RESET_ALARMA')" style="background:#fff; color:#ff3b5c; border:none; padding:8px 16px; border-radius:6px; font-weight:700; cursor:pointer;">Resetear Alarma</button>
+      <button class="btn btn-warn" style="padding: 4px 8px; font-size: 0.68rem;" onclick="openActivity('act-auth')">ACCESO</button>
+      <div class="status-badge">
+        EN LÍNEA: <span id="fleetCount" style="color: var(--green); font-weight: 800; margin-left: 5px;">0</span>
       </div>
     </div>
+  </header>
 
-    <main id="panelPrincipal" style="display:none;">
-      
-      <section class="kpi-grid">
-        <div class="kpi-card">
-          <div class="kpi-label">Temperatura Cámara</div>
-          <div class="kpi-value"><span id="kpiTemp">0.0</span><span class="kpi-unit">°C</span></div>
-        </div>
-        <div class="kpi-card orange">
-          <div class="kpi-label">Presión de Vapor</div>
-          <div class="kpi-value"><span id="kpiPres">0.00</span><span class="kpi-unit">Bar</span></div>
-        </div>
-        <div class="kpi-card blue">
-          <div class="kpi-label">Fase del Ciclo</div>
-          <div class="kpi-value" style="font-size:19px; color:#00b4d8;" id="kpiFase">ESPERA</div>
-        </div>
-        <div class="kpi-card purple">
-          <div class="kpi-label">Tiempo Meseta Restante</div>
-          <div class="kpi-value" id="kpiTiempo">00:00</div>
-        </div>
-      </section>
+  <!-- PESTAÑAS DE NAVEGACIÓN -->
+  <nav class="nav-bar">
+    <button class="nav-tab active" onclick="openActivity('act-telemetry')">⚡ TELEMETRÍA</button>
+    <button class="nav-tab" onclick="openActivity('act-fleet-mgmt')">🏢 EQUIPOS DETECTADOS</button>
+    <button class="nav-tab" onclick="openActivity('act-fota')">🚀 FOTA HUB</button>
+    <button class="nav-tab" onclick="openActivity('act-reports')">📋 REPORTES & AUDITORÍA</button>
+    <button class="nav-tab" id="tabNavUsers" onclick="openActivity('act-users')">🛡️ ACCESOS</button>
+  </nav>
 
-      <div class="dashboard-grid">
-        
-        <div>
-          <div class="panel-card">
-            <div class="panel-title">
-              <span>Curva de Esterilización en Tiempo Real</span>
-              <span id="dSubInfo" style="font-size:11px; color:var(--text-muted); font-family:var(--font-mono);">-</span>
-            </div>
-            <div class="chart-container">
-              <canvas id="graficaCurva"></canvas>
-            </div>
-          </div>
+  <main class="activity-container">
 
-          <div class="panel-card">
-            <div class="panel-title">Comando y Ejecución de Ciclo</div>
-            <div class="action-grid">
-              <button onclick="mandarComando('INICIAR_CICLO')" class="btn-action btn-start">▶ Iniciar Ciclo</button>
-              <button onclick="mandarComando('ABORTAR_CICLO')" class="btn-action btn-stop">⏹ Paro Alarma</button>
-              <button onclick="mandarComando('RESET_ALARMA')" class="btn-action btn-reset">↺ Reset</button>
-            </div>
-          </div>
-        </div>
-
-        <div>
-          <div class="panel-card">
-            <div class="panel-title">
-              <span>Actuadores y Conmutadores Directos</span>
-              <span style="font-size:11px; color:var(--primary);">ACCIONAMIENTO EN VIVO</span>
-            </div>
-            
-            <div id="contenedorToggles" class="toggle-grid"></div>
-            <div id="contenedorSteppers"></div>
-          </div>
-        </div>
-
+    <!-- ==================================================================== -->
+    <!-- ACTIVITY 1: TELEMETRÍA (MONITOR DE FLOTA)                            -->
+    <!-- ==================================================================== -->
+    <section id="act-telemetry" class="activity active">
+      <div class="activity-header">
+        <div class="activity-title">AUTOCLAVES DETECTADOS EN TIEMPO REAL</div>
+        <div style="font-size: 0.72rem; color: var(--text-muted);">TOPIC: autoclave_med_2026/+/telemetria</div>
       </div>
 
-    </main>
+      <div class="grid-fleet" id="fleetLiveContainer">
+        <div style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 60px;">
+          ESPERANDO SEÑAL DE MICROCONTROLADORES EN LÍNEA...
+        </div>
+      </div>
+    </section>
 
-  </div>
+    <!-- ==================================================================== -->
+    <!-- ACTIVITY 2: DETALLE, SENSORES Y CONTROL DINÁMICO DEL DISPOSITIVO    -->
+    <!-- ==================================================================== -->
+    <section id="act-device-detail" class="activity">
+      <div class="activity-header">
+        <div>
+          <button class="btn btn-back" style="margin-bottom: 10px;" onclick="goBackActivity()">← REGRESAR AL MONITOR</button>
+          <div class="activity-title" id="detDeviceAlias">NOMBRE DEL EQUIPO</div>
+          <div style="font-size: 0.72rem; color: var(--text-muted);" id="detDeviceSub">MAC: -- | MODELO: --</div>
+        </div>
+        <span class="status-badge" id="detOnlineBadge"><span class="dot online"></span> ONLINE</span>
+      </div>
 
-<script>
-  const USUARIO_VALIDO = "admin";
-  const CLAVE_VALIDA = "autoclave2026";
+      <!-- TABS DEL DETALLE -->
+      <div style="display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid var(--border-glow); padding-bottom: 10px;">
+        <button class="btn active" id="btnSubTele" onclick="switchDetailTab('tab-det-tele')">📊 SENSORES & ESTADO</button>
+        <button class="btn" id="btnSubCfg" onclick="switchDetailTab('tab-det-cfg')">⚙️ PARÁMETROS DINÁMICOS (ESP32)</button>
+        <button class="btn" id="btnSubFicha" onclick="switchDetailTab('tab-det-ficha')">🏢 ASIGNAR ALIAS / SALA</button>
+        <button class="btn" id="btnSubLogs" onclick="switchDetailTab('tab-det-logs')">📋 HISTORIAL DE ESTE EQUIPO</button>
+      </div>
 
-  // ==========================================
-  // CATÁLOGO CENTRAL DE FIRMWARES DISPONIBLES
-  // ==========================================
-  // Aquí agregas las versiones que vas compilando y guardando en tu carpeta /firmwares/
-  const CATALOGO_FIRMWARES = [
-    {
-      modelo: "Autoclave Quirurgico Clase B",
-      version: "v3.1",
-      archivo: "firmwares/quirurgico_v3.1.bin",
-      notas: "Mejora de control térmico y seguridad"
-    },
-    {
-      modelo: "Autoclave Quirurgico Clase B",
-      version: "v3.2",
-      archivo: "firmwares/quirurgico_v3.2.bin",
-      notas: "Optimización de rampa de enfriamiento"
-    },
-    {
-      modelo: "Autoclave Dental Compacto C3",
-      version: "v1.1",
-      archivo: "firmwares/dental_c3_v1.1.bin",
-      notas: "Rampa acelerada y control doble LED"
-    },
-    {
-      modelo: "Autoclave Dental Compacto C3",
-      version: "v1.2",
-      archivo: "firmwares/dental_c3_v1.2.bin",
-      notas: "Soporte de ciclo flash 134°C"
-    }
-  ];
+      <!-- SUBTAB 1: SENSORES DINÁMICOS -->
+      <div id="tab-det-tele" class="detail-subview">
+        <div class="card">
+          <div style="font-size: 0.8rem; color: var(--cyan); margin-bottom: 10px; font-weight: 700;">TELEMETRÍA DEFINIDA POR EL DISPOSITIVO:</div>
+          <div class="gauge-grid" id="containerDynamicGauges">
+            <!-- Se generan dinámicamente según telemetria_def del ESP32 -->
+          </div>
 
-  let client = null;
-  let dispositivos = {};
-  let seleccionado = "";
-  let chart = null;
+          <div id="detAlarmaBanner" style="display: none; background: rgba(255,0,85,0.2); border: 1px solid var(--red); color: var(--red); padding: 14px; border-radius: 6px; font-size: 0.82rem; margin: 15px 0;">
+            ⚠️ ALARMA: <span id="detAlarmaTexto"></span>
+          </div>
 
-  function iniciarSesion(e) {
-    e.preventDefault();
-    if (document.getElementById('txtUser').value === USUARIO_VALIDO &&
-        document.getElementById('txtPass').value === CLAVE_VALIDA) {
-      sessionStorage.setItem("autoclave_auth", "true");
-      mostrarDashboard();
-    } else {
-      document.getElementById('lblErrorLogin').style.display = "block";
-    }
-  }
+          <div style="display: flex; gap: 12px; margin-top: 20px;">
+            <button class="btn" style="flex: 1; padding: 14px;" onclick="enviarComandoDetalle('INICIAR_CICLO')">▶️ INICIAR CICLO</button>
+            <button class="btn btn-danger" style="flex: 1; padding: 14px;" onclick="enviarComandoDetalle('ABORTAR_CICLO')">⏹️ PARO EMERGENCIA</button>
+            <button class="btn btn-warn" style="flex: 1; padding: 14px;" onclick="enviarComandoDetalle('RESET_ALARMA')">🔄 RESET ALARMA</button>
+          </div>
+        </div>
+      </div>
 
-  function cerrarSesion() {
-    sessionStorage.removeItem("autoclave_auth");
-    if (client) client.end();
-    location.reload();
-  }
+      <!-- SUBTAB 2: PARÁMETROS DINÁMICOS (GENERADOS DESDE MENUS DEL ESP32) -->
+      <div id="tab-det-cfg" class="detail-subview" style="display: none;">
+        <div class="card">
+          <div style="font-size: 0.8rem; color: var(--cyan); margin-bottom: 14px; font-weight: 700;">
+            PARÁMETROS Y CONFIGURACIONES DISPONIBLES EN ESTE DISPOSITIVO:
+          </div>
+          
+          <form onsubmit="event.preventDefault(); guardarParametrosDinamicos();">
+            <div id="containerDynamicMenus">
+              <!-- Se generan dinámicamente según los menús del ESP32 -->
+              <div style="color: var(--text-muted); padding: 20px; text-align: center;">Cargando esquema de capacidades del dispositivo...</div>
+            </div>
 
-  function mostrarDashboard() {
-    document.getElementById('loginScreen').style.display = "none";
-    document.getElementById('mainDashboard').style.display = "block";
-    conectarNube();
-    inicializarGrafica();
-  }
+            <button type="submit" id="btnGuardarDinamico" class="btn" style="width: 100%; padding: 14px; margin-top: 15px;">
+              💾 TRANSMITIR AJUSTES Y GUARDAR EN MEMORIA FLASH (NVS)
+            </button>
+          </form>
+        </div>
+      </div>
 
-  window.onload = () => {
-    if (sessionStorage.getItem("autoclave_auth") === "true") mostrarDashboard();
-  };
+      <!-- SUBTAB 3: ASIGNACIÓN DE ALIAS / CLIENTE -->
+      <div id="tab-det-ficha" class="detail-subview" style="display: none;">
+        <div class="card">
+          <form onsubmit="event.preventDefault(); guardarFichaDetalle();">
+            <label style="font-size: 0.72rem; color: var(--text-muted);">ALIAS EN PANTALLA:</label>
+            <input type="text" id="fichaAlias" class="input-field" placeholder="Ej: Quirófano Central 1" required>
 
-  function inicializarGrafica() {
-    const ctx = document.getElementById('graficaCurva').getContext('2d');
-    const gradTemp = ctx.createLinearGradient(0, 0, 0, 300);
-    gradTemp.addColorStop(0, 'rgba(0, 242, 195, 0.25)');
-    gradTemp.addColorStop(1, 'rgba(0, 242, 195, 0.0)');
+            <label style="font-size: 0.72rem; color: var(--text-muted);">CLIENTE / HOSPITAL / INSTITUCIÓN:</label>
+            <input type="text" id="fichaCliente" class="input-field" placeholder="Ej: Hospital Metropolitano" required>
 
-    chart = new Chart(ctx, {
-      type: 'line',
-      data: {
-        labels: [],
-        datasets: [
-          {
-            label: 'Temperatura (°C)',
-            data: [],
-            borderColor: '#00f2c3',
-            backgroundColor: gradTemp,
-            borderWidth: 2.5,
-            yAxisID: 'yTemp',
-            tension: 0.35,
-            pointRadius: 0,
-            fill: true
-          },
-          {
-            label: 'Presión (Bar)',
-            data: [],
-            borderColor: '#ff9f43',
-            backgroundColor: 'transparent',
-            borderWidth: 2,
-            borderDash: [4, 4],
-            yAxisID: 'yPres',
-            tension: 0.35,
-            pointRadius: 0
-          }
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        interaction: { mode: 'index', intersect: false },
-        scales: {
-          x: { ticks: { color: '#637085', font: { family: 'JetBrains Mono', size: 10 } }, grid: { color: 'rgba(255,255,255,0.04)' } },
-          yTemp: {
-            type: 'linear', position: 'left', min: 20, max: 150,
-            ticks: { color: '#00f2c3', font: { family: 'JetBrains Mono' } },
-            grid: { color: 'rgba(255,255,255,0.05)' }
-          },
-          yPres: {
-            type: 'linear', position: 'right', min: 0, max: 3.0,
-            ticks: { color: '#ff9f43', font: { family: 'JetBrains Mono' } },
-            grid: { drawOnChartArea: false }
-          }
-        },
-        plugins: { legend: { labels: { color: '#d0d7e5', font: { family: 'Inter', size: 12, weight: 600 } } } }
+            <label style="font-size: 0.72rem; color: var(--text-muted);">MODELO DE AUTOCLAVE:</label>
+            <input type="text" id="fichaModelo" class="input-field" placeholder="Ej: Getinge 133HC" required>
+
+            <button type="submit" class="btn" style="width: 100%; padding: 12px;">ACTUALIZAR FICHA DE ESTE EQUIPO</button>
+          </form>
+        </div>
+      </div>
+
+      <!-- SUBTAB 4: HISTORIAL DE ESTE EQUIPO -->
+      <div id="tab-det-logs" class="detail-subview" style="display: none;">
+        <div class="card">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <div style="font-size: 0.8rem; color: var(--cyan); font-weight: 700;">HISTORIAL DE ESTE EQUIPO ESPECÍFICO:</div>
+            <button class="btn" onclick="imprimirCertificadoIndividual()">🖨️ IMPRIMIR CERTIFICADO DE CICLO</button>
+          </div>
+          <div class="table-container">
+            <table>
+              <thead><tr><th>FECHA</th><th>TIPO</th><th>TELEMETRÍA</th><th>DIAGNÓSTICO</th></tr></thead>
+              <tbody id="detLogsTbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================================================================== -->
+    <!-- ACTIVITY 3: FOTA HUB BASADO EN EQUIPOS REALES EN LÍNEA              -->
+    <!-- ==================================================================== -->
+    <section id="act-fota" class="activity">
+      <div class="activity-header">
+        <div class="activity-title">DESPLIEGUE REMOTO (FOTA BASADO EN EQUIPOS ACTIVOS)</div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 25px;">
+        <div class="card">
+          <label style="font-size: 0.72rem; color: var(--text-muted);">VERSIÓN A DESPLEGAR:</label>
+          <input type="text" id="fotaVersionInput" class="input-field" value="v3.3.0">
+
+          <label style="font-size: 0.72rem; color: var(--text-muted);">URL DIRECTA DEL BINARIO (.BIN):</label>
+          <input type="text" id="fotaUrlInput" class="input-field" value="https://raw.githubusercontent.com/yuniolgonzalez9/autoclave-scada-fleet/main/firmwares/firmware.bin">
+
+          <label style="font-size: 0.72rem; color: var(--text-muted);">SELECCIONAR ARCHIVO BINARIO:</label>
+          <div class="input-field" style="padding: 25px; text-align: center; border: 2px dashed rgba(0,243,255,0.3); cursor: pointer;" onclick="document.getElementById('fileBinInput').click()">
+            <input type="file" id="fileBinInput" accept=".bin" style="display: none;" onchange="handleFileSelected(this.files)">
+            <div id="dropFileName" style="color: var(--cyan); font-weight: 700;">Click para cargar firmware.bin</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <div style="font-family: 'Orbitron'; font-size: 0.85rem; color: var(--cyan);">DISPOSITIVOS ACTIVOS EN LÍNEA:</div>
+            <button class="btn" style="padding: 3px 8px; font-size: 0.65rem;" onclick="toggleSelectAllFota()">MARCAR TODOS</button>
+          </div>
+
+          <div id="fotaDevicesLiveList" style="max-height: 280px; overflow-y: auto; margin-bottom: 15px;"></div>
+
+          <button class="btn" id="btnExecuteFota" style="width: 100%; padding: 14px;" onclick="ejecutarFotaSeleccionados()">
+            🚀 TRANSMITIR FOTA A LOS EQUIPOS MARCADOS
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================================================================== -->
+    <!-- ACTIVITY 4: EQUIPOS DETECTADOS EN LA RED                            -->
+    <!-- ==================================================================== -->
+    <section id="act-fleet-mgmt" class="activity">
+      <div class="activity-header"><div class="activity-title">DISPOSITIVOS CONECTADOS</div></div>
+      <div class="card">
+        <div class="table-container">
+          <table>
+            <thead><tr><th>MAC</th><th>ESTADO</th><th>ALIAS</th><th>CLIENTE</th><th>MODELO</th><th>FW</th><th>ACCIÓN</th></tr></thead>
+            <tbody id="fleetMgmtTbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================================================================== -->
+    <!-- ACTIVITY 5: REPORTES & AUDITORÍA                                    -->
+    <!-- ==================================================================== -->
+    <section id="act-reports" class="activity">
+      <div class="activity-header">
+        <div class="activity-title">AUDITORÍA Y REPORTES CLÍNICOS</div>
+        <div style="display: flex; gap: 10px;">
+          <button class="btn" onclick="exportarRegistrosCSV()">📥 EXPORTAR CSV</button>
+          <button class="btn btn-danger" id="btnVaciarLogs" onclick="confirmarVaciarDB()">🗑️ VACIAR AUDITORÍA</button>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+        <div>
+          <label style="font-size: 0.7rem; color: var(--text-muted);">FILTRAR POR EQUIPO:</label>
+          <select id="filterDeviceSelect" class="input-field" onchange="renderizarRegistros()">
+            <option value="TODOS">TODOS LOS EQUIPOS</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size: 0.7rem; color: var(--text-muted);">FILTRAR POR TIPO:</label>
+          <select id="filterType" class="input-field" onchange="renderizarRegistros()">
+            <option value="TODOS">TODOS LOS EVENTOS</option>
+            <option value="CICLO">CICLOS COMPLETADOS</option>
+            <option value="ALARMA">SOLO ALARMAS</option>
+            <option value="CONEXION">CONEXIONES</option>
+            <option value="FOTA">ACTUALIZACIONES FOTA</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size: 0.7rem; color: var(--text-muted);">BÚSQUEDA:</label>
+          <input type="text" id="filterInput" class="input-field" placeholder="Buscar..." onkeyup="renderizarRegistros()">
+        </div>
+      </div>
+
+      <div class="table-container">
+        <table>
+          <thead><tr><th>FECHA</th><th>TIPO</th><th>EQUIPO</th><th>MODELO</th><th>TELEMETRÍA</th><th>DIAGNÓSTICO</th><th>ACCIÓN</th></tr></thead>
+          <tbody id="auditTableBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ==================================================================== -->
+    <!-- ACTIVITY 6: GESTIÓN DE USUARIOS                                     -->
+    <!-- ==================================================================== -->
+    <section id="act-users" class="activity">
+      <div class="activity-header"><div class="activity-title">CONTROL DE USUARIOS</div></div>
+      <div style="display: grid; grid-template-columns: 1fr 1.3fr; gap: 20px;">
+        <div class="card">
+          <form onsubmit="event.preventDefault(); crearUsuario();">
+            <label style="font-size: 0.72rem; color: var(--text-muted);">USUARIO / ID:</label>
+            <input type="text" id="uUser" class="input-field" placeholder="Ej: tec_clinica" required>
+
+            <label style="font-size: 0.72rem; color: var(--text-muted);">PIN / CONTRASEÑA:</label>
+            <input type="password" id="uPass" class="input-field" placeholder="Mínimo 4 caracteres" required>
+
+            <label style="font-size: 0.72rem; color: var(--text-muted);">ROL JERÁRQUICO:</label>
+            <select id="uRol" class="input-field">
+              <option value="OPERADOR">NIVEL 3: OPERADOR</option>
+              <option value="TECNICO">NIVEL 2: TÉCNICO</option>
+              <option value="SUPERADMIN">NIVEL 1: SUPERADMIN</option>
+            </select>
+
+            <button type="submit" class="btn" style="width: 100%; padding: 12px;">+ CREAR CREDENCIAL</button>
+          </form>
+        </div>
+        <div class="card">
+          <div class="table-container">
+            <table>
+              <thead><tr><th>USUARIO</th><th>ROL</th><th>FECHA</th><th>ACCIÓN</th></tr></thead>
+              <tbody id="tablaUsuariosBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================================================================== -->
+    <!-- ACTIVITY 7: AUTENTICACIÓN / LOGIN                                   -->
+    <!-- ==================================================================== -->
+    <section id="act-auth" class="activity">
+      <div style="max-width: 420px; margin: 60px auto;" class="card">
+        <div style="font-family: 'Orbitron'; font-size: 1.1rem; color: var(--cyan); text-align: center; margin-bottom: 8px;">CONTROL DE ACCESO</div>
+        <div style="font-size: 0.72rem; color: var(--text-muted); text-align: center; margin-bottom: 25px;">INGRESA TUS CREDENCIALES</div>
+        <input type="text" id="loginUser" class="input-field" placeholder="Usuario / ID">
+        <input type="password" id="loginPass" class="input-field" placeholder="PIN / Contraseña">
+        <button class="btn" style="width: 100%; padding: 14px; margin-top: 10px;" onclick="procesarLogin()">INGRESAR</button>
+        <button class="btn btn-back" style="width: 100%; padding: 10px; margin-top: 8px;" onclick="goBackActivity()">CANCELAR</button>
+        <div id="loginError" style="color: var(--red); font-size: 0.75rem; margin-top: 12px; text-align: center; display: none;">Credenciales inválidas.</div>
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    // =========================================================================
+    // 1. NAVEGACIÓN ENTRE ACTIVIDADES
+    // =========================================================================
+    let activityStack = ['act-telemetry'];
+    let currentInspectedMAC = null;
+
+    window.openActivity = function(actId) {
+      if (activityStack[activityStack.length - 1] !== actId) {
+        activityStack.push(actId);
       }
-    });
-  }
+      renderActivity(actId);
+    };
 
-  function conectarNube() {
-    client = mqtt.connect('wss://broker.emqx.io:8084/mqtt');
+    window.goBackActivity = function() {
+      if (activityStack.length > 1) {
+        activityStack.pop();
+        const prevAct = activityStack[activityStack.length - 1];
+        renderActivity(prevAct);
+      }
+    };
 
-    client.on('connect', () => {
-      client.subscribe('autoclave_med_2026/+/esquema');
-      client.subscribe('autoclave_med_2026/+/telemetria');
-    });
+    function renderActivity(actId) {
+      document.querySelectorAll('.activity').forEach(a => a.classList.remove('active'));
+      const target = document.getElementById(actId);
+      if (target) target.classList.add('active');
 
-    client.on('message', (topic, message) => {
+      document.getElementById('btnGlobalBack').style.display = activityStack.length > 1 ? 'inline-flex' : 'none';
+
+      document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+      const activeNavTab = Array.from(document.querySelectorAll('.nav-tab')).find(t => t.getAttribute('onclick')?.includes(actId));
+      if (activeNavTab) activeNavTab.classList.add('active');
+
+      if (actId === 'act-fota') renderFotaLiveList();
+      if (actId === 'act-fleet-mgmt') renderFleetMgmtTable();
+      if (actId === 'act-reports') renderizarRegistros();
+    }
+
+    // =========================================================================
+    // 2. BASE DE DATOS LOCAL
+    // =========================================================================
+    let db;
+    let usuarioActual = { user: "admin", rol: "SUPERADMIN" };
+    const fleet = {};
+
+    function initDB() {
+      return new Promise((resolve, reject) => {
+        const req = indexedDB.open("AutoclaveLiveAppDB_v2", 1);
+        req.onupgradeneeded = (e) => {
+          db = e.target.result;
+          if (!db.objectStoreNames.contains("asignaciones")) db.createObjectStore("asignaciones", { keyPath: "mac" });
+          if (!db.objectStoreNames.contains("usuarios")) db.createObjectStore("usuarios", { keyPath: "user" });
+          if (!db.objectStoreNames.contains("reportes")) {
+            const sr = db.createObjectStore("reportes", { keyPath: "id", autoIncrement: true });
+            sr.createIndex("mac", "mac", { unique: false });
+            sr.createIndex("tipo", "tipo", { unique: false });
+          }
+        };
+        req.onsuccess = (e) => {
+          db = e.target.result;
+          const tx = db.transaction(["usuarios"], "readwrite");
+          tx.objectStore("usuarios").get("admin").onsuccess = (ev) => {
+            if (!ev.target.result) tx.objectStore("usuarios").add({ user: "admin", pass: "1234", rol: "SUPERADMIN", fecha: new Date().toISOString() });
+          };
+          cargarUsuariosUI();
+          aplicarPermisosRol();
+          resolve(db);
+        };
+        req.onerror = (e) => reject(e.target.error);
+      });
+    }
+
+    // =========================================================================
+    // 3. COMUNICACIÓN MQTT Y ESQUEMAS DINÁMICOS
+    // =========================================================================
+    let mqttClient;
+
+    function initMQTT() {
+      mqttClient = mqtt.connect("wss://broker.emqx.io:8084/mqtt", { clientId: "SCADA_CORE_" + Math.random().toString(16).substring(2,8), clean: true });
+
+      mqttClient.on("connect", () => {
+        document.getElementById("mqttDot").className = "dot online";
+        document.getElementById("mqttStatusText").innerText = "BROKER ONLINE";
+        document.getElementById("mqttStatusText").style.color = "var(--green)";
+        mqttClient.subscribe("autoclave_med_2026/+/telemetria");
+        mqttClient.subscribe("autoclave_med_2026/+/esquema");
+      });
+
+      mqttClient.on("error", () => {
+        document.getElementById("mqttDot").className = "dot offline";
+        document.getElementById("mqttStatusText").innerText = "ERROR MQTT";
+      });
+
+      mqttClient.on("message", (topic, msg) => {
+        try {
+          const payload = JSON.parse(msg.toString());
+          const mac = topic.split("/")[1];
+          if (topic.includes("telemetria")) procesarTelemetriaReal(mac, payload);
+          if (topic.includes("esquema")) procesarEsquemaReal(mac, payload);
+        } catch(e) {}
+      });
+    }
+
+    function inicializarDispositivoSiNoExiste(mac) {
+      if (!fleet[mac]) {
+        fleet[mac] = {
+          mac: mac,
+          lastSeen: Date.now(),
+          datos: {},
+          esquema: null,
+          meta: {
+            alias: `AUTOCLAVE [${mac.substring(Math.max(0, mac.length - 4))}]`,
+            cliente: "SIN REGISTRAR",
+            modelo: "AUTODETECTADO"
+          }
+        };
+
+        if (db) {
+          db.transaction(["asignaciones"],"readonly").objectStore("asignaciones").get(mac).onsuccess = (e) => {
+            if (e.target.result) fleet[mac].meta = e.target.result;
+            actualizarSelectoresGlobales();
+            renderFleetDashboard();
+          };
+        }
+      }
+    }
+
+    function procesarTelemetriaReal(mac, data) {
+      inicializarDispositivoSiNoExiste(mac);
+      fleet[mac].lastSeen = Date.now();
+      fleet[mac].datos = data;
+
+      if (data.alarma_cod && data.alarma_cod > 0) {
+        if (fleet[mac].ultimaAlarma !== data.alarma_cod) {
+          fleet[mac].ultimaAlarma = data.alarma_cod;
+          guardarReporte("ALARMA", mac, fleet[mac].meta.modelo, data.alarma_msg || "Alarma crítica", { temp: data.temp_camara, presion: data.presion });
+        }
+      } else {
+        fleet[mac].ultimaAlarma = 0;
+      }
+
+      if (data.fase === "FINALIZADO CON EXITO" && !fleet[mac].cicloRegistrado) {
+        fleet[mac].cicloRegistrado = true;
+        guardarReporte("CICLO", mac, fleet[mac].meta.modelo, "Esterilización completada con éxito", { temp: data.temp_camara, presion: data.presion });
+      } else if (data.fase !== "FINALIZADO CON EXITO") {
+        fleet[mac].cicloRegistrado = false;
+      }
+
+      actualizarCardDashboard(mac);
+      if (currentInspectedMAC === mac) actualizarPantallaDetalleDinamica();
+    }
+
+    function procesarEsquemaReal(mac, data) {
+      inicializarDispositivoSiNoExiste(mac);
+      fleet[mac].esquema = data;
+      fleet[mac].fw = data.fw || "v3.x";
+      if (data.modelo && fleet[mac].meta.modelo === "AUTODETECTADO") {
+        fleet[mac].meta.modelo = data.modelo;
+      }
+      if (currentInspectedMAC === mac) {
+        generarUIEsquemaDinamico(mac);
+      }
+      renderFleetDashboard();
+    }
+
+    function isOnline(dev) {
+      return dev && (Date.now() - dev.lastSeen) < 8000;
+    }
+
+    // =========================================================================
+    // 4. RENDERIZADO DEL MONITOR SIN DESTRUIR EL DOM
+    // =========================================================================
+    function renderFleetDashboard() {
+      const container = document.getElementById("fleetLiveContainer");
+      const keys = Object.keys(fleet);
+      const onlineCount = keys.filter(k => isOnline(fleet[k])).length;
+      document.getElementById("fleetCount").innerText = onlineCount;
+
+      if (!keys.length) {
+        container.innerHTML = `<div style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 60px;">ESPERANDO AUTOCLAVES TRANSMITIENDO...</div>`;
+        return;
+      }
+
+      keys.forEach(mac => {
+        let card = document.getElementById(`card-${mac}`);
+        if (!card) {
+          const emptyMsg = container.querySelector('div[style*="grid-column"]');
+          if (emptyMsg) container.innerHTML = '';
+          
+          card = document.createElement('div');
+          card.id = `card-${mac}`;
+          card.className = 'node-item';
+          card.setAttribute('onclick', `abrirDetalleEquipo('${mac}')`);
+          container.appendChild(card);
+        }
+        actualizarCardDashboard(mac);
+      });
+    }
+
+    function actualizarCardDashboard(mac) {
+      const card = document.getElementById(`card-${mac}`);
+      if (!card || !fleet[mac]) return;
+
+      const item = fleet[mac];
+      const d = item.datos || {};
+      const meta = item.meta || { alias: mac, cliente: "Pendiente", modelo: "Autoclave" };
+      const online = isOnline(item);
+
+      card.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+          <div>
+            <div style="font-size: 0.95rem; font-weight: 800; color: var(--cyan);">${meta.alias}</div>
+            <div style="font-size: 0.68rem; color: var(--text-muted);">${meta.cliente} | ${meta.modelo}</div>
+            <div style="font-size: 0.62rem; color: var(--purple); margin-top: 2px;">MAC: ${mac} | FW: ${item.fw || 'v3.2'}</div>
+          </div>
+          <span class="status-badge">
+            <span class="dot ${online ? 'online' : 'offline'}"></span>
+            ${online ? 'ONLINE' : 'OFFLINE'}
+          </span>
+        </div>
+
+        <div class="gauge-grid" style="grid-template-columns: 1fr 1fr;">
+          <div class="gauge-cell">
+            <div class="gauge-val">${(d.temp_camara || 25.0).toFixed(1)}°C</div>
+            <div class="gauge-lbl">TEMPERATURA</div>
+          </div>
+          <div class="gauge-cell">
+            <div class="gauge-val p">${(d.presion || 0.0).toFixed(2)}b</div>
+            <div class="gauge-lbl">PRESIÓN CÁMARA</div>
+          </div>
+        </div>
+
+        <div style="background: rgba(0,0,0,0.35); padding: 8px 12px; border-radius: 4px; font-size: 0.75rem; margin-bottom: 10px; display:flex; justify-content:space-between;">
+          <span style="color: var(--text-muted);">FASE:</span> 
+          <span style="color: var(--green); font-weight: 700;">${d.fase || 'ESPERA'}</span>
+        </div>
+
+        <div style="text-align: center; font-size: 0.68rem; color: var(--cyan); letter-spacing: 1px; padding: 5px; background: rgba(0,243,255,0.06); border-radius: 4px;">
+          👉 TOCAR PARA ENTRAR A CONTROL TOTAL
+        </div>
+      `;
+    }
+
+    // =========================================================================
+    // 5. ENTRADA A LA ACTIVIDAD DE DETALLE DEL EQUIPO (SEGURO Y ROBUSTO)
+    // =========================================================================
+    window.abrirDetalleEquipo = function(mac) {
       try {
-        const data = JSON.parse(message.toString());
-        const mac = data.id;
+        currentInspectedMAC = mac;
+        inicializarDispositivoSiNoExiste(mac);
+        const item = fleet[mac];
 
-        if (topic.endsWith('/esquema')) {
-          if (!dispositivos[mac]) {
-            dispositivos[mac] = { id: mac, esquema: data, telemetria: {}, ultimoContacto: Date.now() };
-            actualizarSelector();
-          } else {
-            dispositivos[mac].esquema = data;
-          }
-          if (seleccionado === mac) construirPanelesInteractivos(dispositivos[mac].esquema);
-        }
+        document.getElementById("detDeviceAlias").innerText = (item.meta?.alias || mac).toUpperCase();
+        document.getElementById("detDeviceSub").innerText = `MAC: ${mac} | CLIENTE: ${item.meta?.cliente || 'SIN REGISTRAR'} | MODELO: ${item.meta?.modelo || 'CLASE B'}`;
 
-        if (topic.endsWith('/telemetria')) {
-          if (dispositivos[mac]) {
-            dispositivos[mac].telemetria = data;
-            dispositivos[mac].ultimoContacto = Date.now();
-            if (seleccionado === mac) {
-              actualizarValoresTelemetria(data);
-              sincronizarTogglesDesdeEquipo(data);
-              agregarPuntoGrafica(data.temp_camara, data.presion);
-              gestionarAlarmasVisuales(data.alarma_cod, data.alarma_msg);
-              actualizarProgresoFOTA(data.ota_progreso);
-            }
-          }
-        }
-      } catch (e) {}
-    });
-  }
+        document.getElementById("fichaAlias").value = item.meta?.alias || "";
+        document.getElementById("fichaCliente").value = item.meta?.cliente || "";
+        document.getElementById("fichaModelo").value = item.meta?.modelo || "";
 
-  function agregarPuntoGrafica(temp, pres) {
-    if (!chart) return;
-    const ahora = new Date().toLocaleTimeString();
-    chart.data.labels.push(ahora);
-    chart.data.datasets[0].data.push(temp);
-    chart.data.datasets[1].data.push(pres);
+        // Generar controles dinámicos según el esquema del ESP32
+        generarUIEsquemaDinamico(mac);
+        actualizarPantallaDetalleDinamica();
+        cargarLogsDetalle(mac);
 
-    if (chart.data.labels.length > 30) {
-      chart.data.labels.shift();
-      chart.data.datasets[0].data.shift();
-      chart.data.datasets[1].data.shift();
-    }
-    chart.update('none');
-  }
+        switchDetailTab('tab-det-tele');
+        openActivity('act-device-detail');
+      } catch (err) {
+        console.error("Error abriendo detalle:", err);
+        alert("Error al acceder al equipo: " + err.message);
+      }
+    };
 
-  function gestionarAlarmasVisuales(cod, msg) {
-    const banner = document.getElementById('bannerAlarma');
-    if (cod > 0) {
-      banner.style.display = 'block';
-      document.getElementById('txtAlarmaMsg').innerText = "CÓDIGO #" + cod + " // " + msg;
-    } else {
-      banner.style.display = 'none';
-    }
-  }
-
-  function mandarComando(cmdName) {
-    if (!seleccionado) return;
-    client.publish(`autoclave_med_2026/${seleccionado}/config`, JSON.stringify({ cmd: cmdName }));
-  }
-
-  function accionarToggleDirecto(clave, estado) {
-    if (!seleccionado) return;
-    let payload = {};
-    payload[clave] = estado;
-
-    const card = document.getElementById(`card_toggle_${clave}`);
-    const badge = document.getElementById(`badge_toggle_${clave}`);
-    if (card) {
-      if (estado) card.classList.add('active');
-      else card.classList.remove('active');
-    }
-    if (badge) {
-      badge.innerText = estado ? "● ACTIVADO" : "○ APAGADO";
-      if (estado) badge.classList.add('on');
-      else badge.classList.remove('on');
-    }
-
-    client.publish(`autoclave_med_2026/${seleccionado}/config`, JSON.stringify(payload));
-  }
-
-  function ajustarNumeroDirecto(clave, delta, min, max) {
-    if (!seleccionado) return;
-    const valEl = document.getElementById(`val_stepper_${clave}`);
-    const slider = document.getElementById(`slider_stepper_${clave}`);
-    let actual = parseFloat(valEl.dataset.valor || valEl.innerText);
-    let nuevo = actual + delta;
-
-    if (nuevo < min) nuevo = min;
-    if (nuevo > max) nuevo = max;
-
-    valEl.innerText = (clave === 'sp_temp') ? nuevo.toFixed(1) + ' °C' : nuevo + ' min';
-    valEl.dataset.valor = nuevo;
-    if (slider) slider.value = nuevo;
-
-    let payload = {};
-    payload[clave] = nuevo;
-    client.publish(`autoclave_med_2026/${seleccionado}/config`, JSON.stringify(payload));
-  }
-
-  function actualizarSelector() {
-    const sel = document.getElementById('selCliente');
-    const valorPrevio = sel.value;
-    sel.innerHTML = "<option value=''>-- Seleccionar Autoclave Activo --</option>";
-    for (let mac in dispositivos) {
-      let d = dispositivos[mac];
-      let opt = document.createElement('option');
-      opt.value = mac;
-      opt.text = (d.esquema ? d.esquema.modelo : "Autoclave") + " [" + mac.substring(8) + "]";
-      sel.appendChild(opt);
-    }
-    if (valorPrevio && dispositivos[valorPrevio]) sel.value = valorPrevio;
-  }
-
-  function seleccionarAutoclave() {
-    seleccionado = document.getElementById('selCliente').value;
-    const panel = document.getElementById('panelPrincipal');
-    if (!seleccionado || !dispositivos[seleccionado]) { panel.style.display = 'none'; return; }
-    panel.style.display = 'block';
-
-    const d = dispositivos[seleccionado];
-    document.getElementById('dSubInfo').innerText = d.esquema.modelo + " | FW: " + d.esquema.fw + " | MAC: " + d.id;
-
-    construirPanelesInteractivos(d.esquema);
-    if (d.telemetria) {
-      actualizarValoresTelemetria(d.telemetria);
-      sincronizarTogglesDesdeEquipo(d.telemetria);
-      gestionarAlarmasVisuales(d.telemetria.alarma_cod, d.telemetria.alarma_msg);
-    }
-
-    if (chart) {
-      chart.data.labels = [];
-      chart.data.datasets[0].data = [];
-      chart.data.datasets[1].data = [];
-      chart.update();
-    }
-  }
-
-  function construirPanelesInteractivos(esquema) {
-    const contenedorToggles = document.getElementById('contenedorToggles');
-    const contenedorSteppers = document.getElementById('contenedorSteppers');
-    contenedorToggles.innerHTML = "";
-    contenedorSteppers.innerHTML = "";
-
-    esquema.menus.forEach(m => {
-      m.campos.forEach(c => {
-        if (c.tipo === "switch") {
-          let card = document.createElement('div');
-          card.id = `card_toggle_${c.key}`;
-          card.className = `toggle-card ${c.val ? 'active' : ''}`;
-          card.innerHTML = `
-            <div class="toggle-info">
-              <span class="toggle-name">${c.label}</span>
-              <span id="badge_toggle_${c.key}" class="toggle-status-badge ${c.val ? 'on' : ''}">
-                ${c.val ? "● ACTIVADO" : "○ APAGADO"}
-              </span>
-            </div>
-            <label class="switch-wrap">
-              <input type="checkbox" id="chk_${c.key}" ${c.val ? "checked" : ""} 
-                     onchange="accionarToggleDirecto('${c.key}', this.checked)">
-              <span class="slider-toggle"></span>
-            </label>
-          `;
-          contenedorToggles.appendChild(card);
-        }
-
-        if (c.tipo === "number") {
-          let stepCard = document.createElement('div');
-          stepCard.className = "stepper-card";
-          let formatVal = (c.key === 'sp_temp') ? c.val.toFixed(1) + ' °C' : c.val + ' min';
-          let stepDelta = (c.key === 'sp_temp') ? 0.5 : 1;
-
-          stepCard.innerHTML = `
-            <div class="stepper-header">
-              <span class="stepper-name">${c.label}</span>
-              <span id="val_stepper_${c.key}" class="stepper-val" data-valor="${c.val}">${formatVal}</span>
-            </div>
-            <div class="stepper-controls">
-              <button class="btn-step" onclick="ajustarNumeroDirecto('${c.key}', -${stepDelta}, ${c.min}, ${c.max})">-</button>
-              <input type="range" id="slider_stepper_${c.key}" class="stepper-slider" 
-                     min="${c.min}" max="${c.max}" step="${c.step}" value="${c.val}"
-                     oninput="document.getElementById('val_stepper_${c.key}').innerText = (('${c.key}'==='sp_temp')?parseFloat(this.value).toFixed(1)+' °C':this.value+' min'); document.getElementById('val_stepper_${c.key}').dataset.valor=this.value;"
-                     onchange="let p={}; p['${c.key}']=parseFloat(this.value); client.publish('autoclave_med_2026/'+seleccionado+'/config', JSON.stringify(p));">
-              <button class="btn-step" onclick="ajustarNumeroDirecto('${c.key}', ${stepDelta}, ${c.min}, ${c.max})">+</button>
-            </div>
-          `;
-          contenedorSteppers.appendChild(stepCard);
+    function switchDetailTab(tabId) {
+      document.querySelectorAll('.detail-subview').forEach(s => s.style.display = 'none');
+      document.querySelectorAll('#act-device-detail .btn').forEach(b => {
+        if (!b.classList.contains('btn-back') && !b.classList.contains('btn-danger') && !b.classList.contains('btn-warn')) {
+          b.classList.remove('active');
         }
       });
-    });
-  }
+      document.getElementById(tabId).style.display = 'block';
 
-  function actualizarValoresTelemetria(data) {
-    if (data.temp_camara !== undefined) document.getElementById('kpiTemp').innerText = data.temp_camara.toFixed(1);
-    if (data.presion !== undefined) document.getElementById('kpiPres').innerText = data.presion.toFixed(2);
-    if (data.fase !== undefined) document.getElementById('kpiFase').innerText = data.fase;
-    
-    if (data.seg_restantes !== undefined) {
-      let m = Math.floor(data.seg_restantes / 60);
-      let s = data.seg_restantes % 60;
-      document.getElementById('kpiTiempo').innerText = 
-        String(m).padStart(2, '0') + ":" + String(s).padStart(2, '0');
+      if (tabId === 'tab-det-tele') document.getElementById('btnSubTele').classList.add('active');
+      if (tabId === 'tab-det-cfg') document.getElementById('btnSubCfg').classList.add('active');
+      if (tabId === 'tab-det-ficha') document.getElementById('btnSubFicha').classList.add('active');
+      if (tabId === 'tab-det-logs') document.getElementById('btnSubLogs').classList.add('active');
     }
-  }
 
-  function sincronizarTogglesDesdeEquipo(data) {
-    if (!data.cfg) return;
-    const cfg = data.cfg;
+    // =========================================================================
+    // 6. MOTOR DINÁMICO: GAUGES Y FORMULARIOS ADAPTABLES
+    // =========================================================================
+    function generarUIEsquemaDinamico(mac) {
+      const item = fleet[mac];
+      if (!item) return;
 
-    for (let k in cfg) {
-      const chk = document.getElementById(`chk_${k}`);
-      const card = document.getElementById(`card_toggle_${k}`);
-      const badge = document.getElementById(`badge_toggle_${k}`);
+      // 1. GAUGES DINÁMICOS (telemetria_def)
+      const containerGauges = document.getElementById("containerDynamicGauges");
+      const teleDef = item.esquema?.telemetria_def;
 
-      if (chk && typeof cfg[k] === "boolean") {
-        chk.checked = cfg[k];
-        if (card) {
-          if (cfg[k]) card.classList.add('active');
-          else card.classList.remove('active');
-        }
-        if (badge) {
-          badge.innerText = cfg[k] ? "● ACTIVADO" : "○ APAGADO";
-          if (cfg[k]) badge.classList.add('on');
-          else badge.classList.remove('on');
-        }
+      if (teleDef && teleDef.length) {
+        containerGauges.innerHTML = teleDef.map(t => {
+          return `
+            <div class="gauge-cell">
+              <div class="gauge-val ${t.key === 'presion' ? 'p' : ''}" id="dyn-val-${t.key}">--</div>
+              <div class="gauge-lbl">${t.label} ${t.unidad ? '(' + t.unidad + ')' : ''}</div>
+            </div>
+          `;
+        }).join("");
+      } else {
+        // Fallback por defecto si no ha llegado el esquema aún
+        containerGauges.innerHTML = `
+          <div class="gauge-cell"><div class="gauge-val" id="dyn-val-temp_camara">--°C</div><div class="gauge-lbl">TEMPERATURA CÁMARA</div></div>
+          <div class="gauge-cell"><div class="gauge-val p" id="dyn-val-presion">--b</div><div class="gauge-lbl">PRESIÓN CÁMARA</div></div>
+          <div class="gauge-cell"><div class="gauge-val" style="color:var(--green);" id="dyn-val-fase">--</div><div class="gauge-lbl">FASE DE CICLO</div></div>
+          <div class="gauge-cell"><div class="gauge-val" style="color:var(--amber);" id="dyn-val-seg_restantes">--:--</div><div class="gauge-lbl">TIEMPO RESTANTE</div></div>
+        `;
       }
 
-      const valEl = document.getElementById(`val_stepper_${k}`);
-      const slider = document.getElementById(`slider_stepper_${k}`);
-      if (valEl && typeof cfg[k] === "number") {
-        valEl.innerText = (k === 'sp_temp') ? cfg[k].toFixed(1) + ' °C' : cfg[k] + ' min';
-        valEl.dataset.valor = cfg[k];
-        if (slider) slider.value = cfg[k];
+      // 2. FORMULARIO NVS DINÁMICO (menus)
+      const containerMenus = document.getElementById("containerDynamicMenus");
+      const menus = item.esquema?.menus;
+      const currentCfg = item.datos?.cfg || {};
+
+      if (menus && menus.length) {
+        containerMenus.innerHTML = menus.map((cat, catIdx) => {
+          return `
+            <div class="category-box">
+              <div class="category-title">${cat.categoria.toUpperCase()}</div>
+              ${cat.campos.map(campo => {
+                const valorActual = (currentCfg[campo.key] !== undefined) ? currentCfg[campo.key] : campo.val;
+
+                if (campo.tipo === 'switch' || typeof valorActual === 'boolean') {
+                  return `
+                    <div class="dynamic-field-row">
+                      <span>${campo.label}</span>
+                      <input type="checkbox" class="dyn-input-field" data-key="${campo.key}" ${valorActual ? 'checked' : ''}>
+                    </div>
+                  `;
+                } else if (campo.tipo === 'number' || typeof valorActual === 'number') {
+                  return `
+                    <div class="dynamic-field-row">
+                      <span>${campo.label}</span>
+                      <input type="number" step="${campo.step || 0.1}" min="${campo.min || 0}" max="${campo.max || 999}" class="input-field dyn-input-field" data-key="${campo.key}" value="${valorActual}">
+                    </div>
+                  `;
+                } else {
+                  return `
+                    <div class="dynamic-field-row">
+                      <span>${campo.label}</span>
+                      <input type="text" class="input-field dyn-input-field" data-key="${campo.key}" value="${valorActual}">
+                    </div>
+                  `;
+                }
+              }).join("")}
+            </div>
+          `;
+        }).join("");
+      } else {
+        // Fallback dinámico basado en las claves que vengan en d.cfg
+        const cfgKeys = Object.keys(currentCfg);
+        if (cfgKeys.length) {
+          containerMenus.innerHTML = `
+            <div class="category-box">
+              <div class="category-title">PARÁMETROS DETECTADOS EN EL DISPOSITIVO</div>
+              ${cfgKeys.map(k => {
+                const val = currentCfg[k];
+                if (typeof val === 'boolean') {
+                  return `<div class="dynamic-field-row"><span>${k.toUpperCase()}</span><input type="checkbox" class="dyn-input-field" data-key="${k}" ${val ? 'checked' : ''}></div>`;
+                } else {
+                  return `<div class="dynamic-field-row"><span>${k.toUpperCase()}</span><input type="number" step="any" class="input-field dyn-input-field" data-key="${k}" value="${val}"></div>`;
+                }
+              }).join("")}
+            </div>
+          `;
+        } else {
+          containerMenus.innerHTML = `<div style="color: var(--text-muted); padding: 20px; text-align: center;">Esperando paquete de configuración del dispositivo...</div>`;
+        }
       }
     }
-  }
 
-  // =========================================================
-  // GESTOR FOTA INTELIGENTE CON CATÁLOGO Y DESPLIEGUE EN VIVO
-  // =========================================================
-  function abrirModalFOTA() {
-    if (!seleccionado || !dispositivos[seleccionado]) {
-      alert("Por favor selecciona un autoclave primero.");
-      return;
+    function actualizarPantallaDetalleDinamica() {
+      if (!currentInspectedMAC || !fleet[currentInspectedMAC]) return;
+      const item = fleet[currentInspectedMAC];
+      const d = item.datos || {};
+      const online = isOnline(item);
+
+      const ob = document.getElementById("detOnlineBadge");
+      ob.innerHTML = `<span class="dot ${online ? 'online' : 'offline'}"></span> ${online ? 'ONLINE' : 'OFFLINE'}`;
+
+      // Actualizar los gauges dinámicos
+      Object.keys(d).forEach(k => {
+        const el = document.getElementById(`dyn-val-${k}`);
+        if (el) {
+          if (k === 'temp_camara') el.innerText = (d[k] || 0).toFixed(1) + "°C";
+          else if (k === 'presion') el.innerText = (d[k] || 0).toFixed(2) + "b";
+          else if (k === 'seg_restantes') {
+            const m = Math.floor(d[k] / 60);
+            const s = d[k] % 60;
+            el.innerText = `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+          } else if (typeof d[k] === 'boolean') {
+            el.innerText = d[k] ? "ACTIVO" : "INACTIVO";
+            el.style.color = d[k] ? "var(--green)" : "var(--text-muted)";
+          } else {
+            el.innerText = d[k];
+          }
+        }
+      });
+
+      if (d.alarma_cod && d.alarma_cod > 0) {
+        document.getElementById("detAlarmaBanner").style.display = "block";
+        document.getElementById("detAlarmaTexto").innerText = d.alarma_msg || "Alarma activa";
+      } else {
+        document.getElementById("detAlarmaBanner").style.display = "none";
+      }
     }
-    const d = dispositivos[seleccionado];
-    const seguro = (d.telemetria.fase === "ESPERA" && d.telemetria.presion < 0.05);
 
-    document.getElementById('fotaTargetBadge').innerText = d.esquema.modelo;
-    const safetyBox = document.getElementById('fotaSafetyBox');
-    const btnInmediato = document.getElementById('btnFotaInmediato');
+    // TRANSMISIÓN UNIVERSAL DE TODOS LOS PARÁMETROS DINÁMICOS
+    window.guardarParametrosDinamicos = function() {
+      if (!currentInspectedMAC) return;
+      if (usuarioActual.rol === "OPERADOR") return alert("Permiso denegado: rol OPERADOR.");
 
-    if (seguro) {
-      safetyBox.innerHTML = `
-        <span style="color:var(--primary); font-weight:700;">✔ CONDICIONES DE SEGURIDAD ÓPTIMAS</span><br>
-        <span style="color:#d0d7e5;">Equipo en reposo (Presión: 0.0 Bar). Versión actual instalada: <b>${d.esquema.fw}</b>.</span>
-      `;
-      btnInmediato.disabled = false;
-      btnInmediato.style.opacity = "1";
-    } else {
-      safetyBox.innerHTML = `
-        <span style="color:var(--danger); font-weight:700;">✖ DESPLIEGUE INMEDIATO BLOQUEADO</span><br>
-        <span style="color:#d0d7e5;">El equipo está operando (Fase: ${d.telemetria.fase}). Puedes usar la opción <b>Publicar al Encender</b> para que se actualice mañana.</span>
-      `;
-      btnInmediato.disabled = true;
-      btnInmediato.style.opacity = "0.5";
-    }
+      const payload = {};
+      document.querySelectorAll(".dyn-input-field").forEach(input => {
+        const key = input.getAttribute("data-key");
+        if (input.type === 'checkbox') {
+          payload[key] = input.checked;
+        } else if (input.type === 'number') {
+          payload[key] = parseFloat(input.value);
+        } else {
+          payload[key] = input.value;
+        }
+      });
 
-    // Filtrar catálogo de firmwares por el modelo de esta máquina
-    const selCat = document.getElementById('selFotaCatalogo');
-    selCat.innerHTML = "<option value=''>-- Seleccionar versión para " + d.esquema.modelo + " --</option>";
-    
-    const compatibles = CATALOGO_FIRMWARES.filter(f => f.modelo === d.esquema.modelo);
-    compatibles.forEach(f => {
-      let opt = document.createElement('option');
-      opt.value = f.archivo;
-      opt.dataset.version = f.version;
-      opt.text = `${f.version} - ${f.notas} (${f.archivo})`;
-      selCat.appendChild(opt);
-    });
-
-    // Opción personalizada al final
-    let optCustom = document.createElement('option');
-    optCustom.value = "CUSTOM";
-    optCustom.text = "✏️ Escribir URL personalizada...";
-    selCat.appendChild(optCustom);
-
-    document.getElementById('fotaModal').style.display = "flex";
-  }
-
-  function seleccionarVersionCatalogo() {
-    const sel = document.getElementById('selFotaCatalogo');
-    const val = sel.value;
-    const txt = document.getElementById('txtUrlFota');
-
-    if (!val || val === "CUSTOM") {
-      txt.value = "";
-      txt.focus();
-    } else {
-      // Auto-completa con la URL de tu propio servidor Netlify/Vercel
-      txt.value = `${window.location.origin}/${val}`;
-    }
-  }
-
-  function cerrarModalFOTA() {
-    document.getElementById('fotaModal').style.display = "none";
-  }
-
-  // VÍA A: DESPLIEGUE INMEDIATO (EN CALIENTE)
-  function dispararFOTAInmediato() {
-    const url = document.getElementById('txtUrlFota').value.trim();
-    if (!url) { alert("Selecciona una versión o ingresa la URL del .bin"); return; }
-    if (!confirm("¿Confirmas la actualización INMEDIATA de este autoclave? El equipo descargará el código y reiniciará.")) return;
-
-    const payload = {
-      cmd: "TRIGGER_FOTA",
-      url: url,
-      modelo: dispositivos[seleccionado].esquema.modelo
+      mqttClient.publish(`autoclave_med_2026/${currentInspectedMAC}/config`, JSON.stringify(payload));
+      guardarReporte("CONFIG", currentInspectedMAC, fleet[currentInspectedMAC].meta.modelo, "Ajuste dinámico transmitido al ESP32");
+      alert("¡Todos los parámetros transmitidos y grabados en el ESP32!");
     };
 
-    client.publish(`autoclave_med_2026/${seleccionado}/config`, JSON.stringify(payload));
-    
-    document.getElementById('fotaProgressBar').style.display = "block";
-    document.getElementById('fotaProgressLabel').style.display = "block";
-    document.getElementById('fotaProgressLabel').innerText = "Orden enviada por la nube... esperando respuesta del autoclave";
-  }
-
-  // VÍA B: PUBLICAR VERSIÓN PROGRAMADA (SE DESCARGA AL ENCENDER POR PRIMERA VEZ)
-  function publicarFOTAProgramado() {
-    const url = document.getElementById('txtUrlFota').value.trim();
-    const sel = document.getElementById('selFotaCatalogo');
-    const ver = sel.options[sel.selectedIndex] ? (sel.options[sel.selectedIndex].dataset.version || "vNext") : "vNext";
-    const modelo = dispositivos[seleccionado].esquema.modelo;
-
-    if (!url) { alert("Selecciona una versión o escribe la URL del archivo"); return; }
-    if (!confirm(`¿Deseas publicar la versión ${ver} como actualización oficial para TODOS los "${modelo}"?\n\nLos equipos la instalarán automáticamente al encender mañana.`)) return;
-
-    const releasePayload = {
-      tipo: "RELEASE_PROGRAMADA",
-      modelo: modelo,
-      target_fw: ver,
-      url: url,
-      fecha: new Date().toISOString().split('T')[0]
+    window.enviarComandoDetalle = function(cmd) {
+      if (!currentInspectedMAC) return;
+      mqttClient.publish(`autoclave_med_2026/${currentInspectedMAC}/config`, JSON.stringify({ cmd }));
     };
 
-    // Publicamos con bandera retain = true en el canal de releases de ese modelo
-    // Reemplazamos espacios para un topic limpio
-    const topicModelo = modelo.replace(/\s+/g, '_');
-    client.publish(`autoclave_med_2026/releases/${topicModelo}`, JSON.stringify(releasePayload), { retain: true });
+    window.guardarFichaDetalle = function() {
+      const alias = document.getElementById("fichaAlias").value.trim();
+      const cliente = document.getElementById("fichaCliente").value.trim();
+      const modelo = document.getElementById("fichaModelo").value.trim();
 
-    alert(`¡Actualización ${ver} publicada con éxito en la Nube!\n\nCualquier "${modelo}" que se encienda detectará este paquete y se actualizará solo.`);
-    cerrarModalFOTA();
-  }
+      const tx = db.transaction(["asignaciones"], "readwrite");
+      tx.objectStore("asignaciones").put({ mac: currentInspectedMAC, alias, cliente, modelo, fecha: new Date().toISOString() });
+      tx.oncomplete = () => {
+        fleet[currentInspectedMAC].meta = { alias, cliente, modelo };
+        document.getElementById("detDeviceAlias").innerText = alias.toUpperCase();
+        document.getElementById("detDeviceSub").innerText = `MAC: ${currentInspectedMAC} | CLIENTE: ${cliente} | MODELO: ${modelo}`;
+        alert("Ficha actualizada.");
+        actualizarCardDashboard(currentInspectedMAC);
+      };
+    };
 
-  function actualizarProgresoFOTA(progreso) {
-    if (progreso > 0 && progreso <= 100) {
-      document.getElementById('fotaProgressBar').style.display = "block";
-      document.getElementById('fotaProgressFill').style.width = progreso + "%";
-      document.getElementById('fotaProgressLabel').style.display = "block";
-      document.getElementById('fotaProgressLabel').innerText = "Grabando Firmware en Flash: " + progreso + "%";
-      if (progreso === 100) {
-        document.getElementById('fotaProgressLabel').innerText = "¡Completado! Reiniciando autoclave en nuevo firmware...";
-        setTimeout(cerrarModalFOTA, 4000);
+    function cargarLogsDetalle(mac) {
+      const tbody = document.getElementById("detLogsTbody");
+      const tx = db.transaction(["reportes"], "readonly");
+      tx.objectStore("reportes").getAll().onsuccess = (e) => {
+        const logs = e.target.result.filter(x => x.mac === mac).reverse();
+        if (!logs.length) {
+          tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-muted);">Sin historial para este equipo.</td></tr>`;
+          return;
+        }
+        tbody.innerHTML = logs.map(r => `
+          <tr>
+            <td style="color:var(--cyan);">${new Date(r.fecha).toLocaleString()}</td>
+            <td><span class="role-badge ${r.tipo === 'ALARMA' ? 'role-super' : r.tipo === 'CICLO' ? 'role-oper' : 'role-tech'}">${r.tipo}</span></td>
+            <td>${r.telemetria?.temp ? `T:${r.telemetria.temp}°C | P:${r.telemetria.presion}b` : '--'}</td>
+            <td>${r.mensaje}</td>
+          </tr>
+        `).join("");
+      };
+    }
+
+    window.imprimirCertificadoIndividual = function() {
+      if (!currentInspectedMAC) return;
+      const meta = fleet[currentInspectedMAC]?.meta || { alias: currentInspectedMAC, cliente: "Clínica", modelo: "Autoclave" };
+      const v = window.open("", "_blank");
+      v.document.write(`
+        <html><head><title>CERTIFICADO - ${meta.alias}</title>
+        <style>body{font-family:'Courier New',monospace;padding:40px;color:#111;}table{width:100%;border-collapse:collapse;margin:20px 0;}td,th{border:1px solid #333;padding:8px;}</style>
+        </head><body>
+        <h2>CERTIFICADO OFICIAL DE CICLO DE ESTERILIZACIÓN</h2>
+        <p>CLIENTE: <b>${meta.cliente.toUpperCase()}</b></p>
+        <p>FECHA: ${new Date().toLocaleString()}</p>
+        <table>
+          <tr><th>EQUIPO / ALIAS</th><td>${meta.alias}</td></tr>
+          <tr><th>DIRECCIÓN MAC</th><td>${currentInspectedMAC}</td></tr>
+          <tr><th>MODELO</th><td>${meta.modelo}</td></tr>
+          <tr><th>VALIDACIÓN</th><td><b>CICLO CONFORME - MATERIAL ESTÉRIL</b></td></tr>
+        </table>
+        <br><br><p>Firma Responsable: ___________________________</p>
+        <script>window.print();<\/script></body></html>
+      `);
+      v.document.close();
+    };
+
+    // =========================================================================
+    // 7. FOTA HUB BASADO EN EQUIPOS REALES
+    // =========================================================================
+    function renderFotaLiveList() {
+      const box = document.getElementById("fotaDevicesLiveList");
+      const onlineMacs = Object.keys(fleet).filter(m => isOnline(fleet[m]));
+
+      if (!onlineMacs.length) {
+        box.innerHTML = `<div style="color:var(--text-muted); text-align:center; padding:25px;">No hay autoclaves conectados en este momento.</div>`;
+        return;
+      }
+
+      box.innerHTML = onlineMacs.map(mac => {
+        const item = fleet[mac];
+        const meta = item.meta || { alias: mac, modelo: "Autoclave" };
+        return `
+          <label style="display:flex; align-items:center; gap:12px; background:rgba(0,0,0,0.35); border:1px solid rgba(255,255,255,0.08); padding:10px 14px; border-radius:6px; margin-bottom:8px; cursor:pointer;">
+            <input type="checkbox" class="fota-target-check" value="${mac}" checked style="width:18px; height:18px; accent-color:var(--cyan);">
+            <div style="flex: 1;">
+              <div style="font-weight: 700; color: var(--cyan);">${meta.alias}</div>
+              <div style="font-size: 0.68rem; color: var(--text-muted);">${meta.modelo} | MAC: ${mac}</div>
+            </div>
+            <span class="status-badge"><span class="dot online"></span> ONLINE</span>
+          </label>
+        `;
+      }).join("");
+    }
+
+    window.toggleSelectAllFota = function() {
+      const checks = document.querySelectorAll(".fota-target-check");
+      const anyUnchecked = Array.from(checks).some(c => !c.checked);
+      checks.forEach(c => c.checked = anyUnchecked);
+    };
+
+    window.ejecutarFotaSeleccionados = function() {
+      if (usuarioActual.rol === "OPERADOR") return alert("Permiso denegado para FOTA.");
+      const seleccionados = Array.from(document.querySelectorAll(".fota-target-check:checked")).map(c => c.value);
+      if (!seleccionados.length) return alert("Selecciona al menos un equipo en línea.");
+
+      const version = document.getElementById("fotaVersionInput").value;
+      const url = document.getElementById("fotaUrlInput").value;
+
+      if (confirm(`¿Desplegar versión ${version} a los ${seleccionados.length} autoclaves seleccionados?`)) {
+        seleccionados.forEach(mac => {
+          mqttClient.publish(`autoclave_med_2026/${mac}/config`, JSON.stringify({
+            cmd: "TRIGGER_FOTA", url, modelo: "UNIVERSAL"
+          }));
+        });
+        guardarReporte("FOTA", "MULTI", `${seleccionados.length} equipos`, `FOTA transmitido v${version}`);
+        alert("¡Orden FOTA transmitida vía MQTT!");
+      }
+    };
+
+    window.handleFileSelected = function(files) {
+      if (!files.length) return;
+      document.getElementById("dropFileName").innerText = `Binario: ${files[0].name} (${(files[0].size/1024).toFixed(1)} KB)`;
+      document.getElementById("dropFileName").style.color = "var(--green)";
+    };
+
+    // =========================================================================
+    // 8. EQUIPOS DETECTADOS EN LA RED
+    // =========================================================================
+    function renderFleetMgmtTable() {
+      const tbody = document.getElementById("fleetMgmtTbody");
+      const keys = Object.keys(fleet);
+
+      if (!keys.length) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted);">Sin dispositivos detectados en MQTT.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = keys.map(mac => {
+        const item = fleet[mac];
+        const meta = item.meta || { alias: "Sin Alias", cliente: "Sin Asignar", modelo: "Genérico" };
+        const online = isOnline(item);
+
+        return `
+          <tr>
+            <td style="color:var(--cyan); font-weight:700;">${mac}</td>
+            <td><span class="status-badge"><span class="dot ${online ? 'online' : 'offline'}"></span> ${online ? 'ONLINE' : 'OFFLINE'}</span></td>
+            <td style="font-weight:700;">${meta.alias}</td>
+            <td>${meta.cliente}</td>
+            <td style="color:var(--purple);">${meta.modelo}</td>
+            <td>${item.fw || 'v3.2'}</td>
+            <td><button class="btn" style="padding:4px 8px;" onclick="abrirDetalleEquipo('${mac}')">⚙️ CONFIGURAR</button></td>
+          </tr>
+        `;
+      }).join("");
+    }
+
+    // =========================================================================
+    // 9. REPORTES & AUDITORÍA
+    // =========================================================================
+    function guardarReporte(tipo, mac, modelo, mensaje, telemetria = {}) {
+      if (!db) return;
+      const tx = db.transaction(["reportes"], "readwrite");
+      tx.objectStore("reportes").add({ tipo, mac, modelo, mensaje, telemetria, fecha: new Date().toISOString() });
+      tx.oncomplete = () => {
+        renderizarRegistros();
+        if (currentInspectedMAC === mac) cargarLogsDetalle(mac);
+      };
+    }
+
+    function actualizarSelectoresGlobales() {
+      const sel = document.getElementById("filterDeviceSelect");
+      const prev = sel.value;
+      sel.innerHTML = `<option value="TODOS">TODOS LOS EQUIPOS</option>`;
+      Object.keys(fleet).forEach(m => {
+        const meta = fleet[m].meta || { alias: m };
+        sel.innerHTML += `<option value="${m}">${meta.alias} (${m})</option>`;
+      });
+      sel.value = prev;
+    }
+
+    function renderizarRegistros() {
+      if (!db) return;
+      const devFilter = document.getElementById("filterDeviceSelect").value;
+      const fType = document.getElementById("filterType").value;
+      const fText = document.getElementById("filterInput").value.toUpperCase();
+      const tbody = document.getElementById("auditTableBody");
+
+      const tx = db.transaction(["reportes"], "readonly");
+      tx.objectStore("reportes").getAll().onsuccess = (e) => {
+        let items = e.target.result.reverse();
+        if (devFilter !== "TODOS") items = items.filter(x => x.mac === devFilter);
+        if (fType !== "TODOS") items = items.filter(x => x.tipo === fType);
+        if (fText) items = items.filter(x => x.mac.toUpperCase().includes(fText) || x.modelo.toUpperCase().includes(fText) || x.mensaje.toUpperCase().includes(fText));
+
+        if (!items.length) {
+          tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:var(--text-muted);">Sin registros.</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = items.map(r => `
+          <tr>
+            <td style="color:var(--cyan);">${new Date(r.fecha).toLocaleString()}</td>
+            <td><span class="role-badge ${r.tipo === 'ALARMA' ? 'role-super' : r.tipo === 'CICLO' ? 'role-oper' : 'role-tech'}">${r.tipo}</span></td>
+            <td style="font-weight:700; cursor:pointer; color:var(--cyan);" onclick="abrirDetalleEquipo('${r.mac}')">${r.mac}</td>
+            <td style="color:var(--purple);">${r.modelo}</td>
+            <td>${r.telemetria?.temp !== undefined ? `T:${r.telemetria.temp}°C | P:${r.telemetria.presion}b` : '--'}</td>
+            <td>${r.mensaje}</td>
+            <td><button class="btn" style="padding:2px 6px; font-size:0.65rem;" onclick="abrirDetalleEquipo('${r.mac}')">VER EQUIPO</button></td>
+          </tr>
+        `).join("");
+      };
+    }
+
+    window.confirmarVaciarDB = function() {
+      if (usuarioActual.rol !== "SUPERADMIN") return alert("Permiso denegado.");
+      if (confirm("¿ELIMINAR TODA LA AUDITORÍA?")) {
+        const tx = db.transaction(["reportes"], "readwrite");
+        tx.objectStore("reportes").clear();
+        tx.oncomplete = () => renderizarRegistros();
+      }
+    };
+
+    window.exportarRegistrosCSV = function() {
+      const devFilter = document.getElementById("filterDeviceSelect").value;
+      const tx = db.transaction(["reportes"], "readonly");
+      tx.objectStore("reportes").getAll().onsuccess = (e) => {
+        let data = e.target.result;
+        if (devFilter !== "TODOS") data = data.filter(x => x.mac === devFilter);
+        if (!data.length) return alert("Sin datos.");
+        let csv = "ID,FECHA,TIPO,MAC,MODELO,MENSAJE,TEMP,PRESION\n";
+        data.forEach(d => {
+          csv += `"${d.id}","${d.fecha}","${d.tipo}","${d.mac}","${d.modelo}","${d.mensaje}","${d.telemetria?.temp||''}","${d.telemetria?.presion||''}"\n`;
+        });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+        a.download = `reporte_${Date.now()}.csv`;
+        a.click();
+      };
+    };
+
+    // =========================================================================
+    // 10. LOGIN Y ROLES
+    // =========================================================================
+    window.procesarLogin = function() {
+      const u = document.getElementById("loginUser").value.trim();
+      const p = document.getElementById("loginPass").value.trim();
+
+      const tx = db.transaction(["usuarios"], "readonly");
+      tx.objectStore("usuarios").get(u).onsuccess = (e) => {
+        const user = e.target.result;
+        if (user && user.pass === p) {
+          usuarioActual = user;
+          document.getElementById("currentUserName").innerText = user.user.toUpperCase();
+          const b = document.getElementById("currentUserRoleBadge");
+          b.innerText = user.rol;
+          b.className = "role-badge " + (user.rol === "SUPERADMIN" ? "role-super" : user.rol === "TECNICO" ? "role-tech" : "role-oper");
+          aplicarPermisosRol();
+          goBackActivity();
+        } else {
+          document.getElementById("loginError").style.display = "block";
+        }
+      };
+    };
+
+    function aplicarPermisosRol() {
+      const esAdmin = usuarioActual.rol === "SUPERADMIN";
+      const esTech = usuarioActual.rol === "TECNICO" || esAdmin;
+
+      document.getElementById("tabNavUsers").style.display = esAdmin ? "block" : "none";
+      document.getElementById("btnVaciarLogs").style.display = esAdmin ? "inline-flex" : "none";
+      document.getElementById("btnExecuteFota").disabled = !esTech;
+      document.getElementById("btnExecuteFota").style.opacity = esTech ? "1" : "0.4";
+      const bg = document.getElementById("btnGuardarDinamico");
+      if (bg) {
+        bg.disabled = !esTech;
+        bg.style.opacity = esTech ? "1" : "0.4";
       }
     }
-  }
-</script>
+
+    window.crearUsuario = function() {
+      if (usuarioActual.rol !== "SUPERADMIN") return alert("Permiso denegado.");
+      const user = document.getElementById("uUser").value.trim();
+      const pass = document.getElementById("uPass").value.trim();
+      const rol = document.getElementById("uRol").value;
+
+      if (!user || pass.length < 4) return alert("PIN mínimo de 4 caracteres.");
+      const tx = db.transaction(["usuarios"], "readwrite");
+      tx.objectStore("usuarios").add({ user, pass, rol, fecha: new Date().toISOString() });
+      tx.oncomplete = () => {
+        alert("Usuario creado.");
+        document.getElementById("uUser").value = "";
+        document.getElementById("uPass").value = "";
+        cargarUsuariosUI();
+      };
+      tx.onerror = () => alert("El usuario ya existe.");
+    };
+
+    function cargarUsuariosUI() {
+      const tx = db.transaction(["usuarios"], "readonly");
+      tx.objectStore("usuarios").getAll().onsuccess = (e) => {
+        const users = e.target.result;
+        document.getElementById("tablaUsuariosBody").innerHTML = users.map(u => `
+          <tr>
+            <td style="font-weight:700; color:var(--cyan);">${u.user}</td>
+            <td><span class="role-badge ${u.rol === 'SUPERADMIN' ? 'role-super' : u.rol === 'TECNICO' ? 'role-tech' : 'role-oper'}">${u.rol}</span></td>
+            <td>${new Date(u.fecha).toLocaleDateString()}</td>
+            <td>${u.user !== 'admin' ? `<button class="btn btn-danger" style="padding:2px 6px; font-size:0.65rem;" onclick="eliminarUsuario('${u.user}')">X</button>` : '--'}</td>
+          </tr>
+        `).join("");
+      };
+    }
+
+    window.eliminarUsuario = function(u) {
+      if (confirm(`¿Eliminar ${u}?`)) {
+        const tx = db.transaction(["usuarios"], "readwrite");
+        tx.objectStore("usuarios").delete(u);
+        tx.oncomplete = () => cargarUsuariosUI();
+      }
+    };
+
+    // Refresco seguro de estados online
+    setInterval(() => {
+      renderFleetDashboard();
+      if (activityStack[activityStack.length - 1] === 'act-fota') renderFotaLiveList();
+    }, 1500);
+
+    window.addEventListener("load", () => {
+      initDB();
+      initMQTT();
+    });
+  </script>
 </body>
 </html>
