@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>AUTOCLAVE SCADA // DYNAMIC ENTERPRISE HUB</title>
+  <title>AUTOCLAVE SCADA // FLEET COMMAND SYSTEM</title>
   
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;800&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
@@ -11,9 +11,9 @@
 
   <style>
     :root {
-      --bg-dark: #05070d;
-      --bg-surface: rgba(12, 18, 32, 0.96);
-      --bg-card: rgba(16, 24, 44, 0.85);
+      --bg-dark: #04070d;
+      --bg-surface: rgba(11, 17, 31, 0.96);
+      --bg-card: rgba(15, 23, 42, 0.85);
       --border-glow: rgba(0, 243, 255, 0.22);
       --border-focus: #00f3ff;
       --cyan: #00f3ff;
@@ -40,7 +40,6 @@
       overflow-x: hidden;
     }
 
-    /* TOP APP BAR */
     .app-bar {
       background: rgba(8, 12, 22, 0.98);
       backdrop-filter: blur(14px);
@@ -77,7 +76,6 @@
     .dot.online { background: var(--green); box-shadow: 0 0 10px var(--green); }
     .dot.offline { background: var(--red); box-shadow: 0 0 10px var(--red); }
 
-    /* NAVEGADOR PRINCIPAL */
     .nav-bar {
       display: flex;
       justify-content: center;
@@ -109,7 +107,6 @@
       box-shadow: 0 0 16px rgba(0, 243, 255, 0.3);
     }
 
-    /* PANTALLAS (ACTIVITIES) */
     .activity-container {
       max-width: 1440px;
       margin: 0 auto;
@@ -136,6 +133,8 @@
       margin-bottom: 20px;
       padding-bottom: 12px;
       border-bottom: 1px solid var(--border-glow);
+      flex-wrap: wrap;
+      gap: 10px;
     }
 
     .activity-title {
@@ -148,7 +147,6 @@
       gap: 12px;
     }
 
-    /* CARDS */
     .card {
       background: var(--bg-surface);
       border: 1px solid var(--border-glow);
@@ -190,7 +188,6 @@
     .gauge-val.p { color: var(--purple); }
     .gauge-lbl { font-size: 0.65rem; color: var(--text-muted); margin-top: 4px; text-transform: uppercase; }
 
-    /* BOTONES */
     .btn {
       background: rgba(0, 243, 255, 0.1);
       border: 1px solid var(--cyan);
@@ -308,11 +305,11 @@
     </div>
   </header>
 
-  <!-- PESTAÑAS DE NAVEGACIÓN -->
+  <!-- NAVEGADOR DE ACTIVIDADES -->
   <nav class="nav-bar">
     <button class="nav-tab active" onclick="openActivity('act-telemetry')">⚡ TELEMETRÍA</button>
-    <button class="nav-tab" onclick="openActivity('act-fleet-mgmt')">🏢 EQUIPOS DETECTADOS</button>
-    <button class="nav-tab" onclick="openActivity('act-fota')">🚀 FOTA HUB</button>
+    <button class="nav-tab" onclick="openActivity('act-fleet-mgmt')">🏢 GESTIÓN DE EQUIPOS</button>
+    <button class="nav-tab" onclick="openActivity('act-fota')">🚀 FOTA HUB (ACTUALIZACIONES)</button>
     <button class="nav-tab" onclick="openActivity('act-reports')">📋 REPORTES & AUDITORÍA</button>
     <button class="nav-tab" id="tabNavUsers" onclick="openActivity('act-users')">🛡️ ACCESOS</button>
   </nav>
@@ -324,13 +321,13 @@
     <!-- ==================================================================== -->
     <section id="act-telemetry" class="activity active">
       <div class="activity-header">
-        <div class="activity-title">AUTOCLAVES DETECTADOS EN TIEMPO REAL</div>
+        <div class="activity-title">FLOTA DE AUTOCLAVES REGISTRADOS Y EN LÍNEA</div>
         <div style="font-size: 0.72rem; color: var(--text-muted);">TOPIC: autoclave_med_2026/+/telemetria</div>
       </div>
 
       <div class="grid-fleet" id="fleetLiveContainer">
         <div style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 60px;">
-          ESPERANDO SEÑAL DE MICROCONTROLADORES EN LÍNEA...
+          BUSCANDO DISPOSITIVOS EN BASE DE DATOS Y RED MQTT...
         </div>
       </div>
     </section>
@@ -345,30 +342,30 @@
           <div class="activity-title" id="detDeviceAlias">NOMBRE DEL EQUIPO</div>
           <div style="font-size: 0.72rem; color: var(--text-muted);" id="detDeviceSub">MAC: -- | MODELO: --</div>
         </div>
-        <span class="status-badge" id="detOnlineBadge"><span class="dot online"></span> ONLINE</span>
+        <div style="display: flex; gap: 10px; align-items: center;">
+          <span class="status-badge" id="detOnlineBadge"><span class="dot offline"></span> OFFLINE</span>
+          <button class="btn btn-danger" style="padding: 5px 10px; font-size: 0.7rem;" onclick="eliminarDispositivoActual()">🗑️ ELIMINAR EQUIPO</button>
+        </div>
       </div>
 
-      <!-- TABS DEL DETALLE -->
-      <div style="display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid var(--border-glow); padding-bottom: 10px;">
+      <div style="display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 1px solid var(--border-glow); padding-bottom: 10px; flex-wrap: wrap;">
         <button class="btn active" id="btnSubTele" onclick="switchDetailTab('tab-det-tele')">📊 SENSORES & ESTADO</button>
         <button class="btn" id="btnSubCfg" onclick="switchDetailTab('tab-det-cfg')">⚙️ PARÁMETROS DINÁMICOS (ESP32)</button>
         <button class="btn" id="btnSubFicha" onclick="switchDetailTab('tab-det-ficha')">🏢 ASIGNAR ALIAS / SALA</button>
         <button class="btn" id="btnSubLogs" onclick="switchDetailTab('tab-det-logs')">📋 HISTORIAL DE ESTE EQUIPO</button>
       </div>
 
-      <!-- SUBTAB 1: SENSORES DINÁMICOS -->
+      <!-- SUBTAB 1: SENSORES -->
       <div id="tab-det-tele" class="detail-subview">
         <div class="card">
-          <div style="font-size: 0.8rem; color: var(--cyan); margin-bottom: 10px; font-weight: 700;">TELEMETRÍA DEFINIDA POR EL DISPOSITIVO:</div>
-          <div class="gauge-grid" id="containerDynamicGauges">
-            <!-- Se generan dinámicamente según telemetria_def del ESP32 -->
-          </div>
+          <div style="font-size: 0.8rem; color: var(--cyan); margin-bottom: 10px; font-weight: 700;">TELEMETRÍA EN TIEMPO REAL:</div>
+          <div class="gauge-grid" id="containerDynamicGauges"></div>
 
           <div id="detAlarmaBanner" style="display: none; background: rgba(255,0,85,0.2); border: 1px solid var(--red); color: var(--red); padding: 14px; border-radius: 6px; font-size: 0.82rem; margin: 15px 0;">
             ⚠️ ALARMA: <span id="detAlarmaTexto"></span>
           </div>
 
-          <div style="display: flex; gap: 12px; margin-top: 20px;">
+          <div style="display: flex; gap: 12px; margin-top: 20px; flex-wrap: wrap;">
             <button class="btn" style="flex: 1; padding: 14px;" onclick="enviarComandoDetalle('INICIAR_CICLO')">▶️ INICIAR CICLO</button>
             <button class="btn btn-danger" style="flex: 1; padding: 14px;" onclick="enviarComandoDetalle('ABORTAR_CICLO')">⏹️ PARO EMERGENCIA</button>
             <button class="btn btn-warn" style="flex: 1; padding: 14px;" onclick="enviarComandoDetalle('RESET_ALARMA')">🔄 RESET ALARMA</button>
@@ -376,17 +373,16 @@
         </div>
       </div>
 
-      <!-- SUBTAB 2: PARÁMETROS DINÁMICOS (GENERADOS DESDE MENUS DEL ESP32) -->
+      <!-- SUBTAB 2: PARÁMETROS DINÁMICOS -->
       <div id="tab-det-cfg" class="detail-subview" style="display: none;">
         <div class="card">
           <div style="font-size: 0.8rem; color: var(--cyan); margin-bottom: 14px; font-weight: 700;">
-            PARÁMETROS Y CONFIGURACIONES DISPONIBLES EN ESTE DISPOSITIVO:
+            PARÁMETROS Y CAPACIDADES RECIBIDAS DEL DISPOSITIVO:
           </div>
           
           <form onsubmit="event.preventDefault(); guardarParametrosDinamicos();">
             <div id="containerDynamicMenus">
-              <!-- Se generan dinámicamente según los menús del ESP32 -->
-              <div style="color: var(--text-muted); padding: 20px; text-align: center;">Cargando esquema de capacidades del dispositivo...</div>
+              <div style="color: var(--text-muted); padding: 20px; text-align: center;">Esperando que el equipo transmita su esquema...</div>
             </div>
 
             <button type="submit" id="btnGuardarDinamico" class="btn" style="width: 100%; padding: 14px; margin-top: 15px;">
@@ -396,7 +392,7 @@
         </div>
       </div>
 
-      <!-- SUBTAB 3: ASIGNACIÓN DE ALIAS / CLIENTE -->
+      <!-- SUBTAB 3: ASIGNAR ALIAS / FICHA -->
       <div id="tab-det-ficha" class="detail-subview" style="display: none;">
         <div class="card">
           <form onsubmit="event.preventDefault(); guardarFichaDetalle();">
@@ -414,11 +410,11 @@
         </div>
       </div>
 
-      <!-- SUBTAB 4: HISTORIAL DE ESTE EQUIPO -->
+      <!-- SUBTAB 4: HISTORIAL -->
       <div id="tab-det-logs" class="detail-subview" style="display: none;">
         <div class="card">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-            <div style="font-size: 0.8rem; color: var(--cyan); font-weight: 700;">HISTORIAL DE ESTE EQUIPO ESPECÍFICO:</div>
+            <div style="font-size: 0.8rem; color: var(--cyan); font-weight: 700;">HISTORIAL DE ESTE EQUIPO:</div>
             <button class="btn" onclick="imprimirCertificadoIndividual()">🖨️ IMPRIMIR CERTIFICADO DE CICLO</button>
           </div>
           <div class="table-container">
@@ -432,11 +428,11 @@
     </section>
 
     <!-- ==================================================================== -->
-    <!-- ACTIVITY 3: FOTA HUB BASADO EN EQUIPOS REALES EN LÍNEA              -->
+    <!-- ACTIVITY 3: FOTA HUB (EQUIPOS REGISTRADOS ONLINE Y OFFLINE)         -->
     <!-- ==================================================================== -->
     <section id="act-fota" class="activity">
       <div class="activity-header">
-        <div class="activity-title">DESPLIEGUE REMOTO (FOTA BASADO EN EQUIPOS ACTIVOS)</div>
+        <div class="activity-title">DESPLIEGUE REMOTO DE FIRMWARE (FOTA HUB)</div>
       </div>
 
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 25px;">
@@ -455,9 +451,14 @@
         </div>
 
         <div class="card">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-            <div style="font-family: 'Orbitron'; font-size: 0.85rem; color: var(--cyan);">DISPOSITIVOS ACTIVOS EN LÍNEA:</div>
-            <button class="btn" style="padding: 3px 8px; font-size: 0.65rem;" onclick="toggleSelectAllFota()">MARCAR TODOS</button>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+            <div style="font-family: 'Orbitron'; font-size: 0.85rem; color: var(--cyan);">SELECCIONAR DISPOSITIVOS:</div>
+            <div style="display: flex; gap: 6px;">
+              <button class="btn" style="padding: 3px 6px; font-size: 0.65rem;" onclick="filterFotaList('ALL')">TODOS</button>
+              <button class="btn" style="padding: 3px 6px; font-size: 0.65rem;" onclick="filterFotaList('ONLINE')">SOLO ONLINE</button>
+              <button class="btn" style="padding: 3px 6px; font-size: 0.65rem;" onclick="filterFotaList('OFFLINE')">SOLO OFFLINE</button>
+              <button class="btn btn-warn" style="padding: 3px 6px; font-size: 0.65rem;" onclick="toggleSelectAllFota()">INVERTIR SELECCIÓN</button>
+            </div>
           </div>
 
           <div id="fotaDevicesLiveList" style="max-height: 280px; overflow-y: auto; margin-bottom: 15px;"></div>
@@ -470,16 +471,44 @@
     </section>
 
     <!-- ==================================================================== -->
-    <!-- ACTIVITY 4: EQUIPOS DETECTADOS EN LA RED                            -->
+    <!-- ACTIVITY 4: GESTIÓN DE FLOTA (AGREGAR / ELIMINAR / EDITAR)          -->
     <!-- ==================================================================== -->
     <section id="act-fleet-mgmt" class="activity">
-      <div class="activity-header"><div class="activity-title">DISPOSITIVOS CONECTADOS</div></div>
-      <div class="card">
-        <div class="table-container">
-          <table>
-            <thead><tr><th>MAC</th><th>ESTADO</th><th>ALIAS</th><th>CLIENTE</th><th>MODELO</th><th>FW</th><th>ACCIÓN</th></tr></thead>
-            <tbody id="fleetMgmtTbody"></tbody>
-          </table>
+      <div class="activity-header">
+        <div class="activity-title">GESTIÓN Y REGISTRO DE DISPOSITIVOS</div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 20px;">
+        <!-- FORMULARIO MANUAL PARA AGREGAR EQUIPO -->
+        <div class="card">
+          <div style="font-family: 'Orbitron'; font-size: 0.85rem; color: var(--cyan); margin-bottom: 15px;">
+            + REGISTRAR EQUIPO MANUALMENTE
+          </div>
+          <form onsubmit="event.preventDefault(); registrarEquipoManual();">
+            <label style="font-size: 0.72rem; color: var(--text-muted);">DIRECCIÓN MAC (SIN DOS PUNTOS):</label>
+            <input type="text" id="addMac" class="input-field" placeholder="Ej: 30AEA4070FB4" required>
+
+            <label style="font-size: 0.72rem; color: var(--text-muted);">ALIAS / SALA:</label>
+            <input type="text" id="addAlias" class="input-field" placeholder="Ej: Quirófano 2" required>
+
+            <label style="font-size: 0.72rem; color: var(--text-muted);">CLIENTE / HOSPITAL:</label>
+            <input type="text" id="addCliente" class="input-field" placeholder="Ej: Clínica Los Ángeles" required>
+
+            <label style="font-size: 0.72rem; color: var(--text-muted);">MODELO DE AUTOCLAVE:</label>
+            <input type="text" id="addModelo" class="input-field" placeholder="Ej: Autoclave Quirúrgico Clase B" required>
+
+            <button type="submit" class="btn" style="width: 100%; padding: 12px;">+ AGREGAR A LA FLOTA</button>
+          </form>
+        </div>
+
+        <!-- TABLA COMPLETA DE EQUIPOS -->
+        <div class="card">
+          <div class="table-container">
+            <table>
+              <thead><tr><th>MAC</th><th>ESTADO</th><th>ALIAS</th><th>CLIENTE</th><th>MODELO</th><th>FW</th><th>ACCIONES</th></tr></thead>
+              <tbody id="fleetMgmtTbody"></tbody>
+            </table>
+          </div>
         </div>
       </div>
     </section>
@@ -581,7 +610,7 @@
 
   <script>
     // =========================================================================
-    // 1. NAVEGACIÓN ENTRE ACTIVIDADES
+    // 1. NAVEGACIÓN SPA ROBUSTA (ACTIVITIES)
     // =========================================================================
     let activityStack = ['act-telemetry'];
     let currentInspectedMAC = null;
@@ -618,15 +647,15 @@
     }
 
     // =========================================================================
-    // 2. BASE DE DATOS LOCAL
+    // 2. BASE DE DATOS LOCAL Y PRECARGA DE EQUIPOS REGISTRADOS
     // =========================================================================
     let db;
     let usuarioActual = { user: "admin", rol: "SUPERADMIN" };
-    const fleet = {};
+    const fleet = {}; // Todos los dispositivos conocidos (registrados + detectados)
 
     function initDB() {
       return new Promise((resolve, reject) => {
-        const req = indexedDB.open("AutoclaveLiveAppDB_v2", 1);
+        const req = indexedDB.open("AutoclaveFleetSystemDB_v3", 1);
         req.onupgradeneeded = (e) => {
           db = e.target.result;
           if (!db.objectStoreNames.contains("asignaciones")) db.createObjectStore("asignaciones", { keyPath: "mac" });
@@ -639,10 +668,15 @@
         };
         req.onsuccess = (e) => {
           db = e.target.result;
+          
+          // Crear usuario admin inicial
           const tx = db.transaction(["usuarios"], "readwrite");
           tx.objectStore("usuarios").get("admin").onsuccess = (ev) => {
             if (!ev.target.result) tx.objectStore("usuarios").add({ user: "admin", pass: "1234", rol: "SUPERADMIN", fecha: new Date().toISOString() });
           };
+
+          // Precargar todos los dispositivos guardados de sesiones anteriores
+          cargarEquiposGuardados();
           cargarUsuariosUI();
           aplicarPermisosRol();
           resolve(db);
@@ -651,13 +685,38 @@
       });
     }
 
+    function cargarEquiposGuardados() {
+      const tx = db.transaction(["asignaciones"], "readonly");
+      tx.objectStore("asignaciones").getAll().onsuccess = (e) => {
+        const guardados = e.target.result || [];
+        guardados.forEach(item => {
+          if (!fleet[item.mac]) {
+            fleet[item.mac] = {
+              mac: item.mac,
+              lastSeen: 0, // Inicia offline hasta que el ESP32 envíe telemetría
+              datos: {},
+              esquema: null,
+              meta: {
+                alias: item.alias || `AUTOCLAVE [${item.mac.slice(-4)}]`,
+                cliente: item.cliente || "SIN ASIGNAR",
+                modelo: item.modelo || "CLASE B"
+              }
+            };
+          }
+        });
+        actualizarSelectoresGlobales();
+        renderFleetDashboard();
+      };
+    }
+
     // =========================================================================
-    // 3. COMUNICACIÓN MQTT Y ESQUEMAS DINÁMICOS
+    // 3. COMUNICACIÓN MQTT ROBUSTA (TOLERANCIA DE 20 SEGUNDOS)
     // =========================================================================
     let mqttClient;
 
     function initMQTT() {
-      mqttClient = mqtt.connect("wss://broker.emqx.io:8084/mqtt", { clientId: "SCADA_CORE_" + Math.random().toString(16).substring(2,8), clean: true });
+      const uniqueId = "SCADA_" + Math.random().toString(36).substring(2, 9) + "_" + Date.now().toString(36);
+      mqttClient = mqtt.connect("wss://broker.emqx.io:8084/mqtt", { clientId: uniqueId, clean: true, keepalive: 60 });
 
       mqttClient.on("connect", () => {
         document.getElementById("mqttDot").className = "dot online";
@@ -708,7 +767,7 @@
 
     function procesarTelemetriaReal(mac, data) {
       inicializarDispositivoSiNoExiste(mac);
-      fleet[mac].lastSeen = Date.now();
+      fleet[mac].lastSeen = Date.now(); // Actualiza marca de tiempo real
       fleet[mac].datos = data;
 
       if (data.alarma_cod && data.alarma_cod > 0) {
@@ -738,18 +797,17 @@
       if (data.modelo && fleet[mac].meta.modelo === "AUTODETECTADO") {
         fleet[mac].meta.modelo = data.modelo;
       }
-      if (currentInspectedMAC === mac) {
-        generarUIEsquemaDinamico(mac);
-      }
+      if (currentInspectedMAC === mac) generarUIEsquemaDinamico(mac);
       renderFleetDashboard();
     }
 
+    // Tolerancia ampliada a 20 segundos para evitar falsas desconexiones
     function isOnline(dev) {
-      return dev && (Date.now() - dev.lastSeen) < 8000;
+      return dev && dev.lastSeen && (Date.now() - dev.lastSeen) < 20000;
     }
 
     // =========================================================================
-    // 4. RENDERIZADO DEL MONITOR SIN DESTRUIR EL DOM
+    // 4. RENDERIZADO DEL MONITOR SIN RECONSTRUIR EL DOM
     // =========================================================================
     function renderFleetDashboard() {
       const container = document.getElementById("fleetLiveContainer");
@@ -758,16 +816,16 @@
       document.getElementById("fleetCount").innerText = onlineCount;
 
       if (!keys.length) {
-        container.innerHTML = `<div style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 60px;">ESPERANDO AUTOCLAVES TRANSMITIENDO...</div>`;
+        container.innerHTML = `<div style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 60px;">NO HAY EQUIPOS REGISTRADOS NI TRANSMITIENDO...</div>`;
         return;
       }
+
+      const emptyMsg = container.querySelector('div[style*="grid-column"]');
+      if (emptyMsg) container.innerHTML = '';
 
       keys.forEach(mac => {
         let card = document.getElementById(`card-${mac}`);
         if (!card) {
-          const emptyMsg = container.querySelector('div[style*="grid-column"]');
-          if (emptyMsg) container.innerHTML = '';
-          
           card = document.createElement('div');
           card.id = `card-${mac}`;
           card.className = 'node-item';
@@ -817,13 +875,13 @@
         </div>
 
         <div style="text-align: center; font-size: 0.68rem; color: var(--cyan); letter-spacing: 1px; padding: 5px; background: rgba(0,243,255,0.06); border-radius: 4px;">
-          👉 TOCAR PARA ENTRAR A CONTROL TOTAL
+          👉 TOCAR PARA CONTROL & PARÁMETROS NVS
         </div>
       `;
     }
 
     // =========================================================================
-    // 5. ENTRADA A LA ACTIVIDAD DE DETALLE DEL EQUIPO (SEGURO Y ROBUSTO)
+    // 5. DETALLE COMPLETO Y ELIMINACIÓN
     // =========================================================================
     window.abrirDetalleEquipo = function(mac) {
       try {
@@ -838,7 +896,6 @@
         document.getElementById("fichaCliente").value = item.meta?.cliente || "";
         document.getElementById("fichaModelo").value = item.meta?.modelo || "";
 
-        // Generar controles dinámicos según el esquema del ESP32
         generarUIEsquemaDinamico(mac);
         actualizarPantallaDetalleDinamica();
         cargarLogsDetalle(mac);
@@ -846,8 +903,33 @@
         switchDetailTab('tab-det-tele');
         openActivity('act-device-detail');
       } catch (err) {
-        console.error("Error abriendo detalle:", err);
-        alert("Error al acceder al equipo: " + err.message);
+        console.error("Error al abrir detalle:", err);
+      }
+    };
+
+    window.eliminarDispositivoActual = function() {
+      if (!currentInspectedMAC) return;
+      eliminarEquipoTotal(currentInspectedMAC);
+    };
+
+    window.eliminarEquipoTotal = function(mac) {
+      if (usuarioActual.rol === "OPERADOR") return alert("Permiso denegado: rol OPERADOR.");
+      if (confirm(`¿ELIMINAR PERMANENTEMENTE el autoclave ${mac} de la plataforma?`)) {
+        const tx = db.transaction(["asignaciones"], "readwrite");
+        tx.objectStore("asignaciones").delete(mac);
+        tx.oncomplete = () => {
+          delete fleet[mac];
+          const c = document.getElementById(`card-${mac}`);
+          if (c) c.remove();
+          
+          actualizarSelectoresGlobales();
+          renderFleetDashboard();
+          renderFleetMgmtTable();
+          if (activityStack[activityStack.length - 1] === 'act-device-detail') {
+            goBackActivity();
+          }
+          alert("Dispositivo eliminado del sistema.");
+        };
       }
     };
 
@@ -866,28 +948,21 @@
       if (tabId === 'tab-det-logs') document.getElementById('btnSubLogs').classList.add('active');
     }
 
-    // =========================================================================
-    // 6. MOTOR DINÁMICO: GAUGES Y FORMULARIOS ADAPTABLES
-    // =========================================================================
     function generarUIEsquemaDinamico(mac) {
       const item = fleet[mac];
       if (!item) return;
 
-      // 1. GAUGES DINÁMICOS (telemetria_def)
       const containerGauges = document.getElementById("containerDynamicGauges");
       const teleDef = item.esquema?.telemetria_def;
 
       if (teleDef && teleDef.length) {
-        containerGauges.innerHTML = teleDef.map(t => {
-          return `
-            <div class="gauge-cell">
-              <div class="gauge-val ${t.key === 'presion' ? 'p' : ''}" id="dyn-val-${t.key}">--</div>
-              <div class="gauge-lbl">${t.label} ${t.unidad ? '(' + t.unidad + ')' : ''}</div>
-            </div>
-          `;
-        }).join("");
+        containerGauges.innerHTML = teleDef.map(t => `
+          <div class="gauge-cell">
+            <div class="gauge-val ${t.key === 'presion' ? 'p' : ''}" id="dyn-val-${t.key}">--</div>
+            <div class="gauge-lbl">${t.label} ${t.unidad ? '(' + t.unidad + ')' : ''}</div>
+          </div>
+        `).join("");
       } else {
-        // Fallback por defecto si no ha llegado el esquema aún
         containerGauges.innerHTML = `
           <div class="gauge-cell"><div class="gauge-val" id="dyn-val-temp_camara">--°C</div><div class="gauge-lbl">TEMPERATURA CÁMARA</div></div>
           <div class="gauge-cell"><div class="gauge-val p" id="dyn-val-presion">--b</div><div class="gauge-lbl">PRESIÓN CÁMARA</div></div>
@@ -896,65 +971,36 @@
         `;
       }
 
-      // 2. FORMULARIO NVS DINÁMICO (menus)
       const containerMenus = document.getElementById("containerDynamicMenus");
       const menus = item.esquema?.menus;
       const currentCfg = item.datos?.cfg || {};
 
       if (menus && menus.length) {
-        containerMenus.innerHTML = menus.map((cat, catIdx) => {
-          return `
-            <div class="category-box">
-              <div class="category-title">${cat.categoria.toUpperCase()}</div>
-              ${cat.campos.map(campo => {
-                const valorActual = (currentCfg[campo.key] !== undefined) ? currentCfg[campo.key] : campo.val;
-
-                if (campo.tipo === 'switch' || typeof valorActual === 'boolean') {
-                  return `
-                    <div class="dynamic-field-row">
-                      <span>${campo.label}</span>
-                      <input type="checkbox" class="dyn-input-field" data-key="${campo.key}" ${valorActual ? 'checked' : ''}>
-                    </div>
-                  `;
-                } else if (campo.tipo === 'number' || typeof valorActual === 'number') {
-                  return `
-                    <div class="dynamic-field-row">
-                      <span>${campo.label}</span>
-                      <input type="number" step="${campo.step || 0.1}" min="${campo.min || 0}" max="${campo.max || 999}" class="input-field dyn-input-field" data-key="${campo.key}" value="${valorActual}">
-                    </div>
-                  `;
-                } else {
-                  return `
-                    <div class="dynamic-field-row">
-                      <span>${campo.label}</span>
-                      <input type="text" class="input-field dyn-input-field" data-key="${campo.key}" value="${valorActual}">
-                    </div>
-                  `;
-                }
-              }).join("")}
-            </div>
-          `;
-        }).join("");
+        containerMenus.innerHTML = menus.map(cat => `
+          <div class="category-box">
+            <div class="category-title">${cat.categoria.toUpperCase()}</div>
+            ${cat.campos.map(campo => {
+              const valorActual = (currentCfg[campo.key] !== undefined) ? currentCfg[campo.key] : campo.val;
+              if (campo.tipo === 'switch' || typeof valorActual === 'boolean') {
+                return `
+                  <div class="dynamic-field-row">
+                    <span>${campo.label}</span>
+                    <input type="checkbox" class="dyn-input-field" data-key="${campo.key}" ${valorActual ? 'checked' : ''}>
+                  </div>
+                `;
+              } else {
+                return `
+                  <div class="dynamic-field-row">
+                    <span>${campo.label}</span>
+                    <input type="number" step="${campo.step || 0.1}" min="${campo.min || 0}" max="${campo.max || 999}" class="input-field dyn-input-field" data-key="${campo.key}" value="${valorActual}">
+                  </div>
+                `;
+              }
+            }).join("")}
+          </div>
+        `).join("");
       } else {
-        // Fallback dinámico basado en las claves que vengan en d.cfg
-        const cfgKeys = Object.keys(currentCfg);
-        if (cfgKeys.length) {
-          containerMenus.innerHTML = `
-            <div class="category-box">
-              <div class="category-title">PARÁMETROS DETECTADOS EN EL DISPOSITIVO</div>
-              ${cfgKeys.map(k => {
-                const val = currentCfg[k];
-                if (typeof val === 'boolean') {
-                  return `<div class="dynamic-field-row"><span>${k.toUpperCase()}</span><input type="checkbox" class="dyn-input-field" data-key="${k}" ${val ? 'checked' : ''}></div>`;
-                } else {
-                  return `<div class="dynamic-field-row"><span>${k.toUpperCase()}</span><input type="number" step="any" class="input-field dyn-input-field" data-key="${k}" value="${val}"></div>`;
-                }
-              }).join("")}
-            </div>
-          `;
-        } else {
-          containerMenus.innerHTML = `<div style="color: var(--text-muted); padding: 20px; text-align: center;">Esperando paquete de configuración del dispositivo...</div>`;
-        }
+        containerMenus.innerHTML = `<div style="color: var(--text-muted); padding: 20px; text-align: center;">Esperando que el equipo envíe su paquete de esquema vía MQTT...</div>`;
       }
     }
 
@@ -967,7 +1013,6 @@
       const ob = document.getElementById("detOnlineBadge");
       ob.innerHTML = `<span class="dot ${online ? 'online' : 'offline'}"></span> ${online ? 'ONLINE' : 'OFFLINE'}`;
 
-      // Actualizar los gauges dinámicos
       Object.keys(d).forEach(k => {
         const el = document.getElementById(`dyn-val-${k}`);
         if (el) {
@@ -994,7 +1039,6 @@
       }
     }
 
-    // TRANSMISIÓN UNIVERSAL DE TODOS LOS PARÁMETROS DINÁMICOS
     window.guardarParametrosDinamicos = function() {
       if (!currentInspectedMAC) return;
       if (usuarioActual.rol === "OPERADOR") return alert("Permiso denegado: rol OPERADOR.");
@@ -1002,18 +1046,14 @@
       const payload = {};
       document.querySelectorAll(".dyn-input-field").forEach(input => {
         const key = input.getAttribute("data-key");
-        if (input.type === 'checkbox') {
-          payload[key] = input.checked;
-        } else if (input.type === 'number') {
-          payload[key] = parseFloat(input.value);
-        } else {
-          payload[key] = input.value;
-        }
+        if (input.type === 'checkbox') payload[key] = input.checked;
+        else if (input.type === 'number') payload[key] = parseFloat(input.value);
+        else payload[key] = input.value;
       });
 
       mqttClient.publish(`autoclave_med_2026/${currentInspectedMAC}/config`, JSON.stringify(payload));
-      guardarReporte("CONFIG", currentInspectedMAC, fleet[currentInspectedMAC].meta.modelo, "Ajuste dinámico transmitido al ESP32");
-      alert("¡Todos los parámetros transmitidos y grabados en el ESP32!");
+      guardarReporte("CONFIG", currentInspectedMAC, fleet[currentInspectedMAC].meta.modelo, "Parámetros NVS actualizados");
+      alert("¡Parámetros transmitidos y grabados en el ESP32!");
     };
 
     window.enviarComandoDetalle = function(cmd) {
@@ -1032,7 +1072,7 @@
         fleet[currentInspectedMAC].meta = { alias, cliente, modelo };
         document.getElementById("detDeviceAlias").innerText = alias.toUpperCase();
         document.getElementById("detDeviceSub").innerText = `MAC: ${currentInspectedMAC} | CLIENTE: ${cliente} | MODELO: ${modelo}`;
-        alert("Ficha actualizada.");
+        alert("Ficha guardada.");
         actualizarCardDashboard(currentInspectedMAC);
       };
     };
@@ -1081,28 +1121,40 @@
     };
 
     // =========================================================================
-    // 7. FOTA HUB BASADO EN EQUIPOS REALES
+    // 6. FOTA HUB (EQUIPOS REGISTRADOS ONLINE Y OFFLINE)
     // =========================================================================
+    let currentFotaFilter = 'ALL';
+
+    window.filterFotaList = function(tipo) {
+      currentFotaFilter = tipo;
+      renderFotaLiveList();
+    };
+
     function renderFotaLiveList() {
       const box = document.getElementById("fotaDevicesLiveList");
-      const onlineMacs = Object.keys(fleet).filter(m => isOnline(fleet[m]));
+      let macs = Object.keys(fleet);
 
-      if (!onlineMacs.length) {
-        box.innerHTML = `<div style="color:var(--text-muted); text-align:center; padding:25px;">No hay autoclaves conectados en este momento.</div>`;
+      if (currentFotaFilter === 'ONLINE') macs = macs.filter(m => isOnline(fleet[m]));
+      if (currentFotaFilter === 'OFFLINE') macs = macs.filter(m => !isOnline(fleet[m]));
+
+      if (!macs.length) {
+        box.innerHTML = `<div style="color:var(--text-muted); text-align:center; padding:25px;">No hay autoclaves que coincidan con el filtro.</div>`;
         return;
       }
 
-      box.innerHTML = onlineMacs.map(mac => {
+      box.innerHTML = macs.map(mac => {
         const item = fleet[mac];
         const meta = item.meta || { alias: mac, modelo: "Autoclave" };
+        const online = isOnline(item);
+
         return `
           <label style="display:flex; align-items:center; gap:12px; background:rgba(0,0,0,0.35); border:1px solid rgba(255,255,255,0.08); padding:10px 14px; border-radius:6px; margin-bottom:8px; cursor:pointer;">
-            <input type="checkbox" class="fota-target-check" value="${mac}" checked style="width:18px; height:18px; accent-color:var(--cyan);">
+            <input type="checkbox" class="fota-target-check" value="${mac}" ${online ? 'checked' : ''} style="width:18px; height:18px; accent-color:var(--cyan);">
             <div style="flex: 1;">
               <div style="font-weight: 700; color: var(--cyan);">${meta.alias}</div>
-              <div style="font-size: 0.68rem; color: var(--text-muted);">${meta.modelo} | MAC: ${mac}</div>
+              <div style="font-size: 0.68rem; color: var(--text-muted);">${meta.cliente} | ${meta.modelo} | MAC: ${mac}</div>
             </div>
-            <span class="status-badge"><span class="dot online"></span> ONLINE</span>
+            <span class="status-badge"><span class="dot ${online ? 'online' : 'offline'}"></span> ${online ? 'ONLINE' : 'OFFLINE'}</span>
           </label>
         `;
       }).join("");
@@ -1117,7 +1169,7 @@
     window.ejecutarFotaSeleccionados = function() {
       if (usuarioActual.rol === "OPERADOR") return alert("Permiso denegado para FOTA.");
       const seleccionados = Array.from(document.querySelectorAll(".fota-target-check:checked")).map(c => c.value);
-      if (!seleccionados.length) return alert("Selecciona al menos un equipo en línea.");
+      if (!seleccionados.length) return alert("Selecciona al menos un equipo de la lista.");
 
       const version = document.getElementById("fotaVersionInput").value;
       const url = document.getElementById("fotaUrlInput").value;
@@ -1128,7 +1180,7 @@
             cmd: "TRIGGER_FOTA", url, modelo: "UNIVERSAL"
           }));
         });
-        guardarReporte("FOTA", "MULTI", `${seleccionados.length} equipos`, `FOTA transmitido v${version}`);
+        guardarReporte("FOTA", "MULTI", `${seleccionados.length} equipos`, `FOTA emitido v${version}`);
         alert("¡Orden FOTA transmitida vía MQTT!");
       }
     };
@@ -1140,14 +1192,44 @@
     };
 
     // =========================================================================
-    // 8. EQUIPOS DETECTADOS EN LA RED
+    // 7. GESTIÓN DE FLOTA (AGREGAR MANUALMENTE & TABLA)
     // =========================================================================
+    window.registrarEquipoManual = function() {
+      const mac = document.getElementById("addMac").value.trim().toUpperCase().replace(/[:\-]/g, '');
+      const alias = document.getElementById("addAlias").value.trim();
+      const cliente = document.getElementById("addCliente").value.trim();
+      const modelo = document.getElementById("addModelo").value.trim();
+
+      if (mac.length < 6) return alert("Dirección MAC inválida.");
+
+      const tx = db.transaction(["asignaciones"], "readwrite");
+      tx.objectStore("asignaciones").put({ mac, alias, cliente, modelo, fecha: new Date().toISOString() });
+      tx.oncomplete = () => {
+        fleet[mac] = {
+          mac,
+          lastSeen: 0,
+          datos: {},
+          esquema: null,
+          meta: { alias, cliente, modelo }
+        };
+        document.getElementById("addMac").value = "";
+        document.getElementById("addAlias").value = "";
+        document.getElementById("addCliente").value = "";
+        document.getElementById("addModelo").value = "";
+        
+        actualizarSelectoresGlobales();
+        renderFleetDashboard();
+        renderFleetMgmtTable();
+        alert("¡Equipo registrado con éxito en la flota!");
+      };
+    };
+
     function renderFleetMgmtTable() {
       const tbody = document.getElementById("fleetMgmtTbody");
       const keys = Object.keys(fleet);
 
       if (!keys.length) {
-        tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted);">Sin dispositivos detectados en MQTT.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-muted);">Sin dispositivos en el sistema.</td></tr>`;
         return;
       }
 
@@ -1164,14 +1246,17 @@
             <td>${meta.cliente}</td>
             <td style="color:var(--purple);">${meta.modelo}</td>
             <td>${item.fw || 'v3.2'}</td>
-            <td><button class="btn" style="padding:4px 8px;" onclick="abrirDetalleEquipo('${mac}')">⚙️ CONFIGURAR</button></td>
+            <td>
+              <button class="btn" style="padding:4px 8px;" onclick="abrirDetalleEquipo('${mac}')">⚙️ VER</button>
+              <button class="btn btn-danger" style="padding:4px 8px; margin-left:6px;" onclick="eliminarEquipoTotal('${mac}')">🗑️</button>
+            </td>
           </tr>
         `;
       }).join("");
     }
 
     // =========================================================================
-    // 9. REPORTES & AUDITORÍA
+    // 8. REPORTES & AUDITORÍA
     // =========================================================================
     function guardarReporte(tipo, mac, modelo, mensaje, telemetria = {}) {
       if (!db) return;
@@ -1221,7 +1306,7 @@
             <td style="color:var(--purple);">${r.modelo}</td>
             <td>${r.telemetria?.temp !== undefined ? `T:${r.telemetria.temp}°C | P:${r.telemetria.presion}b` : '--'}</td>
             <td>${r.mensaje}</td>
-            <td><button class="btn" style="padding:2px 6px; font-size:0.65rem;" onclick="abrirDetalleEquipo('${r.mac}')">VER EQUIPO</button></td>
+            <td><button class="btn" style="padding:2px 6px; font-size:0.65rem;" onclick="abrirDetalleEquipo('${r.mac}')">VER</button></td>
           </tr>
         `).join("");
       };
@@ -1255,7 +1340,7 @@
     };
 
     // =========================================================================
-    // 10. LOGIN Y ROLES
+    // 9. USUARIOS Y AUTENTICACIÓN
     // =========================================================================
     window.procesarLogin = function() {
       const u = document.getElementById("loginUser").value.trim();
@@ -1334,7 +1419,7 @@
       }
     };
 
-    // Refresco seguro de estados online
+    // Refresco seguro de estados online (1.5 segundos)
     setInterval(() => {
       renderFleetDashboard();
       if (activityStack[activityStack.length - 1] === 'act-fota') renderFotaLiveList();
