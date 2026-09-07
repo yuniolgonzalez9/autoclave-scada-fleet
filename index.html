@@ -2,16 +2,15 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
   
-  <!-- MANIFIESTO PWA PARA MODO APP NATIVA -->
   <link rel="manifest" href="manifest.json">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#04070d">
   
-  <title>AUTOCLAVE SCADA // FLEET COMMAND</title>
+  <title>AUTOCLAVE SCADA // ULTRA-FAST ENTERPRISE SYSTEM</title>
   
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;800&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
@@ -33,16 +32,15 @@
       --text-muted: #64748b;
     }
 
-    * { 
-      box-sizing: border-box; 
-      margin: 0; 
-      padding: 0; 
-      font-family: 'JetBrains Mono', monospace; 
-      -webkit-tap-highlight-color: transparent;
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'JetBrains Mono', monospace; }
+    
+    /* SCROLL VERTICAL FLUIDO Y BLOQUEO SOLO DE ARRASTRE HORIZONTAL ACCIDENTAL */
+    html {
+      min-height: 100%;
+      overscroll-behavior-x: none;
     }
     
-    /* BLOQUEO DE GESTOS LATERALES DEL NAVEGADOR (EVITA CIERRES ACCIDENTALES) */
-    html, body {
+    body {
       background-color: var(--bg-dark);
       background-image: 
         radial-gradient(circle at 10% 10%, rgba(0, 243, 255, 0.04) 0%, transparent 40%),
@@ -52,13 +50,9 @@
       background-size: 100% 100%, 100% 100%, 30px 30px, 30px 30px;
       color: var(--text-main);
       min-height: 100vh;
-      width: 100vw;
+      overflow-y: auto !important; /* Desplazamiento vertical 100% libre */
       overflow-x: hidden;
-      overscroll-behavior: none; /* BLOQUEA EL PULL-TO-REFRESH Y EL GESTO DE ATRÁS */
-      overscroll-behavior-x: none;
-      overscroll-behavior-y: none;
-      touch-action: pan-y; /* SOLO PERMITE DESPLAZAMIENTO VERTICAL */
-      user-select: none;
+      -webkit-overflow-scrolling: touch;
     }
 
     .app-bar {
@@ -137,6 +131,7 @@
       padding: 14px;
       min-height: calc(100vh - 120px);
       width: 100%;
+      height: auto;
     }
 
     .activity { display: none; }
@@ -190,6 +185,7 @@
       border-radius: 6px;
       padding: 16px;
       cursor: pointer;
+      transition: border-color 0.15s ease;
       width: 100%;
     }
     .node-item:hover { border-color: var(--cyan); }
@@ -239,7 +235,6 @@
       width: 100%;
       margin-bottom: 12px;
       min-height: 44px;
-      user-select: text;
     }
     .input-field:focus { border-color: var(--cyan); }
 
@@ -273,25 +268,26 @@
       gap: 8px;
     }
 
-    /* AVISO FLOTANTE DE PROTECCIÓN */
+    /* TOAST DE NOTIFICACIÓN DISCRETO (SIN MENSAJES EMERGENTES BLOQUEANTES) */
     .toast-overlay {
       position: fixed;
       bottom: 24px;
       left: 50%;
       transform: translateX(-50%);
-      background: rgba(15, 23, 42, 0.95);
+      background: #0f182b;
       border: 1px solid var(--cyan);
       color: var(--cyan);
-      padding: 12px 24px;
+      padding: 10px 22px;
       border-radius: 30px;
       font-size: 0.8rem;
       font-weight: 700;
-      box-shadow: 0 0 25px rgba(0, 243, 255, 0.35);
+      box-shadow: 0 0 20px rgba(0, 243, 255, 0.3);
       z-index: 9999;
       display: none;
       text-align: center;
       pointer-events: none;
       animation: toastFade 0.2s ease-out;
+      white-space: nowrap;
     }
     @keyframes toastFade {
       from { opacity: 0; transform: translate(-50%, 15px); }
@@ -309,8 +305,8 @@
 </head>
 <body>
 
-  <!-- AVISO TOAST -->
-  <div id="toastApp" class="toast-overlay">⛔ Salida protegida. Usa el botón SALIR para desconectar.</div>
+  <!-- TOAST DISCRETO -->
+  <div id="toastApp" class="toast-overlay">Acción completada</div>
 
   <!-- BARRA SUPERIOR -->
   <header class="app-bar" id="topAppBar" style="display: none;">
@@ -346,7 +342,7 @@
   <main class="activity-container">
 
     <!-- ==================================================================== -->
-    <!-- ACTIVITY 0: LOGIN                                                    -->
+    <!-- ACTIVITY 0: LOGIN CON SOPORTE DE TECLA ENTER                         -->
     <!-- ==================================================================== -->
     <section id="act-login" class="activity active">
       <div style="max-width: 440px; margin: 30px auto;" class="card">
@@ -355,20 +351,22 @@
           <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 6px;">PORTAL CLÍNICO DE ALTA SEGURIDAD</div>
         </div>
 
-        <label style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-bottom: 6px;">SELECCIONAR USUARIO REGISTRADO:</label>
-        <select id="loginUserSelect" class="input-field" onchange="seleccionarUsuarioRegistrado(this.value)">
-          <option value="">-- Seleccionar usuario --</option>
-        </select>
+        <form onsubmit="event.preventDefault(); procesarInicioSesion();">
+          <label style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-bottom: 6px;">SELECCIONAR USUARIO REGISTRADO:</label>
+          <select id="loginUserSelect" class="input-field" onchange="seleccionarUsuarioRegistrado(this.value)">
+            <option value="">-- Seleccionar usuario --</option>
+          </select>
 
-        <label style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-bottom: 6px;">USUARIO / ID:</label>
-        <input type="text" id="loginUserInput" class="input-field" placeholder="Ingresa tu usuario" required>
+          <label style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-bottom: 6px;">USUARIO / ID:</label>
+          <input type="text" id="loginUserInput" class="input-field" placeholder="Ingresa tu usuario" required>
 
-        <label style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-bottom: 6px;">CONTRASEÑA:</label>
-        <input type="password" id="loginPassInput" class="input-field" placeholder="Contraseña" required>
+          <label style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-bottom: 6px;">CONTRASEÑA (PRESIONA ENTER PARA ENTRAR):</label>
+          <input type="password" id="loginPassInput" class="input-field" placeholder="Contraseña" required>
 
-        <button class="btn" style="width: 100%; margin-top: 6px;" onclick="procesarInicioSesion()">
-          🔐 INICIAR SESIÓN Y EXPANDIR
-        </button>
+          <button type="submit" class="btn" style="width: 100%; margin-top: 6px;">
+            🔐 INICIAR SESIÓN [ENTER]
+          </button>
+        </form>
 
         <div style="text-align: center; margin-top: 18px;">
           <button class="btn btn-back" style="width: 100%; font-size: 0.72rem;" onclick="abrirRecuperacion()">
@@ -389,16 +387,18 @@
           RECUPERACIÓN DE ACCESO
         </div>
         <p style="font-size: 0.72rem; color: var(--text-muted); text-align: center; margin-bottom: 18px;">
-          Se generará una clave temporal enviada a: <br>
+          Se enviará la clave temporal a: <br>
           <span style="color: var(--cyan); font-weight: 700;">yuniolgonzalez9@gmail.com</span>
         </p>
 
-        <label style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-bottom: 6px;">USUARIO A RECUPERAR:</label>
-        <input type="text" id="recovUser" class="input-field" placeholder="Ej: admin">
+        <form onsubmit="event.preventDefault(); solicitarCodigoRecuperacion();">
+          <label style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-bottom: 6px;">USUARIO A RECUPERAR:</label>
+          <input type="text" id="recovUser" class="input-field" placeholder="Ej: admin" required>
 
-        <button class="btn" id="btnSendRecovery" style="width: 100%; margin-top: 8px;" onclick="solicitarCodigoRecuperacion()">
-          📩 GENERAR Y ENVIAR CÓDIGO
-        </button>
+          <button type="submit" class="btn" id="btnSendRecovery" style="width: 100%; margin-top: 8px;">
+            📩 ENVIAR CÓDIGO [ENTER]
+          </button>
+        </form>
 
         <button class="btn btn-back" style="width: 100%; margin-top: 10px;" onclick="openActivity('act-login')">
           ← VOLVER AL LOGIN
@@ -417,18 +417,20 @@
           MODIFICAR CONTRASEÑA
         </div>
         <p style="font-size: 0.72rem; color: var(--text-muted); text-align: center; margin-bottom: 18px;">
-          Ingresa y confirma tu nueva clave. La contraseña anterior será destruida de inmediato.
+          Ingresa la nueva clave. Se actualizará inmediatamente al dar Enter.
         </p>
 
-        <label style="font-size: 0.72rem; color: var(--text-muted);">NUEVA CONTRASEÑA:</label>
-        <input type="password" id="newPassInput" class="input-field" placeholder="Mínimo 4 caracteres">
+        <form onsubmit="event.preventDefault(); guardarNuevaContrasena();">
+          <label style="font-size: 0.72rem; color: var(--text-muted);">NUEVA CONTRASEÑA:</label>
+          <input type="password" id="newPassInput" class="input-field" placeholder="Mínimo 4 caracteres" required>
 
-        <label style="font-size: 0.72rem; color: var(--text-muted);">CONFIRMAR NUEVA CONTRASEÑA:</label>
-        <input type="password" id="confirmPassInput" class="input-field" placeholder="Repite la contraseña">
+          <label style="font-size: 0.72rem; color: var(--text-muted);">CONFIRMAR NUEVA CONTRASEÑA:</label>
+          <input type="password" id="confirmPassInput" class="input-field" placeholder="Repite la contraseña" required>
 
-        <button class="btn" style="width: 100%; margin-top: 8px;" onclick="guardarNuevaContrasena()">
-          💾 ACTUALIZAR CONTRASEÑA AHORA
-        </button>
+          <button type="submit" class="btn" style="width: 100%; margin-top: 8px;">
+            💾 ACTUALIZAR CONTRASEÑA [ENTER]
+          </button>
+        </form>
 
         <button class="btn btn-back" style="width: 100%; margin-top: 10px;" onclick="goBackActivity()">
           ← VOLVER ATRÁS
@@ -489,14 +491,15 @@
         </div>
       </div>
 
+      <!-- AJUSTES NVS DINÁMICOS CON ENVÍO AL DAR ENTER -->
       <div id="tab-det-cfg" class="detail-subview" style="display: none;">
         <div class="card">
-          <form onsubmit="event.preventDefault(); guardarParametrosDinamicos();">
+          <form id="formDynamicParams" onsubmit="event.preventDefault(); guardarParametrosDinamicos();">
             <div id="containerDynamicMenus">
               <div style="color: var(--text-muted); padding: 20px; text-align: center;">Esperando esquema del equipo...</div>
             </div>
             <button type="submit" id="btnGuardarDinamico" class="btn" style="width: 100%; margin-top: 14px;">
-              💾 TRANSMITIR Y GUARDAR EN NVS ESP32
+              💾 TRANSMITIR Y GUARDAR EN NVS ESP32 [ENTER]
             </button>
           </form>
         </div>
@@ -514,7 +517,7 @@
             <label style="font-size: 0.72rem; color: var(--text-muted);">MODELO DE AUTOCLAVE:</label>
             <input type="text" id="fichaModelo" class="input-field" required>
 
-            <button type="submit" class="btn" style="width: 100%;">ACTUALIZAR FICHA</button>
+            <button type="submit" class="btn" style="width: 100%;">ACTUALIZAR FICHA [ENTER]</button>
           </form>
         </div>
       </div>
@@ -594,7 +597,7 @@
             <label style="font-size: 0.72rem; color: var(--text-muted);">MODELO:</label>
             <input type="text" id="addModelo" class="input-field" placeholder="Ej: Autoclave Quirúrgico Clase B" required>
 
-            <button type="submit" class="btn" style="width: 100%;">+ AGREGAR A LA FLOTA</button>
+            <button type="submit" class="btn" style="width: 100%;">+ AGREGAR [ENTER]</button>
           </form>
         </div>
 
@@ -656,7 +659,7 @@
               <option value="SUPERADMIN">SUPERADMIN (NIVEL 1)</option>
             </select>
 
-            <button type="submit" class="btn" style="width: 100%;">+ CREAR ACCESO</button>
+            <button type="submit" class="btn" style="width: 100%;">+ CREAR ACCESO [ENTER]</button>
           </form>
         </div>
 
@@ -675,13 +678,28 @@
 
   <script>
     // =========================================================================
-    // 1. TRAMPA DE HISTORIAL INFINITA (EL BOTÓN ATRÁS NUNCA CIERRA LA APP)
+    // 1. SISTEMA DE NOTIFICACIÓN DISCRETA (SIN ALERTAS EMERGENTES BLOQUEANTES)
+    // =========================================================================
+    let toastTimer = null;
+    function notify(msg, color = 'var(--cyan)') {
+      const t = document.getElementById("toastApp");
+      t.innerText = msg;
+      t.style.borderColor = color;
+      t.style.color = color;
+      t.style.display = "block";
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => { t.style.display = "none"; }, 2000);
+    }
+
+    // =========================================================================
+    // 2. NAVEGACIÓN Y TRAMPA DE RETROCESO ANDROID
     // =========================================================================
     let activityStack = ['act-login'];
     let currentInspectedMAC = null;
     let usuarioActual = null;
+    let temporizadorInactividad = null;
+    const TIEMPO_LIMITE_INACTIVIDAD = 45 * 60 * 1000; // 45 minutos
 
-    // Asegurar que siempre haya estados hacia adelante para que "Atrás" nunca salga
     function fijarHistorialInfinito() {
       history.pushState({ app: 'scada' }, '', window.location.href);
     }
@@ -697,16 +715,12 @@
 
     window.goBackActivity = function() {
       if (activityStack.length > 1) {
-        activityStack.pop();
-        const prevAct = activityStack[activityStack.length - 1];
-        renderActivity(prevAct);
+        history.back();
       }
     };
 
-    // Interceptar de raíz cualquier retroceso del teléfono
     window.addEventListener('popstate', (event) => {
-      fijarHistorialInfinito(); // Reinyecta el estado para atrapar al navegador
-
+      fijarHistorialInfinito();
       if (!usuarioActual) {
         renderActivity('act-login');
         return;
@@ -717,18 +731,7 @@
         const prevAct = activityStack[activityStack.length - 1];
         renderActivity(prevAct);
       } else {
-        // Está en la raíz: BLOQUEO TOTAL DE SALIDA
-        const toast = document.getElementById("toastApp");
-        toast.style.display = "block";
-        setTimeout(() => { toast.style.display = "none"; }, 2500);
-      }
-    });
-
-    // Preguntar confirmación si el usuario intenta cerrar la pestaña en PC
-    window.addEventListener('beforeunload', (e) => {
-      if (usuarioActual) {
-        e.preventDefault();
-        e.returnValue = '¿Deseas salir del SCADA?';
+        notify("⛔ Estás en el panel principal. Usa SALIR para desconectar.", "var(--amber)");
       }
     });
 
@@ -749,7 +752,7 @@
     }
 
     // =========================================================================
-    // 2. MODO PANTALLA COMPLETA TOTAL (ELIMINA BARRAS DE NAVEGADOR)
+    // 3. PANTALLA COMPLETA Y SESIÓN PERSISTENTE
     // =========================================================================
     window.alternarPantallaCompleta = function() {
       const el = document.documentElement;
@@ -762,13 +765,24 @@
       }
     };
 
-    // =========================================================================
-    // 3. PERSISTENCIA DE SESIÓN AL RECARGAR PÁGINA
-    // =========================================================================
+    function reiniciarTemporizadorInactividad() {
+      if (temporizadorInactividad) clearTimeout(temporizadorInactividad);
+      if (usuarioActual) {
+        temporizadorInactividad = setTimeout(() => {
+          cerrarSesionManual();
+        }, TIEMPO_LIMITE_INACTIVIDAD);
+      }
+    }
+
+    ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'].forEach(evt => {
+      window.addEventListener(evt, reiniciarTemporizadorInactividad, { passive: true });
+    });
+
     window.cerrarSesionManual = function() {
       usuarioActual = null;
       currentInspectedMAC = null;
       localStorage.removeItem("scada_logged_user");
+      if (temporizadorInactividad) clearTimeout(temporizadorInactividad);
       
       document.getElementById("topAppBar").style.display = "none";
       document.getElementById("mainNavBar").style.display = "none";
@@ -777,6 +791,7 @@
       activityStack = ['act-login'];
       renderActivity('act-login');
       cargarListaUsuariosLogin();
+      notify("Sesión finalizada", "var(--text-muted)");
     };
 
     // =========================================================================
@@ -787,7 +802,7 @@
 
     function initDB() {
       return new Promise((resolve, reject) => {
-        const req = indexedDB.open("AutoclaveKioskDB_v7", 1);
+        const req = indexedDB.open("AutoclaveFastFleetDB_v7", 1);
         req.onupgradeneeded = (e) => {
           db = e.target.result;
           if (!db.objectStoreNames.contains("asignaciones")) db.createObjectStore("asignaciones", { keyPath: "mac" });
@@ -868,7 +883,7 @@
     }
 
     // =========================================================================
-    // 5. AUTENTICACIÓN
+    // 5. AUTENTICACIÓN DIRECTA CON TECLA ENTER
     // =========================================================================
     function cargarListaUsuariosLogin() {
       if (!db) return;
@@ -895,7 +910,6 @@
       const p = document.getElementById("loginPassInput").value.trim();
       const fb = document.getElementById("loginFeedback");
 
-      // Expandir a pantalla completa al entrar
       try {
         if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
           document.documentElement.requestFullscreen().catch(()=>{});
@@ -903,7 +917,7 @@
       } catch(e) {}
 
       if (!u || !p) {
-        mostrarFeedback(fb, "Por favor completa usuario y contraseña.", "var(--red)");
+        mostrarFeedback(fb, "Completa usuario y contraseña.", "var(--red)");
         return;
       }
 
@@ -964,6 +978,7 @@
       
       activityStack = ['act-telemetry'];
       renderActivity('act-telemetry');
+      notify(`Bienvenido, ${user.user.toUpperCase()}`, "var(--green)");
     }
 
     function mostrarFeedback(el, msg, color) {
@@ -1014,12 +1029,12 @@
         })
         .then(() => {
           btn.disabled = false;
-          btn.innerText = "📩 GENERAR Y ENVIAR CÓDIGO";
-          mostrarFeedback(fb, `¡Código enviado a yuniolgonzalez9@gmail.com! Clave temporal: [ ${otpCode} ]`, "var(--green)");
+          btn.innerText = "📩 ENVIAR CÓDIGO [ENTER]";
+          mostrarFeedback(fb, `¡Código enviado a yuniolgonzalez9@gmail.com! Clave: [ ${otpCode} ]`, "var(--green)");
         })
         .catch(() => {
           btn.disabled = false;
-          btn.innerText = "📩 GENERAR Y ENVIAR CÓDIGO";
+          btn.innerText = "📩 ENVIAR CÓDIGO [ENTER]";
           mostrarFeedback(fb, `Código generado: [ ${otpCode} ]. Úsalo en el login.`, "var(--cyan)");
         });
       };
@@ -1029,9 +1044,9 @@
       const p1 = document.getElementById("newPassInput").value.trim();
       const p2 = document.getElementById("confirmPassInput").value.trim();
 
-      if (!usuarioActual || !usuarioActual.user) return alert("Sesión no válida.");
-      if (p1.length < 4) return alert("Mínimo 4 caracteres.");
-      if (p1 !== p2) return alert("Las contraseñas no coinciden.");
+      if (!usuarioActual || !usuarioActual.user) return notify("Sesión no válida", "var(--red)");
+      if (p1.length < 4) return notify("Mínimo 4 caracteres", "var(--red)");
+      if (p1 !== p2) return notify("Las contraseñas no coinciden", "var(--red)");
 
       localStorage.setItem("scada_pass_" + usuarioActual.user, p1);
 
@@ -1049,8 +1064,8 @@
           localStorage.setItem("scada_logged_user", JSON.stringify(usuarioActual));
           document.getElementById("newPassInput").value = "";
           document.getElementById("confirmPassInput").value = "";
-          alert("¡Contraseña actualizada permanentemente!");
           iniciarSesionExitosa(user);
+          notify("¡Contraseña actualizada con éxito!", "var(--green)");
         };
       };
     };
@@ -1071,7 +1086,7 @@
     }
 
     // =========================================================================
-    // 6. MQTT Y TELEMETRÍA
+    // 6. MQTT Y TELEMETRÍA FLUIDA
     // =========================================================================
     let mqttClient;
 
@@ -1238,7 +1253,7 @@
     }
 
     // =========================================================================
-    // 8. DETALLE Y CONTROL DEL EQUIPO
+    // 8. DETALLE Y CONTROL DINÁMICO (ENTER TRANSMITE AL ESP32)
     // =========================================================================
     window.abrirDetalleEquipo = function(mac) {
       try {
@@ -1270,23 +1285,22 @@
     };
 
     window.eliminarEquipoTotal = function(mac) {
-      if (usuarioActual && usuarioActual.rol === "OPERADOR") return alert("Permiso denegado.");
-      if (confirm(`¿ELIMINAR el autoclave ${mac}?`)) {
-        const tx = db.transaction(["asignaciones"], "readwrite");
-        tx.objectStore("asignaciones").delete(mac);
-        tx.oncomplete = () => {
-          delete fleet[mac];
-          const c = document.getElementById(`card-${mac}`);
-          if (c) c.remove();
-          actualizarSelectoresGlobales();
-          renderFleetDashboard();
-          renderFleetMgmtTable();
-          if (activityStack[activityStack.length - 1] === 'act-device-detail') {
-            goBackActivity();
-          }
-          alert("Dispositivo eliminado.");
-        };
-      }
+      if (usuarioActual && usuarioActual.rol === "OPERADOR") return notify("Permiso denegado", "var(--red)");
+      
+      const tx = db.transaction(["asignaciones"], "readwrite");
+      tx.objectStore("asignaciones").delete(mac);
+      tx.oncomplete = () => {
+        delete fleet[mac];
+        const c = document.getElementById(`card-${mac}`);
+        if (c) c.remove();
+        actualizarSelectoresGlobales();
+        renderFleetDashboard();
+        renderFleetMgmtTable();
+        if (activityStack[activityStack.length - 1] === 'act-device-detail') {
+          goBackActivity();
+        }
+        notify("Dispositivo eliminado", "var(--amber)");
+      };
     };
 
     function switchDetailTab(tabId) {
@@ -1341,14 +1355,14 @@
                 return `
                   <div class="dynamic-field-row">
                     <span>${campo.label}</span>
-                    <input type="checkbox" class="dyn-input-field" data-key="${campo.key}" ${valorActual ? 'checked' : ''}>
+                    <input type="checkbox" class="dyn-input-field" data-key="${campo.key}" ${valorActual ? 'checked' : ''} onchange="guardarParametrosDinamicos()">
                   </div>
                 `;
               } else {
                 return `
                   <div class="dynamic-field-row">
                     <span>${campo.label}</span>
-                    <input type="number" step="${campo.step || 0.1}" min="${campo.min || 0}" max="${campo.max || 999}" class="input-field dyn-input-field" data-key="${campo.key}" value="${valorActual}">
+                    <input type="number" step="${campo.step || 0.1}" min="${campo.min || 0}" max="${campo.max || 999}" class="input-field dyn-input-field" data-key="${campo.key}" value="${valorActual}" onkeydown="if(event.key==='Enter'){event.preventDefault(); guardarParametrosDinamicos();}">
                   </div>
                 `;
               }
@@ -1395,9 +1409,10 @@
       }
     }
 
+    // TRANSMISIÓN INSTANTÁNEA (SIN CONFIRMACIONES)
     window.guardarParametrosDinamicos = function() {
       if (!currentInspectedMAC) return;
-      if (usuarioActual && usuarioActual.rol === "OPERADOR") return alert("Permiso denegado.");
+      if (usuarioActual && usuarioActual.rol === "OPERADOR") return notify("Permiso denegado: rol OPERADOR", "var(--red)");
 
       const payload = {};
       document.querySelectorAll(".dyn-input-field").forEach(input => {
@@ -1408,13 +1423,14 @@
       });
 
       mqttClient.publish(`autoclave_med_2026/${currentInspectedMAC}/config`, JSON.stringify(payload));
-      guardarReporte("CONFIG", currentInspectedMAC, fleet[currentInspectedMAC].meta.modelo, "Parámetros NVS actualizados");
-      alert("¡Parámetros transmitidos y grabados en el ESP32!");
+      guardarReporte("CONFIG", currentInspectedMAC, fleet[currentInspectedMAC].meta.modelo, "Parámetros actualizados");
+      notify("⚡ Parámetros enviados al ESP32", "var(--green)");
     };
 
     window.enviarComandoDetalle = function(cmd) {
       if (!currentInspectedMAC) return;
       mqttClient.publish(`autoclave_med_2026/${currentInspectedMAC}/config`, JSON.stringify({ cmd }));
+      notify(`Comando enviado: ${cmd}`, "var(--cyan)");
     };
 
     window.guardarFichaDetalle = function() {
@@ -1428,8 +1444,8 @@
         fleet[currentInspectedMAC].meta = { alias, cliente, modelo };
         document.getElementById("detDeviceAlias").innerText = alias.toUpperCase();
         document.getElementById("detDeviceSub").innerText = `MAC: ${currentInspectedMAC} | CLIENTE: ${cliente} | MODELO: ${modelo}`;
-        alert("Ficha guardada.");
         actualizarCardDashboard(currentInspectedMAC);
+        notify("Ficha actualizada correctamente", "var(--green)");
       };
     };
 
@@ -1477,7 +1493,7 @@
     };
 
     // =========================================================================
-    // 9. FOTA HUB
+    // 9. FOTA HUB (DESPLIEGUE DIRECTO SIN DIÁLOGOS DE CONFIRMACIÓN)
     // =========================================================================
     let currentFotaFilter = 'ALL';
 
@@ -1523,28 +1539,27 @@
     };
 
     window.ejecutarFotaSeleccionados = function() {
-      if (usuarioActual && usuarioActual.rol === "OPERADOR") return alert("Permiso denegado.");
+      if (usuarioActual && usuarioActual.rol === "OPERADOR") return notify("Permiso denegado", "var(--red)");
       const seleccionados = Array.from(document.querySelectorAll(".fota-target-check:checked")).map(c => c.value);
-      if (!seleccionados.length) return alert("Selecciona al menos un equipo.");
+      if (!seleccionados.length) return notify("Selecciona al menos un equipo", "var(--amber)");
 
       const version = document.getElementById("fotaVersionInput").value;
       const url = document.getElementById("fotaUrlInput").value;
 
-      if (confirm(`¿Desplegar versión ${version} a los ${seleccionados.length} autoclaves seleccionados?`)) {
-        seleccionados.forEach(mac => {
-          mqttClient.publish(`autoclave_med_2026/${mac}/config`, JSON.stringify({
-            cmd: "TRIGGER_FOTA", url, modelo: "UNIVERSAL"
-          }));
-        });
-        guardarReporte("FOTA", "MULTI", `${seleccionados.length} equipos`, `FOTA emitido v${version}`);
-        alert("¡Orden FOTA transmitida vía MQTT!");
-      }
+      seleccionados.forEach(mac => {
+        mqttClient.publish(`autoclave_med_2026/${mac}/config`, JSON.stringify({
+          cmd: "TRIGGER_FOTA", url, modelo: "UNIVERSAL"
+        }));
+      });
+      guardarReporte("FOTA", "MULTI", `${seleccionados.length} equipos`, `FOTA emitido v${version}`);
+      notify(`🚀 FOTA transmitido a ${seleccionados.length} equipos`, "var(--green)");
     };
 
     window.handleFileSelected = function(files) {
       if (!files.length) return;
       document.getElementById("dropFileName").innerText = `Binario: ${files[0].name} (${(files[0].size/1024).toFixed(1)} KB)`;
       document.getElementById("dropFileName").style.color = "var(--green)";
+      notify("Archivo binario cargado", "var(--cyan)");
     };
 
     // =========================================================================
@@ -1556,7 +1571,7 @@
       const cliente = document.getElementById("addCliente").value.trim();
       const modelo = document.getElementById("addModelo").value.trim();
 
-      if (mac.length < 6) return alert("Dirección MAC inválida.");
+      if (mac.length < 6) return notify("MAC inválida", "var(--red)");
 
       const tx = db.transaction(["asignaciones"], "readwrite");
       tx.objectStore("asignaciones").put({ mac, alias, cliente, modelo, fecha: new Date().toISOString() });
@@ -1576,7 +1591,7 @@
         actualizarSelectoresGlobales();
         renderFleetDashboard();
         renderFleetMgmtTable();
-        alert("¡Equipo registrado con éxito!");
+        notify("Equipo registrado", "var(--green)");
       };
     };
 
@@ -1668,12 +1683,13 @@
     }
 
     window.confirmarVaciarDB = function() {
-      if (usuarioActual && usuarioActual.rol !== "SUPERADMIN") return alert("Permiso denegado.");
-      if (confirm("¿ELIMINAR TODA LA AUDITORÍA?")) {
-        const tx = db.transaction(["reportes"], "readwrite");
-        tx.objectStore("reportes").clear();
-        tx.oncomplete = () => renderizarRegistros();
-      }
+      if (usuarioActual && usuarioActual.rol !== "SUPERADMIN") return notify("Permiso denegado", "var(--red)");
+      const tx = db.transaction(["reportes"], "readwrite");
+      tx.objectStore("reportes").clear();
+      tx.oncomplete = () => {
+        renderizarRegistros();
+        notify("Auditoría vaciada", "var(--amber)");
+      };
     };
 
     window.exportarRegistrosCSV = function() {
@@ -1682,7 +1698,7 @@
       tx.objectStore("reportes").getAll().onsuccess = (e) => {
         let data = e.target.result;
         if (devFilter !== "TODOS") data = data.filter(x => x.mac === devFilter);
-        if (!data.length) return alert("Sin datos.");
+        if (!data.length) return notify("Sin datos para exportar", "var(--amber)");
         let csv = "ID,FECHA,TIPO,MAC,MODELO,MENSAJE,TEMP,PRESION\n";
         data.forEach(d => {
           csv += `"${d.id}","${d.fecha}","${d.tipo}","${d.mac}","${d.modelo}","${d.mensaje}","${d.telemetria?.temp||''}","${d.telemetria?.presion||''}"\n`;
@@ -1691,6 +1707,7 @@
         a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
         a.download = `reporte_${Date.now()}.csv`;
         a.click();
+        notify("Reporte CSV descargado", "var(--green)");
       };
     };
 
@@ -1698,12 +1715,12 @@
     // 12. GESTIÓN USUARIOS
     // =========================================================================
     window.crearUsuario = function() {
-      if (usuarioActual && usuarioActual.rol !== "SUPERADMIN") return alert("Permiso denegado.");
+      if (usuarioActual && usuarioActual.rol !== "SUPERADMIN") return notify("Permiso denegado", "var(--red)");
       const user = document.getElementById("uUser").value.trim();
       const pass = document.getElementById("uPass").value.trim();
       const rol = document.getElementById("uRol").value;
 
-      if (!user || pass.length < 4) return alert("PIN mínimo de 4 caracteres.");
+      if (!user || pass.length < 4) return notify("PIN mínimo de 4 caracteres", "var(--red)");
       
       localStorage.setItem("scada_pass_" + user, pass);
 
@@ -1719,13 +1736,13 @@
         fecha: new Date().toISOString()
       });
       tx.oncomplete = () => {
-        alert("Usuario creado.");
         document.getElementById("uUser").value = "";
         document.getElementById("uPass").value = "";
         cargarUsuariosUI();
         cargarListaUsuariosLogin();
+        notify("Usuario creado", "var(--green)");
       };
-      tx.onerror = () => alert("El usuario ya existe.");
+      tx.onerror = () => notify("El usuario ya existe", "var(--red)");
     };
 
     function cargarUsuariosUI() {
@@ -1744,24 +1761,17 @@
     }
 
     window.eliminarUsuario = function(u) {
-      if (confirm(`¿Eliminar ${u}?`)) {
-        localStorage.removeItem("scada_pass_" + u);
-        const tx = db.transaction(["usuarios"], "readwrite");
-        tx.objectStore("usuarios").delete(u);
-        tx.oncomplete = () => {
-          cargarUsuariosUI();
-          cargarListaUsuariosLogin();
-        };
-      }
+      localStorage.removeItem("scada_pass_" + u);
+      const tx = db.transaction(["usuarios"], "readwrite");
+      tx.objectStore("usuarios").delete(u);
+      tx.oncomplete = () => {
+        cargarUsuariosUI();
+        cargarListaUsuariosLogin();
+        notify("Usuario eliminado", "var(--amber)");
+      };
     };
 
-    // =========================================================================
-    // 13. REGISTRO DE SERVICE WORKER (PWA NATIVA)
-    // =========================================================================
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('sw.js').catch(()=>{});
-    }
-
+    // Refresco seguro periódico
     setInterval(() => {
       renderFleetDashboard();
       if (activityStack[activityStack.length - 1] === 'act-fota') renderFotaLiveList();
