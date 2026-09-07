@@ -3,7 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
-  <title>AUTOCLAVE SCADA // ULTRA-RESPONSIVE SYSTEM</title>
+  
+  <!-- METAS PARA MODO APP NATIVA (PWA / STANDALONE) -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#04070d">
+  
+  <title>AUTOCLAVE SCADA // NATIVE APP EXPERIENCE</title>
   
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;800&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
@@ -11,7 +18,7 @@
 
   <style>
     :root {
-      --bg-dark: #05080f;
+      --bg-dark: #04070d;
       --bg-surface: #0b1220;
       --bg-card: #0f182b;
       --border-glow: rgba(0, 243, 255, 0.25);
@@ -37,11 +44,12 @@
       background-size: 100% 100%, 100% 100%, 30px 30px, 30px 30px;
       color: var(--text-main);
       min-height: 100vh;
-      overflow-x: auto; /* Permite desplazamiento lateral fluido si algo supera el ancho */
+      overflow-x: auto;
       -webkit-overflow-scrolling: touch;
+      user-select: none; /* Sensación de app nativa */
     }
 
-    /* BARRA SUPERIOR ADAPTABLE */
+    /* BARRA SUPERIOR */
     .app-bar {
       background: #080d1a;
       border-bottom: 1px solid var(--border-glow);
@@ -80,7 +88,7 @@
     .dot.online { background: var(--green); box-shadow: 0 0 8px var(--green); }
     .dot.offline { background: var(--red); box-shadow: 0 0 8px var(--red); }
 
-    /* NAVEGADOR PRINCIPAL CON SCROLL HORIZONTAL TÁCTIL */
+    /* NAVEGADOR HORIZONTAL DESLIZABLE */
     .nav-bar {
       display: flex;
       gap: 8px;
@@ -121,9 +129,7 @@
       width: 100%;
     }
 
-    .activity {
-      display: none;
-    }
+    .activity { display: none; }
     .activity.active {
       display: block;
       animation: fadeIn 0.15s ease-out;
@@ -161,7 +167,6 @@
       width: 100%;
     }
 
-    /* GRID AUTO-AJUSTABLE PARA MÓVIL Y ESCRITORIO */
     .grid-fleet {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
@@ -192,7 +197,6 @@
     .gauge-val.p { color: var(--purple); }
     .gauge-lbl { font-size: 0.62rem; color: var(--text-muted); margin-top: 4px; }
 
-    /* BOTONES ERGONÓMICOS TÁCTILES */
     .btn {
       background: rgba(0, 243, 255, 0.1);
       border: 1px solid var(--cyan);
@@ -207,7 +211,7 @@
       align-items: center;
       justify-content: center;
       gap: 8px;
-      min-height: 44px; /* Estándar táctil Apple/Google */
+      min-height: 44px;
     }
     .btn:hover { background: var(--cyan); color: #000; }
     .btn-back { background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.2); color: var(--text-main); }
@@ -226,10 +230,10 @@
       width: 100%;
       margin-bottom: 12px;
       min-height: 44px;
+      user-select: text;
     }
     .input-field:focus { border-color: var(--cyan); }
 
-    /* CONTENEDOR DE TABLAS CON DESPLAZAMIENTO LATERAL */
     .table-container {
       width: 100%;
       overflow-x: auto;
@@ -260,29 +264,48 @@
       gap: 8px;
     }
 
-    .scroll-hint {
-      font-size: 0.65rem;
-      color: var(--text-muted);
-      margin-bottom: 6px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
+    /* TOAST DE RESTRICCIÓN DE SALIDA */
+    .toast-overlay {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(15, 23, 42, 0.95);
+      border: 1px solid var(--amber);
+      color: var(--amber);
+      padding: 12px 24px;
+      border-radius: 30px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      box-shadow: 0 0 25px rgba(255, 170, 0, 0.35);
+      z-index: 9999;
+      display: none;
+      text-align: center;
+      pointer-events: none;
+      animation: toastFade 0.2s ease-out;
+    }
+    @keyframes toastFade {
+      from { opacity: 0; transform: translate(-50%, 15px); }
+      to { opacity: 1; transform: translate(-50%, 0); }
     }
 
     @media (max-width: 650px) {
       .brand-title { font-size: 0.95rem; }
       .app-bar { padding: 8px 12px; }
       .activity-container { padding: 10px; }
-      .btn { width: 100%; } /* Botones a lo ancho completo en móviles */
+      .btn { width: 100%; }
       .app-bar .btn { width: auto; }
     }
   </style>
 </head>
 <body>
 
+  <!-- TOAST DE SALIDA -->
+  <div id="toastApp" class="toast-overlay">⚠️ Presiona "Atrás" una vez más para salir del sistema</div>
+
   <!-- BARRA SUPERIOR -->
   <header class="app-bar" id="topAppBar" style="display: none;">
-    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
       <button id="btnGlobalBack" class="btn btn-back" style="display: none; min-height: 36px; padding: 6px 12px;" onclick="goBackActivity()">← VOLVER</button>
       <div class="brand-title">AUTOCLAVE SCADA</div>
       <span class="status-badge">
@@ -291,12 +314,13 @@
       </span>
     </div>
     
-    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+      <button id="btnInstallPwa" class="btn" style="min-height: 36px; padding: 6px 10px; font-size: 0.68rem; display: none;" onclick="instalarAppNativa()">📲 INSTALAR APP</button>
       <div class="status-badge" style="border-color: var(--border-glow);">
         <span id="currentUserName" style="color: var(--cyan); font-weight: 800;">ADMIN</span>
         <span id="currentUserRoleBadge" class="role-badge role-super" style="margin-left: 5px;">SUPERADMIN</span>
       </div>
-      <button class="btn btn-warn" style="min-height: 36px; padding: 6px 10px; font-size: 0.68rem;" onclick="openActivity('act-change-pass')">🔑 CAMBIAR CLAVE</button>
+      <button class="btn btn-warn" style="min-height: 36px; padding: 6px 10px; font-size: 0.68rem;" onclick="openActivity('act-change-pass')">🔑 CLAVE</button>
       <button class="btn btn-danger" style="min-height: 36px; padding: 6px 10px; font-size: 0.68rem;" onclick="cerrarSesionManual()">SALIR</button>
     </div>
   </header>
@@ -313,7 +337,7 @@
   <main class="activity-container">
 
     <!-- ==================================================================== -->
-    <!-- ACTIVITY 0: PANTALLA INICIAL DE INICIO DE SESIÓN                     -->
+    <!-- ACTIVITY 0: LOGIN INICIAL                                            -->
     <!-- ==================================================================== -->
     <section id="act-login" class="activity active">
       <div style="max-width: 440px; margin: 30px auto;" class="card">
@@ -348,7 +372,7 @@
     </section>
 
     <!-- ==================================================================== -->
-    <!-- ACTIVITY RECOVERY: RECUPERAR CLAVE                                  -->
+    <!-- ACTIVITY RECOVERY                                                   -->
     <!-- ==================================================================== -->
     <section id="act-recovery" class="activity">
       <div style="max-width: 440px; margin: 30px auto;" class="card">
@@ -356,7 +380,7 @@
           RECUPERACIÓN DE ACCESO
         </div>
         <p style="font-size: 0.72rem; color: var(--text-muted); text-align: center; margin-bottom: 18px;">
-          Se generará una contraseña temporal de un solo uso enviada a: <br>
+          Se generará una clave temporal enviada a: <br>
           <span style="color: var(--cyan); font-weight: 700;">yuniolgonzalez9@gmail.com</span>
         </p>
 
@@ -364,7 +388,7 @@
         <input type="text" id="recovUser" class="input-field" placeholder="Ej: admin">
 
         <button class="btn" id="btnSendRecovery" style="width: 100%; margin-top: 8px;" onclick="solicitarCodigoRecuperacion()">
-          📩 GENERAR Y ENVIAR CÓDIGO TEMPORAL
+          📩 GENERAR Y ENVIAR CÓDIGO
         </button>
 
         <button class="btn btn-back" style="width: 100%; margin-top: 10px;" onclick="openActivity('act-login')">
@@ -376,7 +400,7 @@
     </section>
 
     <!-- ==================================================================== -->
-    <!-- ACTIVITY CAMBIAR CONTRASEÑA (MODIFICACIÓN PERMANENTE)               -->
+    <!-- ACTIVITY CAMBIAR CONTRASEÑA                                         -->
     <!-- ==================================================================== -->
     <section id="act-change-pass" class="activity">
       <div style="max-width: 440px; margin: 30px auto;" class="card">
@@ -384,7 +408,7 @@
           MODIFICAR CONTRASEÑA
         </div>
         <p style="font-size: 0.72rem; color: var(--text-muted); text-align: center; margin-bottom: 18px;">
-          Ingresa y confirma tu nueva clave permanente. La contraseña vieja quedará anulada inmediatamente.
+          Ingresa y confirma tu nueva clave. La contraseña anterior será destruida de forma inmediata.
         </p>
 
         <label style="font-size: 0.72rem; color: var(--text-muted);">NUEVA CONTRASEÑA:</label>
@@ -420,7 +444,7 @@
     </section>
 
     <!-- ==================================================================== -->
-    <!-- ACTIVITY 2: DETALLE Y CONTROL DINÁMICO DEL DISPOSITIVO              -->
+    <!-- ACTIVITY 2: DETALLE DEL EQUIPO                                      -->
     <!-- ==================================================================== -->
     <section id="act-device-detail" class="activity">
       <div class="activity-header">
@@ -442,15 +466,12 @@
         <button class="btn" id="btnSubLogs" onclick="switchDetailTab('tab-det-logs')">📋 HISTORIAL</button>
       </div>
 
-      <!-- SENSORES DINÁMICOS -->
       <div id="tab-det-tele" class="detail-subview">
         <div class="card">
           <div class="gauge-grid" id="containerDynamicGauges"></div>
-
           <div id="detAlarmaBanner" style="display: none; background: rgba(255,0,85,0.2); border: 1px solid var(--red); color: var(--red); padding: 12px; border-radius: 6px; font-size: 0.8rem; margin: 12px 0;">
             ⚠️ ALARMA: <span id="detAlarmaTexto"></span>
           </div>
-
           <div style="display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap;">
             <button class="btn" style="flex: 1;" onclick="enviarComandoDetalle('INICIAR_CICLO')">▶️ INICIAR CICLO</button>
             <button class="btn btn-danger" style="flex: 1;" onclick="enviarComandoDetalle('ABORTAR_CICLO')">⏹️ PARO EMERGENCIA</button>
@@ -459,7 +480,6 @@
         </div>
       </div>
 
-      <!-- AJUSTES NVS -->
       <div id="tab-det-cfg" class="detail-subview" style="display: none;">
         <div class="card">
           <form onsubmit="event.preventDefault(); guardarParametrosDinamicos();">
@@ -473,7 +493,6 @@
         </div>
       </div>
 
-      <!-- FICHA -->
       <div id="tab-det-ficha" class="detail-subview" style="display: none;">
         <div class="card">
           <form onsubmit="event.preventDefault(); guardarFichaDetalle();">
@@ -491,14 +510,12 @@
         </div>
       </div>
 
-      <!-- LOGS DE ESTE EQUIPO -->
       <div id="tab-det-logs" class="detail-subview" style="display: none;">
         <div class="card">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
             <div style="font-size: 0.8rem; color: var(--cyan); font-weight: 700;">HISTORIAL DE ESTE EQUIPO:</div>
             <button class="btn" onclick="imprimirCertificadoIndividual()">🖨️ CERTIFICAR CICLO</button>
           </div>
-          <div class="scroll-hint">↔ Desliza la tabla hacia los lados si no cabe completa</div>
           <div class="table-container">
             <table>
               <thead><tr><th>FECHA</th><th>TIPO</th><th>TELEMETRÍA</th><th>DIAGNÓSTICO</th></tr></thead>
@@ -513,10 +530,7 @@
     <!-- ACTIVITY 3: FOTA HUB                                                -->
     <!-- ==================================================================== -->
     <section id="act-fota" class="activity">
-      <div class="activity-header">
-        <div class="activity-title">DESPLIEGUE REMOTO (FOTA HUB)</div>
-      </div>
-
+      <div class="activity-header"><div class="activity-title">DESPLIEGUE REMOTO (FOTA HUB)</div></div>
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 16px;">
         <div class="card">
           <label style="font-size: 0.72rem; color: var(--text-muted);">VERSIÓN A DESPLEGAR:</label>
@@ -542,9 +556,7 @@
               <button class="btn btn-warn" style="min-height: 32px; padding: 4px 8px; font-size: 0.65rem;" onclick="toggleSelectAllFota()">INVERTIR</button>
             </div>
           </div>
-
           <div id="fotaDevicesLiveList" style="max-height: 260px; overflow-y: auto; margin-bottom: 14px;"></div>
-
           <button class="btn" id="btnExecuteFota" style="width: 100%;" onclick="ejecutarFotaSeleccionados()">
             🚀 TRANSMITIR ACTUALIZACIÓN FOTA
           </button>
@@ -578,7 +590,6 @@
         </div>
 
         <div class="card">
-          <div class="scroll-hint">↔ Desliza la tabla hacia los lados si no cabe completa</div>
           <div class="table-container">
             <table>
               <thead><tr><th>MAC</th><th>ESTADO</th><th>ALIAS</th><th>CLIENTE</th><th>MODELO</th><th>ACCIONES</th></tr></thead>
@@ -602,19 +613,11 @@
       </div>
 
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-bottom: 12px;">
-        <select id="filterDeviceSelect" class="input-field" onchange="renderizarRegistros()">
-          <option value="TODOS">TODOS LOS EQUIPOS</option>
-        </select>
-        <select id="filterType" class="input-field" onchange="renderizarRegistros()">
-          <option value="TODOS">TODOS LOS EVENTOS</option>
-          <option value="CICLO">CICLOS COMPLETADOS</option>
-          <option value="ALARMA">SOLO ALARMAS</option>
-          <option value="CONEXION">CONEXIONES</option>
-        </select>
+        <select id="filterDeviceSelect" class="input-field" onchange="renderizarRegistros()"><option value="TODOS">TODOS LOS EQUIPOS</option></select>
+        <select id="filterType" class="input-field" onchange="renderizarRegistros()"><option value="TODOS">TODOS LOS EVENTOS</option><option value="CICLO">CICLOS COMPLETADOS</option><option value="ALARMA">SOLO ALARMAS</option></select>
         <input type="text" id="filterInput" class="input-field" placeholder="Buscar texto..." onkeyup="renderizarRegistros()">
       </div>
 
-      <div class="scroll-hint">↔ Desliza la tabla horizontalmente para ver todas las columnas</div>
       <div class="table-container">
         <table>
           <thead><tr><th>FECHA</th><th>TIPO</th><th>EQUIPO</th><th>MODELO</th><th>TELEMETRÍA</th><th>DIAGNÓSTICO</th><th>ACCIÓN</th></tr></thead>
@@ -649,7 +652,6 @@
         </div>
 
         <div class="card">
-          <div class="scroll-hint">↔ Desliza la tabla hacia los lados si no cabe completa</div>
           <div class="table-container">
             <table>
               <thead><tr><th>USUARIO</th><th>ROL</th><th>FECHA</th><th>ACCIÓN</th></tr></thead>
@@ -664,60 +666,58 @@
 
   <script>
     // =========================================================================
-    // 1. SISTEMA DE SESIÓN & CONTROL DE INACTIVIDAD (5 MINUTOS)
+    // 1. GESTIÓN NATIVA DE NAVEGACIÓN ANDROID ("ATRÁS" & DOBLE TOQUE PARA SALIR)
     // =========================================================================
     let activityStack = ['act-login'];
     let currentInspectedMAC = null;
     let usuarioActual = null;
     let temporizadorInactividad = null;
-    const TIEMPO_LIMITE_INACTIVIDAD = 5 * 60 * 1000; // 5 minutos
+    const TIEMPO_LIMITE_INACTIVIDAD = 30 * 60 * 1000; // 30 minutos de inactividad
+    let ultimoToqueAtras = 0;
 
-    function reiniciarTemporizadorInactividad() {
-      if (temporizadorInactividad) clearTimeout(temporizadorInactividad);
-      if (usuarioActual) {
-        temporizadorInactividad = setTimeout(() => {
-          alert("⚠️ Sesión cerrada automáticamente por inactividad (5 minutos).");
-          cerrarSesionManual();
-        }, TIEMPO_LIMITE_INACTIVIDAD);
-      }
-    }
-
-    ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'].forEach(evt => {
-      window.addEventListener(evt, reiniciarTemporizadorInactividad, { passive: true });
-    });
-
-    window.cerrarSesionManual = function() {
-      usuarioActual = null;
-      currentInspectedMAC = null;
-      sessionStorage.removeItem("scada_session_user");
-      if (temporizadorInactividad) clearTimeout(temporizadorInactividad);
-      
-      document.getElementById("topAppBar").style.display = "none";
-      document.getElementById("mainNavBar").style.display = "none";
-      document.getElementById("loginPassInput").value = "";
-      
-      activityStack = ['act-login'];
-      renderActivity('act-login');
-      cargarListaUsuariosLogin();
-    };
-
-    // =========================================================================
-    // 2. NAVEGACIÓN FLUIDA (ACTIVITIES)
-    // =========================================================================
+    // Integración directa con History API de los teléfonos
     window.openActivity = function(actId) {
       if (activityStack[activityStack.length - 1] !== actId) {
         activityStack.push(actId);
+        history.pushState({ activity: actId }, '', '#' + actId);
       }
       renderActivity(actId);
     };
 
     window.goBackActivity = function() {
       if (activityStack.length > 1) {
+        history.back(); // Emula retroceso nativo
+      }
+    };
+
+    window.addEventListener('popstate', (event) => {
+      if (!usuarioActual) {
+        renderActivity('act-login');
+        return;
+      }
+
+      if (activityStack.length > 1) {
         activityStack.pop();
         const prevAct = activityStack[activityStack.length - 1];
         renderActivity(prevAct);
+      } else {
+        // Estamos en la raíz: restringir salida con doble toque
+        const ahora = Date.now();
+        if (ahora - ultimoToqueAtras < 2500) {
+          // Segundo toque en menos de 2.5s: permitir salida al navegador
+        } else {
+          ultimoToqueAtras = ahora;
+          history.pushState({ activity: 'act-telemetry' }, '', '#act-telemetry');
+          mostrarToastAtras();
+        }
       }
-    };
+    });
+
+    function mostrarToastAtras() {
+      const toast = document.getElementById("toastApp");
+      toast.style.display = "block";
+      setTimeout(() => { toast.style.display = "none"; }, 2500);
+    }
 
     function renderActivity(actId) {
       document.querySelectorAll('.activity').forEach(a => a.classList.remove('active'));
@@ -736,14 +736,47 @@
     }
 
     // =========================================================================
-    // 3. BASE DE DATOS LOCAL CON SINCRONIZACIÓN DOBLE (ANTI-PÉRDIDA DE PASS)
+    // 2. SESIÓN PERSISTENTE AL RECARGAR (NO SE CIERRA POR ACTUALIZAR)
+    // =========================================================================
+    function reiniciarTemporizadorInactividad() {
+      if (temporizadorInactividad) clearTimeout(temporizadorInactividad);
+      if (usuarioActual) {
+        temporizadorInactividad = setTimeout(() => {
+          alert("⚠️ Sesión cerrada automáticamente por 30 minutos de inactividad.");
+          cerrarSesionManual();
+        }, TIEMPO_LIMITE_INACTIVIDAD);
+      }
+    }
+
+    ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'].forEach(evt => {
+      window.addEventListener(evt, reiniciarTemporizadorInactividad, { passive: true });
+    });
+
+    window.cerrarSesionManual = function() {
+      usuarioActual = null;
+      currentInspectedMAC = null;
+      localStorage.removeItem("scada_logged_user");
+      if (temporizadorInactividad) clearTimeout(temporizadorInactividad);
+      
+      document.getElementById("topAppBar").style.display = "none";
+      document.getElementById("mainNavBar").style.display = "none";
+      document.getElementById("loginPassInput").value = "";
+      
+      activityStack = ['act-login'];
+      history.replaceState({ activity: 'act-login' }, '', '#login');
+      renderActivity('act-login');
+      cargarListaUsuariosLogin();
+    };
+
+    // =========================================================================
+    // 3. BASE DE DATOS LOCAL CON SINCRONIZACIÓN DOBLE
     // =========================================================================
     let db;
     const fleet = {};
 
     function initDB() {
       return new Promise((resolve, reject) => {
-        const req = indexedDB.open("AutoclaveFastFleetDB_v5", 1);
+        const req = indexedDB.open("AutoclaveFastFleetDB_v6", 1);
         req.onupgradeneeded = (e) => {
           db = e.target.result;
           if (!db.objectStoreNames.contains("asignaciones")) db.createObjectStore("asignaciones", { keyPath: "mac" });
@@ -757,7 +790,6 @@
         req.onsuccess = (e) => {
           db = e.target.result;
           
-          // Crear admin por defecto si no existe
           const tx = db.transaction(["usuarios"], "readwrite");
           const store = tx.objectStore("usuarios");
           store.get("admin").onsuccess = (ev) => {
@@ -780,10 +812,28 @@
           cargarEquiposGuardados();
           cargarListaUsuariosLogin();
           cargarUsuariosUI();
+          
+          // COMPROBAR SI YA HABÍA SESIÓN INICIADA AL RECARGAR PÁGINA
+          verificarSesionPersistente();
           resolve(db);
         };
         req.onerror = (e) => reject(e.target.error);
       });
+    }
+
+    function verificarSesionPersistente() {
+      const sesionGuardada = localStorage.getItem("scada_logged_user");
+      if (sesionGuardada) {
+        try {
+          const userObj = JSON.parse(sesionGuardada);
+          // Validar con la clave actual en almacenamiento
+          const passActual = localStorage.getItem("scada_pass_" + userObj.user) || userObj.pass;
+          userObj.pass = passActual;
+          iniciarSesionExitosa(userObj, true);
+        } catch(e) {
+          localStorage.removeItem("scada_logged_user");
+        }
+      }
     }
 
     function cargarEquiposGuardados() {
@@ -853,7 +903,7 @@
 
         const ahora = Date.now();
 
-        // 1. Verificación de Contraseña Temporal (OTP)
+        // 1. Verificación OTP
         if (user.otp && p === user.otp) {
           if (user.otpUsado) {
             mostrarFeedback(fb, "Este código temporal ya fue usado.", "var(--red)");
@@ -873,25 +923,24 @@
           return;
         }
 
-        // 2. Verificación de Contraseña Regular (Valida en IndexedDB y respaldo localStorage)
+        // 2. Verificación Regular
         const passAlmacenada = localStorage.getItem("scada_pass_" + user.user) || user.pass;
 
         if (passAlmacenada === p) {
-          // Si hubo desincronización, reparar inmediatamente
           if (user.pass !== passAlmacenada) {
             user.pass = passAlmacenada;
             store.put(user);
           }
           iniciarSesionExitosa(user);
         } else {
-          mostrarFeedback(fb, "Contraseña incorrecta. Verifica mayúsculas.", "var(--red)");
+          mostrarFeedback(fb, "Contraseña incorrecta.", "var(--red)");
         }
       };
     };
 
-    function iniciarSesionExitosa(user) {
+    function iniciarSesionExitosa(user, esRestauracion = false) {
       usuarioActual = user;
-      sessionStorage.setItem("scada_session_user", user.user);
+      localStorage.setItem("scada_logged_user", JSON.stringify(user));
 
       document.getElementById("currentUserName").innerText = user.user.toUpperCase();
       const b = document.getElementById("currentUserRoleBadge");
@@ -903,9 +952,12 @@
       aplicarPermisosRol();
       reiniciarTemporizadorInactividad();
 
-      guardarReporte("CONEXION", "SISTEMA", usuarioActual.rol, `Inicio de sesión de ${user.user}`);
+      if (!esRestauracion) {
+        guardarReporte("CONEXION", "SISTEMA", usuarioActual.rol, `Inicio de sesión de ${user.user}`);
+      }
       
       activityStack = ['act-telemetry'];
+      history.replaceState({ activity: 'act-telemetry' }, '', '#telemetria');
       renderActivity('act-telemetry');
     }
 
@@ -928,19 +980,13 @@
       const fb = document.getElementById("recovFeedback");
       const btn = document.getElementById("btnSendRecovery");
 
-      if (!u) {
-        mostrarFeedback(fb, "Ingresa el usuario a recuperar.", "var(--red)");
-        return;
-      }
+      if (!u) return mostrarFeedback(fb, "Ingresa el usuario a recuperar.", "var(--red)");
 
       const tx = db.transaction(["usuarios"], "readwrite");
       const store = tx.objectStore("usuarios");
       store.get(u).onsuccess = (e) => {
         const user = e.target.result;
-        if (!user) {
-          mostrarFeedback(fb, "El usuario ingresado no existe.", "var(--red)");
-          return;
-        }
+        if (!user) return mostrarFeedback(fb, "El usuario ingresado no existe.", "var(--red)");
 
         const otpCode = Math.random().toString(36).substring(2, 8).toUpperCase();
         user.otp = otpCode;
@@ -963,18 +1009,17 @@
         })
         .then(() => {
           btn.disabled = false;
-          btn.innerText = "📩 GENERAR Y ENVIAR CÓDIGO TEMPORAL";
+          btn.innerText = "📩 GENERAR Y ENVIAR CÓDIGO";
           mostrarFeedback(fb, `¡Código enviado a yuniolgonzalez9@gmail.com! Clave temporal: [ ${otpCode} ]`, "var(--green)");
         })
         .catch(() => {
           btn.disabled = false;
-          btn.innerText = "📩 GENERAR Y ENVIAR CÓDIGO TEMPORAL";
-          mostrarFeedback(fb, `Código temporal generado: [ ${otpCode} ]. Úsalo en el login.`, "var(--cyan)");
+          btn.innerText = "📩 GENERAR Y ENVIAR CÓDIGO";
+          mostrarFeedback(fb, `Código temporal: [ ${otpCode} ]. Úsalo en el login.`, "var(--cyan)");
         });
       };
     };
 
-    // ACTUALIZACIÓN DE CONTRASEÑA DOBLEMENTE BLINDADA
     window.guardarNuevaContrasena = function() {
       const p1 = document.getElementById("newPassInput").value.trim();
       const p2 = document.getElementById("confirmPassInput").value.trim();
@@ -988,10 +1033,9 @@
       if (p1.length < 4) return alert("La contraseña debe tener al menos 4 caracteres.");
       if (p1 !== p2) return alert("Las contraseñas no coinciden.");
 
-      // 1. Guardar de forma sincrónica en localStorage
+      // Destrucción inmediata de la clave anterior en ambos almacenes
       localStorage.setItem("scada_pass_" + usuarioActual.user, p1);
 
-      // 2. Guardar en IndexedDB
       const tx = db.transaction(["usuarios"], "readwrite");
       const store = tx.objectStore("usuarios");
       store.get(usuarioActual.user).onsuccess = (e) => {
@@ -1000,12 +1044,13 @@
         user.otp = null;
         user.otpUsado = false;
         
-        const putReq = store.put(user);
-        putReq.onsuccess = () => {
+        store.put(user);
+        tx.oncomplete = () => {
           usuarioActual.pass = p1;
+          localStorage.setItem("scada_logged_user", JSON.stringify(usuarioActual));
           document.getElementById("newPassInput").value = "";
           document.getElementById("confirmPassInput").value = "";
-          alert("¡Contraseña actualizada permanentemente! La contraseña anterior ha sido eliminada por completo.");
+          alert("¡Contraseña actualizada permanentemente! La clave anterior fue destruida.");
           iniciarSesionExitosa(user);
         };
       };
@@ -1027,7 +1072,7 @@
     }
 
     // =========================================================================
-    // 5. COMUNICACIÓN MQTT INSTANTÁNEA (SIN LAG)
+    // 5. COMUNICACIÓN MQTT INSTANTÁNEA
     // =========================================================================
     let mqttClient;
 
@@ -1103,7 +1148,6 @@
         fleet[mac].cicloRegistrado = false;
       }
 
-      // Inyección directa a la interfaz sin reconstruir el DOM (0 lag)
       actualizarCardDashboard(mac);
       if (currentInspectedMAC === mac) actualizarPantallaDetalleDinamica();
     }
@@ -1124,13 +1168,11 @@
     }
 
     // =========================================================================
-    // 6. RENDERIZADO DEL MONITOR SIN LAG
+    // 6. RENDERIZADO DEL MONITOR
     // =========================================================================
     function renderFleetDashboard() {
       const container = document.getElementById("fleetLiveContainer");
       const keys = Object.keys(fleet);
-      const onlineCount = keys.filter(k => isOnline(fleet[k])).length;
-      document.getElementById("fleetCount").innerText = onlineCount;
 
       if (!keys.length) {
         container.innerHTML = `<div style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 50px;">ESPERANDO AUTOCLAVES TRANSMITIENDO...</div>`;
@@ -1571,7 +1613,7 @@
     }
 
     // =========================================================================
-    // 10. AUDITORÍA Y REPORTES
+    // 10. REPORTES & AUDITORÍA
     // =========================================================================
     function guardarReporte(tipo, mac, modelo, mensaje, telemetria = {}) {
       if (!db) return;
@@ -1697,14 +1739,14 @@
             <td style="font-weight:700; color:var(--cyan);">${u.user}</td>
             <td><span class="role-badge ${u.rol === 'SUPERADMIN' ? 'role-super' : u.rol === 'TECNICO' ? 'role-tech' : 'role-oper'}">${u.rol}</span></td>
             <td>${new Date(u.fecha).toLocaleDateString()}</td>
-            <td>${u.user !== 'admin' ? `<button class="btn btn-danger" style="min-height:28px; padding:2px 8px; font-size:0.65rem;" onclick="eliminarUsuario('${u.user}')">X</button>` : '--'}</td>
+            <td>${u.user !== 'admin' ? `<button class="btn btn-danger" style="padding:2px 6px; font-size:0.65rem; min-height:26px;" onclick="eliminarUsuario('${u.user}')">X</button>` : '--'}</td>
           </tr>
         `).join("");
       };
     }
 
     window.eliminarUsuario = function(u) {
-      if (confirm(`¿Eliminar al usuario ${u}?`)) {
+      if (confirm(`¿Eliminar ${u}?`)) {
         localStorage.removeItem("scada_pass_" + u);
         const tx = db.transaction(["usuarios"], "readwrite");
         tx.objectStore("usuarios").delete(u);
@@ -1715,17 +1757,38 @@
       }
     };
 
-    // Refresco seguro periódico
+    // =========================================================================
+    // 12. PWA INSTALABLE COMO APP
+    // =========================================================================
+    let deferredPrompt = null;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      document.getElementById("btnInstallPwa").style.display = "inline-flex";
+    });
+
+    window.instalarAppNativa = function() {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then((choiceResult) => {
+          if (choiceResult.outcome === 'accepted') {
+            document.getElementById("btnInstallPwa").style.display = "none";
+          }
+          deferredPrompt = null;
+        });
+      } else {
+        alert("En tu navegador Chrome/Edge presiona los 3 puntos (⋮) arriba a la derecha y selecciona 'Instalar aplicación' o 'Agregar a la pantalla principal'.");
+      }
+    };
+
     setInterval(() => {
       renderFleetDashboard();
       if (activityStack[activityStack.length - 1] === 'act-fota') renderFotaLiveList();
     }, 1500);
 
-    // Arranque inicial en pantalla de Login
     window.addEventListener("load", () => {
       initDB();
       initMQTT();
-      renderActivity('act-login');
     });
   </script>
 </body>
