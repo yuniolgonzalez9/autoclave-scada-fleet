@@ -4,6 +4,7 @@
 let toastTimer = null;
 function notify(msg, color = 'var(--cyan)') {
   const t = document.getElementById("toastApp");
+  if (!t) return;
   t.innerText = msg;
   t.style.borderColor = color;
   t.style.color = color;
@@ -88,8 +89,10 @@ function renderActivity(actId) {
   }
 
   const esPublico = RUTAS_PUBLICAS.includes(actId);
-  document.getElementById('topAppBar').style.display = esPublico ? 'none' : 'flex';
-  document.getElementById('mainNavBar').style.display = esPublico ? 'none' : 'flex';
+  const topBar = document.getElementById('topAppBar');
+  const navBar = document.getElementById('mainNavBar');
+  if (topBar) topBar.style.display = esPublico ? 'none' : 'flex';
+  if (navBar) navBar.style.display = esPublico ? 'none' : 'flex';
 
   document.querySelectorAll('.activity').forEach(a => a.classList.remove('active'));
   const target = document.getElementById(actId);
@@ -165,7 +168,7 @@ const sesionesActivas = {};
 
 function initDB() {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open("AutoclaveFastFleetDB_v11", 1);
+    const req = indexedDB.open("AutoclaveFastFleetDB_v12", 1);
     req.onupgradeneeded = (e) => {
       db = e.target.result;
       if (!db.objectStoreNames.contains("asignaciones")) db.createObjectStore("asignaciones", { keyPath: "mac" });
@@ -245,6 +248,7 @@ function cargarEquiposGuardados() {
           lastSeen: 0,
           datos: {},
           esquema: null,
+          ultimaFase: null,
           _pendingLock: {},
           meta: {
             alias: item.alias || `AUTOCLAVE [${item.mac.slice(-4)}]`,
@@ -262,7 +266,7 @@ function cargarEquiposGuardados() {
 }
 
 // =========================================================================
-// 3. MOTOR DE REPORTES EMPAQUETADOS (STORE & FORWARD)
+// 3. MOTOR DE REPORTES: CAPTURA DINÁMICA DE EVENTOS Y DIAGNÓSTICOS
 // =========================================================================
 function registrarEventoEnSesion(mac, tipo, msg, extra = {}) {
   const ahora = new Date().toISOString();
@@ -280,28 +284,48 @@ function registrarEventoEnSesion(mac, tipo, msg, extra = {}) {
       horaApagado: "EN OPERACIÓN",
       ciclosAcumulados: meta.ciclosCompletados,
       limiteMantenimiento: meta.limiteMantenimiento,
-      tempMax: 25.0,
-      presMax: 0.0,
+      tempMax: extra.temp || 25.0,
+      presMax: extra.presion || 0.0,
       conteoAlarmas: 0,
-      faseFinal: "ESPERA",
+      diagnosticoPrincipal: "🟢 EQUIPO EN LÍNEA (EN REPOSO)",
       eventos: [],
       esOffline: false
     };
   }
 
   const ses = sesionesActivas[mac];
+
+  // Registrar el evento en la línea de tiempo
   ses.eventos.push({
     hora: new Date().toLocaleTimeString(),
     tipo: tipo,
     msg: msg,
-    temp: extra.temp || 0,
-    presion: extra.presion || 0
+    temp: extra.temp !== undefined ? extra.temp : 0,
+    presion: extra.presion !== undefined ? extra.presion : 0
   });
 
+  // Actualizar picos máximos registrados
   if (extra.temp && extra.temp > ses.tempMax) ses.tempMax = extra.temp;
   if (extra.presion && extra.presion > ses.presMax) ses.presMax = extra.presion;
-  if (tipo === "ALARMA") ses.conteoAlarmas++;
-  if (extra.fase) ses.faseFinal = extra.fase;
+
+  // Actualizar diagnóstico dinámico según el evento real
+  if (tipo === "ALARMA") {
+    ses.conteoAlarmas++;
+    ses.diagnosticoPrincipal = `⚠️ ${msg.toUpperCase()}`;
+  } else if (tipo === "CICLO_OK") {
+    ses.diagnosticoPrincipal = `✅ CICLO CONFORME #${meta.ciclosCompletados} (${ses.tempMax.toFixed(1)}°C / ${ses.presMax.toFixed(2)}b)`;
+  } else if (tipo === "INICIO_CICLO") {
+    ses.diagnosticoPrincipal = `⏳ CALENTANDO HACIA SETPOINT (${extra.sp || 121}°C)`;
+  } else if (tipo === "ESTERILIZANDO") {
+    ses.diagnosticoPrincipal = `🟣 EN MESETA ESTÉRIL (${extra.temp.toFixed(1)}°C / ${extra.presion.toFixed(2)}b)`;
+  } else if (tipo === "DESPRESURIZANDO") {
+    ses.diagnosticoPrincipal = `🔵 DESPRESURIZANDO CÁMARA`;
+  } else if (tipo === "APAGADO") {
+    ses.horaApagado = new Date().toLocaleTimeString();
+    if (ses.conteoAlarmas === 0 && !ses.diagnosticoPrincipal.includes("CICLO CONFORME")) {
+      ses.diagnosticoPrincipal = "⚪ SESIÓN CERRADA / APAGADO";
+    }
+  }
 
   guardarSesionEnDB(ses);
 }
@@ -321,6 +345,7 @@ function procesarPaqueteOfflineSync(mac, paquete) {
   paquete.mac = mac;
   paquete.esOffline = true;
   if (!paquete.fecha) paquete.fecha = new Date().toISOString();
+  if (!paquete.diagnosticoPrincipal) paquete.diagnosticoPrincipal = "📦 SINCRONIZADO OFFLINE";
   
   const tx = db.transaction(["reportes_sesiones"], "readwrite");
   tx.objectStore("reportes_sesiones").put(paquete);
@@ -331,7 +356,7 @@ function procesarPaqueteOfflineSync(mac, paquete) {
 }
 
 // =========================================================================
-// 4. MQTT CONEXIÓN
+// 4. MQTT: DETECCIÓN DE TRANSICIONES Y CAMBIOS DE ESTADO
 // =========================================================================
 let mqttClient;
 
@@ -340,17 +365,20 @@ function initMQTT() {
   mqttClient = mqtt.connect("wss://broker.emqx.io:8084/mqtt", { clientId: uniqueId, clean: true, keepalive: 60 });
 
   mqttClient.on("connect", () => {
-    document.getElementById("mqttDot").className = "dot online";
-    document.getElementById("mqttStatusText").innerText = "ONLINE";
-    document.getElementById("mqttStatusText").style.color = "var(--green)";
+    const dot = document.getElementById("mqttDot");
+    const txt = document.getElementById("mqttStatusText");
+    if (dot) dot.className = "dot online";
+    if (txt) { txt.innerText = "ONLINE"; txt.style.color = "var(--green)"; }
     mqttClient.subscribe("autoclave_med_2026/+/telemetria");
     mqttClient.subscribe("autoclave_med_2026/+/esquema");
     mqttClient.subscribe("autoclave_med_2026/+/reporte_paquete");
   });
 
   mqttClient.on("error", () => {
-    document.getElementById("mqttDot").className = "dot offline";
-    document.getElementById("mqttStatusText").innerText = "ERROR RED";
+    const dot = document.getElementById("mqttDot");
+    const txt = document.getElementById("mqttStatusText");
+    if (dot) dot.className = "dot offline";
+    if (txt) { txt.innerText = "ERROR RED"; txt.style.color = "var(--red)"; }
   });
 
   mqttClient.on("message", (topic, msg) => {
@@ -376,6 +404,7 @@ function inicializarDispositivoSiNoExiste(mac) {
       lastSeen: Date.now(),
       datos: {},
       esquema: null,
+      ultimaFase: null,
       _pendingLock: {},
       meta: {
         alias: `AUTOCLAVE [${mac.substring(Math.max(0, mac.length - 4))}]`,
@@ -393,7 +422,7 @@ function inicializarDispositivoSiNoExiste(mac) {
         renderFleetDashboard();
       };
     }
-    registrarEventoEnSesion(mac, "ENCENDIDO", "Dispositivo en línea / Inicio de telemetría");
+    registrarEventoEnSesion(mac, "ENCENDIDO", "Equipo detectado en línea");
   }
 }
 
@@ -408,35 +437,58 @@ function procesarTelemetriaReal(mac, data) {
     });
   }
 
+  // DETECTOR DE CAMBIO DE FASE Y GENERACIÓN DE EVENTOS EN TIEMPO REAL
+  const faseAnterior = fleet[mac].ultimaFase;
+  const faseActual = data.fase || "ESPERA";
+
+  if (faseAnterior && faseAnterior !== faseActual) {
+    if (faseActual === "CALENTANDO") {
+      registrarEventoEnSesion(mac, "INICIO_CICLO", `Calentamiento iniciado -> Rumbo a Setpoint (${data.cfg?.sp_temp || 121}°C)`, {
+        temp: data.temp_camara,
+        presion: data.presion,
+        sp: data.cfg?.sp_temp
+      });
+    } else if (faseActual === "ESTERILIZANDO") {
+      registrarEventoEnSesion(mac, "ESTERILIZANDO", `Entrada en Meseta Estéril sostenida (${data.temp_camara.toFixed(1)}°C / ${data.presion.toFixed(2)}b)`, {
+        temp: data.temp_camara,
+        presion: data.presion
+      });
+    } else if (faseActual === "DESPRESURIZANDO") {
+      registrarEventoEnSesion(mac, "DESPRESURIZANDO", `Fin de meseta -> Alivio y purga de vapor`, {
+        temp: data.temp_camara,
+        presion: data.presion
+      });
+    } else if (faseActual === "FINALIZADO CON EXITO") {
+      fleet[mac].meta.ciclosCompletados = (fleet[mac].meta.ciclosCompletados || 0) + 1;
+      const tx = db.transaction(["asignaciones"], "readwrite");
+      tx.objectStore("asignaciones").put(fleet[mac].meta);
+
+      registrarEventoEnSesion(mac, "CICLO_OK", `Esterilización completada con éxito. Material quirúrgico conforme.`, {
+        temp: data.temp_camara,
+        presion: data.presion
+      });
+    } else if (faseActual === "ESPERA" && faseAnterior !== "ESPERA") {
+      registrarEventoEnSesion(mac, "REPOSO", `Ciclo finalizado. Autoclave en reposo listo para nueva operación.`, {
+        temp: data.temp_camara,
+        presion: data.presion
+      });
+    }
+  }
+  fleet[mac].ultimaFase = faseActual;
+
   fleet[mac].datos = data;
 
+  // Manejo de Alarma
   if (data.alarma_cod && data.alarma_cod > 0) {
     if (fleet[mac].ultimaAlarma !== data.alarma_cod) {
       fleet[mac].ultimaAlarma = data.alarma_cod;
       registrarEventoEnSesion(mac, "ALARMA", data.alarma_msg || "Alarma crítica", {
         temp: data.temp_camara,
-        presion: data.presion,
-        fase: data.fase
+        presion: data.presion
       });
     }
   } else {
     fleet[mac].ultimaAlarma = 0;
-  }
-
-  if (data.fase === "FINALIZADO CON EXITO" && !fleet[mac].cicloRegistrado) {
-    fleet[mac].cicloRegistrado = true;
-    fleet[mac].meta.ciclosCompletados = (fleet[mac].meta.ciclosCompletados || 0) + 1;
-    
-    const tx = db.transaction(["asignaciones"], "readwrite");
-    tx.objectStore("asignaciones").put(fleet[mac].meta);
-
-    registrarEventoEnSesion(mac, "CICLO_OK", `Ciclo #${fleet[mac].meta.ciclosCompletados} conforme`, {
-      temp: data.temp_camara,
-      presion: data.presion,
-      fase: data.fase
-    });
-  } else if (data.fase !== "FINALIZADO CON EXITO") {
-    fleet[mac].cicloRegistrado = false;
   }
 
   actualizarCardDashboard(mac);
@@ -458,11 +510,26 @@ function isOnline(dev) {
   return dev && dev.lastSeen && (Date.now() - dev.lastSeen) < 20000;
 }
 
+// DETECTOR PERIÓDICO DE APAGADO DE DISPOSITIVOS
+function verificarApagadoDispositivos() {
+  const ahora = Date.now();
+  Object.keys(fleet).forEach(mac => {
+    const dev = fleet[mac];
+    if (dev.lastSeen > 0 && (ahora - dev.lastSeen) >= 20000 && !dev._marcadoApagado) {
+      dev._marcadoApagado = true;
+      registrarEventoEnSesion(mac, "APAGADO", "Dispositivo desconectado / Apagado");
+    } else if (isOnline(dev)) {
+      dev._marcadoApagado = false;
+    }
+  });
+}
+
 // =========================================================================
 // 5. MONITOR PRINCIPAL
 // =========================================================================
 function renderFleetDashboard() {
   const container = document.getElementById("fleetLiveContainer");
+  if (!container) return;
   const keys = Object.keys(fleet);
 
   if (!keys.length) {
@@ -545,7 +612,7 @@ function actualizarCardDashboard(mac) {
 }
 
 // =========================================================================
-// 6. DETALLE Y CONTROL DEL EQUIPO
+// 6. DETALLE DEL EQUIPO
 // =========================================================================
 window.abrirDetalleEquipo = function(mac) {
   try {
@@ -603,12 +670,13 @@ function switchDetailTab(tabId) {
       b.classList.remove('active');
     }
   });
-  document.getElementById(tabId).style.display = 'block';
+  const el = document.getElementById(tabId);
+  if (el) el.style.display = 'block';
 
-  if (tabId === 'tab-det-tele') document.getElementById('btnSubTele').classList.add('active');
-  if (tabId === 'tab-det-cfg') document.getElementById('btnSubCfg').classList.add('active');
-  if (tabId === 'tab-det-ficha') document.getElementById('btnSubFicha').classList.add('active');
-  if (tabId === 'tab-det-logs') document.getElementById('btnSubLogs').classList.add('active');
+  if (tabId === 'tab-det-tele') document.getElementById('btnSubTele')?.classList.add('active');
+  if (tabId === 'tab-det-cfg') document.getElementById('btnSubCfg')?.classList.add('active');
+  if (tabId === 'tab-det-ficha') document.getElementById('btnSubFicha')?.classList.add('active');
+  if (tabId === 'tab-det-logs') document.getElementById('btnSubLogs')?.classList.add('active');
 }
 
 function generarUIEsquemaDinamico(mac) {
@@ -692,7 +760,7 @@ function actualizarPantallaDetalleDinamica() {
   const online = isOnline(item);
 
   const ob = document.getElementById("detOnlineBadge");
-  ob.innerHTML = `<span class="dot ${online ? 'online' : 'offline'}"></span> ${online ? 'ONLINE' : 'OFFLINE'}`;
+  if (ob) ob.innerHTML = `<span class="dot ${online ? 'online' : 'offline'}"></span> ${online ? 'ONLINE' : 'OFFLINE'}`;
 
   Object.keys(d).forEach(k => {
     const el = document.getElementById(`dyn-val-${k}`);
@@ -712,11 +780,13 @@ function actualizarPantallaDetalleDinamica() {
     }
   });
 
+  const banner = document.getElementById("detAlarmaBanner");
+  const txt = document.getElementById("detAlarmaTexto");
   if (d.alarma_cod && d.alarma_cod > 0) {
-    document.getElementById("detAlarmaBanner").style.display = "block";
-    document.getElementById("detAlarmaTexto").innerText = d.alarma_msg || "Alarma activa";
+    if (banner) banner.style.display = "block";
+    if (txt) txt.innerText = d.alarma_msg || "Alarma activa";
   } else {
-    document.getElementById("detAlarmaBanner").style.display = "none";
+    if (banner) banner.style.display = "none";
   }
 }
 
@@ -771,6 +841,7 @@ window.guardarFichaDetalle = function() {
 
 function cargarLogsDetalle(mac) {
   const tbody = document.getElementById("detLogsTbody");
+  if (!tbody) return;
   const tx = db.transaction(["reportes_sesiones"], "readonly");
   tx.objectStore("reportes_sesiones").getAll().onsuccess = (e) => {
     const logs = e.target.result.filter(x => x.mac === mac).reverse();
@@ -784,7 +855,7 @@ function cargarLogsDetalle(mac) {
       return `
         <tr>
           <td style="color:var(--cyan); font-weight:700;">${new Date(s.fecha).toLocaleDateString()} ${s.horaEncendido}</td>
-          <td><span class="role-badge ${s.conteoAlarmas > 0 ? 'role-super' : 'role-oper'}">${s.faseFinal}</span></td>
+          <td><span class="role-badge ${s.conteoAlarmas > 0 ? 'role-super' : 'role-oper'}">${s.diagnosticoPrincipal || s.faseFinal}</span></td>
           <td>${ciclos} / ${limite}</td>
           <td><span style="color:${ciclos >= limite ? 'var(--red)' : 'var(--green)'}">${ciclos >= limite ? 'VENCIDO' : 'OK'}</span></td>
           <td>T:${s.tempMax.toFixed(1)}°C | P:${s.presMax.toFixed(2)}b</td>
@@ -796,24 +867,26 @@ function cargarLogsDetalle(mac) {
 }
 
 // =========================================================================
-// 7. CENTRO DE REPORTES AVANZADO: BÚSQUEDA, FILTROS Y BORRADO EN LOTE
+// 7. CENTRO DE REPORTES AVANZADO: BÚSQUEDA, FILTROS Y DIAGNÓSTICO CLÍNICO
 // =========================================================================
 let reportesCache = [];
 
 function renderizarRegistros() {
   if (!db) return;
-  const devFilter = document.getElementById("filterDeviceSelect").value;
-  const fType = document.getElementById("filterType").value;
-  const fDesde = document.getElementById("filterFechaDesde").value;
-  const fHasta = document.getElementById("filterFechaHasta").value;
-  const fText = document.getElementById("filterInput").value.toUpperCase();
+  const devFilter = document.getElementById("filterDeviceSelect")?.value || "TODOS";
+  const fType = document.getElementById("filterType")?.value || "TODOS";
+  const fDesde = document.getElementById("filterFechaDesde")?.value;
+  const fHasta = document.getElementById("filterFechaHasta")?.value;
+  const fText = document.getElementById("filterInput")?.value.toUpperCase() || "";
   const tbody = document.getElementById("auditTableBody");
+  if (!tbody) return;
 
   const tx = db.transaction(["reportes_sesiones"], "readonly");
   tx.objectStore("reportes_sesiones").getAll().onsuccess = (e) => {
     let items = e.target.result.reverse();
     reportesCache = items;
 
+    // Estadísticas en barra superior
     document.getElementById("kpiTotalSesiones").innerText = items.length;
     const totalCiclos = items.reduce((acc, cur) => acc + (cur.ciclosAcumulados || 0), 0);
     document.getElementById("kpiTotalCiclos").innerText = totalCiclos;
@@ -822,9 +895,9 @@ function renderizarRegistros() {
     const totalAlarmas = items.filter(x => x.conteoAlarmas > 0).length;
     document.getElementById("kpiTotalAlarmas").innerText = totalAlarmas;
 
+    // Filtros
     if (devFilter !== "TODOS") items = items.filter(x => x.mac === devFilter);
-    
-    if (fType === "CICLO_OK") items = items.filter(x => x.faseFinal === "FINALIZADO CON EXITO");
+    if (fType === "CICLO_OK") items = items.filter(x => x.diagnosticoPrincipal.includes("CONFORME"));
     if (fType === "ALARMA") items = items.filter(x => x.conteoAlarmas > 0);
     if (fType === "MANT_WARN") items = items.filter(x => (x.ciclosAcumulados || 0) >= (x.limiteMantenimiento || 200) * 0.8);
     if (fType === "OFFLINE_SYNC") items = items.filter(x => x.esOffline === true);
@@ -837,12 +910,13 @@ function renderizarRegistros() {
         x.mac.toUpperCase().includes(fText) || 
         x.alias.toUpperCase().includes(fText) || 
         x.cliente.toUpperCase().includes(fText) ||
-        x.modelo.toUpperCase().includes(fText)
+        x.modelo.toUpperCase().includes(fText) ||
+        (x.diagnosticoPrincipal && x.diagnosticoPrincipal.toUpperCase().includes(fText))
       );
     }
 
     if (!items.length) {
-      tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:30px;">No se encontraron reportes coincidentes.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:30px;">No se encontraron reportes con los criterios indicados.</td></tr>`;
       return;
     }
 
@@ -872,8 +946,10 @@ function renderizarRegistros() {
           </td>
           <td>T:${(s.tempMax||0).toFixed(1)}°C<br>P:${(s.presMax||0).toFixed(2)}b</td>
           <td>
-            <span class="role-badge ${s.conteoAlarmas > 0 ? 'role-super' : 'role-oper'}">${s.faseFinal}</span>
-            ${s.esOffline ? '<span class="role-badge role-tech" style="margin-left:4px;">OFFLINE</span>' : ''}
+            <div style="font-size:0.75rem; font-weight:700; color:${s.conteoAlarmas > 0 ? 'var(--red)' : s.diagnosticoPrincipal.includes('CONFORME') ? 'var(--green)' : 'var(--cyan)'};">
+              ${s.diagnosticoPrincipal || 'EN REPOSO'}
+            </div>
+            ${s.esOffline ? '<span class="role-badge role-tech" style="margin-top:2px;">OFFLINE</span>' : ''}
           </td>
           <td>
             <div style="display:flex; gap:4px;">
@@ -937,9 +1013,9 @@ window.imprimirCertificadoSesionActual = function() {
       <tr><td>Temperatura Máxima Registrada</td><td>${s.tempMax.toFixed(1)} °C</td></tr>
       <tr><td>Presión Máxima Alcanzada</td><td>${s.presMax.toFixed(2)} Bar</td></tr>
       <tr><td>Ciclos Acumulados del Equipo</td><td>${s.ciclosAcumulados} / ${s.limiteMantenimiento}</td></tr>
-      <tr><td>Diagnóstico de Validación</td><td><b>${s.faseFinal}</b></td></tr>
+      <tr><td>Diagnóstico de Validación</td><td><b>${s.diagnosticoPrincipal || s.faseFinal}</b></td></tr>
     </table>
-    <h3>REGISTRO CRONOLÓGICO:</h3>
+    <h3>REGISTRO CRONOLÓGICO DE LA SESIÓN:</h3>
     <ul>${(s.eventos||[]).map(e => `<li><b>${e.hora} [${e.tipo}]:</b> ${e.msg}</li>`).join("")}</ul>
     <br><br><p>Firma y Sello Responsable Biomédico: ___________________________</p>
     <script>window.print();<\/script></body></html>
@@ -990,13 +1066,13 @@ window.exportarRegistrosCSV = function() {
   tx.objectStore("reportes_sesiones").getAll().onsuccess = (e) => {
     let data = e.target.result || [];
     if (!data.length) return notify("Sin datos para exportar", "var(--amber)");
-    let csv = "ID_SESION,FECHA,MAC,ALIAS,CLIENTE,MODELO,HORA_ON,HORA_OFF,CICLOS,LIMITE_MANT,T_MAX,P_MAX,ESTADO\n";
+    let csv = "ID_SESION,FECHA,MAC,ALIAS,CLIENTE,MODELO,HORA_ON,HORA_OFF,CICLOS,LIMITE_MANT,T_MAX,P_MAX,DIAGNOSTICO\n";
     data.forEach(d => {
-      csv += `"${d.sessionId}","${d.fecha}","${d.mac}","${d.alias}","${d.cliente}","${d.modelo}","${d.horaEncendido}","${d.horaApagado}","${d.ciclosAcumulados}","${d.limiteMantenimiento}","${d.tempMax}","${d.presMax}","${d.faseFinal}"\n`;
+      csv += `"${d.sessionId}","${d.fecha}","${d.mac}","${d.alias}","${d.cliente}","${d.modelo}","${d.horaEncendido}","${d.horaApagado}","${d.ciclosAcumulados}","${d.limiteMantenimiento}","${d.tempMax}","${d.presMax}","${d.diagnosticoPrincipal||d.faseFinal}"\n`;
     });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
-    a.download = `reporte_sesiones_autoclave_${Date.now()}.csv`;
+    a.download = `reporte_sesiones_${Date.now()}.csv`;
     a.click();
     notify("Archivo CSV descargado", "var(--green)");
   };
@@ -1010,6 +1086,7 @@ window.filterFotaList = function(tipo) { currentFotaFilter = tipo; renderFotaLiv
 
 function renderFotaLiveList() {
   const box = document.getElementById("fotaDevicesLiveList");
+  if (!box) return;
   let macs = Object.keys(fleet);
   if (currentFotaFilter === 'ONLINE') macs = macs.filter(m => isOnline(fleet[m]));
   if (currentFotaFilter === 'OFFLINE') macs = macs.filter(m => !isOnline(fleet[m]));
@@ -1114,6 +1191,7 @@ window.testResetAlarma = function() {
 
 function renderFleetMgmtTable() {
   const tbody = document.getElementById("fleetMgmtTbody");
+  if (!tbody) return;
   const keys = Object.keys(fleet);
   if (!keys.length) {
     tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted);">Sin dispositivos registrados.</td></tr>`;
@@ -1142,6 +1220,7 @@ function renderFleetMgmtTable() {
 
 function actualizarSelectoresGlobales() {
   const sel = document.getElementById("filterDeviceSelect");
+  if (!sel) return;
   const prev = sel.value;
   sel.innerHTML = `<option value="TODOS">TODOS LOS EQUIPOS</option>`;
   Object.keys(fleet).forEach(m => {
@@ -1156,7 +1235,9 @@ function cargarUsuariosUI() {
   const tx = db.transaction(["usuarios"], "readonly");
   tx.objectStore("usuarios").getAll().onsuccess = (e) => {
     const users = e.target.result || [];
-    document.getElementById("tablaUsuariosBody").innerHTML = users.map(u => `
+    const tbody = document.getElementById("tablaUsuariosBody");
+    if (!tbody) return;
+    tbody.innerHTML = users.map(u => `
       <tr>
         <td style="font-weight:700; color:var(--cyan);">${u.user}</td>
         <td><span class="role-badge ${u.rol === 'SUPERADMIN' ? 'role-super' : u.rol === 'TECNICO' ? 'role-tech' : 'role-oper'}">${u.rol}</span></td>
@@ -1201,6 +1282,7 @@ function cargarListaUsuariosLogin() {
   tx.objectStore("usuarios").getAll().onsuccess = (e) => {
     const users = e.target.result || [];
     const sel = document.getElementById("loginUserSelect");
+    if (!sel) return;
     sel.innerHTML = `<option value="">-- Seleccionar usuario --</option>`;
     users.forEach(u => sel.innerHTML += `<option value="${u.user}">${u.user.toUpperCase()} (${u.rol})</option>`);
   };
@@ -1256,8 +1338,10 @@ function iniciarSesionExitosa(user, esRestauracion = false) {
   localStorage.setItem("scada_logged_user", JSON.stringify(user));
   document.getElementById("currentUserName").innerText = user.user.toUpperCase();
   const b = document.getElementById("currentUserRoleBadge");
-  b.innerText = user.rol;
-  b.className = "role-badge " + (user.rol === "SUPERADMIN" ? "role-super" : user.rol === "TECNICO" ? "role-tech" : "role-oper");
+  if (b) {
+    b.innerText = user.rol;
+    b.className = "role-badge " + (user.rol === "SUPERADMIN" ? "role-super" : user.rol === "TECNICO" ? "role-tech" : "role-oper");
+  }
   aplicarPermisosRol();
 
   if (!esRestauracion) {
@@ -1270,6 +1354,7 @@ function iniciarSesionExitosa(user, esRestauracion = false) {
 }
 
 function mostrarFeedback(el, msg, color) {
+  if (!el) return;
   el.style.display = "block";
   el.style.color = color;
   el.style.border = `1px solid ${color}`;
@@ -1348,15 +1433,20 @@ window.guardarNuevaContrasena = function() {
 function aplicarPermisosRol() {
   const esAdmin = usuarioActual && usuarioActual.rol === "SUPERADMIN";
   const esTech = usuarioActual && (usuarioActual.rol === "TECNICO" || esAdmin);
-  document.getElementById("tabNavUsers").style.display = esAdmin ? "block" : "none";
-  document.getElementById("btnVaciarLogs").style.display = esAdmin ? "inline-flex" : "none";
-  document.getElementById("btnExecuteFota").disabled = !esTech;
-  document.getElementById("btnExecuteFota").style.opacity = esTech ? "1" : "0.4";
+  const tabUsers = document.getElementById("tabNavUsers");
+  const btnVaciar = document.getElementById("btnVaciarLogs");
+  const btnFota = document.getElementById("btnExecuteFota");
   const bg = document.getElementById("btnGuardarDinamico");
+
+  if (tabUsers) tabUsers.style.display = esAdmin ? "block" : "none";
+  if (btnVaciar) btnVaciar.style.display = esAdmin ? "inline-flex" : "none";
+  if (btnFota) { btnFota.disabled = !esTech; btnFota.style.opacity = esTech ? "1" : "0.4"; }
   if (bg) { bg.disabled = !esTech; bg.style.opacity = esTech ? "1" : "0.4"; }
 }
 
+// Bucle de refresco y verificación de desconexión
 setInterval(() => {
+  verificarApagadoDispositivos();
   renderFleetDashboard();
   if (activityStack[activityStack.length - 1] === 'act-fota') renderFotaLiveList();
 }, 1500);
