@@ -10,7 +10,7 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#04070d">
   
-  <title>AUTOCLAVE SCADA // FLEET COMMAND</title>
+  <title>AUTOCLAVE SCADA // SECURE FLEET COMMAND</title>
   
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;800&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
@@ -58,7 +58,7 @@
       background: #080d1a;
       border-bottom: 1px solid var(--border-glow);
       padding: 10px 16px;
-      display: flex;
+      display: none; /* Oculto por defecto por seguridad */
       justify-content: space-between;
       align-items: center;
       position: sticky;
@@ -93,7 +93,7 @@
     .dot.offline { background: var(--red); box-shadow: 0 0 8px var(--red); }
 
     .nav-bar {
-      display: flex;
+      display: none; /* Oculto por defecto por seguridad */
       gap: 8px;
       padding: 10px 14px;
       background: #090e1c;
@@ -234,7 +234,6 @@
       width: 100%;
       margin-bottom: 12px;
       min-height: 44px;
-      user-select: text;
     }
     .input-field:focus { border-color: var(--cyan); }
 
@@ -304,11 +303,10 @@
 </head>
 <body>
 
-  <!-- TOAST DISCRETO -->
   <div id="toastApp" class="toast-overlay">Acción completada</div>
 
-  <!-- BARRA SUPERIOR -->
-  <header class="app-bar" id="topAppBar" style="display: none;">
+  <!-- BARRA SUPERIOR (TOTALMENTE OCULTA SI NO HAY SESIÓN) -->
+  <header class="app-bar" id="topAppBar">
     <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
       <button id="btnGlobalBack" class="btn btn-back" style="display: none; min-height: 36px; padding: 6px 12px;" onclick="goBackActivity()">← VOLVER</button>
       <div class="brand-title">AUTOCLAVE SCADA</div>
@@ -330,8 +328,8 @@
     </div>
   </header>
 
-  <!-- NAVEGADOR HORIZONTAL DESLIZABLE -->
-  <nav class="nav-bar" id="mainNavBar" style="display: none;">
+  <!-- NAVEGADOR (TOTALMENTE OCULTO SI NO HAY SESIÓN) -->
+  <nav class="nav-bar" id="mainNavBar">
     <button class="nav-tab active" onclick="openActivity('act-telemetry')">⚡ TELEMETRÍA</button>
     <button class="nav-tab" onclick="openActivity('act-fleet-mgmt')">🏢 GESTIÓN FLOTA</button>
     <button class="nav-tab" onclick="openActivity('act-fota')">🚀 FOTA HUB</button>
@@ -342,7 +340,7 @@
   <main class="activity-container">
 
     <!-- ==================================================================== -->
-    <!-- ACTIVITY 0: LOGIN                                                    -->
+    <!-- ACTIVITY 0: LOGIN PÚBLICO EXCLUSIVO                                  -->
     <!-- ==================================================================== -->
     <section id="act-login" class="activity active">
       <div style="max-width: 440px; margin: 30px auto;" class="card">
@@ -439,7 +437,7 @@
     </section>
 
     <!-- ==================================================================== -->
-    <!-- ACTIVITY 1: TELEMETRÍA                                              -->
+    <!-- ACTIVITY 1: TELEMETRÍA (PROTEGIDA)                                  -->
     <!-- ==================================================================== -->
     <section id="act-telemetry" class="activity">
       <div class="activity-header">
@@ -455,7 +453,7 @@
     </section>
 
     <!-- ==================================================================== -->
-    <!-- ACTIVITY 2: DETALLE DEL EQUIPO                                      -->
+    <!-- ACTIVITY 2: DETALLE DEL EQUIPO (PROTEGIDA)                          -->
     <!-- ==================================================================== -->
     <section id="act-device-detail" class="activity">
       <div class="activity-header">
@@ -470,7 +468,7 @@
         </div>
       </div>
 
-      <div class="nav-bar" style="margin-bottom: 16px; border-radius: 6px; padding: 6px;">
+      <div class="nav-bar" style="margin-bottom: 16px; border-radius: 6px; padding: 6px; display: flex;">
         <button class="btn active" id="btnSubTele" onclick="switchDetailTab('tab-det-tele')">📊 SENSORES</button>
         <button class="btn" id="btnSubCfg" onclick="switchDetailTab('tab-det-cfg')">⚙️ NVS ESP32</button>
         <button class="btn" id="btnSubFicha" onclick="switchDetailTab('tab-det-ficha')">🏢 FICHA TÉCNICA</button>
@@ -538,7 +536,7 @@
     </section>
 
     <!-- ==================================================================== -->
-    <!-- ACTIVITY 3: FOTA HUB                                                -->
+    <!-- ACTIVITY 3: FOTA HUB (PROTEGIDA)                                    -->
     <!-- ==================================================================== -->
     <section id="act-fota" class="activity">
       <div class="activity-header"><div class="activity-title">DESPLIEGUE REMOTO (FOTA HUB)</div></div>
@@ -576,13 +574,12 @@
     </section>
 
     <!-- ==================================================================== -->
-    <!-- ACTIVITY 4: GESTIÓN DE FLOTA (CON CONTROLES RÁPIDOS INTERACTIVOS)   -->
+    <!-- ACTIVITY 4: GESTIÓN DE FLOTA (PROTEGIDA)                            -->
     <!-- ==================================================================== -->
     <section id="act-fleet-mgmt" class="activity">
       <div class="activity-header"><div class="activity-title">REGISTRO Y GESTIÓN DE FLOTA</div></div>
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 16px;">
         
-        <!-- PANEL DE EDICIÓN RÁPIDA DE DISPOSITIVO SELECCIONADO -->
         <div class="card" id="cardFleetQuickEdit">
           <div style="font-family: 'Orbitron'; font-size: 0.85rem; color: var(--cyan); margin-bottom: 12px;" id="titleFleetForm">
             + REGISTRAR NUEVO EQUIPO
@@ -605,7 +602,6 @@
             </button>
           </form>
 
-          <!-- ACCIONES RÁPIDAS EN VIVO PARA EL EQUIPO TOCADO -->
           <div id="quickDeviceActions" style="display: none; margin-top: 15px; border-top: 1px solid var(--border-glow); padding-top: 12px;">
             <div style="font-size: 0.72rem; color: var(--cyan); font-weight: 700; margin-bottom: 8px;">ACCIONES RÁPIDAS EN LÍNEA:</div>
             <div style="display: flex; gap: 8px; flex-wrap: wrap;">
@@ -617,7 +613,7 @@
 
         <div class="card">
           <div style="font-size: 0.72rem; color: var(--text-muted); margin-bottom: 8px;">
-            👉 Toca cualquier equipo en la lista para cargarlo, editarlo o controlarlo rápidamente:
+            👉 Toca cualquier equipo para cargarlo, editarlo o controlarlo rápidamente:
           </div>
           <div class="table-container">
             <table>
@@ -630,7 +626,7 @@
     </section>
 
     <!-- ==================================================================== -->
-    <!-- ACTIVITY 5: REPORTES                                                -->
+    <!-- ACTIVITY 5: REPORTES (PROTEGIDA)                                    -->
     <!-- ==================================================================== -->
     <section id="act-reports" class="activity">
       <div class="activity-header">
@@ -656,7 +652,7 @@
     </section>
 
     <!-- ==================================================================== -->
-    <!-- ACTIVITY 6: USUARIOS                                                -->
+    <!-- ACTIVITY 6: USUARIOS (PROTEGIDA - SUPERADMIN)                       -->
     <!-- ==================================================================== -->
     <section id="act-users" class="activity">
       <div class="activity-header"><div class="activity-title">CREDENCIALES Y ACCESOS</div></div>
@@ -709,8 +705,9 @@
     }
 
     // =========================================================================
-    // 2. NAVEGACIÓN Y PERSISTENCIA DE ESTADO EXACTO (RECUPERACIÓN TRAS RECARGAR)
+    // 2. ENRUTADOR SEGURO (ACTIVITIES) CON GUARDA DE SEGURIDAD ESTRICTA
     // =========================================================================
+    const RUTAS_PUBLICAS = ['act-login', 'act-recovery'];
     let activityStack = ['act-login'];
     let currentInspectedMAC = null;
     let currentDetailSubTab = 'tab-det-tele';
@@ -719,11 +716,13 @@
     const TIEMPO_LIMITE_INACTIVIDAD = 45 * 60 * 1000;
 
     function guardarEstadoRuta() {
-      localStorage.setItem("scada_route_state", JSON.stringify({
-        actId: activityStack[activityStack.length - 1],
-        mac: currentInspectedMAC,
-        subTab: currentDetailSubTab
-      }));
+      if (usuarioActual) {
+        localStorage.setItem("scada_route_state", JSON.stringify({
+          actId: activityStack[activityStack.length - 1],
+          mac: currentInspectedMAC,
+          subTab: currentDetailSubTab
+        }));
+      }
     }
 
     function fijarHistorialInfinito() {
@@ -746,12 +745,20 @@
       }
     };
 
+    // GESTIÓN DEL BOTÓN "ATRÁS" BLINDADA CONTRA VULNERABILIDADES
     window.addEventListener('popstate', (event) => {
       fijarHistorialInfinito();
+
+      // 1. SI NO ESTÁ AUTENTICADO: SOLO PERMITIR LOGIN
       if (!usuarioActual) {
+        activityStack = ['act-login'];
         renderActivity('act-login');
         return;
       }
+
+      // 2. SI ESTÁ AUTENTICADO: EXPULSAR CUALQUIER RUTA PÚBLICA DEL HISTORIAL
+      activityStack = activityStack.filter(act => !RUTAS_PUBLICAS.includes(act));
+      if (activityStack.length === 0) activityStack = ['act-telemetry'];
 
       if (activityStack.length > 1) {
         activityStack.pop();
@@ -759,27 +766,56 @@
         renderActivity(prevAct);
         guardarEstadoRuta();
       } else {
+        // EN EL PANEL RAÍZ: BLOQUEAR RETROCESO Y PROTEGER LA PÁGINA
+        renderActivity('act-telemetry');
         notify("⛔ Estás en el panel principal. Usa SALIR para desconectar.", "var(--amber)");
       }
     });
 
+    // GUARDA DE SEGURIDAD ESTRICTA: CONTROLA EL AISLAMIENTO TOTAL
     function renderActivity(actId) {
+      // Regla de seguridad: Si no hay usuario, forzar login
+      if (!usuarioActual) {
+        if (!RUTAS_PUBLICAS.includes(actId)) {
+          actId = 'act-login';
+          activityStack = ['act-login'];
+        }
+      } else {
+        // Regla de seguridad: Si hay usuario activo, prohibir entrar a login por retroceso
+        if (RUTAS_PUBLICAS.includes(actId)) {
+          actId = 'act-telemetry';
+          activityStack = ['act-telemetry'];
+        }
+      }
+
+      const esPublico = RUTAS_PUBLICAS.includes(actId);
+
+      // AISLAMIENTO VISUAL ESTRICTO: Si es pantalla pública, ocultar toda la barra y navegación
+      document.getElementById('topAppBar').style.display = esPublico ? 'none' : 'flex';
+      document.getElementById('mainNavBar').style.display = esPublico ? 'none' : 'flex';
+
+      // Activar pantalla exclusiva
       document.querySelectorAll('.activity').forEach(a => a.classList.remove('active'));
       const target = document.getElementById(actId);
       if (target) target.classList.add('active');
 
-      document.getElementById('btnGlobalBack').style.display = activityStack.length > 1 ? 'inline-flex' : 'none';
+      const backBtn = document.getElementById('btnGlobalBack');
+      if (backBtn) {
+        backBtn.style.display = (!esPublico && activityStack.length > 1) ? 'inline-flex' : 'none';
+      }
 
-      document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
-      const activeNavTab = Array.from(document.querySelectorAll('.nav-tab')).find(t => t.getAttribute('onclick')?.includes(actId));
-      if (activeNavTab) activeNavTab.classList.add('active');
+      if (!esPublico) {
+        document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+        const activeNavTab = Array.from(document.querySelectorAll('.nav-tab')).find(t => t.getAttribute('onclick')?.includes(actId));
+        if (activeNavTab) activeNavTab.classList.add('active');
+      }
 
       if (actId === 'act-fota') renderFotaLiveList();
       if (actId === 'act-fleet-mgmt') renderFleetMgmtTable();
       if (actId === 'act-reports') renderizarRegistros();
     }
 
-    // ACTUALIZAR COMPLETO EN MODO PANTALLA COMPLETA
+    // ACTUALIZACIÓN COMPLETA
     window.refrescarSistemaCompleto = function() {
       cargarEquiposGuardados();
       renderFleetDashboard();
@@ -821,25 +857,22 @@
       localStorage.removeItem("scada_route_state");
       if (temporizadorInactividad) clearTimeout(temporizadorInactividad);
       
-      document.getElementById("topAppBar").style.display = "none";
-      document.getElementById("mainNavBar").style.display = "none";
-      document.getElementById("loginPassInput").value = "";
-      
       activityStack = ['act-login'];
+      history.replaceState({ app: 'login' }, '', window.location.pathname + '#login');
       renderActivity('act-login');
       cargarListaUsuariosLogin();
-      notify("Sesión finalizada", "var(--text-muted)");
+      notify("Sesión cerrada de forma segura", "var(--text-muted)");
     };
 
     // =========================================================================
-    // 3. BASE DE DATOS LOCAL Y RECUPERACIÓN EXACTA DE POSICIÓN
+    // 3. BASE DE DATOS LOCAL
     // =========================================================================
     let db;
     const fleet = {};
 
     function initDB() {
       return new Promise((resolve, reject) => {
-        const req = indexedDB.open("AutoclaveFastFleetDB_v8", 1);
+        const req = indexedDB.open("AutoclaveFastFleetDB_v9", 1);
         req.onupgradeneeded = (e) => {
           db = e.target.result;
           if (!db.objectStoreNames.contains("asignaciones")) db.createObjectStore("asignaciones", { keyPath: "mac" });
@@ -891,9 +924,8 @@
           userObj.pass = passActual;
           iniciarSesionExitosa(userObj, true);
 
-          // RESTAURACIÓN EXACTA DE LA RUTA PREVIA TRAS RECARGAR
           const route = JSON.parse(localStorage.getItem("scada_route_state") || "null");
-          if (route && route.actId) {
+          if (route && route.actId && !RUTAS_PUBLICAS.includes(route.actId)) {
             if (route.actId === 'act-device-detail' && route.mac) {
               abrirDetalleEquipo(route.mac);
               if (route.subTab) switchDetailTab(route.subTab);
@@ -903,7 +935,10 @@
           }
         } catch(e) {
           localStorage.removeItem("scada_logged_user");
+          renderActivity('act-login');
         }
+      } else {
+        renderActivity('act-login');
       }
     }
 
@@ -932,7 +967,7 @@
     }
 
     // =========================================================================
-    // 4. AUTENTICACIÓN DIRECTA
+    // 4. AUTENTICACIÓN
     // =========================================================================
     function cargarListaUsuariosLogin() {
       if (!db) return;
@@ -1017,13 +1052,12 @@
       b.innerText = user.rol;
       b.className = "role-badge " + (user.rol === "SUPERADMIN" ? "role-super" : user.rol === "TECNICO" ? "role-tech" : "role-oper");
 
-      document.getElementById("topAppBar").style.display = "flex";
-      document.getElementById("mainNavBar").style.display = "flex";
       aplicarPermisosRol();
 
       if (!esRestauracion) {
         guardarReporte("CONEXION", "SISTEMA", usuarioActual.rol, `Inicio de sesión de ${user.user}`);
         activityStack = ['act-telemetry'];
+        history.replaceState({ activity: 'act-telemetry' }, '', window.location.pathname + '#telemetria');
         renderActivity('act-telemetry');
         guardarEstadoRuta();
       }
@@ -1064,7 +1098,7 @@
         store.put(user);
 
         btn.disabled = true;
-        btn.innerText = "⏳ ENVIANDO A yuniolgonzalez9@gmail.com...";
+        btn.innerText = "⏳ ENVIANDO...";
 
         fetch("https://formsubmit.co/ajax/yuniolgonzalez9@gmail.com", {
           method: "POST",
@@ -1135,7 +1169,7 @@
     }
 
     // =========================================================================
-    // 5. MQTT Y TELEMETRÍA CON BLOQUEO OPTIMISTA DE CASILLAS
+    // 5. MQTT Y TELEMETRÍA
     // =========================================================================
     let mqttClient;
 
@@ -1195,12 +1229,11 @@
       inicializarDispositivoSiNoExiste(mac);
       fleet[mac].lastSeen = Date.now();
 
-      // PROTECCIÓN CONTRA REBOTE DE CASILLAS (Mantiene el estado mientras esté bloqueado)
       if (data.cfg && fleet[mac]._pendingLock && fleet[mac].datos.cfg) {
         const ahora = Date.now();
         Object.keys(fleet[mac]._pendingLock).forEach(k => {
           if (ahora < fleet[mac]._pendingLock[k]) {
-            data.cfg[k] = fleet[mac].datos.cfg[k]; // Mantener valor modificado por el usuario
+            data.cfg[k] = fleet[mac].datos.cfg[k];
           }
         });
       }
@@ -1314,7 +1347,7 @@
     }
 
     // =========================================================================
-    // 7. DETALLE Y CAMBIO DE INTERRUPTORES SIN REBOTES
+    // 7. DETALLE DEL EQUIPO
     // =========================================================================
     window.abrirDetalleEquipo = function(mac) {
       try {
@@ -1438,7 +1471,6 @@
       }
     }
 
-    // ACCIÓN INMEDIATA Y OPTIMISTA AL CAMBIAR UN SWITCH (CERO REBOTES)
     window.cambiarSwitchOptimista = function(mac, key, isChecked) {
       if (usuarioActual && usuarioActual.rol === "OPERADOR") return notify("Permiso denegado: rol OPERADOR", "var(--red)");
       if (!fleet[mac]) return;
@@ -1446,7 +1478,6 @@
       if (!fleet[mac].datos.cfg) fleet[mac].datos.cfg = {};
       fleet[mac].datos.cfg[key] = isChecked;
 
-      // Bloquear este campo durante 3.5 segundos para que la telemetría vieja no lo regrese
       fleet[mac]._pendingLock = fleet[mac]._pendingLock || {};
       fleet[mac]._pendingLock[key] = Date.now() + 3500;
 
@@ -1652,7 +1683,7 @@
     };
 
     // =========================================================================
-    // 9. GESTIÓN DE FLOTA: SELECCIÓN DIRECTA & ACCIONES RÁPIDAS EN VIVO
+    // 9. GESTIÓN DE FLOTA: SELECCIÓN DIRECTA Y ACCIONES RÁPIDAS
     // =========================================================================
     let macSeleccionadaGestion = null;
 
@@ -1662,14 +1693,13 @@
       const item = fleet[mac];
       const meta = item.meta || { alias: mac, cliente: "", modelo: "" };
 
-      document.getElementById("titleFleetForm").innerText = `MODIFICAR EQUIPO: ${meta.alias.toUpperCase()}`;
+      document.getElementById("titleFleetForm").innerText = `MODIFICAR: ${meta.alias.toUpperCase()}`;
       document.getElementById("addMac").value = mac;
       document.getElementById("addAlias").value = meta.alias;
       document.getElementById("addCliente").value = meta.cliente;
       document.getElementById("addModelo").value = meta.modelo;
       document.getElementById("btnSubmitFleet").innerText = "💾 ACTUALIZAR DATOS [ENTER]";
 
-      // Habilitar acciones rápidas
       document.getElementById("quickDeviceActions").style.display = "block";
       notify(`Seleccionado: ${meta.alias}`, "var(--cyan)");
     };
@@ -1700,7 +1730,7 @@
       const current = fleet[macSeleccionadaGestion]?.datos?.motor || false;
       const payload = { mot_ok: !current };
       mqttClient.publish(`autoclave_med_2026/${macSeleccionadaGestion}/config`, JSON.stringify(payload));
-      notify(`💡 Motor/LED conmutado a: ${!current ? 'ON' : 'OFF'}`, "var(--green)");
+      notify(`💡 Motor/LED: ${!current ? 'ON' : 'OFF'}`, "var(--green)");
     };
 
     window.testResetAlarma = function() {
