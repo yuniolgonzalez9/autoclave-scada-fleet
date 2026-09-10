@@ -6,20 +6,26 @@
   "start_url": "./index.html",
   "display": "fullscreen",
   "orientation": "any",
-  "background_color": "#0a1329",
-  "theme_color": "#0a1329",
+  "background_color": "#04070d",
+  "theme_color": "#04070d",
   "icons": [
     {
-      "src": "./icon.png",
+      "src": "https://raw.githubusercontent.com/yuniolgonzalez9/Autoclave-Scada-Fleet/Principal/icon512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
-      "src": "./icon.png",
+      "src": "https://cdn-icons-png.flaticon.com/512/3004/3004458.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/3004/3004458.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     }
   ]
 }
