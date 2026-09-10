@@ -1,7 +1,7 @@
 {
   "name": "Autoclave SCADA Fleet",
   "short_name": "SCADA",
-  "start_url": "index.html",
+  "start_url": "./index.html",
   "display": "fullscreen",
   "orientation": "any",
   "background_color": "#04070d",
