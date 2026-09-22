@@ -160,7 +160,7 @@ window.cerrarSesionManual = function() {
 };
 
 // =========================================================================
-// 2. BASE DE DATOS LOCAL CON ARQUITECTURA DE SESIONES & REPORTES
+// 2. BASE DE DATOS LOCAL CON CLAVE DE FÁBRICA 24331973
 // =========================================================================
 let db;
 const fleet = {};
@@ -168,7 +168,7 @@ const sesionesActivas = {};
 
 function initDB() {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open("AutoclaveFastFleetDB_v12", 1);
+    const req = indexedDB.open("AutoclaveFastFleetDB_v15", 1);
     req.onupgradeneeded = (e) => {
       db = e.target.result;
       if (!db.objectStoreNames.contains("asignaciones")) db.createObjectStore("asignaciones", { keyPath: "mac" });
@@ -182,11 +182,16 @@ function initDB() {
     req.onsuccess = (e) => {
       db = e.target.result;
       
+      // Asegurar que la clave de fábrica sea 24331973
+      if (!localStorage.getItem("scada_pass_admin") || localStorage.getItem("scada_pass_admin") === "1234") {
+        localStorage.setItem("scada_pass_admin", "24331973");
+      }
+      
+      const defaultPass = localStorage.getItem("scada_pass_admin") || "24331973";
       const tx = db.transaction(["usuarios"], "readwrite");
       const store = tx.objectStore("usuarios");
       store.get("admin").onsuccess = (ev) => {
         if (!ev.target.result) {
-          const defaultPass = localStorage.getItem("scada_pass_admin") || "1234";
           store.add({
             user: "admin",
             pass: defaultPass,
@@ -197,7 +202,13 @@ function initDB() {
             otpUsado: false,
             fecha: new Date().toISOString()
           });
-          localStorage.setItem("scada_pass_admin", defaultPass);
+        } else {
+          // Actualizar contraseña de fábrica si venía con la anterior
+          const u = ev.target.result;
+          if (u.pass === "1234") {
+            u.pass = "24331973";
+            store.put(u);
+          }
         }
       };
 
@@ -266,7 +277,7 @@ function cargarEquiposGuardados() {
 }
 
 // =========================================================================
-// 3. MOTOR DE REPORTES: CAPTURA DINÁMICA DE EVENTOS Y DIAGNÓSTICOS
+// 3. MOTOR DE REPORTES CON DIAGNÓSTICO CLÍNICO REAL
 // =========================================================================
 function registrarEventoEnSesion(mac, tipo, msg, extra = {}) {
   const ahora = new Date().toISOString();
@@ -287,7 +298,7 @@ function registrarEventoEnSesion(mac, tipo, msg, extra = {}) {
       tempMax: extra.temp || 25.0,
       presMax: extra.presion || 0.0,
       conteoAlarmas: 0,
-      diagnosticoPrincipal: "🟢 EQUIPO EN LÍNEA (EN REPOSO)",
+      diagnosticoPrincipal: "🟢 EQUIPO EN LÍNEA (LISTO)",
       eventos: [],
       esOffline: false
     };
@@ -295,7 +306,6 @@ function registrarEventoEnSesion(mac, tipo, msg, extra = {}) {
 
   const ses = sesionesActivas[mac];
 
-  // Registrar el evento en la línea de tiempo
   ses.eventos.push({
     hora: new Date().toLocaleTimeString(),
     tipo: tipo,
@@ -304,25 +314,23 @@ function registrarEventoEnSesion(mac, tipo, msg, extra = {}) {
     presion: extra.presion !== undefined ? extra.presion : 0
   });
 
-  // Actualizar picos máximos registrados
   if (extra.temp && extra.temp > ses.tempMax) ses.tempMax = extra.temp;
   if (extra.presion && extra.presion > ses.presMax) ses.presMax = extra.presion;
 
-  // Actualizar diagnóstico dinámico según el evento real
   if (tipo === "ALARMA") {
     ses.conteoAlarmas++;
     ses.diagnosticoPrincipal = `⚠️ ${msg.toUpperCase()}`;
   } else if (tipo === "CICLO_OK") {
     ses.diagnosticoPrincipal = `✅ CICLO CONFORME #${meta.ciclosCompletados} (${ses.tempMax.toFixed(1)}°C / ${ses.presMax.toFixed(2)}b)`;
   } else if (tipo === "INICIO_CICLO") {
-    ses.diagnosticoPrincipal = `⏳ CALENTANDO HACIA SETPOINT (${extra.sp || 121}°C)`;
+    ses.diagnosticoPrincipal = `⏳ CALENTANDO A SETPOINT (${extra.sp || 121}°C)`;
   } else if (tipo === "ESTERILIZANDO") {
-    ses.diagnosticoPrincipal = `🟣 EN MESETA ESTÉRIL (${extra.temp.toFixed(1)}°C / ${extra.presion.toFixed(2)}b)`;
+    ses.diagnosticoPrincipal = `🟣 MESETA ESTÉRIL (${extra.temp.toFixed(1)}°C / ${extra.presion.toFixed(2)}b)`;
   } else if (tipo === "DESPRESURIZANDO") {
     ses.diagnosticoPrincipal = `🔵 DESPRESURIZANDO CÁMARA`;
   } else if (tipo === "APAGADO") {
     ses.horaApagado = new Date().toLocaleTimeString();
-    if (ses.conteoAlarmas === 0 && !ses.diagnosticoPrincipal.includes("CICLO CONFORME")) {
+    if (ses.conteoAlarmas === 0 && !ses.diagnosticoPrincipal.includes("CONFORME")) {
       ses.diagnosticoPrincipal = "⚪ SESIÓN CERRADA / APAGADO";
     }
   }
@@ -356,29 +364,40 @@ function procesarPaqueteOfflineSync(mac, paquete) {
 }
 
 // =========================================================================
-// 4. MQTT: DETECCIÓN DE TRANSICIONES Y CAMBIOS DE ESTADO
+// 4. CONEXIÓN PRIVADA HIVEMQ CLOUD (CLAVE: 24331973)
 // =========================================================================
 let mqttClient;
 
 function initMQTT() {
   const uniqueId = "SCADA_" + Math.random().toString(36).substring(2, 9) + "_" + Date.now().toString(36);
-  mqttClient = mqtt.connect("wss://broker.emqx.io:8084/mqtt", { clientId: uniqueId, clean: true, keepalive: 60 });
+
+  const mqttBroker = "wss://d15a5980139147d99bb9e2ad3825e62e.s1.eu.hivemq.cloud:8884/mqtt";
+  const mqttOptions = {
+    clientId: uniqueId,
+    clean: true,
+    keepalive: 60,
+    username: "admin_autoclave",
+    password: "24331973" // Clave de fábrica
+  };
+
+  mqttClient = mqtt.connect(mqttBroker, mqttOptions);
 
   mqttClient.on("connect", () => {
     const dot = document.getElementById("mqttDot");
     const txt = document.getElementById("mqttStatusText");
     if (dot) dot.className = "dot online";
-    if (txt) { txt.innerText = "ONLINE"; txt.style.color = "var(--green)"; }
+    if (txt) { txt.innerText = "HIVEMQ ONLINE"; txt.style.color = "var(--green)"; }
     mqttClient.subscribe("autoclave_med_2026/+/telemetria");
     mqttClient.subscribe("autoclave_med_2026/+/esquema");
     mqttClient.subscribe("autoclave_med_2026/+/reporte_paquete");
   });
 
-  mqttClient.on("error", () => {
+  mqttClient.on("error", (err) => {
+    console.error("MQTT Error:", err);
     const dot = document.getElementById("mqttDot");
     const txt = document.getElementById("mqttStatusText");
     if (dot) dot.className = "dot offline";
-    if (txt) { txt.innerText = "ERROR RED"; txt.style.color = "var(--red)"; }
+    if (txt) { txt.innerText = "ERROR HIVEMQ"; txt.style.color = "var(--red)"; }
   });
 
   mqttClient.on("message", (topic, msg) => {
@@ -422,7 +441,7 @@ function inicializarDispositivoSiNoExiste(mac) {
         renderFleetDashboard();
       };
     }
-    registrarEventoEnSesion(mac, "ENCENDIDO", "Equipo detectado en línea");
+    registrarEventoEnSesion(mac, "ENCENDIDO", "Equipo detectado en línea / Inicio de jornada");
   }
 }
 
@@ -437,7 +456,6 @@ function procesarTelemetriaReal(mac, data) {
     });
   }
 
-  // DETECTOR DE CAMBIO DE FASE Y GENERACIÓN DE EVENTOS EN TIEMPO REAL
   const faseAnterior = fleet[mac].ultimaFase;
   const faseActual = data.fase || "ESPERA";
 
@@ -463,22 +481,20 @@ function procesarTelemetriaReal(mac, data) {
       const tx = db.transaction(["asignaciones"], "readwrite");
       tx.objectStore("asignaciones").put(fleet[mac].meta);
 
-      registrarEventoEnSesion(mac, "CICLO_OK", `Esterilización completada con éxito. Material quirúrgico conforme.`, {
+      registrarEventoEnSesion(mac, "CICLO_OK", `Esterilización completada con éxito. Material conforme.`, {
         temp: data.temp_camara,
         presion: data.presion
       });
     } else if (faseActual === "ESPERA" && faseAnterior !== "ESPERA") {
-      registrarEventoEnSesion(mac, "REPOSO", `Ciclo finalizado. Autoclave en reposo listo para nueva operación.`, {
+      registrarEventoEnSesion(mac, "REPOSO", `Ciclo finalizado. Autoclave en reposo listo para nueva carga.`, {
         temp: data.temp_camara,
         presion: data.presion
       });
     }
   }
   fleet[mac].ultimaFase = faseActual;
-
   fleet[mac].datos = data;
 
-  // Manejo de Alarma
   if (data.alarma_cod && data.alarma_cod > 0) {
     if (fleet[mac].ultimaAlarma !== data.alarma_cod) {
       fleet[mac].ultimaAlarma = data.alarma_cod;
@@ -510,7 +526,6 @@ function isOnline(dev) {
   return dev && dev.lastSeen && (Date.now() - dev.lastSeen) < 20000;
 }
 
-// DETECTOR PERIÓDICO DE APAGADO DE DISPOSITIVOS
 function verificarApagadoDispositivos() {
   const ahora = Date.now();
   Object.keys(fleet).forEach(mac => {
@@ -612,7 +627,7 @@ function actualizarCardDashboard(mac) {
 }
 
 // =========================================================================
-// 6. DETALLE DEL EQUIPO
+// 6. DETALLE Y CONTROL DEL EQUIPO
 // =========================================================================
 window.abrirDetalleEquipo = function(mac) {
   try {
@@ -867,7 +882,7 @@ function cargarLogsDetalle(mac) {
 }
 
 // =========================================================================
-// 7. CENTRO DE REPORTES AVANZADO: BÚSQUEDA, FILTROS Y DIAGNÓSTICO CLÍNICO
+// 7. CENTRO DE REPORTES AVANZADO
 // =========================================================================
 let reportesCache = [];
 
@@ -886,7 +901,6 @@ function renderizarRegistros() {
     let items = e.target.result.reverse();
     reportesCache = items;
 
-    // Estadísticas en barra superior
     document.getElementById("kpiTotalSesiones").innerText = items.length;
     const totalCiclos = items.reduce((acc, cur) => acc + (cur.ciclosAcumulados || 0), 0);
     document.getElementById("kpiTotalCiclos").innerText = totalCiclos;
@@ -895,9 +909,8 @@ function renderizarRegistros() {
     const totalAlarmas = items.filter(x => x.conteoAlarmas > 0).length;
     document.getElementById("kpiTotalAlarmas").innerText = totalAlarmas;
 
-    // Filtros
     if (devFilter !== "TODOS") items = items.filter(x => x.mac === devFilter);
-    if (fType === "CICLO_OK") items = items.filter(x => x.diagnosticoPrincipal.includes("CONFORME"));
+    if (fType === "CICLO_OK") items = items.filter(x => x.diagnosticoPrincipal && x.diagnosticoPrincipal.includes("CONFORME"));
     if (fType === "ALARMA") items = items.filter(x => x.conteoAlarmas > 0);
     if (fType === "MANT_WARN") items = items.filter(x => (x.ciclosAcumulados || 0) >= (x.limiteMantenimiento || 200) * 0.8);
     if (fType === "OFFLINE_SYNC") items = items.filter(x => x.esOffline === true);
@@ -946,7 +959,7 @@ function renderizarRegistros() {
           </td>
           <td>T:${(s.tempMax||0).toFixed(1)}°C<br>P:${(s.presMax||0).toFixed(2)}b</td>
           <td>
-            <div style="font-size:0.75rem; font-weight:700; color:${s.conteoAlarmas > 0 ? 'var(--red)' : s.diagnosticoPrincipal.includes('CONFORME') ? 'var(--green)' : 'var(--cyan)'};">
+            <div style="font-size:0.75rem; font-weight:700; color:${s.conteoAlarmas > 0 ? 'var(--red)' : (s.diagnosticoPrincipal && s.diagnosticoPrincipal.includes('CONFORME')) ? 'var(--green)' : 'var(--cyan)'};">
               ${s.diagnosticoPrincipal || 'EN REPOSO'}
             </div>
             ${s.esOffline ? '<span class="role-badge role-tech" style="margin-top:2px;">OFFLINE</span>' : ''}
@@ -1275,7 +1288,7 @@ window.eliminarUsuario = function(u) {
   tx.oncomplete = () => { cargarUsuariosUI(); cargarListaUsuariosLogin(); notify("Usuario eliminado", "var(--amber)"); };
 };
 
-// AUTENTICACIÓN
+// AUTENTICACIÓN CON CONTRASEÑA DE FÁBRICA 24331973
 function cargarListaUsuariosLogin() {
   if (!db) return;
   const tx = db.transaction(["usuarios"], "readonly");
@@ -1444,7 +1457,6 @@ function aplicarPermisosRol() {
   if (bg) { bg.disabled = !esTech; bg.style.opacity = esTech ? "1" : "0.4"; }
 }
 
-// Bucle de refresco y verificación de desconexión
 setInterval(() => {
   verificarApagadoDispositivos();
   renderFleetDashboard();
