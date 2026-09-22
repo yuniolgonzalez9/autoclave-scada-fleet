@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
   
+  <!-- MANIFIESTO PWA PARA MODO APP NATIVA -->
   <link rel="manifest" href="manifest.json">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -15,11 +16,12 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;800&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
   
-  <!-- HOJA DE ESTILOS EXTERNA -->
-  <link rel="stylesheet" href="style.css">
+  <!-- HOJA DE ESTILOS EXTERNA CON ROMPEDOR DE CACHÉ -->
+  <link rel="stylesheet" href="style.css?v=4">
   
-  <!-- LIBRERÍA MQTT -->
+  <!-- LIBRERÍAS DE COMUNICACIÓN Y NUBE -->
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
@@ -31,9 +33,17 @@
     <div class="header-left">
       <button id="btnGlobalBack" class="btn btn-back" style="display: none;" onclick="goBackActivity()">← VOLVER</button>
       <div class="brand-title">AUTOCLAVE SCADA</div>
+      
+      <!-- ESTADO DE BROKER MQTT -->
       <span class="status-badge">
         <span class="dot" id="mqttDot"></span>
         <span id="mqttStatusText">DESCONECTADO</span>
+      </span>
+
+      <!-- ESTADO DE SINCRONIZACIÓN EN LA NUBE (SUPABASE) -->
+      <span class="status-badge" style="border-color: rgba(0, 255, 136, 0.3);">
+        <span class="dot online"></span>
+        <span style="color: var(--green);">NUBE SYNC</span>
       </span>
     </div>
     
@@ -60,7 +70,9 @@
 
   <main class="activity-container">
 
-    <!-- ACTIVITY 0: LOGIN -->
+    <!-- ==================================================================== -->
+    <!-- ACTIVITY 0: LOGIN                                                    -->
+    <!-- ==================================================================== -->
     <section id="act-login" class="activity active">
       <div class="auth-box card">
         <div class="auth-header">
@@ -75,10 +87,10 @@
           </select>
 
           <label class="field-label">USUARIO / ID:</label>
-          <input type="text" id="loginUserInput" class="input-field" placeholder="Ingresa tu usuario" required>
+          <input type="text" id="loginUserInput" class="input-field" placeholder="Ingresa tu usuario" autocapitalize="none" spellcheck="false" enterkeyhint="next" required>
 
           <label class="field-label">CONTRASEÑA [ENTER]:</label>
-          <input type="password" id="loginPassInput" class="input-field" placeholder="Contraseña" required>
+          <input type="password" id="loginPassInput" class="input-field" placeholder="Contraseña" enterkeyhint="go" required>
 
           <button type="submit" class="btn btn-full" style="margin-top: 6px;">
             🔐 INICIAR SESIÓN [ENTER]
@@ -95,7 +107,9 @@
       </div>
     </section>
 
-    <!-- ACTIVITY RECOVERY -->
+    <!-- ==================================================================== -->
+    <!-- ACTIVITY RECOVERY                                                   -->
+    <!-- ==================================================================== -->
     <section id="act-recovery" class="activity">
       <div class="auth-box card">
         <div class="activity-title text-center">RECUPERACIÓN DE ACCESO</div>
@@ -104,7 +118,7 @@
         </p>
         <form onsubmit="event.preventDefault(); solicitarCodigoRecuperacion();">
           <label class="field-label">USUARIO A RECUPERAR:</label>
-          <input type="text" id="recovUser" class="input-field" placeholder="Ej: admin" required>
+          <input type="text" id="recovUser" class="input-field" placeholder="Ej: admin" autocapitalize="none" spellcheck="false" enterkeyhint="go" required>
           <button type="submit" class="btn btn-full" id="btnSendRecovery">📩 ENVIAR CÓDIGO [ENTER]</button>
         </form>
         <button class="btn btn-back btn-full" style="margin-top: 10px;" onclick="openActivity('act-login')">← VOLVER AL LOGIN</button>
@@ -112,23 +126,27 @@
       </div>
     </section>
 
-    <!-- ACTIVITY CAMBIO DE CLAVE -->
+    <!-- ==================================================================== -->
+    <!-- ACTIVITY CAMBIO DE CLAVE                                            -->
+    <!-- ==================================================================== -->
     <section id="act-change-pass" class="activity">
       <div class="auth-box card">
         <div class="activity-title text-center">MODIFICAR CONTRASEÑA</div>
         <p class="auth-desc text-center">Ingresa la nueva clave. Se actualizará inmediatamente al dar Enter.</p>
         <form onsubmit="event.preventDefault(); guardarNuevaContrasena();">
           <label class="field-label">NUEVA CONTRASEÑA:</label>
-          <input type="password" id="newPassInput" class="input-field" placeholder="Mínimo 4 caracteres" required>
+          <input type="password" id="newPassInput" class="input-field" placeholder="Mínimo 4 caracteres" enterkeyhint="next" required>
           <label class="field-label">CONFIRMAR NUEVA CONTRASEÑA:</label>
-          <input type="password" id="confirmPassInput" class="input-field" placeholder="Repite la contraseña" required>
+          <input type="password" id="confirmPassInput" class="input-field" placeholder="Repite la contraseña" enterkeyhint="done" required>
           <button type="submit" class="btn btn-full" style="margin-top: 8px;">💾 ACTUALIZAR CONTRASEÑA [ENTER]</button>
         </form>
         <button class="btn btn-back btn-full" style="margin-top: 10px;" onclick="goBackActivity()">← VOLVER ATRÁS</button>
       </div>
     </section>
 
-    <!-- ACTIVITY 1: TELEMETRÍA -->
+    <!-- ==================================================================== -->
+    <!-- ACTIVITY 1: TELEMETRÍA (MONITOR DE FLOTA)                            -->
+    <!-- ==================================================================== -->
     <section id="act-telemetry" class="activity">
       <div class="activity-header">
         <div class="activity-title">MONITOR DE FLOTA EN TIEMPO REAL</div>
@@ -139,7 +157,9 @@
       </div>
     </section>
 
-    <!-- ACTIVITY 2: DETALLE DEL EQUIPO -->
+    <!-- ==================================================================== -->
+    <!-- ACTIVITY 2: DETALLE DEL EQUIPO                                      -->
+    <!-- ==================================================================== -->
     <section id="act-device-detail" class="activity">
       <div class="activity-header">
         <div>
@@ -185,11 +205,11 @@
         <div class="card">
           <form onsubmit="event.preventDefault(); guardarFichaDetalle();">
             <label class="field-label">ALIAS EN PANTALLA:</label>
-            <input type="text" id="fichaAlias" class="input-field" required>
+            <input type="text" id="fichaAlias" class="input-field" placeholder="Ej: Quirófano Central 1" enterkeyhint="next" required>
             <label class="field-label">CLIENTE / HOSPITAL:</label>
-            <input type="text" id="fichaCliente" class="input-field" required>
+            <input type="text" id="fichaCliente" class="input-field" placeholder="Ej: Hospital Metropolitano" enterkeyhint="next" required>
             <label class="field-label">MODELO DE AUTOCLAVE:</label>
-            <input type="text" id="fichaModelo" class="input-field" required>
+            <input type="text" id="fichaModelo" class="input-field" placeholder="Ej: Getinge 133HC" enterkeyhint="done" required>
             <button type="submit" class="btn btn-full">ACTUALIZAR FICHA [ENTER]</button>
           </form>
         </div>
@@ -210,15 +230,17 @@
       </div>
     </section>
 
-    <!-- ACTIVITY 3: FOTA HUB -->
+    <!-- ==================================================================== -->
+    <!-- ACTIVITY 3: FOTA HUB                                                -->
+    <!-- ==================================================================== -->
     <section id="act-fota" class="activity">
       <div class="activity-header"><div class="activity-title">DESPLIEGUE REMOTO (FOTA HUB)</div></div>
       <div class="grid-split">
         <div class="card">
           <label class="field-label">VERSIÓN A DESPLEGAR:</label>
-          <input type="text" id="fotaVersionInput" class="input-field" value="v3.3.0">
+          <input type="text" id="fotaVersionInput" class="input-field" value="v3.3.0" autocapitalize="none">
           <label class="field-label">URL DEL BINARIO (.BIN):</label>
-          <input type="text" id="fotaUrlInput" class="input-field" value="https://raw.githubusercontent.com/yuniolgonzalez9/autoclave-scada-fleet/main/firmwares/firmware.bin">
+          <input type="text" id="fotaUrlInput" class="input-field" value="https://raw.githubusercontent.com/yuniolgonzalez9/autoclave-scada-fleet/main/firmwares/firmware.bin" autocapitalize="none">
           <label class="field-label">SELECCIONAR ARCHIVO BINARIO:</label>
           <div class="drop-zone" onclick="document.getElementById('fileBinInput').click()">
             <input type="file" id="fileBinInput" accept=".bin" style="display: none;" onchange="handleFileSelected(this.files)">
@@ -242,7 +264,9 @@
       </div>
     </section>
 
-    <!-- ACTIVITY 4: GESTIÓN DE FLOTA -->
+    <!-- ==================================================================== -->
+    <!-- ACTIVITY 4: GESTIÓN DE FLOTA                                        -->
+    <!-- ==================================================================== -->
     <section id="act-fleet-mgmt" class="activity">
       <div class="activity-header"><div class="activity-title">REGISTRO Y GESTIÓN DE FLOTA</div></div>
       <div class="grid-split">
@@ -250,13 +274,13 @@
           <div class="form-title" id="titleFleetForm">+ REGISTRAR NUEVO EQUIPO</div>
           <form onsubmit="event.preventDefault(); guardarEquipoDesdeGestion();">
             <label class="field-label">DIRECCIÓN MAC (SIN DOS PUNTOS):</label>
-            <input type="text" id="addMac" class="input-field" placeholder="Ej: 30AEA4070FB4" required>
+            <input type="text" id="addMac" class="input-field" placeholder="Ej: 30AEA4070FB4" autocapitalize="characters" spellcheck="false" enterkeyhint="next" required>
             <label class="field-label">ALIAS / SALA:</label>
-            <input type="text" id="addAlias" class="input-field" placeholder="Ej: Quirófano 2" required>
+            <input type="text" id="addAlias" class="input-field" placeholder="Ej: Quirófano 2" enterkeyhint="next" required>
             <label class="field-label">CLIENTE / HOSPITAL:</label>
-            <input type="text" id="addCliente" class="input-field" placeholder="Ej: Clínica Los Ángeles" required>
+            <input type="text" id="addCliente" class="input-field" placeholder="Ej: Clínica Los Ángeles" enterkeyhint="next" required>
             <label class="field-label">MODELO DE AUTOCLAVE:</label>
-            <input type="text" id="addModelo" class="input-field" placeholder="Ej: Autoclave Quirúrgico Clase B" required>
+            <input type="text" id="addModelo" class="input-field" placeholder="Ej: Autoclave Quirúrgico Clase B" enterkeyhint="done" required>
             <button type="submit" class="btn btn-full" id="btnSubmitFleet">💾 GUARDAR / ACTUALIZAR [ENTER]</button>
           </form>
 
@@ -280,7 +304,9 @@
       </div>
     </section>
 
-    <!-- ACTIVITY 5: REPORTES Y AUDITORÍA -->
+    <!-- ==================================================================== -->
+    <!-- ACTIVITY 5: REPORTES Y AUDITORÍA                                    -->
+    <!-- ==================================================================== -->
     <section id="act-reports" class="activity">
       <div class="activity-header">
         <div class="activity-title">CENTRO DE AUDITORÍA, CICLOS Y MANTENIMIENTO</div>
@@ -291,7 +317,7 @@
         </div>
       </div>
 
-      <!-- KPI METRICS BAR -->
+      <!-- MÉTRICAS KPI -->
       <div class="kpi-grid">
         <div class="kpi-card">
           <div class="kpi-val" id="kpiTotalSesiones">0</div>
@@ -338,7 +364,7 @@
           </div>
           <div>
             <label class="field-label">BÚSQUEDA LIBRE [ENTER]:</label>
-            <input type="text" id="filterInput" class="input-field" placeholder="Buscar texto, clínica..." onkeyup="renderizarRegistros()">
+            <input type="text" id="filterInput" class="input-field" placeholder="Buscar texto, clínica..." enterkeyhint="search" onkeyup="renderizarRegistros()">
           </div>
         </div>
       </div>
@@ -362,7 +388,9 @@
       </div>
     </section>
 
-    <!-- ACTIVITY: VISOR DETALLADO DE SESIÓN -->
+    <!-- ==================================================================== -->
+    <!-- ACTIVITY: VISOR DETALLADO DE SESIÓN                                 -->
+    <!-- ==================================================================== -->
     <section id="act-report-view" class="activity">
       <div class="activity-header">
         <div>
@@ -394,16 +422,18 @@
       </div>
     </section>
 
-    <!-- ACTIVITY 6: USUARIOS -->
+    <!-- ==================================================================== -->
+    <!-- ACTIVITY 6: USUARIOS                                                -->
+    <!-- ==================================================================== -->
     <section id="act-users" class="activity">
       <div class="activity-header"><div class="activity-title">CREDENCIALES Y ACCESOS</div></div>
       <div class="grid-split">
         <div class="card">
           <form onsubmit="event.preventDefault(); crearUsuario();">
             <label class="field-label">USUARIO / ID:</label>
-            <input type="text" id="uUser" class="input-field" placeholder="Ej: tec_clinica" required>
+            <input type="text" id="uUser" class="input-field" placeholder="Ej: tec_clinica" autocapitalize="none" spellcheck="false" enterkeyhint="next" required>
             <label class="field-label">CONTRASEÑA:</label>
-            <input type="password" id="uPass" class="input-field" placeholder="Mínimo 4 caracteres" required>
+            <input type="password" id="uPass" class="input-field" placeholder="Mínimo 4 caracteres" enterkeyhint="done" required>
             <label class="field-label">ROL:</label>
             <select id="uRol" class="input-field">
               <option value="OPERADOR">OPERADOR (NIVEL 3)</option>
@@ -427,7 +457,7 @@
 
   </main>
 
-  <!-- LÓGICA DE JAVASCRIPT EXTERNA -->
-  <script src="app.js"></script>
+  <!-- LÓGICA DE JAVASCRIPT EXTERNA CON ROMPEDOR DE CACHÉ -->
+  <script src="app.js?v=4"></script>
 </body>
 </html>
