@@ -4,7 +4,6 @@
 const SUPABASE_URL = "https://gjtqyodpgwfvfvkhlhik.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdqdHF5b2RwZ3dmdmZ2a2hsaGlrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAwNDAzNTYsImV4cCI6MjEwNTYxNjM1Nn0.g8t_PbEityaneKkOUHttQ_cZv50aczLU4Z9la8R4d_g";
 
-// Cliente de Supabase blindado contra colisiones de nombres
 const sbClient = (window.supabase && window.supabase.createClient) 
   ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) 
   : null;
@@ -171,7 +170,7 @@ window.cerrarSesionManual = function() {
 };
 
 // =========================================================================
-// 3. BASE DE DATOS LOCAL
+// 3. BASE DE DATOS LOCAL Y SESIÓN
 // =========================================================================
 let db = null;
 const fleet = {};
@@ -179,10 +178,9 @@ const sesionesActivas = {};
 
 function initDB() {
   return new Promise((resolve) => {
-    // Si hay alguna clave vieja residual en localStorage, forzar 24331973
     localStorage.setItem("scada_pass_admin", "24331973");
 
-    const req = indexedDB.open("AutoclaveFastFleetDB_v17", 1);
+    const req = indexedDB.open("AutoclaveFastFleetDB_v18", 1);
     req.onupgradeneeded = (e) => {
       db = e.target.result;
       if (!db.objectStoreNames.contains("asignaciones")) db.createObjectStore("asignaciones", { keyPath: "mac" });
@@ -225,7 +223,6 @@ function initDB() {
       resolve(db);
     };
     req.onerror = () => {
-      // Si IndexedDB falla o tarda, la app sigue viva con localStorage
       verificarSesionPersistente();
       resolve(null);
     };
@@ -262,23 +259,8 @@ function cargarEquiposGuardados() {
   const tx = db.transaction(["asignaciones"], "readonly");
   tx.objectStore("asignaciones").getAll().onsuccess = (e) => {
     (e.target.result || []).forEach(item => {
-      if (!fleet[item.mac]) {
-        fleet[item.mac] = {
-          mac: item.mac,
-          lastSeen: 0,
-          datos: {},
-          esquema: null,
-          ultimaFase: null,
-          _pendingLock: {},
-          meta: {
-            alias: item.alias || `AUTOCLAVE [${item.mac.slice(-4)}]`,
-            cliente: item.cliente || "SIN ASIGNAR",
-            modelo: item.modelo || "CLASE B",
-            ciclosCompletados: item.ciclosCompletados || 0,
-            limiteMantenimiento: item.limiteMantenimiento || 200
-          }
-        };
-      }
+      inicializarDispositivoSiNoExiste(item.mac);
+      fleet[item.mac].meta = item;
     });
     actualizarSelectoresGlobales();
     renderFleetDashboard();
@@ -286,7 +268,7 @@ function cargarEquiposGuardados() {
 }
 
 // =========================================================================
-// 4. MOTOR DE REPORTES Y SUPABASE
+// 4. MOTOR DE REPORTES CON PERSISTENCIA EN LA NUBE (SUPABASE)
 // =========================================================================
 function registrarEventoEnSesion(mac, tipo, msg, extra = {}) {
   const ahora = new Date().toISOString();
@@ -380,11 +362,8 @@ async function guardarSesionEnSupabase(sesionObj) {
       es_offline: sesionObj.esOffline || false
     };
 
-    const { error } = await sbClient.from('reportes_autoclaves').upsert(row, { onConflict: 'session_id' });
-    if (error) console.error("[SUPABASE ERROR]:", error);
-  } catch(e) {
-    console.error("[SUPABASE EXCEPTION]:", e);
-  }
+    await sbClient.from('reportes_autoclaves').upsert(row, { onConflict: 'session_id' });
+  } catch(e) {}
 }
 
 function procesarPaqueteOfflineSync(mac, paquete) {
@@ -414,7 +393,7 @@ function iniciarSuscripcionNubeRealtime() {
 }
 
 // =========================================================================
-// 5. MQTT HIVEMQ CLOUD (CLAVE: 24331973)
+// 5. MQTT HIVEMQ CLOUD CON SINCRONIZACIÓN INSTANTÁNEA (WSS 8884)
 // =========================================================================
 let mqttClient;
 
@@ -437,8 +416,11 @@ function initMQTT() {
     const txt = document.getElementById("mqttStatusText");
     if (dot) dot.className = "dot online";
     if (txt) { txt.innerText = "HIVEMQ ONLINE"; txt.style.color = "var(--green)"; }
+    
+    // Suscripción a todos los canales en vivo
     mqttClient.subscribe("autoclave_med_2026/+/telemetria");
     mqttClient.subscribe("autoclave_med_2026/+/esquema");
+    mqttClient.subscribe("autoclave_med_2026/+/meta"); // Metadatos globales retenidos
     mqttClient.subscribe("autoclave_med_2026/+/reporte_paquete");
   });
 
@@ -452,14 +434,19 @@ function initMQTT() {
   mqttClient.on("message", (topic, msg) => {
     try {
       const payload = JSON.parse(msg.toString());
-      const mac = topic.split("/")[1];
+      const parts = topic.split("/");
+      const mac = parts[1];
+      const canal = parts[2];
 
-      if (topic.includes("reporte_paquete")) {
+      if (canal === "reporte_paquete") {
         procesarPaqueteOfflineSync(mac, payload);
-      } else if (topic.includes("telemetria")) {
+      } else if (canal === "telemetria") {
         procesarTelemetriaReal(mac, payload);
-      } else if (topic.includes("esquema")) {
+      } else if (canal === "esquema") {
         procesarEsquemaReal(mac, payload);
+      } else if (canal === "meta") {
+        // Sincronización instantánea de Nombres y Clientes en todas las pantallas
+        procesarMetaGlobal(mac, payload);
       }
     } catch(e) {}
   });
@@ -470,7 +457,7 @@ function inicializarDispositivoSiNoExiste(mac) {
     fleet[mac] = {
       mac: mac,
       lastSeen: Date.now(),
-      datos: {},
+      datos: { cfg: {} },
       esquema: null,
       ultimaFase: null,
       _pendingLock: {},
@@ -490,7 +477,20 @@ function inicializarDispositivoSiNoExiste(mac) {
         renderFleetDashboard();
       };
     }
-    registrarEventoEnSesion(mac, "ENCENDIDO", "Equipo detectado en línea / Inicio de jornada");
+    registrarEventoEnSesion(mac, "ENCENDIDO", "Equipo detectado en línea");
+  }
+}
+
+// SINCRONIZACIÓN DE NOMBRES Y CLIENTES EN TODAS LAS PANTALLAS
+function procesarMetaGlobal(mac, metaData) {
+  inicializarDispositivoSiNoExiste(mac);
+  fleet[mac].meta = Object.assign(fleet[mac].meta, metaData);
+  actualizarCardDashboard(mac);
+  actualizarSelectoresGlobales();
+  renderFleetMgmtTable();
+  if (currentInspectedMAC === mac) {
+    document.getElementById("detDeviceAlias").innerText = fleet[mac].meta.alias.toUpperCase();
+    document.getElementById("detDeviceSub").innerText = `MAC: ${mac} | CLIENTE: ${fleet[mac].meta.cliente} | MODELO: ${fleet[mac].meta.modelo}`;
   }
 }
 
@@ -498,25 +498,30 @@ function procesarTelemetriaReal(mac, data) {
   inicializarDispositivoSiNoExiste(mac);
   fleet[mac].lastSeen = Date.now();
 
+  // Respetar seguro temporal local para que el interruptor que tocaste no rebote
   if (data.cfg && fleet[mac]._pendingLock && fleet[mac].datos.cfg) {
     const ahora = Date.now();
     Object.keys(fleet[mac]._pendingLock).forEach(k => {
-      if (ahora < fleet[mac]._pendingLock[k]) data.cfg[k] = fleet[mac].datos.cfg[k];
+      if (ahora < fleet[mac]._pendingLock[k]) {
+        data.cfg[k] = fleet[mac].datos.cfg[k];
+      }
     });
   }
+
+  fleet[mac].datos = data;
 
   const faseAnterior = fleet[mac].ultimaFase;
   const faseActual = data.fase || "ESPERA";
 
   if (faseAnterior && faseAnterior !== faseActual) {
     if (faseActual === "CALENTANDO") {
-      registrarEventoEnSesion(mac, "INICIO_CICLO", `Calentamiento iniciado -> Rumbo a Setpoint (${data.cfg?.sp_temp || 121}°C)`, {
+      registrarEventoEnSesion(mac, "INICIO_CICLO", `Calentamiento iniciado -> Setpoint (${data.cfg?.sp_temp || 121}°C)`, {
         temp: data.temp_camara,
         presion: data.presion,
         sp: data.cfg?.sp_temp
       });
     } else if (faseActual === "ESTERILIZANDO") {
-      registrarEventoEnSesion(mac, "ESTERILIZANDO", `Entrada en Meseta Estéril sostenida (${data.temp_camara.toFixed(1)}°C / ${data.presion.toFixed(2)}b)`, {
+      registrarEventoEnSesion(mac, "ESTERILIZANDO", `Meseta Estéril sostenida (${data.temp_camara.toFixed(1)}°C / ${data.presion.toFixed(2)}b)`, {
         temp: data.temp_camara,
         presion: data.presion
       });
@@ -531,7 +536,6 @@ function procesarTelemetriaReal(mac, data) {
         const tx = db.transaction(["asignaciones"], "readwrite");
         tx.objectStore("asignaciones").put(fleet[mac].meta);
       }
-
       registrarEventoEnSesion(mac, "CICLO_OK", `Esterilización completada con éxito. Material conforme.`, {
         temp: data.temp_camara,
         presion: data.presion
@@ -544,7 +548,6 @@ function procesarTelemetriaReal(mac, data) {
     }
   }
   fleet[mac].ultimaFase = faseActual;
-  fleet[mac].datos = data;
 
   if (data.alarma_cod && data.alarma_cod > 0) {
     if (fleet[mac].ultimaAlarma !== data.alarma_cod) {
@@ -558,8 +561,11 @@ function procesarTelemetriaReal(mac, data) {
     fleet[mac].ultimaAlarma = 0;
   }
 
+  // Actualización inmediata de interfaces
   actualizarCardDashboard(mac);
-  if (currentInspectedMAC === mac) actualizarPantallaDetalleDinamica();
+  if (currentInspectedMAC === mac) {
+    actualizarPantallaDetalleDinamica();
+  }
 }
 
 function procesarEsquemaReal(mac, data) {
@@ -678,7 +684,7 @@ function actualizarCardDashboard(mac) {
 }
 
 // =========================================================================
-// 7. DETALLE DEL EQUIPO
+// 7. DETALLE DEL EQUIPO CON ESPEJO BIDIRECCIONAL EN TIEMPO REAL
 // =========================================================================
 window.abrirDetalleEquipo = function(mac) {
   try {
@@ -802,24 +808,7 @@ function generarUIEsquemaDinamico(mac) {
   }
 }
 
-window.cambiarSwitchOptimista = function(mac, key, isChecked) {
-  if (usuarioActual && usuarioActual.rol === "OPERADOR") return notify("Permiso denegado: rol OPERADOR", "var(--red)");
-  if (!fleet[mac]) return;
-
-  if (!fleet[mac].datos.cfg) fleet[mac].datos.cfg = {};
-  fleet[mac].datos.cfg[key] = isChecked;
-
-  fleet[mac]._pendingLock = fleet[mac]._pendingLock || {};
-  fleet[mac]._pendingLock[key] = Date.now() + 3500;
-
-  const payload = {};
-  payload[key] = isChecked;
-  mqttClient.publish(`autoclave_med_2026/${mac}/config`, JSON.stringify(payload));
-  
-  registrarEventoEnSesion(mac, "CONFIG", `Switch [${key}] cambiado a: ${isChecked ? 'ON' : 'OFF'}`);
-  notify(`⚡ ${key.toUpperCase()}: ${isChecked ? 'ACTIVADO' : 'DESACTIVADO'}`, isChecked ? "var(--green)" : "var(--amber)");
-};
-
+// SINCRONIZACIÓN INSTANTÁNEA ENTRE PANTALLAS
 function actualizarPantallaDetalleDinamica() {
   if (!currentInspectedMAC || !fleet[currentInspectedMAC]) return;
   const item = fleet[currentInspectedMAC];
@@ -829,6 +818,7 @@ function actualizarPantallaDetalleDinamica() {
   const ob = document.getElementById("detOnlineBadge");
   if (ob) ob.innerHTML = `<span class="dot ${online ? 'online' : 'offline'}"></span> ${online ? 'ONLINE' : 'OFFLINE'}`;
 
+  // 1. Actualizar números y relojes
   Object.keys(d).forEach(k => {
     const el = document.getElementById(`dyn-val-${k}`);
     if (el) {
@@ -847,6 +837,26 @@ function actualizarPantallaDetalleDinamica() {
     }
   });
 
+  // 2. ESPEJO EN VIVO: Si otro teléfono cambió un interruptor, moverlo aquí en milisegundos
+  if (d.cfg) {
+    Object.keys(d.cfg).forEach(k => {
+      const inputEl = document.querySelector(`.dyn-input-field[data-key="${k}"]`);
+      if (inputEl) {
+        const ahora = Date.now();
+        const estaBloqueado = item._pendingLock && ahora < item._pendingLock[k];
+        
+        // Si no estamos tocándolo localmente en este segundo, reflejar el estado real
+        if (!estaBloqueado) {
+          if (inputEl.type === 'checkbox') {
+            inputEl.checked = !!d.cfg[k];
+          } else if (inputEl.type === 'number' && document.activeElement !== inputEl) {
+            inputEl.value = d.cfg[k];
+          }
+        }
+      }
+    });
+  }
+
   const banner = document.getElementById("detAlarmaBanner");
   const txt = document.getElementById("detAlarmaTexto");
   if (d.alarma_cod && d.alarma_cod > 0) {
@@ -856,6 +866,24 @@ function actualizarPantallaDetalleDinamica() {
     if (banner) banner.style.display = "none";
   }
 }
+
+window.cambiarSwitchOptimista = function(mac, key, isChecked) {
+  if (usuarioActual && usuarioActual.rol === "OPERADOR") return notify("Permiso denegado: rol OPERADOR", "var(--red)");
+  if (!fleet[mac]) return;
+
+  if (!fleet[mac].datos.cfg) fleet[mac].datos.cfg = {};
+  fleet[mac].datos.cfg[key] = isChecked;
+
+  fleet[mac]._pendingLock = fleet[mac]._pendingLock || {};
+  fleet[mac]._pendingLock[key] = Date.now() + 2500;
+
+  const payload = {};
+  payload[key] = isChecked;
+  mqttClient.publish(`autoclave_med_2026/${mac}/config`, JSON.stringify(payload));
+  
+  registrarEventoEnSesion(mac, "CONFIG", `Switch [${key}] cambiado a: ${isChecked ? 'ON' : 'OFF'}`);
+  notify(`⚡ ${key.toUpperCase()}: ${isChecked ? 'ACTIVADO' : 'DESACTIVADO'}`, isChecked ? "var(--green)" : "var(--amber)");
+};
 
 window.guardarParametrosDinamicos = function() {
   if (!currentInspectedMAC) return;
@@ -868,7 +896,7 @@ window.guardarParametrosDinamicos = function() {
       payload[key] = input.checked;
       fleet[currentInspectedMAC].datos.cfg = fleet[currentInspectedMAC].datos.cfg || {};
       fleet[currentInspectedMAC].datos.cfg[key] = input.checked;
-      fleet[currentInspectedMAC]._pendingLock[key] = Date.now() + 3500;
+      fleet[currentInspectedMAC]._pendingLock[key] = Date.now() + 2500;
     } else if (input.type === 'number') {
       payload[key] = parseFloat(input.value);
     } else {
@@ -888,23 +916,28 @@ window.enviarComandoDetalle = function(cmd) {
   notify(`Comando enviado: ${cmd}`, "var(--cyan)");
 };
 
+// GUARDAR Y RETENER METADATOS PARA TODAS LAS PANTALLAS
 window.guardarFichaDetalle = function() {
   const alias = document.getElementById("fichaAlias").value.trim();
   const cliente = document.getElementById("fichaCliente").value.trim();
   const modelo = document.getElementById("fichaModelo").value.trim();
 
+  const metaData = { alias, cliente, modelo };
+
   if (db) {
     const tx = db.transaction(["asignaciones"], "readwrite");
-    tx.objectStore("asignaciones").put({ mac: currentInspectedMAC, alias, cliente, modelo, fecha: new Date().toISOString() });
+    tx.objectStore("asignaciones").put(Object.assign({ mac: currentInspectedMAC }, metaData));
   }
 
-  fleet[currentInspectedMAC].meta.alias = alias;
-  fleet[currentInspectedMAC].meta.cliente = cliente;
-  fleet[currentInspectedMAC].meta.modelo = modelo;
+  fleet[currentInspectedMAC].meta = Object.assign(fleet[currentInspectedMAC].meta, metaData);
+  
+  // Publicación retenida por MQTT: Cualquier celular que abra la app recibirá este nombre en 5 milisegundos
+  mqttClient.publish(`autoclave_med_2026/${currentInspectedMAC}/meta`, JSON.stringify(metaData), { retain: true, qos: 1 });
+
   document.getElementById("detDeviceAlias").innerText = alias.toUpperCase();
   document.getElementById("detDeviceSub").innerText = `MAC: ${currentInspectedMAC} | CLIENTE: ${cliente} | MODELO: ${modelo}`;
   actualizarCardDashboard(currentInspectedMAC);
-  notify("Ficha actualizada", "var(--green)");
+  notify("Ficha sincronizada globalmente", "var(--green)");
 };
 
 function cargarLogsDetalle(mac) {
@@ -950,7 +983,6 @@ async function renderizarRegistros() {
 
   let items = [];
 
-  // 1. Consultar primero desde Supabase en la nube
   if (sbClient) {
     try {
       const { data, error } = await sbClient
@@ -983,7 +1015,6 @@ async function renderizarRegistros() {
     } catch(e) {}
   }
 
-  // 2. Si no hay internet o falló Supabase, consultar copia local en IndexedDB
   if (!items.length && db) {
     const tx = db.transaction(["reportes_sesiones"], "readonly");
     const localReq = tx.objectStore("reportes_sesiones").getAll();
@@ -1025,7 +1056,7 @@ function pintarTablaReportes(items, devFilter, fType, fDesde, fHasta, fText, tbo
     items = items.filter(x => 
       x.mac.toUpperCase().includes(fText) || 
       x.alias.toUpperCase().includes(fText) || 
-      x.cliente.toUpperCase().includes(fText) ||
+      x.cliente.toUpperCase().includes(fText) || 
       x.modelo.toUpperCase().includes(fText) ||
       (x.diagnosticoPrincipal && x.diagnosticoPrincipal.toUpperCase().includes(fText))
     );
@@ -1298,17 +1329,23 @@ window.guardarEquipoDesdeGestion = function() {
 
   if (mac.length < 6) return notify("MAC inválida", "var(--red)");
 
+  const metaData = { alias, cliente, modelo };
+
   if (db) {
     const tx = db.transaction(["asignaciones"], "readwrite");
-    tx.objectStore("asignaciones").put({ mac, alias, cliente, modelo, fecha: new Date().toISOString() });
+    tx.objectStore("asignaciones").put(Object.assign({ mac }, metaData, { ciclosCompletados: fleet[mac]?.meta?.ciclosCompletados || 0, limiteMantenimiento: fleet[mac]?.meta?.limiteMantenimiento || 200 }));
   }
 
   inicializarDispositivoSiNoExiste(mac);
-  fleet[mac].meta = { alias, cliente, modelo, ciclosCompletados: fleet[mac].meta.ciclosCompletados || 0, limiteMantenimiento: fleet[mac].meta.limiteMantenimiento || 200 };
+  fleet[mac].meta = Object.assign(fleet[mac].meta, metaData);
+  
+  // Sincronizar en la nube por MQTT para todos los dispositivos
+  mqttClient.publish(`autoclave_med_2026/${mac}/meta`, JSON.stringify(metaData), { retain: true, qos: 1 });
+
   actualizarSelectoresGlobales();
   renderFleetDashboard();
   renderFleetMgmtTable();
-  notify("¡Equipo actualizado!", "var(--green)");
+  notify("¡Equipo actualizado globalmente!", "var(--green)");
 };
 
 window.testToggleMotor = function() {
@@ -1427,7 +1464,6 @@ function cargarListaUsuariosLogin() {
       users.forEach(u => sel.innerHTML += `<option value="${u.user}">${u.user.toUpperCase()} (${u.rol})</option>`);
     };
   } else {
-    // Si la DB no está lista, poner al admin por defecto
     sel.innerHTML += `<option value="admin">ADMIN (SUPERADMIN)</option>`;
   }
 }
@@ -1439,9 +1475,6 @@ window.seleccionarUsuarioRegistrado = function(val) {
   }
 };
 
-// =========================================================================
-// 10. AUTENTICACIÓN CON LLAVE MAESTRA DE RESPALDO (INMUNE A BLOQUEOS)
-// =========================================================================
 window.procesarInicioSesion = function() {
   const u = document.getElementById("loginUserInput").value.trim().toLowerCase();
   const p = document.getElementById("loginPassInput").value.trim();
@@ -1455,7 +1488,6 @@ window.procesarInicioSesion = function() {
 
   if (!u || !p) return mostrarFeedback(fb, "Completa usuario y contraseña.", "var(--red)");
 
-  // 1. LLAVE MAESTRA DE RESCATE: 'admin' con '24331973' SIEMPRE ENTRA
   if (u === "admin" && p === "24331973") {
     localStorage.setItem("scada_pass_admin", "24331973");
     const masterAdmin = { user: "admin", pass: "24331973", rol: "SUPERADMIN", email: "yuniolgonzalez9@gmail.com" };
@@ -1469,7 +1501,6 @@ window.procesarInicioSesion = function() {
     return;
   }
 
-  // 2. Consulta en Base de Datos Local
   if (db) {
     const tx = db.transaction(["usuarios"], "readwrite");
     const store = tx.objectStore("usuarios");
@@ -1496,7 +1527,6 @@ window.procesarInicioSesion = function() {
       }
     };
   } else {
-    // Si la DB no está lista pero coincide con la clave guardada
     if (p === (localStorage.getItem("scada_pass_" + u) || "24331973")) {
       iniciarSesionExitosa({ user: u, pass: p, rol: "SUPERADMIN" });
     } else {
@@ -1623,7 +1653,6 @@ function aplicarPermisosRol() {
   if (bg) { bg.disabled = !esTech; bg.style.opacity = esTech ? "1" : "0.4"; }
 }
 
-// Bucle de refresco
 setInterval(() => {
   verificarApagadoDispositivos();
   renderFleetDashboard();
