@@ -1,5 +1,16 @@
 // =========================================================================
-// 1. NOTIFICACIÓN Y NAVEGACIÓN BLINDADA
+// 1. CONFIGURACIÓN DE BASE DE DATOS EN LA NUBE (SUPABASE CLOUD)
+// =========================================================================
+const SUPABASE_URL = "https://gjtqyodpgwfvfvkhlhik.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdqdHF5b2RwZ3dmdmZ2a2hsaGlrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAwNDAzNTYsImV4cCI6MjEwNTYxNjM1Nn0.g8t_PbEityaneKkOUHttQ_cZv50aczLU4Z9la8R4d_g";
+
+// Cliente de Supabase para operaciones en la nube
+const supabase = (window.supabase && window.supabase.createClient) 
+  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) 
+  : null;
+
+// =========================================================================
+// 2. NOTIFICACIÓN Y NAVEGACIÓN BLINDADA
 // =========================================================================
 let toastTimer = null;
 function notify(msg, color = 'var(--cyan)') {
@@ -118,7 +129,7 @@ window.refrescarSistemaCompleto = function() {
   cargarEquiposGuardados();
   renderFleetDashboard();
   if (activityStack[activityStack.length - 1] === 'act-reports') renderizarRegistros();
-  notify("⚡ Sistema sincronizado en tiempo real", "var(--green)");
+  notify("⚡ Sistema sincronizado con la nube", "var(--green)");
 };
 
 window.alternarPantallaCompleta = function() {
@@ -160,7 +171,7 @@ window.cerrarSesionManual = function() {
 };
 
 // =========================================================================
-// 2. BASE DE DATOS LOCAL CON CLAVE DE FÁBRICA 24331973
+// 3. BASE DE DATOS LOCAL Y RECUPERACIÓN DE SESIÓN
 // =========================================================================
 let db;
 const fleet = {};
@@ -168,7 +179,7 @@ const sesionesActivas = {};
 
 function initDB() {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open("AutoclaveFastFleetDB_v15", 1);
+    const req = indexedDB.open("AutoclaveFastFleetDB_v16", 1);
     req.onupgradeneeded = (e) => {
       db = e.target.result;
       if (!db.objectStoreNames.contains("asignaciones")) db.createObjectStore("asignaciones", { keyPath: "mac" });
@@ -182,7 +193,6 @@ function initDB() {
     req.onsuccess = (e) => {
       db = e.target.result;
       
-      // Asegurar que la clave de fábrica sea 24331973
       if (!localStorage.getItem("scada_pass_admin") || localStorage.getItem("scada_pass_admin") === "1234") {
         localStorage.setItem("scada_pass_admin", "24331973");
       }
@@ -202,13 +212,6 @@ function initDB() {
             otpUsado: false,
             fecha: new Date().toISOString()
           });
-        } else {
-          // Actualizar contraseña de fábrica si venía con la anterior
-          const u = ev.target.result;
-          if (u.pass === "1234") {
-            u.pass = "24331973";
-            store.put(u);
-          }
         }
       };
 
@@ -216,6 +219,7 @@ function initDB() {
       cargarListaUsuariosLogin();
       cargarUsuariosUI();
       verificarSesionPersistente();
+      iniciarSuscripcionNubeRealtime(); // Escuchar cambios en la nube
       resolve(db);
     };
     req.onerror = (e) => reject(e.target.error);
@@ -277,7 +281,7 @@ function cargarEquiposGuardados() {
 }
 
 // =========================================================================
-// 3. MOTOR DE REPORTES CON DIAGNÓSTICO CLÍNICO REAL
+// 4. MOTOR DE REPORTES CON PERSISTENCIA EN LA NUBE (SUPABASE)
 // =========================================================================
 function registrarEventoEnSesion(mac, tipo, msg, extra = {}) {
   const ahora = new Date().toISOString();
@@ -336,6 +340,7 @@ function registrarEventoEnSesion(mac, tipo, msg, extra = {}) {
   }
 
   guardarSesionEnDB(ses);
+  guardarSesionEnSupabase(ses); // Guarda simultáneamente en la nube
 }
 
 function guardarSesionEnDB(sesionObj) {
@@ -348,23 +353,65 @@ function guardarSesionEnDB(sesionObj) {
   };
 }
 
+// INSERCIÓN / ACTUALIZACIÓN DIRECTA EN SUPABASE
+async function guardarSesionEnSupabase(sesionObj) {
+  if (!supabase) return;
+  try {
+    const row = {
+      session_id: sesionObj.sessionId,
+      mac: sesionObj.mac,
+      alias: sesionObj.alias,
+      cliente: sesionObj.cliente,
+      modelo: sesionObj.modelo,
+      hora_encendido: sesionObj.horaEncendido,
+      hora_apagado: sesionObj.horaApagado,
+      ciclos_acumulados: sesionObj.ciclosAcumulados || 0,
+      limite_mantenimiento: sesionObj.limiteMantenimiento || 200,
+      temp_max: sesionObj.tempMax || 0,
+      pres_max: sesionObj.presMax || 0,
+      conteo_alarmas: sesionObj.conteoAlarmas || 0,
+      diagnostico_principal: sesionObj.diagnosticoPrincipal,
+      fase_final: sesionObj.faseFinal || "ESPERA",
+      eventos: sesionObj.eventos || [],
+      es_offline: sesionObj.esOffline || false
+    };
+
+    const { error } = await supabase.from('reportes_autoclaves').upsert(row, { onConflict: 'session_id' });
+    if (error) console.error("[SUPABASE ERROR]:", error);
+  } catch(e) {
+    console.error("[SUPABASE EXCEPTION]:", e);
+  }
+}
+
 function procesarPaqueteOfflineSync(mac, paquete) {
-  if (!db || !paquete) return;
+  if (!paquete) return;
   paquete.mac = mac;
   paquete.esOffline = true;
   if (!paquete.fecha) paquete.fecha = new Date().toISOString();
   if (!paquete.diagnosticoPrincipal) paquete.diagnosticoPrincipal = "📦 SINCRONIZADO OFFLINE";
-  
-  const tx = db.transaction(["reportes_sesiones"], "readwrite");
-  tx.objectStore("reportes_sesiones").put(paquete);
-  tx.oncomplete = () => {
-    notify(`📦 Paquete Offline recibido de ${mac}`, "var(--purple)");
-    if (activityStack[activityStack.length - 1] === 'act-reports') renderizarRegistros();
-  };
+
+  guardarSesionEnDB(paquete);
+  guardarSesionEnSupabase(paquete);
+  notify(`📦 Reporte Offline sincronizado en la nube: ${mac}`, "var(--purple)");
+}
+
+// ESCUCHA EN TIEMPO REAL DESDE CUALQUIER DISPOSITIVO
+function iniciarSuscripcionNubeRealtime() {
+  if (!supabase) return;
+  try {
+    supabase
+      .channel('cambios_autoclaves')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'reportes_autoclaves' }, () => {
+        if (activityStack[activityStack.length - 1] === 'act-reports') {
+          renderizarRegistros();
+        }
+      })
+      .subscribe();
+  } catch(e) {}
 }
 
 // =========================================================================
-// 4. CONEXIÓN PRIVADA HIVEMQ CLOUD (CLAVE: 24331973)
+// 5. MQTT PRIVADO HIVEMQ CLOUD (CLAVE: 24331973)
 // =========================================================================
 let mqttClient;
 
@@ -377,7 +424,7 @@ function initMQTT() {
     clean: true,
     keepalive: 60,
     username: "admin_autoclave",
-    password: "24331973" // Clave de fábrica
+    password: "24331973"
   };
 
   mqttClient = mqtt.connect(mqttBroker, mqttOptions);
@@ -392,12 +439,11 @@ function initMQTT() {
     mqttClient.subscribe("autoclave_med_2026/+/reporte_paquete");
   });
 
-  mqttClient.on("error", (err) => {
-    console.error("MQTT Error:", err);
+  mqttClient.on("error", () => {
     const dot = document.getElementById("mqttDot");
     const txt = document.getElementById("mqttStatusText");
     if (dot) dot.className = "dot offline";
-    if (txt) { txt.innerText = "ERROR HIVEMQ"; txt.style.color = "var(--red)"; }
+    if (txt) { txt.innerText = "ERROR RED"; txt.style.color = "var(--red)"; }
   });
 
   mqttClient.on("message", (topic, msg) => {
@@ -540,7 +586,7 @@ function verificarApagadoDispositivos() {
 }
 
 // =========================================================================
-// 5. MONITOR PRINCIPAL
+// 6. RENDERIZADO DEL MONITOR
 // =========================================================================
 function renderFleetDashboard() {
   const container = document.getElementById("fleetLiveContainer");
@@ -627,7 +673,7 @@ function actualizarCardDashboard(mac) {
 }
 
 // =========================================================================
-// 6. DETALLE Y CONTROL DEL EQUIPO
+// 7. DETALLE DEL EQUIPO
 // =========================================================================
 window.abrirDetalleEquipo = function(mac) {
   try {
@@ -882,12 +928,11 @@ function cargarLogsDetalle(mac) {
 }
 
 // =========================================================================
-// 7. CENTRO DE REPORTES AVANZADO
+// 8. CENTRO DE REPORTES: CONSULTA DESDE SUPABASE CLOUD
 // =========================================================================
 let reportesCache = [];
 
-function renderizarRegistros() {
-  if (!db) return;
+async function renderizarRegistros() {
   const devFilter = document.getElementById("filterDeviceSelect")?.value || "TODOS";
   const fType = document.getElementById("filterType")?.value || "TODOS";
   const fDesde = document.getElementById("filterFechaDesde")?.value;
@@ -896,84 +941,130 @@ function renderizarRegistros() {
   const tbody = document.getElementById("auditTableBody");
   if (!tbody) return;
 
-  const tx = db.transaction(["reportes_sesiones"], "readonly");
-  tx.objectStore("reportes_sesiones").getAll().onsuccess = (e) => {
-    let items = e.target.result.reverse();
-    reportesCache = items;
+  let items = [];
 
-    document.getElementById("kpiTotalSesiones").innerText = items.length;
-    const totalCiclos = items.reduce((acc, cur) => acc + (cur.ciclosAcumulados || 0), 0);
-    document.getElementById("kpiTotalCiclos").innerText = totalCiclos;
-    const mantAlerts = items.filter(x => (x.ciclosAcumulados || 0) >= (x.limiteMantenimiento || 200) * 0.8).length;
-    document.getElementById("kpiMantenimientoAlerta").innerText = mantAlerts;
-    const totalAlarmas = items.filter(x => x.conteoAlarmas > 0).length;
-    document.getElementById("kpiTotalAlarmas").innerText = totalAlarmas;
+  // 1. Intentar consultar desde Supabase en la nube
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('reportes_autoclaves')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-    if (devFilter !== "TODOS") items = items.filter(x => x.mac === devFilter);
-    if (fType === "CICLO_OK") items = items.filter(x => x.diagnosticoPrincipal && x.diagnosticoPrincipal.includes("CONFORME"));
-    if (fType === "ALARMA") items = items.filter(x => x.conteoAlarmas > 0);
-    if (fType === "MANT_WARN") items = items.filter(x => (x.ciclosAcumulados || 0) >= (x.limiteMantenimiento || 200) * 0.8);
-    if (fType === "OFFLINE_SYNC") items = items.filter(x => x.esOffline === true);
+      if (!error && data) {
+        items = data.map(r => ({
+          id: r.id,
+          sessionId: r.session_id,
+          mac: r.mac,
+          alias: r.alias || r.mac,
+          cliente: r.cliente || "Clínica",
+          modelo: r.modelo || "Autoclave",
+          fecha: r.created_at,
+          horaEncendido: r.hora_encendido || "--",
+          horaApagado: r.hora_apagado || "--",
+          ciclosAcumulados: r.ciclos_acumulados || 0,
+          limiteMantenimiento: r.limite_mantenimiento || 200,
+          tempMax: parseFloat(r.temp_max) || 0,
+          presMax: parseFloat(r.pres_max) || 0,
+          conteoAlarmas: r.conteo_alarmas || 0,
+          diagnosticoPrincipal: r.diagnostico_principal || r.fase_final,
+          faseFinal: r.fase_final || "ESPERA",
+          eventos: r.eventos || [],
+          esOffline: r.es_offline || false
+        }));
+      }
+    } catch(e) {}
+  }
 
-    if (fDesde) items = items.filter(x => new Date(x.fecha) >= new Date(fDesde));
-    if (fHasta) items = items.filter(x => new Date(x.fecha) <= new Date(fHasta + "T23:59:59"));
+  // 2. Si no hay red o falló Supabase, consultar copia local en IndexedDB
+  if (!items.length && db) {
+    const tx = db.transaction(["reportes_sesiones"], "readonly");
+    const localReq = tx.objectStore("reportes_sesiones").getAll();
+    localReq.onsuccess = (e) => {
+      items = (e.target.result || []).reverse();
+      pintarTablaReportes(items, devFilter, fType, fDesde, fHasta, fText, tbody);
+    };
+    return;
+  }
 
-    if (fText) {
-      items = items.filter(x => 
-        x.mac.toUpperCase().includes(fText) || 
-        x.alias.toUpperCase().includes(fText) || 
-        x.cliente.toUpperCase().includes(fText) ||
-        x.modelo.toUpperCase().includes(fText) ||
-        (x.diagnosticoPrincipal && x.diagnosticoPrincipal.toUpperCase().includes(fText))
-      );
-    }
+  pintarTablaReportes(items, devFilter, fType, fDesde, fHasta, fText, tbody);
+}
 
-    if (!items.length) {
-      tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:30px;">No se encontraron reportes con los criterios indicados.</td></tr>`;
-      return;
-    }
+function pintarTablaReportes(items, devFilter, fType, fDesde, fHasta, fText, tbody) {
+  reportesCache = items;
 
-    tbody.innerHTML = items.map(s => {
-      const ciclos = s.ciclosAcumulados || 0;
-      const limite = s.limiteMantenimiento || 200;
-      const pct = Math.min(100, Math.round((ciclos / limite) * 100));
+  document.getElementById("kpiTotalSesiones").innerText = items.length;
+  const totalCiclos = items.reduce((acc, cur) => acc + (cur.ciclosAcumulados || 0), 0);
+  document.getElementById("kpiTotalCiclos").innerText = totalCiclos;
+  const mantAlerts = items.filter(x => (x.ciclosAcumulados || 0) >= (x.limiteMantenimiento || 200) * 0.8).length;
+  document.getElementById("kpiMantenimientoAlerta").innerText = mantAlerts;
+  const totalAlarmas = items.filter(x => x.conteoAlarmas > 0).length;
+  document.getElementById("kpiTotalAlarmas").innerText = totalAlarmas;
 
-      return `
-        <tr>
-          <td style="text-align:center;"><input type="checkbox" class="check-report-item" value="${s.id}" style="width:18px; height:18px; accent-color:var(--cyan);"></td>
-          <td>
-            <div style="color:var(--cyan); font-weight:700;">${new Date(s.fecha).toLocaleDateString()}</div>
-            <div style="font-size:0.65rem; color:var(--text-muted);">${s.sessionId || s.id}</div>
-          </td>
-          <td>
-            <div style="font-weight:700;">${s.alias}</div>
-            <div style="font-size:0.65rem; color:var(--purple);">MAC: ${s.mac} | ${s.modelo}</div>
-          </td>
-          <td>
-            <div>ON: ${s.horaEncendido}</div>
-            <div style="color:var(--text-muted);">OFF: ${s.horaApagado}</div>
-          </td>
-          <td>
-            <div>${ciclos} de ${limite} ciclos (${pct}%)</div>
-            <div class="health-bar"><div class="health-fill ${pct>=100?'danger':pct>=80?'warn':''}" style="width:${pct}%;"></div></div>
-          </td>
-          <td>T:${(s.tempMax||0).toFixed(1)}°C<br>P:${(s.presMax||0).toFixed(2)}b</td>
-          <td>
-            <div style="font-size:0.75rem; font-weight:700; color:${s.conteoAlarmas > 0 ? 'var(--red)' : (s.diagnosticoPrincipal && s.diagnosticoPrincipal.includes('CONFORME')) ? 'var(--green)' : 'var(--cyan)'};">
-              ${s.diagnosticoPrincipal || 'EN REPOSO'}
-            </div>
-            ${s.esOffline ? '<span class="role-badge role-tech" style="margin-top:2px;">OFFLINE</span>' : ''}
-          </td>
-          <td>
-            <div style="display:flex; gap:4px;">
-              <button class="btn btn-compact" onclick="verPaqueteSesion('${s.sessionId}')">👁️ VER</button>
-              <button class="btn btn-danger btn-compact" style="padding:2px 6px;" onclick="eliminarReporteIndividual(${s.id})">🗑️</button>
-            </div>
-          </td>
-        </tr>
-      `;
-    }).join("");
-  };
+  if (devFilter !== "TODOS") items = items.filter(x => x.mac === devFilter);
+  if (fType === "CICLO_OK") items = items.filter(x => x.diagnosticoPrincipal && x.diagnosticoPrincipal.includes("CONFORME"));
+  if (fType === "ALARMA") items = items.filter(x => x.conteoAlarmas > 0);
+  if (fType === "MANT_WARN") items = items.filter(x => (x.ciclosAcumulados || 0) >= (x.limiteMantenimiento || 200) * 0.8);
+  if (fType === "OFFLINE_SYNC") items = items.filter(x => x.esOffline === true);
+
+  if (fDesde) items = items.filter(x => new Date(x.fecha) >= new Date(fDesde));
+  if (fHasta) items = items.filter(x => new Date(x.fecha) <= new Date(fHasta + "T23:59:59"));
+
+  if (fText) {
+    items = items.filter(x => 
+      x.mac.toUpperCase().includes(fText) || 
+      x.alias.toUpperCase().includes(fText) || 
+      x.cliente.toUpperCase().includes(fText) ||
+      x.modelo.toUpperCase().includes(fText) ||
+      (x.diagnosticoPrincipal && x.diagnosticoPrincipal.toUpperCase().includes(fText))
+    );
+  }
+
+  if (!items.length) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:30px;">No se encontraron reportes con los criterios indicados.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = items.map(s => {
+    const ciclos = s.ciclosAcumulados || 0;
+    const limite = s.limiteMantenimiento || 200;
+    const pct = Math.min(100, Math.round((ciclos / limite) * 100));
+
+    return `
+      <tr>
+        <td style="text-align:center;"><input type="checkbox" class="check-report-item" value="${s.id}" data-session="${s.sessionId}" style="width:18px; height:18px; accent-color:var(--cyan);"></td>
+        <td>
+          <div style="color:var(--cyan); font-weight:700;">${new Date(s.fecha).toLocaleDateString()}</div>
+          <div style="font-size:0.65rem; color:var(--text-muted);">${s.sessionId || s.id}</div>
+        </td>
+        <td>
+          <div style="font-weight:700;">${s.alias}</div>
+          <div style="font-size:0.65rem; color:var(--purple);">MAC: ${s.mac} | ${s.modelo}</div>
+        </td>
+        <td>
+          <div>ON: ${s.horaEncendido}</div>
+          <div style="color:var(--text-muted);">OFF: ${s.horaApagado}</div>
+        </td>
+        <td>
+          <div>${ciclos} de ${limite} ciclos (${pct}%)</div>
+          <div class="health-bar"><div class="health-fill ${pct>=100?'danger':pct>=80?'warn':''}" style="width:${pct}%;"></div></div>
+        </td>
+        <td>T:${(s.tempMax||0).toFixed(1)}°C<br>P:${(s.presMax||0).toFixed(2)}b</td>
+        <td>
+          <div style="font-size:0.75rem; font-weight:700; color:${s.conteoAlarmas > 0 ? 'var(--red)' : (s.diagnosticoPrincipal && s.diagnosticoPrincipal.includes('CONFORME')) ? 'var(--green)' : 'var(--cyan)'};">
+            ${s.diagnosticoPrincipal || 'EN REPOSO'}
+          </div>
+          ${s.esOffline ? '<span class="role-badge role-tech" style="margin-top:2px;">OFFLINE</span>' : ''}
+        </td>
+        <td>
+          <div style="display:flex; gap:4px;">
+            <button class="btn btn-compact" onclick="verPaqueteSesion('${s.sessionId}')">👁️ VER</button>
+            <button class="btn btn-danger btn-compact" style="padding:2px 6px;" onclick="eliminarReporteIndividual('${s.sessionId}')">🗑️</button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join("");
 }
 
 window.verPaqueteSesion = function(sessionId) {
@@ -1040,59 +1131,69 @@ window.toggleSelectAllReports = function(isChecked) {
   document.querySelectorAll(".check-report-item").forEach(c => c.checked = isChecked);
 };
 
-window.eliminarReporteIndividual = function(id) {
+// ELIMINACIÓN SINCRONIZADA (LOCAL + NUBE)
+window.eliminarReporteIndividual = async function(sessionId) {
   if (usuarioActual && usuarioActual.rol === "OPERADOR") return notify("Permiso denegado.", "var(--red)");
-  const tx = db.transaction(["reportes_sesiones"], "readwrite");
-  tx.objectStore("reportes_sesiones").delete(id);
-  tx.oncomplete = () => {
-    renderizarRegistros();
-    notify("Reporte eliminado", "var(--amber)");
-  };
+
+  if (supabase) {
+    try {
+      await supabase.from('reportes_autoclaves').delete().eq('session_id', sessionId);
+    } catch(e) {}
+  }
+
+  renderizarRegistros();
+  notify("Reporte eliminado de la nube", "var(--amber)");
 };
 
-window.eliminarReportesSeleccionados = function() {
+window.eliminarReportesSeleccionados = async function() {
   if (usuarioActual && usuarioActual.rol === "OPERADOR") return notify("Permiso denegado.", "var(--red)");
-  const seleccionados = Array.from(document.querySelectorAll(".check-report-item:checked")).map(c => parseInt(c.value));
+  const seleccionados = Array.from(document.querySelectorAll(".check-report-item:checked")).map(c => c.getAttribute("data-session"));
   if (!seleccionados.length) return notify("Marca al menos un reporte", "var(--amber)");
 
-  const tx = db.transaction(["reportes_sesiones"], "readwrite");
-  const store = tx.objectStore("reportes_sesiones");
-  seleccionados.forEach(id => store.delete(id));
-  tx.oncomplete = () => {
-    renderizarRegistros();
-    notify(`🗑️ ${seleccionados.length} reportes eliminados con éxito`, "var(--amber)");
-  };
+  if (supabase) {
+    try {
+      await supabase.from('reportes_autoclaves').delete().in('session_id', seleccionados);
+    } catch(e) {}
+  }
+
+  renderizarRegistros();
+  notify(`🗑️ ${seleccionados.length} reportes eliminados de la nube`, "var(--amber)");
 };
 
-window.confirmarVaciarDB = function() {
+window.confirmarVaciarDB = async function() {
   if (usuarioActual && usuarioActual.rol !== "SUPERADMIN") return notify("Permiso denegado: solo SuperAdmin", "var(--red)");
-  const tx = db.transaction(["reportes_sesiones"], "readwrite");
-  tx.objectStore("reportes_sesiones").clear();
-  tx.oncomplete = () => {
-    renderizarRegistros();
-    notify("Toda la auditoría fue vaciada", "var(--red)");
-  };
+
+  if (supabase) {
+    try {
+      await supabase.from('reportes_autoclaves').delete().neq('mac', 'NONE');
+    } catch(e) {}
+  }
+
+  if (db) {
+    const tx = db.transaction(["reportes_sesiones"], "readwrite");
+    tx.objectStore("reportes_sesiones").clear();
+  }
+
+  renderizarRegistros();
+  notify("Toda la auditoría en la nube fue vaciada", "var(--red)");
 };
 
 window.exportarRegistrosCSV = function() {
-  const tx = db.transaction(["reportes_sesiones"], "readonly");
-  tx.objectStore("reportes_sesiones").getAll().onsuccess = (e) => {
-    let data = e.target.result || [];
-    if (!data.length) return notify("Sin datos para exportar", "var(--amber)");
-    let csv = "ID_SESION,FECHA,MAC,ALIAS,CLIENTE,MODELO,HORA_ON,HORA_OFF,CICLOS,LIMITE_MANT,T_MAX,P_MAX,DIAGNOSTICO\n";
-    data.forEach(d => {
-      csv += `"${d.sessionId}","${d.fecha}","${d.mac}","${d.alias}","${d.cliente}","${d.modelo}","${d.horaEncendido}","${d.horaApagado}","${d.ciclosAcumulados}","${d.limiteMantenimiento}","${d.tempMax}","${d.presMax}","${d.diagnosticoPrincipal||d.faseFinal}"\n`;
-    });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
-    a.download = `reporte_sesiones_${Date.now()}.csv`;
-    a.click();
-    notify("Archivo CSV descargado", "var(--green)");
-  };
+  const data = reportesCache || [];
+  if (!data.length) return notify("Sin datos para exportar", "var(--amber)");
+  let csv = "ID_SESION,FECHA,MAC,ALIAS,CLIENTE,MODELO,HORA_ON,HORA_OFF,CICLOS,LIMITE_MANT,T_MAX,P_MAX,DIAGNOSTICO\n";
+  data.forEach(d => {
+    csv += `"${d.sessionId}","${d.fecha}","${d.mac}","${d.alias}","${d.cliente}","${d.modelo}","${d.horaEncendido}","${d.horaApagado}","${d.ciclosAcumulados}","${d.limiteMantenimiento}","${d.tempMax}","${d.presMax}","${d.diagnosticoPrincipal||d.faseFinal}"\n`;
+  });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+  a.download = `reporte_sesiones_${Date.now()}.csv`;
+  a.click();
+  notify("Archivo CSV descargado", "var(--green)");
 };
 
 // =========================================================================
-// 8. FOTA HUB, GESTIÓN FLOTA Y USUARIOS
+// 9. FOTA HUB, GESTIÓN FLOTA Y USUARIOS
 // =========================================================================
 let currentFotaFilter = 'ALL';
 window.filterFotaList = function(tipo) { currentFotaFilter = tipo; renderFotaLiveList(); };
@@ -1288,7 +1389,7 @@ window.eliminarUsuario = function(u) {
   tx.oncomplete = () => { cargarUsuariosUI(); cargarListaUsuariosLogin(); notify("Usuario eliminado", "var(--amber)"); };
 };
 
-// AUTENTICACIÓN CON CONTRASEÑA DE FÁBRICA 24331973
+// AUTENTICACIÓN
 function cargarListaUsuariosLogin() {
   if (!db) return;
   const tx = db.transaction(["usuarios"], "readonly");
