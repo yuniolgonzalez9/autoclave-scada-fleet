@@ -10,30 +10,29 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#020409">
   
-  <title>AUTOCLAVE SCADA // COMMAND DECK</title>
+  <title>AUTOCLAVE SCADA // ENTERPRISE DECK</title>
   
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;800&family=Orbitron:wght@600;800;900&display=swap" rel="stylesheet">
   
-  <!-- CSS CON CACHE-BUSTER V9 -->
-  <link rel="stylesheet" href="style.css?v=9">
+  <link rel="stylesheet" href="style.css?v=10">
   
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
-<body>
+<body class="unauthenticated">
 
-  <!-- TOAST HUD FLOTANTE -->
+  <!-- AVISO TOAST FLOTANTE -->
   <div id="toastApp" class="toast-hud">Acción completada</div>
 
-  <!-- BARRA DE COMANDO SUPERIOR -->
-  <header class="hud-topbar" id="topAppBar" style="display: none;">
+  <!-- BARRA SUPERIOR DE COMANDO -->
+  <header class="hud-topbar" id="topAppBar">
     <div class="hud-left">
       <button id="btnGlobalBack" class="btn btn-sm btn-secondary" style="display: none;" onclick="goBackActivity()">
         ◀ VOLVER
       </button>
       
-      <!-- LOGO CON REACTOR GIRATORIO ANIMADO -->
+      <!-- LOGO CON REACTOR GIRATORIO -->
       <div class="hud-brand">
         <div class="reactor-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -48,10 +47,10 @@
         </div>
       </div>
       
-      <!-- BALIZAS DE RED CON PULSO VERDE -->
+      <!-- INDICADORES EN VIVO -->
       <div class="network-indicators">
         <span class="status-pill">
-          <span class="beacon online" id="mqttDot"></span>
+          <span class="beacon" id="mqttDot"></span>
           <span id="mqttStatusText">HIVEMQ 8884</span>
         </span>
         <span class="status-pill sync-pill">
@@ -68,7 +67,6 @@
         <span class="user-role" id="currentUserRoleBadge">SUPERADMIN</span>
       </div>
 
-      <!-- BOTÓN ENGRANAJE CON MENÚ DESPLEGABLE -->
       <div class="gear-menu-wrapper">
         <button class="btn btn-gear" id="btnGearToggle" onclick="toggleGearMenu(event)">
           ⚙️
@@ -94,14 +92,19 @@
     </div>
   </header>
 
-  <!-- NAVEGACIÓN SUPERIOR ESCRITORIO -->
-  <nav class="desktop-nav" id="desktopNavBar" style="display: none;">
-    <button class="nav-tab active" data-tab="act-telemetry" onclick="openTopLevel('act-telemetry')">⚡ TELEMETRÍA EN VIVO</button>
-    <button class="nav-tab" data-tab="act-fleet-mgmt" onclick="openTopLevel('act-fleet-mgmt')">🏢 GESTIÓN FLOTA</button>
-    <button class="nav-tab" data-tab="act-fota" onclick="openTopLevel('act-fota')">🚀 FOTA HUB</button>
-    <button class="nav-tab" data-tab="act-reports" onclick="openTopLevel('act-reports')">📋 CENTRO DE REPORTES</button>
-    <button class="nav-tab" id="tabNavUsers" data-tab="act-users" onclick="openTopLevel('act-users')">🛡️ SEGURIDAD</button>
-  </nav>
+  <!-- CONTENEDOR DESPLEGABLE HORIZONTAL (DOCK PLEGABLE) -->
+  <div class="desktop-dock-container" id="desktopDockContainer">
+    <button class="btn-dock-toggle" onclick="toggleHorizontalDock()">
+      <span class="dock-arrow" id="dockArrow">◀</span> 🗂️ SECCIONES
+    </button>
+    <nav class="desktop-nav-slider open" id="desktopNavBar">
+      <button class="btn nav-btn active" data-tab="act-telemetry" onclick="openTopLevel('act-telemetry')">⚡ TELEMETRÍA</button>
+      <button class="btn nav-btn" data-tab="act-fleet-mgmt" onclick="openTopLevel('act-fleet-mgmt')">🏢 GESTIÓN FLOTA</button>
+      <button class="btn nav-btn" data-tab="act-fota" onclick="openTopLevel('act-fota')">🚀 FOTA HUB</button>
+      <button class="btn nav-btn" data-tab="act-reports" onclick="openTopLevel('act-reports')">📋 REPORTES</button>
+      <button class="btn nav-btn" id="tabNavUsers" data-tab="act-users" onclick="openTopLevel('act-users')">🛡️ ACCESOS</button>
+    </nav>
+  </div>
 
   <main class="app-viewport" id="appViewport">
 
@@ -129,7 +132,7 @@
 
           <div class="input-group">
             <label>CLAVE DE ACCESO [ENTER]:</label>
-            <input type="password" id="loginPassInput" class="input-field" placeholder="Clave: 24331973" required>
+            <input type="password" id="loginPassInput" class="input-field" placeholder="Clave de fábrica: 24331973" required>
           </div>
 
           <button type="submit" class="btn btn-primary w-full" style="margin-top: 6px;">
@@ -170,9 +173,6 @@
     <section id="act-change-pass" class="activity">
       <div class="card auth-box">
         <div style="font-family: 'Orbitron'; font-size: 1.1rem; color: var(--cyan); text-align: center; margin-bottom: 8px;">MODIFICAR CONTRASEÑA</div>
-        <p style="font-size: 0.72rem; color: var(--text-muted); text-align: center; margin-bottom: 18px;">
-          Ingresa tu nueva clave permanente. La anterior quedará anulada.
-        </p>
         <form onsubmit="event.preventDefault(); guardarNuevaContrasena();">
           <div class="input-group">
             <label>NUEVA CLAVE:</label>
@@ -188,18 +188,15 @@
       </div>
     </section>
 
-    <!-- ==================================================================== -->
-    <!-- ACTIVITY 1: TELEMETRÍA (CON FILTRO TÁCTICO: CERO MANGÚ)               -->
-    <!-- ==================================================================== -->
+    <!-- ACTIVITY 1: TELEMETRÍA (CON FILTRO TÁCTICO) -->
     <section id="act-telemetry" class="activity">
       <div class="section-title-bar">
         <div>
           <div class="title-primary">ESTADO DE FLOTA EN VIVO</div>
-          <div class="title-secondary">CONSULTA Y RECEPCIÓN CONTINUA VÍA HIVEMQ CLOUD</div>
+          <div class="title-secondary">RECEPCIÓN CONTINUA VÍA HIVEMQ CLOUD</div>
         </div>
       </div>
 
-      <!-- SELECTOR TÁCTICO: SOLO MUESTRA ONLINE POR DEFECTO -->
       <div class="telemetry-filter-bar">
         <button class="btn btn-sm btn-filter active" id="filterBtnOnline" onclick="setFleetHealthFilter('ONLINE')">
           🟢 EN LÍNEA (<span id="countOnline">0</span>)
@@ -220,9 +217,7 @@
       </div>
     </section>
 
-    <!-- ==================================================================== -->
-    <!-- ACTIVITY 2: DETALLE DEL EQUIPO (ACTIVIDAD HIJA)                      -->
-    <!-- ==================================================================== -->
+    <!-- ACTIVITY 2: DETALLE DEL EQUIPO (ACTIVIDAD HIJA) -->
     <section id="act-device-detail" class="activity activity-child">
       <div class="card" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 16px;">
         <div>
@@ -398,9 +393,9 @@
 
     <!-- ACTIVITY 5: REPORTES -->
     <section id="act-reports" class="activity">
-      <div class="activity-header">
+      <div class="section-title-bar">
         <div>
-          <div class="activity-title">CENTRO DE AUDITORÍA CLÍNICA</div>
+          <div class="title-primary">CENTRO DE AUDITORÍA CLÍNICA</div>
           <div style="font-size: 0.65rem; color: var(--text-muted);">REPORTES DE CICLO 24/7 Y SALUD PREVENTIVA</div>
         </div>
         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
@@ -545,8 +540,8 @@
 
   </main>
 
-  <!-- BARRA DE NAVEGACIÓN INFERIOR PARA MÓVILES -->
-  <nav class="mobile-bottom-nav" id="mobileBottomNav" style="display: none;">
+  <!-- BARRA DE NAVEGACIÓN INFERIOR PARA MÓVILES (SOLO VISIBLE CUANDO ESTÁ AUTENTICADO) -->
+  <nav class="mobile-bottom-nav" id="mobileBottomNav">
     <button class="m-tab active" data-tab="act-telemetry" onclick="openTopLevel('act-telemetry')">
       <span class="m-icon">⚡</span>
       <span class="m-label">Flota</span>
@@ -569,6 +564,6 @@
     </button>
   </nav>
 
-  <script src="app.js?v=9"></script>
+  <script src="app.js?v=10"></script>
 </body>
 </html>
