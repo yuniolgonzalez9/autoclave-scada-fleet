@@ -15,10 +15,12 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;800&family=Orbitron:wght@600;800;900&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="style.css?v=10">
+  <link rel="stylesheet" href="style.css?v=11">
   
+  <!-- Dependencias externas -->
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body class="unauthenticated">
 
@@ -97,7 +99,7 @@
     <button class="btn-dock-toggle" onclick="toggleHorizontalDock()">
       <span class="dock-arrow" id="dockArrow">◀</span> 🗂️ SECCIONES
     </button>
-    <nav class="desktop-nav-slider open" id="desktopNavBar">
+    <nav class="desktop-nav-slider" id="desktopNavBar">
       <button class="btn nav-btn active" data-tab="act-telemetry" onclick="openTopLevel('act-telemetry')">⚡ TELEMETRÍA</button>
       <button class="btn nav-btn" data-tab="act-fleet-mgmt" onclick="openTopLevel('act-fleet-mgmt')">🏢 GESTIÓN FLOTA</button>
       <button class="btn nav-btn" data-tab="act-fota" onclick="openTopLevel('act-fota')">🚀 FOTA HUB</button>
@@ -141,7 +143,7 @@
         </form>
 
         <div style="text-align: center; margin-top: 18px;">
-          <button class="btn btn-secondary w-full" style="font-size: 0.72rem;" onclick="openTopLevel('act-recovery')">
+          <button class="btn btn-secondary w-full" style="font-size: 0.72rem;" onclick="abrirRecuperacion()">
             ❓ ¿Olvidaste tu contraseña? (Recuperar Clave)
           </button>
         </div>
@@ -235,11 +237,13 @@
 
       <div class="subtab-slider">
         <button class="btn btn-sm nav-tab active" id="btnSubTele" onclick="switchDetailTab('tab-det-tele')">📊 SENSORES & ESTADO</button>
+        <button class="btn btn-sm nav-tab" id="btnSubGraph" onclick="switchDetailTab('tab-det-graph')">📈 CURVA ESTERILIZACIÓN</button>
         <button class="btn btn-sm nav-tab" id="btnSubCfg" onclick="switchDetailTab('tab-det-cfg')">⚙️ NVS & PARÁMETROS</button>
         <button class="btn btn-sm nav-tab" id="btnSubFicha" onclick="switchDetailTab('tab-det-ficha')">🏢 ASIGNAR CLIENTE</button>
         <button class="btn btn-sm nav-tab" id="btnSubLogs" onclick="switchDetailTab('tab-det-logs')">📋 HISTORIAL DE CICLOS</button>
       </div>
 
+      <!-- SUBTAB 1: SENSORES -->
       <div id="tab-det-tele" class="detail-subview">
         <div class="card">
           <div class="gauge-grid" id="containerDynamicGauges"></div>
@@ -252,6 +256,17 @@
         </div>
       </div>
 
+      <!-- SUBTAB 2: GRÁFICO CLÍNICO EN TIEMPO REAL -->
+      <div id="tab-det-graph" class="detail-subview" style="display: none;">
+        <div class="card">
+          <div style="font-family:'Orbitron'; font-size:0.85rem; color:var(--cyan); margin-bottom:10px;">MONITOR DE PRESIÓN Y TEMPERATURA EN TIEMPO REAL</div>
+          <div style="position: relative; height: 320px; width: 100%;">
+            <canvas id="realtimeSterileChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- SUBTAB 3: CONFIGURACIÓN DINÁMICA -->
       <div id="tab-det-cfg" class="detail-subview" style="display: none;">
         <div class="card">
           <form id="formDynamicParams" onsubmit="event.preventDefault(); guardarParametrosDinamicos();">
@@ -261,6 +276,7 @@
         </div>
       </div>
 
+      <!-- SUBTAB 4: FICHA DE CLIENTE -->
       <div id="tab-det-ficha" class="detail-subview" style="display: none;">
         <div class="card">
           <form onsubmit="event.preventDefault(); guardarFichaDetalle();">
@@ -281,6 +297,7 @@
         </div>
       </div>
 
+      <!-- SUBTAB 5: HISTORIAL -->
       <div id="tab-det-logs" class="detail-subview" style="display: none;">
         <div class="card">
           <div style="font-size: 0.8rem; color: var(--cyan); font-weight: 800; margin-bottom: 12px;">HISTORIAL DE ESTE EQUIPO:</div>
@@ -540,7 +557,7 @@
 
   </main>
 
-  <!-- BARRA DE NAVEGACIÓN INFERIOR PARA MÓVILES (SOLO VISIBLE CUANDO ESTÁ AUTENTICADO) -->
+  <!-- BARRA DE NAVEGACIÓN INFERIOR PARA MÓVILES -->
   <nav class="mobile-bottom-nav" id="mobileBottomNav">
     <button class="m-tab active" data-tab="act-telemetry" onclick="openTopLevel('act-telemetry')">
       <span class="m-icon">⚡</span>
@@ -564,6 +581,6 @@
     </button>
   </nav>
 
-  <script src="app.js?v=10"></script>
+  <script src="app.js?v=11"></script>
 </body>
 </html>
