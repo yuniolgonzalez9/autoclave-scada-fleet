@@ -15,9 +15,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;800&family=Orbitron:wght@600;800;900&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="style.css?v=11">
+  <link rel="stylesheet" href="style.css?v=12">
   
-  <!-- Dependencias externas -->
+  <!-- Dependencias Externas Esenciales -->
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -27,7 +27,20 @@
   <!-- AVISO TOAST FLOTANTE -->
   <div id="toastApp" class="toast-hud">Acción completada</div>
 
-  <!-- BARRA SUPERIOR DE COMANDO -->
+  <!-- MODAL DE CONFIRMACIÓN TÁCTIL (PREVIENE ACCIDENTES EN MÓVIL) -->
+  <div id="modalConfirmOverlay" class="modal-overlay" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-icon" id="modalConfirmIcon">⚠️</div>
+      <div class="modal-title" id="modalConfirmTitle">CONFIRMAR ACCIÓN</div>
+      <div class="modal-desc" id="modalConfirmMsg">¿Estás seguro de ejecutar esta operación?</div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary flex-1" onclick="cerrarModalConfirmacion(false)">CANCELAR</button>
+        <button class="btn btn-danger flex-1" id="btnModalConfirmOk" onclick="cerrarModalConfirmacion(true)">EJECUTAR</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- BARRA SUPERIOR DE COMANDO (HUD COMMAND BAR) -->
   <header class="hud-topbar" id="topAppBar">
     <div class="hud-left">
       <button id="btnGlobalBack" class="btn btn-sm btn-secondary" style="display: none;" onclick="goBackActivity()">
@@ -56,8 +69,8 @@
           <span id="mqttStatusText">HIVEMQ 8884</span>
         </span>
         <span class="status-pill sync-pill">
-          <span class="beacon online"></span>
-          <span>NUBE 24/7</span>
+          <span class="beacon online" id="syncDot"></span>
+          <span id="syncStatusText">NUBE SINCRONIZADA</span>
         </span>
       </div>
     </div>
@@ -103,7 +116,7 @@
       <button class="btn nav-btn active" data-tab="act-telemetry" onclick="openTopLevel('act-telemetry')">⚡ TELEMETRÍA</button>
       <button class="btn nav-btn" data-tab="act-fleet-mgmt" onclick="openTopLevel('act-fleet-mgmt')">🏢 GESTIÓN FLOTA</button>
       <button class="btn nav-btn" data-tab="act-fota" onclick="openTopLevel('act-fota')">🚀 FOTA HUB</button>
-      <button class="btn nav-btn" data-tab="act-reports" onclick="openTopLevel('act-reports')">📋 REPORTES</button>
+      <button class="btn nav-btn" data-tab="act-reports" onclick="openTopLevel('act-reports')">📋 REPORTES & AUDITORÍA</button>
       <button class="btn nav-btn" id="tabNavUsers" data-tab="act-users" onclick="openTopLevel('act-users')">🛡️ ACCESOS</button>
     </nav>
   </div>
@@ -134,7 +147,7 @@
 
           <div class="input-group">
             <label>CLAVE DE ACCESO [ENTER]:</label>
-            <input type="password" id="loginPassInput" class="input-field" placeholder="Clave de fábrica: 24331973" required>
+            <input type="password" id="loginPassInput" class="input-field" placeholder="Clave de acceso" required>
           </div>
 
           <button type="submit" class="btn btn-primary w-full" style="margin-top: 6px;">
@@ -231,7 +244,7 @@
         </div>
         <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
           <span class="status-badge" id="detOnlineBadge"><span class="dot offline"></span> OFFLINE</span>
-          <button class="btn btn-sm btn-danger" onclick="eliminarDispositivoActual()">🗑️ ELIMINAR</button>
+          <button class="btn btn-sm btn-danger" onclick="solicitarEliminacionActual()">🗑️ ELIMINAR</button>
         </div>
       </div>
 
@@ -249,18 +262,21 @@
           <div class="gauge-grid" id="containerDynamicGauges"></div>
           <div id="detAlarmaBanner" class="alarm-callout">⚠️ ALARMA: <span id="detAlarmaTexto"></span></div>
           <div class="button-row">
-            <button class="btn btn-success flex-2" onclick="enviarComandoDetalle('INICIAR_CICLO')">▶ INICIAR CICLO</button>
-            <button class="btn btn-danger flex-1" onclick="enviarComandoDetalle('ABORTAR_CICLO')">⏹ PARO EMERGENCIA</button>
-            <button class="btn btn-warn flex-1" onclick="enviarComandoDetalle('RESET_ALARMA')">🔄 RESET ALARMA</button>
+            <button class="btn btn-success flex-2" onclick="pedirConfirmacionComando('INICIAR_CICLO', '¿Deseas INICIAR el ciclo de esterilización en este equipo?', '▶ INICIAR')">▶ INICIAR CICLO</button>
+            <button class="btn btn-danger flex-1" onclick="pedirConfirmacionComando('ABORTAR_CICLO', '⚠️ ¿Deseas aplicar PARO DE EMERGENCIA y despresurizar de inmediato?', '⏹ ABORTAR')">⏹ PARO EMERGENCIA</button>
+            <button class="btn btn-warn flex-1" onclick="pedirConfirmacionComando('RESET_ALARMA', '¿Restablecer el estado de alarma de la cámara?', '🔄 RESET')">🔄 RESET ALARMA</button>
           </div>
         </div>
       </div>
 
-      <!-- SUBTAB 2: GRÁFICO CLÍNICO EN TIEMPO REAL -->
+      <!-- SUBTAB 2: CURVA CLÍNICA EN TIEMPO REAL (CHART.JS) -->
       <div id="tab-det-graph" class="detail-subview" style="display: none;">
         <div class="card">
-          <div style="font-family:'Orbitron'; font-size:0.85rem; color:var(--cyan); margin-bottom:10px;">MONITOR DE PRESIÓN Y TEMPERATURA EN TIEMPO REAL</div>
-          <div style="position: relative; height: 320px; width: 100%;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+            <div style="font-family:'Orbitron'; font-size:0.85rem; color:var(--cyan); font-weight:800;">MONITOR DINÁMICO T° vs PRESIÓN</div>
+            <span style="font-size:0.68rem; color:var(--text-muted);">Muestreo continuo cada 2 segundos</span>
+          </div>
+          <div style="position: relative; height: 330px; width: 100%;">
             <canvas id="realtimeSterileChart"></canvas>
           </div>
         </div>
@@ -297,7 +313,7 @@
         </div>
       </div>
 
-      <!-- SUBTAB 5: HISTORIAL -->
+      <!-- SUBTAB 5: HISTORIAL ESPECÍFICO -->
       <div id="tab-det-logs" class="detail-subview" style="display: none;">
         <div class="card">
           <div style="font-size: 0.8rem; color: var(--cyan); font-weight: 800; margin-bottom: 12px;">HISTORIAL DE ESTE EQUIPO:</div>
@@ -350,7 +366,7 @@
             </div>
           </div>
           <div id="fotaDevicesLiveList" style="max-height: 260px; overflow-y: auto; margin-bottom: 14px;"></div>
-          <button class="btn btn-primary w-full" id="btnExecuteFota" onclick="ejecutarFotaSeleccionados()">🚀 TRANSMITIR ACTUALIZACIÓN FOTA</button>
+          <button class="btn btn-primary w-full" id="btnExecuteFota" onclick="pedirConfirmacionFota()">🚀 TRANSMITIR ACTUALIZACIÓN FOTA</button>
         </div>
       </div>
     </section>
@@ -408,35 +424,42 @@
       </div>
     </section>
 
-    <!-- ACTIVITY 5: REPORTES -->
+    <!-- ACTIVITY 5: REPORTES & GESTIÓN DE ALMACENAMIENTO -->
     <section id="act-reports" class="activity">
       <div class="section-title-bar">
         <div>
           <div class="title-primary">CENTRO DE AUDITORÍA CLÍNICA</div>
-          <div style="font-size: 0.65rem; color: var(--text-muted);">REPORTES DE CICLO 24/7 Y SALUD PREVENTIVA</div>
+          <div style="font-size: 0.65rem; color: var(--text-muted);">GESTIÓN ROBUSTA DE REGISTROS, COPIAS DE SEGURIDAD Y NORMAS MÉDICAS</div>
         </div>
+        
+        <!-- HERRAMIENTAS DE GESTIÓN DE DATOS -->
         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <button class="btn btn-sm btn-secondary" onclick="descargarBackupJSON()" title="Copia de seguridad local JSON">💾 BACKUP JSON</button>
+          <button class="btn btn-sm btn-secondary" onclick="document.getElementById('inputRestoreJSON').click()" title="Restaurar copia local">📤 RESTAURAR</button>
+          <input type="file" id="inputRestoreJSON" accept=".json" style="display:none;" onchange="restaurarBackupJSON(this.files)">
+          <button class="btn btn-sm btn-secondary" onclick="exportarRegistrosCSV()">📥 EXPORTAR CSV</button>
           <button class="btn btn-sm btn-warn" onclick="eliminarReportesSeleccionados()">🗑️ ELIMINAR MARCADOS</button>
           <button class="btn btn-sm btn-danger" id="btnVaciarLogs" onclick="confirmarVaciarDB()">🧹 VACIAR NUBE</button>
-          <button class="btn btn-sm btn-secondary" onclick="exportarRegistrosCSV()">📥 EXPORTAR CSV</button>
         </div>
       </div>
 
+      <!-- KPIS AUDITABLES -->
       <div class="kpi-grid">
         <div class="kpi-card"><div class="kpi-val" id="kpiTotalSesiones">0</div><div class="kpi-lbl">SESIONES AUDITADAS</div></div>
-        <div class="kpi-card"><div class="kpi-val text-green" id="kpiTotalCiclos">0</div><div class="kpi-lbl">CICLOS ESTÉRILES</div></div>
+        <div class="kpi-card"><div class="kpi-val text-green" id="kpiTotalCiclos">0</div><div class="kpi-lbl">CICLOS CONFORMES</div></div>
         <div class="kpi-card"><div class="kpi-val text-amber" id="kpiMantenimientoAlerta">0</div><div class="kpi-lbl">ALERTAS MANTENIMIENTO</div></div>
         <div class="kpi-card"><div class="kpi-val text-red" id="kpiTotalAlarmas">0</div><div class="kpi-lbl">INCIDENTES TÉRMICOS</div></div>
       </div>
 
-      <div class="card" style="margin-bottom: 14px; padding: 12px;">
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px;">
+      <!-- FILTRADO AVANZADO Y CONTROL DE CONSULTA -->
+      <div class="card" style="margin-bottom: 14px; padding: 14px;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px;">
           <div>
-            <label style="font-size: 0.68rem; color: var(--text-muted);">EQUIPO:</label>
+            <label style="font-size: 0.68rem; color: var(--cyan); font-weight:800;">EQUIPO:</label>
             <select id="filterDeviceSelect" class="input-field" onchange="renderizarRegistros()"><option value="TODOS">TODOS LOS EQUIPOS</option></select>
           </div>
           <div>
-            <label style="font-size: 0.68rem; color: var(--text-muted);">FILTRAR ESTADO:</label>
+            <label style="font-size: 0.68rem; color: var(--cyan); font-weight:800;">FILTRAR ESTADO:</label>
             <select id="filterType" class="input-field" onchange="renderizarRegistros()">
               <option value="TODOS">TODAS LAS SESIONES</option>
               <option value="CICLO_OK">CICLOS COMPLETADOS (CONFORME)</option>
@@ -446,15 +469,24 @@
             </select>
           </div>
           <div>
-            <label style="font-size: 0.68rem; color: var(--text-muted);">DESDE:</label>
+            <label style="font-size: 0.68rem; color: var(--cyan); font-weight:800;">DESDE:</label>
             <input type="date" id="filterFechaDesde" class="input-field" onchange="renderizarRegistros()">
           </div>
           <div>
-            <label style="font-size: 0.68rem; color: var(--text-muted);">HASTA:</label>
+            <label style="font-size: 0.68rem; color: var(--cyan); font-weight:800;">HASTA:</label>
             <input type="date" id="filterFechaHasta" class="input-field" onchange="renderizarRegistros()">
           </div>
           <div>
-            <label style="font-size: 0.68rem; color: var(--text-muted);">BUSCADOR UNIVERSAL [ENTER]:</label>
+            <label style="font-size: 0.68rem; color: var(--cyan); font-weight:800;">LÍMITE CONSULTA:</label>
+            <select id="filterLimit" class="input-field" onchange="renderizarRegistros()">
+              <option value="50">Últimos 50 registros</option>
+              <option value="100" selected>Últimos 100 registros</option>
+              <option value="300">Últimos 300 registros</option>
+              <option value="ALL">Sin límite (Todos)</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size: 0.68rem; color: var(--cyan); font-weight:800;">BUSCADOR RÁPIDO:</label>
             <input type="text" id="filterInput" class="input-field" placeholder="Buscar texto, clínica..." onkeyup="renderizarRegistros()">
           </div>
         </div>
@@ -479,7 +511,7 @@
       </div>
     </section>
 
-    <!-- ACTIVITY: VISOR DETALLADO -->
+    <!-- ACTIVITY: VISOR DETALLADO DEL REPORTE -->
     <section id="act-report-view" class="activity activity-child">
       <div class="card" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
         <div>
@@ -581,6 +613,6 @@
     </button>
   </nav>
 
-  <script src="app.js?v=11"></script>
+  <script src="app.js?v=12"></script>
 </body>
 </html>
