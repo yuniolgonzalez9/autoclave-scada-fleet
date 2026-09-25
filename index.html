@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;800&family=Orbitron:wght@600;800;900&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="style.css?v=11">
+  <link rel="stylesheet" href="style.css?v=10">
   
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -92,7 +92,7 @@
     </div>
   </header>
 
-  <!-- DOCK DESPLEGABLE HORIZONTAL -->
+  <!-- CONTENEDOR DESPLEGABLE HORIZONTAL (DOCK PLEGABLE) -->
   <div class="desktop-dock-container" id="desktopDockContainer">
     <button class="btn-dock-toggle" onclick="toggleHorizontalDock()">
       <span class="dock-arrow" id="dockArrow">◀</span> 🗂️ SECCIONES
@@ -132,7 +132,7 @@
 
           <div class="input-group">
             <label>CLAVE DE ACCESO [ENTER]:</label>
-            <input type="password" id="loginPassInput" class="input-field" placeholder="Clave: 24331973" required>
+            <input type="password" id="loginPassInput" class="input-field" placeholder="Clave de fábrica: 24331973" required>
           </div>
 
           <button type="submit" class="btn btn-primary w-full" style="margin-top: 6px;">
@@ -173,9 +173,6 @@
     <section id="act-change-pass" class="activity">
       <div class="card auth-box">
         <div style="font-family: 'Orbitron'; font-size: 1.1rem; color: var(--cyan); text-align: center; margin-bottom: 8px;">MODIFICAR CONTRASEÑA</div>
-        <p style="font-size: 0.72rem; color: var(--text-muted); text-align: center; margin-bottom: 18px;">
-          Ingresa tu nueva clave permanente. La anterior quedará anulada.
-        </p>
         <form onsubmit="event.preventDefault(); guardarNuevaContrasena();">
           <div class="input-group">
             <label>NUEVA CLAVE:</label>
@@ -396,9 +393,9 @@
 
     <!-- ACTIVITY 5: REPORTES -->
     <section id="act-reports" class="activity">
-      <div class="activity-header">
+      <div class="section-title-bar">
         <div>
-          <div class="activity-title">CENTRO DE AUDITORÍA CLÍNICA</div>
+          <div class="title-primary">CENTRO DE AUDITORÍA CLÍNICA</div>
           <div style="font-size: 0.65rem; color: var(--text-muted);">REPORTES DE CICLO 24/7 Y SALUD PREVENTIVA</div>
         </div>
         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
@@ -543,7 +540,7 @@
 
   </main>
 
-  <!-- BARRA DE NAVEGACIÓN INFERIOR PARA MÓVILES -->
+  <!-- BARRA DE NAVEGACIÓN INFERIOR PARA MÓVILES (SOLO VISIBLE CUANDO ESTÁ AUTENTICADO) -->
   <nav class="mobile-bottom-nav" id="mobileBottomNav">
     <button class="m-tab active" data-tab="act-telemetry" onclick="openTopLevel('act-telemetry')">
       <span class="m-icon">⚡</span>
@@ -567,6 +564,6 @@
     </button>
   </nav>
 
-  <script src="app.js?v=11"></script>
+  <script src="app.js?v=10"></script>
 </body>
 </html>
