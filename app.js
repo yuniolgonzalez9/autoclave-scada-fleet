@@ -1,5 +1,5 @@
 // =========================================================================
-// 1. CONFIGURACIÓN SUPABASE CLOUD (BASE DE DATOS EN LA NUBE 24/7)
+// 1. SUPABASE CLOUD (BASE DE DATOS 24/7)
 // =========================================================================
 const SUPABASE_URL = "https://gjtqyodpgwfvfvkhlhik.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdqdHF5b2RwZ3dmdmZ2a2hsaGlrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAwNDAzNTYsImV4cCI6MjEwNTYxNjM1Nn0.g8t_PbEityaneKkOUHttQ_cZv50aczLU4Z9la8R4d_g";
@@ -9,13 +9,14 @@ const sbClient = (window.supabase && window.supabase.createClient)
   : null;
 
 // =========================================================================
-// 2. ENRUTADOR JERÁRQUICO TIPO APP NATIVA (ROUTER 2.0)
+// 2. ENRUTADOR NATIVO TIPO APP
 // =========================================================================
 let currentTopLevel = 'act-telemetry';
 let currentActivity = 'act-login';
 let currentInspectedMAC = null;
 let currentDetailSubTab = 'tab-det-tele';
 let currentViewingReport = null;
+let currentHealthFilter = 'ONLINE'; // Por defecto solo muestra 100% ONLINE (Sin mezclas)
 let usuarioActual = null;
 let ultimoToqueAtras = 0;
 
@@ -83,7 +84,7 @@ function renderScreen(screenId) {
   if (target) target.classList.add('active');
 
   if (!esPublico && !esPantallaHija) {
-    document.querySelectorAll('.d-tab, .m-tab').forEach(t => {
+    document.querySelectorAll('.nav-tab, .m-tab').forEach(t => {
       t.classList.toggle('active', t.getAttribute('data-tab') === screenId);
     });
   }
@@ -95,7 +96,7 @@ function renderScreen(screenId) {
 
 function guardarRutaNavegacion() {
   if (usuarioActual) {
-    localStorage.setItem("scada_nav_route_v2", JSON.stringify({
+    localStorage.setItem("scada_nav_route_v4", JSON.stringify({
       topLevel: currentTopLevel,
       activity: currentActivity,
       mac: currentInspectedMAC,
@@ -116,7 +117,45 @@ function notify(msg, color = 'var(--cyan)') {
 }
 
 // =========================================================================
-// 3. PERSISTENCIA DE SESIÓN & BASE DE DATOS LOCAL
+// 3. MENÚ ENGRANAJE ⚙️ Y PANTALLA COMPLETA
+// =========================================================================
+window.toggleGearMenu = function(e) {
+  if (e) e.stopPropagation();
+  const menu = document.getElementById("gearDropdownMenu");
+  if (menu) {
+    menu.style.display = (menu.style.display === "block") ? "none" : "block";
+  }
+};
+
+window.closeGearMenu = function() {
+  const menu = document.getElementById("gearDropdownMenu");
+  if (menu) menu.style.display = "none";
+};
+
+document.addEventListener("click", () => {
+  closeGearMenu();
+});
+
+window.refrescarSistemaCompleto = function() {
+  cargarEquiposGuardados();
+  renderFleetDashboard();
+  if (activityStack[activityStack.length - 1] === 'act-reports') renderizarRegistros();
+  notify("⚡ Datos sincronizados al milisegundo", "var(--green)");
+};
+
+window.alternarPantallaCompleta = function() {
+  const el = document.documentElement;
+  if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+    if (el.requestFullscreen) el.requestFullscreen();
+    else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+  } else {
+    if (document.exitFullscreen) document.exitFullscreen();
+    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+  }
+};
+
+// =========================================================================
+// 4. BASE DE DATOS LOCAL Y SESIÓN PERSISTENTE
 // =========================================================================
 let db = null;
 const fleet = {};
@@ -126,7 +165,7 @@ function initDB() {
   return new Promise((resolve) => {
     localStorage.setItem("scada_pass_admin", "24331973");
 
-    const req = indexedDB.open("AutoclaveFastFleetDB_v20", 1);
+    const req = indexedDB.open("AutoclaveFastFleetDB_v22", 1);
     req.onupgradeneeded = (e) => {
       db = e.target.result;
       if (!db.objectStoreNames.contains("asignaciones")) db.createObjectStore("asignaciones", { keyPath: "mac" });
@@ -159,7 +198,7 @@ function verificarSesionPersistente() {
       const userObj = JSON.parse(sesionGuardada);
       iniciarSesionExitosa(userObj, true);
 
-      const route = JSON.parse(localStorage.getItem("scada_nav_route_v2") || "null");
+      const route = JSON.parse(localStorage.getItem("scada_nav_route_v4") || "null");
       if (route && route.activity) {
         if (route.activity === 'act-device-detail' && route.mac) {
           abrirDetalleEquipo(route.mac);
@@ -206,7 +245,7 @@ async function cargarEquiposGuardados() {
 }
 
 // =========================================================================
-// 4. MQTT HIVEMQ CLOUD (PUERTO SEGURO WSS 8884)
+// 5. MQTT HIVEMQ CLOUD (PUERTO WSS 8884)
 // =========================================================================
 let mqttClient;
 
@@ -227,7 +266,7 @@ function initMQTT() {
   mqttClient.on("connect", () => {
     const dot = document.getElementById("mqttDot");
     const txt = document.getElementById("mqttStatusText");
-    if (dot) dot.className = "beacon online";
+    if (dot) dot.className = "beacon online"; // Pulso verde animado activo
     if (txt) { txt.innerText = "HIVEMQ 8884"; txt.style.color = "var(--green)"; }
     
     mqttClient.subscribe("autoclave_med_2026/+/telemetria");
@@ -323,43 +362,81 @@ function procesarEsquemaReal(mac, data) {
   renderFleetDashboard();
 }
 
+// CÁLCULO DE SALUD Y CALIDAD DE RED
 function isOnline(dev) {
   return dev && dev.lastSeen && (Date.now() - dev.lastSeen) < 18000;
 }
 
-function getConnectionQuality(dev) {
-  if (!dev || !dev.lastSeen) return { text: "OFFLINE", color: "var(--red)", dot: "offline" };
+function getHealthStatus(dev) {
+  if (!dev || !dev.lastSeen) return 'OFFLINE';
   const diff = Date.now() - dev.lastSeen;
-  if (diff < 5000) return { text: "ONLINE 2s", color: "var(--green)", dot: "online" };
-  if (diff < 18000) return { text: "LATENCIA", color: "var(--amber)", dot: "online" };
+  if (diff < 5000) return 'ONLINE';
+  if (diff < 18000) return 'LATENCY';
+  return 'OFFLINE';
+}
+
+function getConnectionQuality(dev) {
+  const status = getHealthStatus(dev);
+  if (status === 'ONLINE') return { text: "100% ONLINE", color: "var(--green)", dot: "online" };
+  if (status === 'LATENCY') return { text: "LATENCIA", color: "var(--amber)", dot: "online" };
   return { text: "OFFLINE", color: "var(--red)", dot: "offline" };
 }
 
 // =========================================================================
-// 5. MONITOR DE FLOTA EN VIVO
+// 6. MONITOR DE FLOTA SEGMENTADO (CERO MANGÚ)
 // =========================================================================
+window.setFleetHealthFilter = function(filterType) {
+  currentHealthFilter = filterType;
+  document.querySelectorAll(".btn-filter").forEach(b => b.classList.remove("active"));
+  
+  if (filterType === 'ONLINE') document.getElementById("filterBtnOnline")?.classList.add("active");
+  if (filterType === 'LATENCY') document.getElementById("filterBtnLatency")?.classList.add("active");
+  if (filterType === 'OFFLINE') document.getElementById("filterBtnOffline")?.classList.add("active");
+  if (filterType === 'ALL') document.getElementById("filterBtnAll")?.classList.add("active");
+
+  renderFleetDashboard();
+};
+
 function renderFleetDashboard() {
   const container = document.getElementById("fleetLiveContainer");
   if (!container) return;
   const keys = Object.keys(fleet);
 
-  if (!keys.length) {
-    container.innerHTML = `<div class="empty-deck">ESPERANDO AUTOCLAVES TRANSMITIENDO EN VIVO...</div>`;
+  let countOn = 0, countLat = 0, countOff = 0;
+  keys.forEach(k => {
+    const s = getHealthStatus(fleet[k]);
+    if (s === 'ONLINE') countOn++;
+    else if (s === 'LATENCY') countLat++;
+    else countOff++;
+  });
+
+  const elOn = document.getElementById("countOnline");
+  const elLat = document.getElementById("countLatency");
+  const elOff = document.getElementById("countOffline");
+  const elAll = document.getElementById("countAll");
+
+  if (elOn) elOn.innerText = countOn;
+  if (elLat) elLat.innerText = countLat;
+  if (elOff) elOff.innerText = countOff;
+  if (elAll) elAll.innerText = keys.length;
+
+  let filteredKeys = keys;
+  if (currentHealthFilter !== 'ALL') {
+    filteredKeys = keys.filter(k => getHealthStatus(fleet[k]) === currentHealthFilter);
+  }
+
+  if (!filteredKeys.length) {
+    container.innerHTML = `<div class="empty-deck">NO HAY AUTOCLAVES EN EL APARTADO [${currentHealthFilter}].</div>`;
     return;
   }
 
-  const emptyMsg = container.querySelector('.empty-deck');
-  if (emptyMsg) container.innerHTML = '';
-
-  keys.forEach(mac => {
-    let card = document.getElementById(`card-${mac}`);
-    if (!card) {
-      card = document.createElement('div');
-      card.id = `card-${mac}`;
-      card.className = 'node-item';
-      card.setAttribute('onclick', `abrirDetalleEquipo('${mac}')`);
-      container.appendChild(card);
-    }
+  container.innerHTML = '';
+  filteredKeys.forEach(mac => {
+    const card = document.createElement('div');
+    card.id = `card-${mac}`;
+    card.className = 'node-item';
+    card.setAttribute('onclick', `abrirDetalleEquipo('${mac}')`);
+    container.appendChild(card);
     actualizarCardDashboard(mac);
   });
 }
@@ -379,10 +456,10 @@ function actualizarCardDashboard(mac) {
   const mantClass = pct >= 100 ? 'danger' : pct >= 80 ? 'warn' : '';
 
   card.innerHTML = `
-    <div class="node-topbar">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
       <div>
-        <div class="node-alias">${meta.alias}</div>
-        <div class="node-client">${meta.cliente} | ${meta.modelo}</div>
+        <div style="font-size: 0.95rem; font-weight: 800; color: var(--cyan);">${meta.alias}</div>
+        <div style="font-size: 0.68rem; color: var(--text-muted);">${meta.cliente} | ${meta.modelo}</div>
       </div>
       <span class="status-badge" style="border-color:${health.color};">
         <span class="beacon ${health.dot}"></span>
@@ -390,7 +467,7 @@ function actualizarCardDashboard(mac) {
       </span>
     </div>
 
-    <div class="gauge-grid">
+    <div class="gauge-grid" style="grid-template-columns: 1fr 1fr;">
       <div class="gauge-cell">
         <div class="gauge-val">${(d.temp_camara || 25.0).toFixed(1)}°C</div>
         <div class="gauge-lbl">TEMPERATURA</div>
@@ -401,7 +478,7 @@ function actualizarCardDashboard(mac) {
       </div>
     </div>
 
-    <div style="margin: 10px 0;">
+    <div style="margin: 8px 0;">
       <div style="display:flex; justify-content:space-between; font-size:0.65rem; color:var(--text-muted); font-weight:700;">
         <span>CICLOS: ${ciclos} / ${limite}</span>
         <span style="color:${pct >= 100 ? 'var(--red)' : pct >= 80 ? 'var(--amber)' : 'var(--green)'};">
@@ -411,7 +488,7 @@ function actualizarCardDashboard(mac) {
       <div class="health-bar"><div class="health-fill ${mantClass}" style="width: ${pct}%;"></div></div>
     </div>
 
-    <div style="background: rgba(0,0,0,0.4); padding: 8px 12px; border-radius: 4px; font-size: 0.72rem; margin-bottom: 8px; display:flex; justify-content:space-between; align-items:center;">
+    <div style="background: rgba(0,0,0,0.35); padding: 7px 10px; border-radius: 4px; font-size: 0.72rem; margin-bottom: 8px; display:flex; justify-content:space-between; align-items:center;">
       <span style="color: var(--text-muted); font-weight:700;">FASE ACTUAL:</span> 
       <span style="color: var(--green); font-weight: 800; letter-spacing:1px;">${d.fase || 'ESPERA'}</span>
     </div>
@@ -423,7 +500,7 @@ function actualizarCardDashboard(mac) {
 }
 
 // =========================================================================
-// 6. ACTIVIDAD DE CONTROL
+// 7. CONTROL TOTAL Y NVS (SINCRONIZACIÓN EN MILISEGUNDOS)
 // =========================================================================
 window.abrirDetalleEquipo = function(mac) {
   currentInspectedMAC = mac;
@@ -447,8 +524,8 @@ window.abrirDetalleEquipo = function(mac) {
 
 function switchDetailTab(tabId) {
   currentDetailSubTab = tabId;
-  document.querySelectorAll('.subtab-pane').forEach(s => s.style.display = 'none');
-  document.querySelectorAll('.subtab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.detail-subview').forEach(s => s.style.display = 'none');
+  document.querySelectorAll('.subtab-slider .btn').forEach(b => b.classList.remove('active'));
 
   const el = document.getElementById(tabId);
   if (el) el.style.display = 'block';
@@ -503,7 +580,7 @@ function generarUIEsquemaDinamico(mac) {
             return `
               <div class="dynamic-field-row">
                 <span>${campo.label}</span>
-                <input type="number" step="${campo.step || 0.1}" min="${campo.min || 0}" max="${campo.max || 999}" class="form-input dyn-input-field" data-key="${campo.key}" value="${valorActual}" onkeydown="if(event.key==='Enter'){event.preventDefault(); guardarParametrosDinamicos();}">
+                <input type="number" step="${campo.step || 0.1}" min="${campo.min || 0}" max="${campo.max || 999}" class="input-field dyn-input-field" data-key="${campo.key}" value="${valorActual}" onkeydown="if(event.key==='Enter'){event.preventDefault(); guardarParametrosDinamicos();}">
               </div>
             `;
           }
@@ -655,14 +732,14 @@ function cargarLogsDetalle(mac) {
         <td>${s.ciclosAcumulados} / ${s.limiteMantenimiento}</td>
         <td><span style="color:${s.ciclosAcumulados >= s.limiteMantenimiento ? 'var(--red)' : 'var(--green)'}; font-weight:700;">${s.ciclosAcumulados >= s.limiteMantenimiento ? 'VENCIDO' : 'OK'}</span></td>
         <td>T:${s.tempMax.toFixed(1)}°C | P:${s.presMax.toFixed(2)}b</td>
-        <td><button class="btn-hud" onclick="verPaqueteSesion('${s.sessionId}')">👁️</button></td>
+        <td><button class="btn btn-sm" onclick="verPaqueteSesion('${s.sessionId}')">👁️</button></td>
       </tr>
     `).join("");
   };
 }
 
 // =========================================================================
-// 7. CENTRO DE REPORTES CLÍNICOS
+// 8. REPORTES & SUPABASE CLOUD
 // =========================================================================
 let reportesCache = [];
 
@@ -785,14 +862,14 @@ function pintarTablaReportes(items, devFilter, fType, fDesde, fHasta, fText, tbo
         </td>
         <td>T:${(s.tempMax||0).toFixed(1)}°C<br>P:${(s.presMax||0).toFixed(2)}b</td>
         <td>
-          <span class="user-role" style="color:${s.conteoAlarmas > 0 ? 'var(--red)' : s.diagnosticoPrincipal.includes('CONFORME') ? 'var(--green)' : 'var(--cyan)'};">
+          <span class="user-role" style="color:${s.conteoAlarmas > 0 ? 'var(--red)' : (s.diagnosticoPrincipal && s.diagnosticoPrincipal.includes('CONFORME')) ? 'var(--green)' : 'var(--cyan)'};">
             ${s.diagnosticoPrincipal || 'EN REPOSO'}
           </span>
         </td>
         <td>
           <div style="display:flex; gap:4px;">
-            <button class="btn-hud" onclick="verPaqueteSesion('${s.sessionId}')">👁️ VER</button>
-            <button class="btn-hud btn-danger-outline" style="padding:4px 8px;" onclick="eliminarReporteIndividual('${s.sessionId}')">🗑️</button>
+            <button class="btn btn-sm" onclick="verPaqueteSesion('${s.sessionId}')">👁️</button>
+            <button class="btn btn-sm btn-danger" style="padding:4px 8px;" onclick="eliminarReporteIndividual('${s.sessionId}')">🗑️</button>
           </div>
         </td>
       </tr>
@@ -909,7 +986,7 @@ window.exportarRegistrosCSV = function() {
 };
 
 // =========================================================================
-// 8. FOTA HUB & GESTIÓN DIRECTA
+// 9. FOTA HUB & GESTIÓN DIRECTA
 // =========================================================================
 let currentFotaFilter = 'ALL';
 window.filterFotaList = function(tipo) { currentFotaFilter = tipo; renderFotaLiveList(); };
@@ -936,7 +1013,7 @@ function renderFotaLiveList() {
           <div style="font-weight:800; color:var(--cyan); font-size:0.85rem;">${meta.alias}</div>
           <div style="font-size:0.68rem; color:var(--text-muted);">${meta.cliente} | ${meta.modelo}</div>
         </div>
-        <span class="status-pill"><span class="beacon ${online ? 'online' : 'offline'}"></span> ${online ? 'ONLINE' : 'OFFLINE'}</span>
+        <span class="status-badge"><span class="beacon ${online ? 'online' : 'offline'}"></span> ${online ? 'ONLINE' : 'OFFLINE'}</span>
       </label>
     `;
   }).join("");
@@ -1043,13 +1120,13 @@ function renderFleetMgmtTable() {
     return `
       <tr style="cursor:pointer; background: ${esSeleccionado ? 'rgba(0,240,255,0.1)' : 'transparent'};" onclick="seleccionarEquipoEnGestion('${mac}')">
         <td style="color:var(--cyan); font-weight:800;">${mac}</td>
-        <td><span class="status-pill"><span class="beacon ${online ? 'online' : 'offline'}"></span> ${online ? 'ONLINE' : 'OFFLINE'}</span></td>
+        <td><span class="status-badge"><span class="beacon ${online ? 'online' : 'offline'}"></span> ${online ? 'ONLINE' : 'OFFLINE'}</span></td>
         <td style="font-weight:800;">${meta.alias}</td>
         <td>${meta.cliente}</td>
         <td style="color:var(--purple);">${meta.modelo}</td>
         <td>
-          <button class="btn-hud" style="min-height:30px; padding:3px 8px;" onclick="event.stopPropagation(); abrirDetalleEquipo('${mac}')">⚙️</button>
-          <button class="btn-hud btn-danger-outline" style="min-height:30px; padding:3px 8px; margin-left:4px;" onclick="event.stopPropagation(); eliminarEquipoTotal('${mac}')">🗑️</button>
+          <button class="btn btn-sm" onclick="event.stopPropagation(); abrirDetalleEquipo('${mac}')">⚙️</button>
+          <button class="btn btn-sm btn-danger" style="margin-left:4px;" onclick="event.stopPropagation(); eliminarEquipoTotal('${mac}')">🗑️</button>
         </td>
       </tr>
     `;
@@ -1069,7 +1146,7 @@ function actualizarSelectoresGlobales() {
 }
 
 // =========================================================================
-// 9. USUARIOS & AUTENTICACIÓN
+// 10. USUARIOS & AUTENTICACIÓN
 // =========================================================================
 function cargarUsuariosUI() {
   if (!db) return;
@@ -1083,7 +1160,7 @@ function cargarUsuariosUI() {
         <td style="font-weight:800; color:var(--cyan);">${u.user}</td>
         <td><span class="user-role">${u.rol}</span></td>
         <td>${new Date(u.fecha).toLocaleDateString()}</td>
-        <td>${u.user !== 'admin' ? `<button class="btn-hud btn-danger-outline" style="min-height:28px; padding:2px 8px;" onclick="eliminarUsuario('${u.user}')">X</button>` : '--'}</td>
+        <td>${u.user !== 'admin' ? `<button class="btn btn-sm btn-danger" onclick="eliminarUsuario('${u.user}')">X</button>` : '--'}</td>
       </tr>
     `).join("");
   };
@@ -1168,7 +1245,6 @@ function iniciarSesionExitosa(user, esRestauracion = false) {
   const b = document.getElementById("currentUserRoleBadge");
   if (b) b.innerText = user.rol;
 
-  // SEGURIDAD: APLICAR PERMISOS TANTO EN ESCRITORIO COMO EN LA BARRA MÓVIL
   aplicarPermisosRol();
 
   if (!esRestauracion) {
@@ -1181,11 +1257,9 @@ function aplicarPermisosRol() {
   const esAdmin = usuarioActual && usuarioActual.rol === "SUPERADMIN";
   const esTech = usuarioActual && (usuarioActual.rol === "TECNICO" || esAdmin);
 
-  // Menú superior escritorio
   const tabUsers = document.getElementById("tabNavUsers");
-  if (tabUsers) tabUsers.style.display = esAdmin ? "block" : "none";
+  if (tabUsers) tabUsers.style.display = esAdmin ? "inline-flex" : "none";
 
-  // Barra táctil inferior móvil
   const tabMob = document.getElementById("tabMobileUsers");
   if (tabMob) tabMob.style.display = esAdmin ? "flex" : "none";
 
@@ -1254,13 +1328,7 @@ window.guardarNuevaContrasena = function() {
   notify("¡Contraseña actualizada con éxito!", "var(--green)");
 };
 
-// =========================================================================
-// 10. INICIALIZACIÓN Y SERVICE WORKER PWA
-// =========================================================================
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js').catch(()=>{});
-}
-
+// Refresco periódico del monitor y estado de red
 setInterval(() => {
   renderFleetDashboard();
   if (currentActivity === 'act-fota') renderFotaLiveList();
