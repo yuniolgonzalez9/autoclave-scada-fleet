@@ -84,7 +84,7 @@ window.cerrarModalConfirmacion = function(confirmado) {
 
 window.pedirConfirmacionComando = function(cmd, msg, btnText) {
   if (usuarioActual && usuarioActual.rol === "OPERADOR" && cmd !== 'INICIAR_CICLO') {
-    return notify("Permiso denegado para tu nivel", "var(--red)");
+    return notify("Permiso denegado para tu rol OPERADOR", "var(--red)");
   }
   mostrarModalConfirmacion({
     icon: cmd === 'ABORTAR_CICLO' ? '🛑' : '⚡',
@@ -109,7 +109,7 @@ window.pedirConfirmacionFota = function() {
 };
 
 // =========================================================================
-// 5. ENRUTADOR SEGURO DE ACTIVIDADES
+// 5. ENRUTADOR SEGURO DE ACTIVIDADES & BLOQUEO JERÁRQUICO
 // =========================================================================
 window.openTopLevel = function(secId) {
   if (!estaAutenticado() && secId !== 'act-login' && secId !== 'act-recovery') {
@@ -117,14 +117,19 @@ window.openTopLevel = function(secId) {
     return;
   }
 
-  // Comprobar jerarquía antes de acceder a la sección
-  if (usuarioActual && usuarioActual.rol === "OPERADOR" && (secId === 'act-fota' || secId === 'act-fleet-mgmt' || secId === 'act-users')) {
-    notify("Acceso restringido por jerarquía RBAC", "var(--red)");
-    return;
+  // RESTRICCIÓN JERÁRQUICA ACTIVA
+  if (usuarioActual && usuarioActual.rol === "OPERADOR") {
+    if (secId === 'act-fota' || secId === 'act-fleet-mgmt' || secId === 'act-users') {
+      notify("⛔ Acceso restringido para el rol OPERADOR", "var(--red)");
+      return;
+    }
   }
-  if (usuarioActual && usuarioActual.rol === "TECNICO" && secId === 'act-users') {
-    notify("Acceso exclusivo para SuperAdmin", "var(--red)");
-    return;
+
+  if (usuarioActual && usuarioActual.rol === "TECNICO") {
+    if (secId === 'act-users') {
+      notify("⛔ Acceso exclusivo para SUPERADMIN", "var(--red)");
+      return;
+    }
   }
 
   currentTopLevel = secId;
@@ -216,10 +221,15 @@ function renderScreen(screenId) {
     });
   }
 
+  // Ejecución según la vista activa
   if (screenId === 'act-fota') renderFotaLiveList();
   if (screenId === 'act-fleet-mgmt') renderFleetMgmtTable();
   if (screenId === 'act-reports') renderizarRegistros();
   if (screenId === 'act-telemetry') renderFleetDashboard();
+  if (screenId === 'act-users') cargarUsuariosUI();
+
+  // Re-aplicar jerarquía para blindar la pantalla
+  if (!esPublico) aplicarPermisosRol();
 }
 
 function guardarRutaNavegacion() {
@@ -320,7 +330,7 @@ const fleet = {};
 
 function initDB() {
   return new Promise((resolve) => {
-    const req = indexedDB.open("AutoclaveFastFleetDB_v24", 1);
+    const req = indexedDB.open("AutoclaveFastFleetDB_v25", 1);
     req.onupgradeneeded = (e) => {
       db = e.target.result;
       if (!db.objectStoreNames.contains("asignaciones")) db.createObjectStore("asignaciones", { keyPath: "mac" });
@@ -623,7 +633,7 @@ function getConnectionQuality(dev) {
 }
 
 // =========================================================================
-// 9. DASHBOARD ADAPTATIVO (SIN CLIENTES DESCONECTADOS EN VISTA ONLINE)
+// 9. DASHBOARD ADAPTATIVO
 // =========================================================================
 window.setFleetHealthFilter = function(filterType) {
   currentHealthFilter = filterType;
@@ -667,7 +677,6 @@ function renderFleetDashboard() {
     filteredKeys = keys.filter(k => getHealthStatus(fleet[k]) === currentHealthFilter);
   }
 
-  // Si un equipo no está conectado, NUNCA se muestra bajo ONLINE
   if (!filteredKeys.length) {
     container.innerHTML = `<div class="empty-deck">NO HAY AUTOCLAVES TRANSMITIENDO EN EL FILTRO [${currentHealthFilter}].</div>`;
     return;
@@ -771,7 +780,6 @@ window.abrirDetalleEquipo = function(mac) {
 };
 
 function switchDetailTab(tabId) {
-  // Comprobación de rol para pestaña NVS y Ficha
   if (usuarioActual && usuarioActual.rol === "OPERADOR" && (tabId === 'tab-det-cfg' || tabId === 'tab-det-ficha')) {
     return notify("Pestaña restringida para nivel OPERADOR", "var(--red)");
   }
@@ -1696,14 +1704,15 @@ function actualizarSelectoresGlobales() {
 }
 
 // =========================================================================
-// 14. JERARQUÍA DE USUARIOS (RBAC) & RECUPERACIÓN POR CORREO
+// 14. JERARQUÍA ESTRICTA (RBAC) & GESTIÓN DE USUARIOS EN LA NUBE
 // =========================================================================
 function aplicarPermisosRol() {
   if (!usuarioActual) return;
-  const esAdmin = usuarioActual.rol === "SUPERADMIN";
-  const esTech = usuarioActual.rol === "TECNICO" || esAdmin;
+  const rol = usuarioActual.rol;
+  const esAdmin = rol === "SUPERADMIN";
+  const esTech = rol === "TECNICO" || esAdmin;
 
-  // Adaptar elementos según el atributo data-rbac
+  // 1. Ocultar o mostrar pestañas y botones según atributo data-rbac
   document.querySelectorAll('[data-rbac]').forEach(el => {
     const req = el.getAttribute('data-rbac');
     if (req === 'SUPERADMIN') {
@@ -1713,11 +1722,17 @@ function aplicarPermisosRol() {
     }
   });
 
-  // Botón dinámico de parámetros NVS en detalle de equipo
+  // 2. Proteger controles dinámicos de parámetros NVS
   const bg = document.getElementById("btnGuardarDinamico");
   if (bg) {
     bg.disabled = !esTech;
     bg.style.opacity = esTech ? "1" : "0.3";
+  }
+
+  // 3. Proteger botón de eliminación de autoclave en detalle
+  const btnDetDel = document.getElementById("btnDetDeleteDevice");
+  if (btnDetDel) {
+    btnDetDel.style.display = esAdmin ? 'inline-flex' : 'none';
   }
 }
 
@@ -1727,13 +1742,23 @@ async function cargarUsuariosUI() {
 
   let users = [];
 
+  // 1. Intentar cargar desde Supabase Cloud
   if (sbClient) {
     try {
       const { data, error } = await sbClient.from('usuarios_scada').select('*').order('created_at', { ascending: false });
-      if (!error && data && data.length) users = data;
+      if (!error && data && data.length) {
+        users = data;
+        // Guardar copia local en IndexedDB
+        if (db) {
+          const tx = db.transaction(["usuarios"], "readwrite");
+          const store = tx.objectStore("usuarios");
+          data.forEach(u => store.put(u));
+        }
+      }
     } catch(e) {}
   }
 
+  // 2. Si no hay nube, cargar de base de datos local
   if (!users.length && db) {
     const tx = db.transaction(["usuarios"], "readonly");
     tx.objectStore("usuarios").getAll().onsuccess = (e) => {
@@ -1773,10 +1798,14 @@ window.crearUsuario = async function() {
 
   const nuevoUsuario = { user, pass, rol, email, created_at: new Date().toISOString() };
 
-  // Guardar en Supabase Cloud
+  let guardadoEnNube = false;
+
+  // Guardar directamente en Supabase Cloud
   if (sbClient) {
     try {
-      await sbClient.from('usuarios_scada').upsert(nuevoUsuario, { onConflict: 'user' });
+      const { error } = await sbClient.from('usuarios_scada').upsert(nuevoUsuario, { onConflict: 'user' });
+      if (!error) guardadoEnNube = true;
+      else notify("Atención: Ejecuta el script SQL en Supabase para habilitar la tabla", "var(--amber)");
     } catch(e) {}
   }
 
@@ -1794,16 +1823,16 @@ window.crearUsuario = async function() {
 
   cargarUsuariosUI();
   cargarListaUsuariosLogin();
-  notify(`Usuario [${user.toUpperCase()}] registrado con éxito`, "var(--green)");
+  notify(guardadoEnNube ? `✅ Usuario [${user.toUpperCase()}] guardado en la nube con rol ${rol}` : `Usuario [${user.toUpperCase()}] registrado localmente`, "var(--green)");
 };
 
 window.eliminarUsuario = function(u) {
-  if (usuarioActual && usuarioActual.rol !== "SUPERADMIN") return notify("Permiso denegado.", "var(--red)");
+  if (usuarioActual && usuarioActual.rol !== "SUPERADMIN") return notify("Permiso denegado: solo SUPERADMIN", "var(--red)");
   
   mostrarModalConfirmacion({
     icon: '👤',
     title: 'ELIMINAR CREDENCIAL',
-    msg: `¿Deseas eliminar el usuario [${u}] del sistema?`,
+    msg: `¿Deseas eliminar permanentemente al usuario [${u}] de la nube?`,
     okText: 'ELIMINAR USUARIO',
     okClass: 'btn-danger',
     onConfirm: async () => {
@@ -1819,7 +1848,7 @@ window.eliminarUsuario = function(u) {
       }
       cargarUsuariosUI();
       cargarListaUsuariosLogin();
-      notify(`Usuario [${u}] eliminado`, "var(--amber)");
+      notify(`Usuario [${u}] eliminado de la nube`, "var(--amber)");
     }
   });
 };
@@ -1865,29 +1894,50 @@ window.procesarInicioSesion = async function() {
 
   if (!u || !p) return mostrarFeedback(fb, "Completa usuario y clave.", "var(--red)");
 
-  // LLAVE MAESTRA
+  // 1. LLAVE MAESTRA DE FABRICA
   if (u === "admin" && p === "24331973") {
     iniciarSesionExitosa({ user: "admin", pass: "24331973", rol: "SUPERADMIN", email: "yuniolgonzalez9@gmail.com" });
     return;
   }
 
-  // Verificación en Supabase
+  // 2. VERIFICACIÓN REAL EN SUPABASE CLOUD (RESPETA EL ROL EXACTO)
   if (sbClient) {
     try {
       const { data, error } = await sbClient.from('usuarios_scada').select('*').eq('user', u).maybeSingle();
       if (!error && data && data.pass === p) {
-        iniciarSesionExitosa(data);
+        iniciarSesionExitosa({
+          user: data.user,
+          pass: data.pass,
+          rol: data.rol, // ROL VERDADERO DE LA NUBE
+          email: data.email
+        });
         return;
       }
     } catch(e) {}
   }
 
-  // Verificación local
-  if (p === (localStorage.getItem("scada_pass_" + u) || "24331973")) {
-    iniciarSesionExitosa({ user: u, pass: p, rol: "SUPERADMIN", email: "yuniolgonzalez9@gmail.com" });
-  } else {
-    mostrarFeedback(fb, "Contraseña incorrecta.", "var(--red)");
+  // 3. VERIFICACIÓN EN BASE DE DATOS LOCAL (INDEXEDDB) SI NO HAY CONEXIÓN
+  if (db) {
+    const tx = db.transaction(["usuarios"], "readonly");
+    const req = tx.objectStore("usuarios").get(u);
+    req.onsuccess = (e) => {
+      const usuarioLocal = e.target.result;
+      if (usuarioLocal && usuarioLocal.pass === p) {
+        iniciarSesionExitosa({
+          user: usuarioLocal.user,
+          pass: usuarioLocal.pass,
+          rol: usuarioLocal.rol || "OPERADOR", // NUNCA FORZAR SUPERADMIN
+          email: usuarioLocal.email || "yuniolgonzalez9@gmail.com"
+        });
+        return;
+      }
+      mostrarFeedback(fb, "Contraseña incorrecta o usuario no registrado.", "var(--red)");
+    };
+    req.onerror = () => mostrarFeedback(fb, "Contraseña incorrecta.", "var(--red)");
+    return;
   }
+
+  mostrarFeedback(fb, "Contraseña incorrecta.", "var(--red)");
 };
 
 function iniciarSesionExitosa(user, esRestauracion = false) {
@@ -1897,7 +1947,7 @@ function iniciarSesionExitosa(user, esRestauracion = false) {
   const b = document.getElementById("currentUserRoleBadge");
   if (b) b.innerText = user.rol;
 
-  // APLICAR JERARQUÍA Y PERMISOS EN TODA LA PLATAFORMA
+  // APLICAR JERARQUÍA DE INMEDIATO
   aplicarPermisosRol();
 
   if (!esRestauracion) {
