@@ -6,8 +6,8 @@
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#04070d",
-  "theme_color": "#04070d",
+  "background_color": "#02040a",
+  "theme_color": "#02040a",
   "icons": [
     {
       "src": "https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/72x72/2695.png",
@@ -19,13 +19,7 @@
       "src": "https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/72x72/2695.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/72x72/2695.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable"
+      "purpose": "any maskable"
     }
   ]
 }
