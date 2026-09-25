@@ -1,5 +1,5 @@
 // =========================================================================
-// 1. SUPABASE CLOUD (BASE DE DATOS 24/7)
+// 1. SUPABASE CLOUD (BASE DE DATOS EN LA NUBE 24/7)
 // =========================================================================
 const SUPABASE_URL = "https://gjtqyodpgwfvfvkhlhik.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdqdHF5b2RwZ3dmdmZ2a2hsaGlrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAwNDAzNTYsImV4cCI6MjEwNTYxNjM1Nn0.g8t_PbEityaneKkOUHttQ_cZv50aczLU4Z9la8R4d_g";
@@ -9,18 +9,28 @@ const sbClient = (window.supabase && window.supabase.createClient)
   : null;
 
 // =========================================================================
-// 2. ENRUTADOR NATIVO TIPO APP
+// 2. CERROJO ESTRICTO DE SEGURIDAD Y ENRUTADOR NATIVO
 // =========================================================================
 let currentTopLevel = 'act-telemetry';
 let currentActivity = 'act-login';
 let currentInspectedMAC = null;
 let currentDetailSubTab = 'tab-det-tele';
 let currentViewingReport = null;
-let currentHealthFilter = 'ONLINE'; // Por defecto solo muestra 100% ONLINE (Sin mezclas)
+let currentHealthFilter = 'ONLINE'; // Por defecto solo muestra 100% ONLINE
 let usuarioActual = null;
 let ultimoToqueAtras = 0;
 
+// REGLA DE SEGURIDAD ESTRICTA: ¿ESTÁ REALMENTE AUTENTICADO?
+function estaAutenticado() {
+  return !!usuarioActual && !!localStorage.getItem("scada_logged_user");
+}
+
 window.openTopLevel = function(secId) {
+  // SEGURIDAD: Nadie puede entrar a pantallas privadas sin iniciar sesión
+  if (!estaAutenticado() && secId !== 'act-login' && secId !== 'act-recovery') {
+    renderScreen('act-login');
+    return;
+  }
   currentTopLevel = secId;
   currentInspectedMAC = null;
   history.replaceState({ type: 'top', secId: secId }, '', '#' + secId);
@@ -29,6 +39,10 @@ window.openTopLevel = function(secId) {
 };
 
 window.openActivity = function(actId) {
+  if (!estaAutenticado()) {
+    renderScreen('act-login');
+    return;
+  }
   if (currentActivity !== actId) {
     history.pushState({ type: 'child', actId: actId, parent: currentTopLevel }, '', '#' + actId);
     renderScreen(actId);
@@ -41,7 +55,7 @@ window.goBackActivity = function() {
 };
 
 window.addEventListener('popstate', () => {
-  if (!usuarioActual) {
+  if (!estaAutenticado()) {
     renderScreen('act-login');
     return;
   }
@@ -64,17 +78,29 @@ window.addEventListener('popstate', () => {
 });
 
 function renderScreen(screenId) {
+  // BLOQUEO ABSOLUTO: Si no hay sesión válida, forzar LOGIN
+  if (!estaAutenticado() && screenId !== 'act-login' && screenId !== 'act-recovery') {
+    screenId = 'act-login';
+  }
+
   currentActivity = screenId;
   const esPublico = (screenId === 'act-login' || screenId === 'act-recovery');
 
+  // GOBIERNO DE SEGURIDAD EN EL BODY
+  if (esPublico) {
+    document.body.classList.remove('authenticated');
+    document.body.classList.add('unauthenticated');
+  } else {
+    document.body.classList.remove('unauthenticated');
+    document.body.classList.add('authenticated');
+  }
+
   const topBar = document.getElementById('topAppBar');
-  const dNav = document.getElementById('desktopNavBar');
-  const mNav = document.getElementById('mobileBottomNav');
+  const dDock = document.getElementById('desktopDockContainer');
   const backBtn = document.getElementById('btnGlobalBack');
 
   if (topBar) topBar.style.display = esPublico ? 'none' : 'flex';
-  if (dNav) dNav.style.display = esPublico ? 'none' : 'flex';
-  if (mNav) mNav.style.display = esPublico ? 'none' : 'flex';
+  if (dDock) dDock.style.display = esPublico ? 'none' : 'flex';
 
   const esPantallaHija = (screenId === 'act-device-detail' || screenId === 'act-report-view');
   if (backBtn) backBtn.style.display = esPantallaHija ? 'inline-flex' : 'none';
@@ -84,7 +110,7 @@ function renderScreen(screenId) {
   if (target) target.classList.add('active');
 
   if (!esPublico && !esPantallaHija) {
-    document.querySelectorAll('.nav-tab, .m-tab').forEach(t => {
+    document.querySelectorAll('.nav-btn, .m-tab').forEach(t => {
       t.classList.toggle('active', t.getAttribute('data-tab') === screenId);
     });
   }
@@ -95,8 +121,8 @@ function renderScreen(screenId) {
 }
 
 function guardarRutaNavegacion() {
-  if (usuarioActual) {
-    localStorage.setItem("scada_nav_route_v4", JSON.stringify({
+  if (estaAutenticado()) {
+    localStorage.setItem("scada_nav_route_v5", JSON.stringify({
       topLevel: currentTopLevel,
       activity: currentActivity,
       mac: currentInspectedMAC,
@@ -117,8 +143,18 @@ function notify(msg, color = 'var(--cyan)') {
 }
 
 // =========================================================================
-// 3. MENÚ ENGRANAJE ⚙️ Y PANTALLA COMPLETA
+// 3. BARRA HORIZONTAL DESPLEGABLE (DOCK TÁCTICO)
 // =========================================================================
+window.toggleHorizontalDock = function() {
+  const dock = document.getElementById("desktopNavBar");
+  const arrow = document.getElementById("dockArrow");
+  if (dock) {
+    dock.classList.toggle("collapsed");
+    const estaPlegado = dock.classList.contains("collapsed");
+    if (arrow) arrow.innerText = estaPlegado ? "▶" : "◀";
+  }
+};
+
 window.toggleGearMenu = function(e) {
   if (e) e.stopPropagation();
   const menu = document.getElementById("gearDropdownMenu");
@@ -139,8 +175,8 @@ document.addEventListener("click", () => {
 window.refrescarSistemaCompleto = function() {
   cargarEquiposGuardados();
   renderFleetDashboard();
-  if (activityStack[activityStack.length - 1] === 'act-reports') renderizarRegistros();
-  notify("⚡ Datos sincronizados al milisegundo", "var(--green)");
+  if (currentActivity === 'act-reports') renderizarRegistros();
+  notify("⚡ Datos sincronizados en milisegundos", "var(--green)");
 };
 
 window.alternarPantallaCompleta = function() {
@@ -155,7 +191,32 @@ window.alternarPantallaCompleta = function() {
 };
 
 // =========================================================================
-// 4. BASE DE DATOS LOCAL Y SESIÓN PERSISTENTE
+// 4. CIERRE DE SESIÓN BLINDADO
+// =========================================================================
+window.cerrarSesionManual = function() {
+  usuarioActual = null;
+  currentInspectedMAC = null;
+  localStorage.removeItem("scada_logged_user");
+  localStorage.removeItem("scada_nav_route_v5");
+
+  // APLICAR BLOQUEO INMEDIATO
+  document.body.classList.remove('authenticated');
+  document.body.classList.add('unauthenticated');
+
+  document.getElementById("topAppBar").style.display = "none";
+  document.getElementById("desktopDockContainer").style.display = "none";
+  document.getElementById("loginPassInput").value = "";
+
+  activityStack = ['act-login'];
+  currentTopLevel = 'act-login';
+  history.replaceState({ app: 'login' }, '', window.location.pathname);
+  renderScreen('act-login');
+  cargarListaUsuariosLogin();
+  notify("🔒 Sesión destruida y sistema bloqueado", "var(--red)");
+};
+
+// =========================================================================
+// 5. BASE DE DATOS LOCAL
 // =========================================================================
 let db = null;
 const fleet = {};
@@ -165,7 +226,7 @@ function initDB() {
   return new Promise((resolve) => {
     localStorage.setItem("scada_pass_admin", "24331973");
 
-    const req = indexedDB.open("AutoclaveFastFleetDB_v22", 1);
+    const req = indexedDB.open("AutoclaveFastFleetDB_v23", 1);
     req.onupgradeneeded = (e) => {
       db = e.target.result;
       if (!db.objectStoreNames.contains("asignaciones")) db.createObjectStore("asignaciones", { keyPath: "mac" });
@@ -198,7 +259,7 @@ function verificarSesionPersistente() {
       const userObj = JSON.parse(sesionGuardada);
       iniciarSesionExitosa(userObj, true);
 
-      const route = JSON.parse(localStorage.getItem("scada_nav_route_v4") || "null");
+      const route = JSON.parse(localStorage.getItem("scada_nav_route_v5") || "null");
       if (route && route.activity) {
         if (route.activity === 'act-device-detail' && route.mac) {
           abrirDetalleEquipo(route.mac);
@@ -245,7 +306,7 @@ async function cargarEquiposGuardados() {
 }
 
 // =========================================================================
-// 5. MQTT HIVEMQ CLOUD (PUERTO WSS 8884)
+// 6. MQTT HIVEMQ CLOUD (CANAL WSS 8884)
 // =========================================================================
 let mqttClient;
 
@@ -266,7 +327,7 @@ function initMQTT() {
   mqttClient.on("connect", () => {
     const dot = document.getElementById("mqttDot");
     const txt = document.getElementById("mqttStatusText");
-    if (dot) dot.className = "beacon online"; // Pulso verde animado activo
+    if (dot) dot.className = "beacon online";
     if (txt) { txt.innerText = "HIVEMQ 8884"; txt.style.color = "var(--green)"; }
     
     mqttClient.subscribe("autoclave_med_2026/+/telemetria");
@@ -362,7 +423,6 @@ function procesarEsquemaReal(mac, data) {
   renderFleetDashboard();
 }
 
-// CÁLCULO DE SALUD Y CALIDAD DE RED
 function isOnline(dev) {
   return dev && dev.lastSeen && (Date.now() - dev.lastSeen) < 18000;
 }
@@ -383,7 +443,7 @@ function getConnectionQuality(dev) {
 }
 
 // =========================================================================
-// 6. MONITOR DE FLOTA SEGMENTADO (CERO MANGÚ)
+// 7. MONITOR DE FLOTA SEGMENTADO (CERO MANGÚ)
 // =========================================================================
 window.setFleetHealthFilter = function(filterType) {
   currentHealthFilter = filterType;
@@ -500,7 +560,7 @@ function actualizarCardDashboard(mac) {
 }
 
 // =========================================================================
-// 7. CONTROL TOTAL Y NVS (SINCRONIZACIÓN EN MILISEGUNDOS)
+// 8. CONTROL TOTAL Y NVS (SINCRONIZACIÓN EN MILISEGUNDOS)
 // =========================================================================
 window.abrirDetalleEquipo = function(mac) {
   currentInspectedMAC = mac;
@@ -712,7 +772,7 @@ window.guardarFichaDetalle = async function() {
   document.getElementById("detDeviceAlias").innerText = alias.toUpperCase();
   document.getElementById("detDeviceSub").innerText = `MAC: ${currentInspectedMAC} | CLIENTE: ${cliente} | MODELO: ${modelo}`;
   actualizarCardDashboard(currentInspectedMAC);
-  notify("Ficha sincronizada globalmente", "var(--green)");
+  notify("Ficha guardada y sincronizada", "var(--green)");
 };
 
 function cargarLogsDetalle(mac) {
@@ -739,7 +799,7 @@ function cargarLogsDetalle(mac) {
 }
 
 // =========================================================================
-// 8. REPORTES & SUPABASE CLOUD
+// 9. REPORTES & SUPABASE CLOUD
 // =========================================================================
 let reportesCache = [];
 
@@ -862,7 +922,7 @@ function pintarTablaReportes(items, devFilter, fType, fDesde, fHasta, fText, tbo
         </td>
         <td>T:${(s.tempMax||0).toFixed(1)}°C<br>P:${(s.presMax||0).toFixed(2)}b</td>
         <td>
-          <span class="user-role" style="color:${s.conteoAlarmas > 0 ? 'var(--red)' : (s.diagnosticoPrincipal && s.diagnosticoPrincipal.includes('CONFORME')) ? 'var(--green)' : 'var(--cyan)'};">
+          <span class="user-role" style="color:${s.conteoAlarmas > 0 ? 'var(--red)' : s.diagnosticoPrincipal.includes('CONFORME') ? 'var(--green)' : 'var(--cyan)'};">
             ${s.diagnosticoPrincipal || 'EN REPOSO'}
           </span>
         </td>
@@ -986,7 +1046,7 @@ window.exportarRegistrosCSV = function() {
 };
 
 // =========================================================================
-// 9. FOTA HUB & GESTIÓN DIRECTA
+// 10. FOTA HUB & GESTIÓN DIRECTA
 // =========================================================================
 let currentFotaFilter = 'ALL';
 window.filterFotaList = function(tipo) { currentFotaFilter = tipo; renderFotaLiveList(); };
@@ -1146,7 +1206,7 @@ function actualizarSelectoresGlobales() {
 }
 
 // =========================================================================
-// 10. USUARIOS & AUTENTICACIÓN
+// 11. USUARIOS & AUTENTICACIÓN
 // =========================================================================
 function cargarUsuariosUI() {
   if (!db) return;
@@ -1225,6 +1285,7 @@ window.procesarInicioSesion = function() {
 
   if (!u || !p) return mostrarFeedback(fb, "Completa usuario y contraseña.", "var(--red)");
 
+  // LLAVE MAESTRA
   if (u === "admin" && p === "24331973") {
     localStorage.setItem("scada_pass_admin", "24331973");
     iniciarSesionExitosa({ user: "admin", pass: "24331973", rol: "SUPERADMIN" });
@@ -1245,6 +1306,7 @@ function iniciarSesionExitosa(user, esRestauracion = false) {
   const b = document.getElementById("currentUserRoleBadge");
   if (b) b.innerText = user.rol;
 
+  // SEGURIDAD: APLICAR PERMISOS TANTO EN ESCRITORIO COMO EN LA BARRA MÓVIL
   aplicarPermisosRol();
 
   if (!esRestauracion) {
@@ -1328,7 +1390,7 @@ window.guardarNuevaContrasena = function() {
   notify("¡Contraseña actualizada con éxito!", "var(--green)");
 };
 
-// Refresco periódico del monitor y estado de red
+// Refresco periódico
 setInterval(() => {
   renderFleetDashboard();
   if (currentActivity === 'act-fota') renderFotaLiveList();
