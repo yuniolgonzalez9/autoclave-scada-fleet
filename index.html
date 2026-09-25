@@ -15,9 +15,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;800&family=Orbitron:wght@600;800;900&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="style.css?v=12">
+  <link rel="stylesheet" href="style.css?v=13">
   
-  <!-- Dependencias Externas Esenciales -->
+  <!-- Dependencias Externas -->
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -27,7 +27,7 @@
   <!-- AVISO TOAST FLOTANTE -->
   <div id="toastApp" class="toast-hud">Acción completada</div>
 
-  <!-- MODAL DE CONFIRMACIÓN TÁCTIL (PREVIENE ACCIDENTES EN MÓVIL) -->
+  <!-- VENTANA EMERGENTE FLOTANTE CENTRALIZADA (MODAL DE CONFIRMACIÓN) -->
   <div id="modalConfirmOverlay" class="modal-overlay" style="display: none;">
     <div class="modal-card">
       <div class="modal-icon" id="modalConfirmIcon">⚠️</div>
@@ -70,12 +70,12 @@
         </span>
         <span class="status-pill sync-pill">
           <span class="beacon online" id="syncDot"></span>
-          <span id="syncStatusText">NUBE SINCRONIZADA</span>
+          <span id="syncStatusText">NUBE CONECTADA</span>
         </span>
       </div>
     </div>
     
-    <!-- DERECHA: USUARIO Y ENGRANAJE ⚙️ -->
+    <!-- DERECHA: USUARIO CON BADGE DE ROL Y ENGRANAJE ⚙️ -->
     <div class="hud-right">
       <div class="user-chip">
         <span class="user-name" id="currentUserName">ADMIN</span>
@@ -96,7 +96,7 @@
             <span>⛶</span> Pantalla Completa
           </button>
           <button class="dropdown-item" onclick="openTopLevel('act-change-pass'); closeGearMenu();">
-            <span>🔑</span> Modificar Contraseña
+            <span>🔑</span> Modificar Mi Contraseña
           </button>
           <div class="dropdown-separator"></div>
           <button class="dropdown-item item-danger" onclick="cerrarSesionManual(); closeGearMenu();">
@@ -107,17 +107,17 @@
     </div>
   </header>
 
-  <!-- CONTENEDOR DESPLEGABLE HORIZONTAL (DOCK PLEGABLE) -->
+  <!-- CONTENEDOR DESPLEGABLE HORIZONTAL (DOCK PLEGABLE CON CONTROL JERÁRQUICO) -->
   <div class="desktop-dock-container" id="desktopDockContainer">
     <button class="btn-dock-toggle" onclick="toggleHorizontalDock()">
       <span class="dock-arrow" id="dockArrow">◀</span> 🗂️ SECCIONES
     </button>
     <nav class="desktop-nav-slider" id="desktopNavBar">
       <button class="btn nav-btn active" data-tab="act-telemetry" onclick="openTopLevel('act-telemetry')">⚡ TELEMETRÍA</button>
-      <button class="btn nav-btn" data-tab="act-fleet-mgmt" onclick="openTopLevel('act-fleet-mgmt')">🏢 GESTIÓN FLOTA</button>
-      <button class="btn nav-btn" data-tab="act-fota" onclick="openTopLevel('act-fota')">🚀 FOTA HUB</button>
-      <button class="btn nav-btn" data-tab="act-reports" onclick="openTopLevel('act-reports')">📋 REPORTES & AUDITORÍA</button>
-      <button class="btn nav-btn" id="tabNavUsers" data-tab="act-users" onclick="openTopLevel('act-users')">🛡️ ACCESOS</button>
+      <button class="btn nav-btn" id="tabNavFleet" data-tab="act-fleet-mgmt" data-rbac="TECNICO" onclick="openTopLevel('act-fleet-mgmt')">🏢 GESTIÓN FLOTA</button>
+      <button class="btn nav-btn" id="tabNavFota" data-tab="act-fota" data-rbac="TECNICO" onclick="openTopLevel('act-fota')">🚀 FOTA HUB</button>
+      <button class="btn nav-btn" id="tabNavReports" data-tab="act-reports" onclick="openTopLevel('act-reports')">📋 AUDITORÍA SESIONES</button>
+      <button class="btn nav-btn" id="tabNavUsers" data-tab="act-users" data-rbac="SUPERADMIN" onclick="openTopLevel('act-users')">🛡️ ACCESOS RBAC</button>
     </nav>
   </div>
 
@@ -134,9 +134,9 @@
 
         <form onsubmit="event.preventDefault(); procesarInicioSesion();">
           <div class="input-group">
-            <label>SELECCIONAR OPERADOR:</label>
+            <label>SELECCIONAR OPERADOR / CUENTA:</label>
             <select id="loginUserSelect" class="input-field" onchange="seleccionarUsuarioRegistrado(this.value)">
-              <option value="">-- Seleccionar cuenta --</option>
+              <option value="">-- Seleccionar cuenta registrada --</option>
             </select>
           </div>
 
@@ -147,7 +147,7 @@
 
           <div class="input-group">
             <label>CLAVE DE ACCESO [ENTER]:</label>
-            <input type="password" id="loginPassInput" class="input-field" placeholder="Clave de acceso" required>
+            <input type="password" id="loginPassInput" class="input-field" placeholder="Introduce tu clave" required>
           </div>
 
           <button type="submit" class="btn btn-primary w-full" style="margin-top: 6px;">
@@ -157,7 +157,7 @@
 
         <div style="text-align: center; margin-top: 18px;">
           <button class="btn btn-secondary w-full" style="font-size: 0.72rem;" onclick="abrirRecuperacion()">
-            ❓ ¿Olvidaste tu contraseña? (Recuperar Clave)
+            ❓ ¿Olvidaste tu contraseña? (Recuperar por Correo)
           </button>
         </div>
 
@@ -165,50 +165,50 @@
       </div>
     </section>
 
-    <!-- ACTIVITY RECOVERY -->
+    <!-- ACTIVITY: RECUPERACIÓN DE CONTRASEÑA POR CORREO -->
     <section id="act-recovery" class="activity">
       <div class="card auth-box">
         <div style="font-family: 'Orbitron'; font-size: 1.1rem; color: var(--cyan); text-align: center; margin-bottom: 8px;">RECUPERACIÓN DE ACCESO</div>
         <p style="font-size: 0.72rem; color: var(--text-muted); text-align: center; margin-bottom: 18px;">
-          Se enviará la clave temporal a: <br><span style="color: var(--cyan); font-weight: 700;">yuniolgonzalez9@gmail.com</span>
+          Ingresa tu usuario registrado. Se transmitirá una clave temporal cifrada a tu correo oficial configurado en el sistema.
         </p>
         <form onsubmit="event.preventDefault(); solicitarCodigoRecuperacion();">
           <div class="input-group">
             <label>USUARIO A RECUPERAR:</label>
-            <input type="text" id="recovUser" class="input-field" placeholder="Ej: admin" autocapitalize="none" required>
+            <input type="text" id="recovUser" class="input-field" placeholder="Ej: operador_central" autocapitalize="none" required>
           </div>
-          <button type="submit" class="btn btn-primary w-full" id="btnSendRecovery">ENVIAR CLAVE TEMPORAL [ENTER]</button>
+          <button type="submit" class="btn btn-primary w-full" id="btnSendRecovery">ENVIAR CLAVE TEMPORAL AL CORREO [ENTER]</button>
         </form>
         <button class="btn btn-secondary w-full" style="margin-top: 10px;" onclick="openTopLevel('act-login')">← VOLVER AL LOGIN</button>
         <div id="recovFeedback" class="feedback-toast"></div>
       </div>
     </section>
 
-    <!-- ACTIVITY CAMBIO DE CONTRASEÑA -->
+    <!-- ACTIVITY: CAMBIO DE CONTRASEÑA -->
     <section id="act-change-pass" class="activity">
       <div class="card auth-box">
         <div style="font-family: 'Orbitron'; font-size: 1.1rem; color: var(--cyan); text-align: center; margin-bottom: 8px;">MODIFICAR CONTRASEÑA</div>
         <form onsubmit="event.preventDefault(); guardarNuevaContrasena();">
           <div class="input-group">
-            <label>NUEVA CLAVE:</label>
+            <label>NUEVA CLAVE DE ACCESO:</label>
             <input type="password" id="newPassInput" class="input-field" placeholder="Mínimo 4 caracteres" required>
           </div>
           <div class="input-group">
-            <label>CONFIRMAR CLAVE:</label>
-            <input type="password" id="confirmPassInput" class="input-field" placeholder="Repite la clave" required>
+            <label>CONFIRMAR NUEVA CLAVE:</label>
+            <input type="password" id="confirmPassInput" class="input-field" placeholder="Repite la clave exactamente" required>
           </div>
-          <button type="submit" class="btn btn-primary w-full" style="margin-top: 8px;">GUARDAR CONTRASEÑA [ENTER]</button>
+          <button type="submit" class="btn btn-primary w-full" style="margin-top: 8px;">GUARDAR Y ACTUALIZAR CREDENCIAL [ENTER]</button>
         </form>
         <button class="btn btn-secondary w-full" style="margin-top: 10px;" onclick="goBackActivity()">← VOLVER ATRÁS</button>
       </div>
     </section>
 
-    <!-- ACTIVITY 1: TELEMETRÍA (CON FILTRO TÁCTICO) -->
+    <!-- ACTIVITY 1: TELEMETRÍA DE FLOTA (ADAPTATIVA Y SIN HARDCODEO) -->
     <section id="act-telemetry" class="activity">
       <div class="section-title-bar">
         <div>
           <div class="title-primary">ESTADO DE FLOTA EN VIVO</div>
-          <div class="title-secondary">RECEPCIÓN CONTINUA VÍA HIVEMQ CLOUD</div>
+          <div class="title-secondary">MONITOR ADAPTATIVO // RECEPCIÓN DINÁMICA POR MQTT HIVEMQ</div>
         </div>
       </div>
 
@@ -227,12 +227,13 @@
         </button>
       </div>
 
+      <!-- CONTENEDOR DINÁMICO DE TARJETAS DE AUTOCLAVES -->
       <div class="fleet-deck-grid" id="fleetLiveContainer">
-        <div class="empty-deck">BUSCANDO AUTOCLAVES TRANSMITIENDO...</div>
+        <div class="empty-deck">BUSCANDO AUTOCLAVES TRANSMITIENDO CAPACIDADES...</div>
       </div>
     </section>
 
-    <!-- ACTIVITY 2: DETALLE DEL EQUIPO (ACTIVIDAD HIJA) -->
+    <!-- ACTIVITY 2: DETALLE DEL EQUIPO (ESQUEMA ADAPTATIVO DEL CLIENTE) -->
     <section id="act-device-detail" class="activity activity-child">
       <div class="card" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 16px;">
         <div>
@@ -244,19 +245,19 @@
         </div>
         <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
           <span class="status-badge" id="detOnlineBadge"><span class="dot offline"></span> OFFLINE</span>
-          <button class="btn btn-sm btn-danger" onclick="solicitarEliminacionActual()">🗑️ ELIMINAR</button>
+          <button class="btn btn-sm btn-danger" id="btnDetDeleteDevice" data-rbac="SUPERADMIN" onclick="solicitarEliminacionActual()">🗑️ ELIMINAR</button>
         </div>
       </div>
 
       <div class="subtab-slider">
         <button class="btn btn-sm nav-tab active" id="btnSubTele" onclick="switchDetailTab('tab-det-tele')">📊 SENSORES & ESTADO</button>
         <button class="btn btn-sm nav-tab" id="btnSubGraph" onclick="switchDetailTab('tab-det-graph')">📈 CURVA ESTERILIZACIÓN</button>
-        <button class="btn btn-sm nav-tab" id="btnSubCfg" onclick="switchDetailTab('tab-det-cfg')">⚙️ NVS & PARÁMETROS</button>
-        <button class="btn btn-sm nav-tab" id="btnSubFicha" onclick="switchDetailTab('tab-det-ficha')">🏢 ASIGNAR CLIENTE</button>
+        <button class="btn btn-sm nav-tab" id="btnSubCfg" data-rbac="TECNICO" onclick="switchDetailTab('tab-det-cfg')">⚙️ NVS & PARÁMETROS</button>
+        <button class="btn btn-sm nav-tab" id="btnSubFicha" data-rbac="TECNICO" onclick="switchDetailTab('tab-det-ficha')">🏢 ASIGNAR CLIENTE</button>
         <button class="btn btn-sm nav-tab" id="btnSubLogs" onclick="switchDetailTab('tab-det-logs')">📋 HISTORIAL DE CICLOS</button>
       </div>
 
-      <!-- SUBTAB 1: SENSORES -->
+      <!-- SUBTAB 1: SENSORES DINÁMICOS -->
       <div id="tab-det-tele" class="detail-subview">
         <div class="card">
           <div class="gauge-grid" id="containerDynamicGauges"></div>
@@ -282,12 +283,12 @@
         </div>
       </div>
 
-      <!-- SUBTAB 3: CONFIGURACIÓN DINÁMICA -->
+      <!-- SUBTAB 3: CONFIGURACIÓN DINÁMICA (GENERADA POR ESQUEMA) -->
       <div id="tab-det-cfg" class="detail-subview" style="display: none;">
         <div class="card">
           <form id="formDynamicParams" onsubmit="event.preventDefault(); guardarParametrosDinamicos();">
             <div id="containerDynamicMenus"></div>
-            <button type="submit" id="btnGuardarDinamico" class="btn btn-primary w-full" style="margin-top: 14px;">💾 TRANSMITIR AJUSTES [ENTER]</button>
+            <button type="submit" id="btnGuardarDinamico" class="btn btn-primary w-full" style="margin-top: 14px;">💾 TRANSMITIR AJUSTES AL EQUIPO [ENTER]</button>
           </form>
         </div>
       </div>
@@ -316,10 +317,10 @@
       <!-- SUBTAB 5: HISTORIAL ESPECÍFICO -->
       <div id="tab-det-logs" class="detail-subview" style="display: none;">
         <div class="card">
-          <div style="font-size: 0.8rem; color: var(--cyan); font-weight: 800; margin-bottom: 12px;">HISTORIAL DE ESTE EQUIPO:</div>
+          <div style="font-size: 0.8rem; color: var(--cyan); font-weight: 800; margin-bottom: 12px;">PAQUETES DE SESIÓN DE ESTE EQUIPO:</div>
           <div class="table-container">
             <table>
-              <thead><tr><th>SESIÓN / FECHA</th><th>ESTADO</th><th>CICLOS ACUM.</th><th>MANTENIMIENTO</th><th>MAX T/P</th><th>ACCIÓN</th></tr></thead>
+              <thead><tr><th>FECHA / SESIÓN</th><th>ESTADO</th><th>CICLOS EXACTOS</th><th>SALUD MANT.</th><th>MÁXIMOS</th><th>ACCIÓN</th></tr></thead>
               <tbody id="detLogsTbody"></tbody>
             </table>
           </div>
@@ -327,7 +328,7 @@
       </div>
     </section>
 
-    <!-- ACTIVITY 3: FOTA HUB -->
+    <!-- ACTIVITY 3: FOTA HUB (SOLO TÉCNICO Y SUPERADMIN) -->
     <section id="act-fota" class="activity">
       <div class="section-title-bar">
         <div>
@@ -347,17 +348,17 @@
             <input type="text" id="fotaUrlInput" class="input-field" value="https://raw.githubusercontent.com/yuniolgonzalez9/Autoclave-Scada-Fleet/Principal/firmwares/firmware.bin">
           </div>
           <div class="input-group">
-            <label>SELECCIONAR ARCHIVO BINARIO:</label>
+            <label>CARGAR BINARIO LOCAL:</label>
             <div class="drop-zone" onclick="document.getElementById('fileBinInput').click()">
               <input type="file" id="fileBinInput" accept=".bin" style="display: none;" onchange="handleFileSelected(this.files)">
-              <div id="dropFileName" style="color: var(--cyan); font-weight: 700;">Click para cargar firmware.bin</div>
+              <div id="dropFileName" style="color: var(--cyan); font-weight: 700;">Click para seleccionar archivo .bin</div>
             </div>
           </div>
         </div>
 
         <div class="card">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 6px;">
-            <div style="font-family: 'Orbitron'; font-size: 0.85rem; color: var(--cyan); font-weight: 800;">SELECCIÓN DE EQUIPOS:</div>
+            <div style="font-family: 'Orbitron'; font-size: 0.85rem; color: var(--cyan); font-weight: 800;">EQUIPOS DESTINO:</div>
             <div style="display: flex; gap: 6px; flex-wrap: wrap;">
               <button class="btn btn-sm btn-secondary" onclick="filterFotaList('ALL')">TODOS</button>
               <button class="btn btn-sm btn-secondary" onclick="filterFotaList('ONLINE')">ONLINE</button>
@@ -371,12 +372,12 @@
       </div>
     </section>
 
-    <!-- ACTIVITY 4: GESTIÓN DE FLOTA -->
+    <!-- ACTIVITY 4: GESTIÓN DE FLOTA (SOLO TÉCNICO Y SUPERADMIN) -->
     <section id="act-fleet-mgmt" class="activity">
       <div class="section-title-bar">
         <div>
           <div class="title-primary">DIRECTORIO & GESTIÓN DE FLOTA</div>
-          <div class="title-secondary">ASIGNACIÓN, CONTROL RÁPIDO Y REGISTRO CENTRALIZADO</div>
+          <div class="title-secondary">ASIGNACIÓN Y GESTIÓN EN NUBE DIRECTA</div>
         </div>
       </div>
 
@@ -413,7 +414,7 @@
         </div>
 
         <div class="card">
-          <div style="font-size: 0.72rem; color: var(--text-muted); margin-bottom: 8px;">👉 Toca cualquier equipo para editarlo o probarlo en vivo:</div>
+          <div style="font-size: 0.72rem; color: var(--text-muted); margin-bottom: 8px;">👉 Toca cualquier equipo para editarlo o gestionarlo:</div>
           <div class="table-container">
             <table>
               <thead><tr><th>MAC</th><th>ESTADO</th><th>ALIAS</th><th>CLIENTE</th><th>MODELO</th><th>ACCIONES</th></tr></thead>
@@ -424,46 +425,46 @@
       </div>
     </section>
 
-    <!-- ACTIVITY 5: REPORTES & GESTIÓN DE ALMACENAMIENTO -->
+    <!-- ACTIVITY 5: AUDITORÍA DE REPORTES POR PAQUETE COMPLETO -->
     <section id="act-reports" class="activity">
       <div class="section-title-bar">
         <div>
           <div class="title-primary">CENTRO DE AUDITORÍA CLÍNICA</div>
-          <div style="font-size: 0.65rem; color: var(--text-muted);">GESTIÓN ROBUSTA DE REGISTROS, COPIAS DE SEGURIDAD Y NORMAS MÉDICAS</div>
+          <div style="font-size: 0.65rem; color: var(--text-muted);">PAQUETES DE SESIÓN (ENCENDIDO ➔ CICLOS EXACTOS ➔ APAGADO)</div>
         </div>
         
-        <!-- HERRAMIENTAS DE GESTIÓN DE DATOS -->
+        <!-- HERRAMIENTAS DE GESTIÓN -->
         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-          <button class="btn btn-sm btn-secondary" onclick="descargarBackupJSON()" title="Copia de seguridad local JSON">💾 BACKUP JSON</button>
-          <button class="btn btn-sm btn-secondary" onclick="document.getElementById('inputRestoreJSON').click()" title="Restaurar copia local">📤 RESTAURAR</button>
+          <button class="btn btn-sm btn-secondary" onclick="descargarBackupJSON()" title="Descargar copia de seguridad clínica en JSON">💾 BACKUP JSON</button>
+          <button class="btn btn-sm btn-secondary" data-rbac="SUPERADMIN" onclick="document.getElementById('inputRestoreJSON').click()" title="Restaurar copia local">📤 RESTAURAR</button>
           <input type="file" id="inputRestoreJSON" accept=".json" style="display:none;" onchange="restaurarBackupJSON(this.files)">
           <button class="btn btn-sm btn-secondary" onclick="exportarRegistrosCSV()">📥 EXPORTAR CSV</button>
-          <button class="btn btn-sm btn-warn" onclick="eliminarReportesSeleccionados()">🗑️ ELIMINAR MARCADOS</button>
-          <button class="btn btn-sm btn-danger" id="btnVaciarLogs" onclick="confirmarVaciarDB()">🧹 VACIAR NUBE</button>
+          <button class="btn btn-sm btn-warn" id="btnEliminarReportes" data-rbac="SUPERADMIN" onclick="eliminarReportesSeleccionados()">🗑️ ELIMINAR MARCADOS</button>
+          <button class="btn btn-sm btn-danger" id="btnVaciarLogs" data-rbac="SUPERADMIN" onclick="confirmarVaciarDB()">🧹 VACIAR NUBE</button>
         </div>
       </div>
 
       <!-- KPIS AUDITABLES -->
       <div class="kpi-grid">
-        <div class="kpi-card"><div class="kpi-val" id="kpiTotalSesiones">0</div><div class="kpi-lbl">SESIONES AUDITADAS</div></div>
+        <div class="kpi-card"><div class="kpi-val" id="kpiTotalSesiones">0</div><div class="kpi-lbl">PAQUETES DE SESIÓN</div></div>
         <div class="kpi-card"><div class="kpi-val text-green" id="kpiTotalCiclos">0</div><div class="kpi-lbl">CICLOS CONFORMES</div></div>
         <div class="kpi-card"><div class="kpi-val text-amber" id="kpiMantenimientoAlerta">0</div><div class="kpi-lbl">ALERTAS MANTENIMIENTO</div></div>
         <div class="kpi-card"><div class="kpi-val text-red" id="kpiTotalAlarmas">0</div><div class="kpi-lbl">INCIDENTES TÉRMICOS</div></div>
       </div>
 
-      <!-- FILTRADO AVANZADO Y CONTROL DE CONSULTA -->
+      <!-- FILTRADO AVANZADO -->
       <div class="card" style="margin-bottom: 14px; padding: 14px;">
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px;">
           <div>
-            <label style="font-size: 0.68rem; color: var(--cyan); font-weight:800;">EQUIPO:</label>
+            <label style="font-size: 0.68rem; color: var(--cyan); font-weight:800;">EQUIPO / CLIENTE:</label>
             <select id="filterDeviceSelect" class="input-field" onchange="renderizarRegistros()"><option value="TODOS">TODOS LOS EQUIPOS</option></select>
           </div>
           <div>
-            <label style="font-size: 0.68rem; color: var(--cyan); font-weight:800;">FILTRAR ESTADO:</label>
+            <label style="font-size: 0.68rem; color: var(--cyan); font-weight:800;">ESTADO DE SESIÓN:</label>
             <select id="filterType" class="input-field" onchange="renderizarRegistros()">
               <option value="TODOS">TODAS LAS SESIONES</option>
-              <option value="CICLO_OK">CICLOS COMPLETADOS (CONFORME)</option>
-              <option value="ALARMA">SESIONES CON FALLOS</option>
+              <option value="CICLO_OK">CON CICLOS CONFORMES</option>
+              <option value="ALARMA">CON ALARMAS / ERRORES</option>
               <option value="MANT_WARN">PRÓXIMOS A MANTENIMIENTO</option>
               <option value="OFFLINE_SYNC">SINCRONIZADOS OFFLINE</option>
             </select>
@@ -479,19 +480,20 @@
           <div>
             <label style="font-size: 0.68rem; color: var(--cyan); font-weight:800;">LÍMITE CONSULTA:</label>
             <select id="filterLimit" class="input-field" onchange="renderizarRegistros()">
-              <option value="50">Últimos 50 registros</option>
-              <option value="100" selected>Últimos 100 registros</option>
-              <option value="300">Últimos 300 registros</option>
+              <option value="50">Últimos 50 paquetes</option>
+              <option value="100" selected>Últimos 100 paquetes</option>
+              <option value="300">Últimos 300 paquetes</option>
               <option value="ALL">Sin límite (Todos)</option>
             </select>
           </div>
           <div>
-            <label style="font-size: 0.68rem; color: var(--cyan); font-weight:800;">BUSCADOR RÁPIDO:</label>
-            <input type="text" id="filterInput" class="input-field" placeholder="Buscar texto, clínica..." onkeyup="renderizarRegistros()">
+            <label style="font-size: 0.68rem; color: var(--cyan); font-weight:800;">BUSCADOR TEXTO:</label>
+            <input type="text" id="filterInput" class="input-field" placeholder="Buscar sesión, cliente..." onkeyup="renderizarRegistros()">
           </div>
         </div>
       </div>
 
+      <!-- TABLA DE PAQUETES CLICKEABLES (SELECCIÓN AL TOCAR CUALQUIER PARTE) -->
       <div class="table-container">
         <table>
           <thead>
@@ -499,10 +501,10 @@
               <th style="width: 36px; text-align: center;"><input type="checkbox" id="checkSelectAllReports" onchange="toggleSelectAllReports(this.checked)"></th>
               <th>FECHA / SESIÓN</th>
               <th>AUTOCLAVE & CLIENTE</th>
-              <th>HORARIOS (ON / OFF)</th>
-              <th>CICLOS & SALUD MANT.</th>
-              <th>MÁXIMOS (T° / P)</th>
-              <th>DIAGNÓSTICO FINAL</th>
+              <th>HORARIOS (ENCENDIDO / APAGADO)</th>
+              <th>CICLOS EN ESTA SESIÓN</th>
+              <th>PICO MÁXIMO (T° / P)</th>
+              <th>DIAGNÓSTICO GLOBAL</th>
               <th>ACCIONES</th>
             </tr>
           </thead>
@@ -511,12 +513,12 @@
       </div>
     </section>
 
-    <!-- ACTIVITY: VISOR DETALLADO DEL REPORTE -->
+    <!-- ACTIVITY: VISOR DETALLADO DEL PAQUETE DE SESIÓN -->
     <section id="act-report-view" class="activity activity-child">
       <div class="card" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
         <div>
-          <button class="btn btn-sm btn-secondary" style="margin-bottom: 8px;" onclick="goBackActivity()">← VOLVER A REPORTES</button>
-          <div class="activity-title" id="repPkgTitle">INFORME DE CICLO ESTÉRIL</div>
+          <button class="btn btn-sm btn-secondary" style="margin-bottom: 8px;" onclick="goBackActivity()">← VOLVER A PAQUETES</button>
+          <div class="activity-title" id="repPkgTitle">PAQUETE COMPLETO DE SESIÓN</div>
           <div style="font-size: 0.7rem; color: var(--text-muted);" id="repPkgSub">ID: -- | EQUIPO: --</div>
         </div>
         <button class="btn btn-primary" onclick="imprimirCertificadoSesionActual()">🖨️ IMPRIMIR CERTIFICADO MÉDICO</button>
@@ -524,10 +526,10 @@
 
       <div class="card">
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 20px;">
-          <div><span style="color:var(--text-muted); font-size:0.7rem;">HORA ENCENDIDO:</span> <div id="repEncendidoVal" style="font-weight:800; color:var(--cyan);">--</div></div>
-          <div><span style="color:var(--text-muted); font-size:0.7rem;">HORA APAGADO / FIN:</span> <div id="repApagadoVal" style="font-weight:800; color:var(--text-main);">--</div></div>
+          <div><span style="color:var(--text-muted); font-size:0.7rem;">HORA ENCENDIDO (BOOT):</span> <div id="repEncendidoVal" style="font-weight:800; color:var(--cyan);">--</div></div>
+          <div><span style="color:var(--text-muted); font-size:0.7rem;">HORA APAGADO (SHUTDOWN):</span> <div id="repApagadoVal" style="font-weight:800; color:var(--text-main);">--</div></div>
           <div><span style="color:var(--text-muted); font-size:0.7rem;">TOTAL EVENTOS:</span> <div id="repUptimeVal" style="font-weight:800; color:var(--green);">--</div></div>
-          <div><span style="color:var(--text-muted); font-size:0.7rem;">CICLOS EQUIPO:</span> <div id="repCiclosVal" style="font-weight:800; color:var(--amber);">--</div></div>
+          <div><span style="color:var(--text-muted); font-size:0.7rem;">CICLOS ACUMULADOS:</span> <div id="repCiclosVal" style="font-weight:800; color:var(--amber);">--</div></div>
         </div>
 
         <div style="margin-bottom: 25px;">
@@ -538,48 +540,57 @@
           <div class="health-bar"><div class="health-fill" id="repMantBar" style="width: 0%;"></div></div>
         </div>
 
-        <div style="font-family:'Orbitron'; font-size:0.9rem; color:var(--cyan); font-weight:800; margin-bottom:14px;">REGISTRO CRONOLÓGICO CONTINUO DE LA SESIÓN:</div>
+        <!-- LISTADO DE CICLOS EXACTOS NUMERADOS DENTRO DE LA SESIÓN -->
+        <div style="font-family:'Orbitron'; font-size:0.9rem; color:var(--cyan); font-weight:800; margin-bottom:14px;">CICLOS EJECUTADOS EN ESTA SESIÓN:</div>
+        <div id="repCyclesListContainer" style="margin-bottom: 24px;"></div>
+
+        <!-- REGISTRO CRONOLÓGICO CONTINUO -->
+        <div style="font-family:'Orbitron'; font-size:0.9rem; color:var(--cyan); font-weight:800; margin-bottom:14px;">REGISTRO CRONOLÓGICO DESDE ENCENDIDO HASTA APAGADO:</div>
         <div id="repTimelineContainer" style="padding-left: 14px;"></div>
       </div>
     </section>
 
-    <!-- ACTIVITY 6: USUARIOS -->
+    <!-- ACTIVITY 6: CONTROL DE ACCESOS Y USUARIOS RBAC (SOLO SUPERADMIN) -->
     <section id="act-users" class="activity">
       <div class="section-title-bar">
         <div>
-          <div class="title-primary">CONTROL DE ACCESO & ROLES</div>
-          <div class="title-secondary">JERARQUÍA MULTIUSUARIO RBAC</div>
+          <div class="title-primary">CONTROL DE ACCESO & ROLES (RBAC)</div>
+          <div class="title-secondary">ADMINISTRACIÓN TOTAL DE CREDENCIALES Y JERARQUÍAS</div>
         </div>
       </div>
       <div class="grid-split">
         <div class="card">
-          <div style="font-family:'Orbitron'; font-size:0.85rem; color:var(--cyan); font-weight:800; margin-bottom:12px;">+ NUEVA CREDENCIAL</div>
+          <div style="font-family:'Orbitron'; font-size:0.85rem; color:var(--cyan); font-weight:800; margin-bottom:12px;">+ REGISTRAR NUEVO USUARIO</div>
           <form onsubmit="event.preventDefault(); crearUsuario();">
             <div class="input-group">
-              <label>NOMBRE DE USUARIO:</label>
-              <input type="text" id="uUser" class="input-field" placeholder="Ej: enfermero_quirofano" required>
+              <label>NOMBRE DE USUARIO (IDENTIFICADOR):</label>
+              <input type="text" id="uUser" class="input-field" placeholder="Ej: enfermero_quirofano1" required>
             </div>
             <div class="input-group">
-              <label>CONTRASEÑA:</label>
+              <label>CORREO ELECTRÓNICO (PARA RECUPERACIÓN):</label>
+              <input type="email" id="uEmail" class="input-field" placeholder="Ej: correo@clinica.com" value="yuniolgonzalez9@gmail.com" required>
+            </div>
+            <div class="input-group">
+              <label>CONTRASEÑA INICIAL:</label>
               <input type="password" id="uPass" class="input-field" placeholder="Mínimo 4 caracteres" required>
             </div>
             <div class="input-group">
-              <label>NIVEL DE PRIVILEGIO:</label>
+              <label>NIVEL DE PRIVILEGIO (JERARQUÍA):</label>
               <select id="uRol" class="input-field">
-                <option value="OPERADOR">OPERADOR (NIVEL 3: Solo ciclos)</option>
-                <option value="TECNICO">TÉCNICO (NIVEL 2: FOTA y Calibración)</option>
-                <option value="SUPERADMIN">SUPERADMIN (NIVEL 1: Control Total)</option>
+                <option value="OPERADOR">OPERADOR (NIVEL 3: Solo ver telemetría y ciclos)</option>
+                <option value="TECNICO">TÉCNICO (NIVEL 2: FOTA, Gestión y Calibración NVS)</option>
+                <option value="SUPERADMIN">SUPERADMIN (NIVEL 1: Control Total de la Plataforma)</option>
               </select>
             </div>
-            <button type="submit" class="btn btn-primary w-full">+ CREAR USUARIO [ENTER]</button>
+            <button type="submit" class="btn btn-primary w-full">+ CREAR USUARIO EN LA NUBE [ENTER]</button>
           </form>
         </div>
 
         <div class="card">
-          <div style="font-family:'Orbitron'; font-size:0.85rem; color:var(--cyan); font-weight:800; margin-bottom:12px;">USUARIOS ACTIVOS</div>
+          <div style="font-family:'Orbitron'; font-size:0.85rem; color:var(--cyan); font-weight:800; margin-bottom:12px;">USUARIOS ACTIVOS Y JERARQUÍA</div>
           <div class="table-container">
             <table>
-              <thead><tr><th>USUARIO</th><th>ROL</th><th>FECHA ALTA</th><th>ACCIÓN</th></tr></thead>
+              <thead><tr><th>USUARIO</th><th>ROL</th><th>CORREO</th><th>FECHA ALTA</th><th>ACCIÓN</th></tr></thead>
               <tbody id="tablaUsuariosBody"></tbody>
             </table>
           </div>
@@ -589,30 +600,30 @@
 
   </main>
 
-  <!-- BARRA DE NAVEGACIÓN INFERIOR PARA MÓVILES -->
+  <!-- BARRA DE NAVEGACIÓN INFERIOR PARA MÓVILES (ADAPTATIVA A LA JERARQUÍA) -->
   <nav class="mobile-bottom-nav" id="mobileBottomNav">
     <button class="m-tab active" data-tab="act-telemetry" onclick="openTopLevel('act-telemetry')">
       <span class="m-icon">⚡</span>
       <span class="m-label">Flota</span>
     </button>
-    <button class="m-tab" data-tab="act-fleet-mgmt" onclick="openTopLevel('act-fleet-mgmt')">
+    <button class="m-tab" id="tabMobileFleet" data-tab="act-fleet-mgmt" data-rbac="TECNICO" onclick="openTopLevel('act-fleet-mgmt')">
       <span class="m-icon">🏢</span>
       <span class="m-label">Gestión</span>
     </button>
-    <button class="m-tab" data-tab="act-fota" onclick="openTopLevel('act-fota')">
+    <button class="m-tab" id="tabMobileFota" data-tab="act-fota" data-rbac="TECNICO" onclick="openTopLevel('act-fota')">
       <span class="m-icon">🚀</span>
       <span class="m-label">FOTA</span>
     </button>
-    <button class="m-tab" data-tab="act-reports" onclick="openTopLevel('act-reports')">
+    <button class="m-tab" id="tabMobileReports" data-tab="act-reports" onclick="openTopLevel('act-reports')">
       <span class="m-icon">📋</span>
-      <span class="m-label">Reportes</span>
+      <span class="m-label">Auditoría</span>
     </button>
-    <button class="m-tab" id="tabMobileUsers" data-tab="act-users" onclick="openTopLevel('act-users')">
+    <button class="m-tab" id="tabMobileUsers" data-tab="act-users" data-rbac="SUPERADMIN" onclick="openTopLevel('act-users')">
       <span class="m-icon">🛡️</span>
       <span class="m-label">Admin</span>
     </button>
   </nav>
 
-  <script src="app.js?v=12"></script>
+  <script src="app.js?v=13"></script>
 </body>
 </html>
