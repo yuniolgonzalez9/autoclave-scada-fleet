@@ -1,5 +1,5 @@
 // =========================================================================
-// 1. CONFIGURACIÓN DE BASE DE DATOS EN LA NUBE (SUPABASE CLOUD)
+// 1. CONFIGURACIÓN SUPABASE CLOUD (BASE DE DATOS EN LA NUBE 24/7)
 // =========================================================================
 const SUPABASE_URL = "https://gjtqyodpgwfvfvkhlhik.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdqdHF5b2RwZ3dmdmZ2a2hsaGlrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAwNDAzNTYsImV4cCI6MjEwNTYxNjM1Nn0.g8t_PbEityaneKkOUHttQ_cZv50aczLU4Z9la8R4d_g";
@@ -9,9 +9,101 @@ const sbClient = (window.supabase && window.supabase.createClient)
   : null;
 
 // =========================================================================
-// 2. NOTIFICACIÓN Y NAVEGACIÓN BLINDADA
+// 2. ENRUTADOR JERÁRQUICO TIPO APP NATIVA (ROUTER 2.0)
 // =========================================================================
-let toastTimer = null;
+let currentTopLevel = 'act-telemetry';
+let currentActivity = 'act-login';
+let currentInspectedMAC = null;
+let currentDetailSubTab = 'tab-det-tele';
+let currentViewingReport = null;
+let usuarioActual = null;
+let ultimoToqueAtras = 0;
+
+window.openTopLevel = function(secId) {
+  currentTopLevel = secId;
+  currentInspectedMAC = null;
+  history.replaceState({ type: 'top', secId: secId }, '', '#' + secId);
+  renderScreen(secId);
+  guardarRutaNavegacion();
+};
+
+window.openActivity = function(actId) {
+  if (currentActivity !== actId) {
+    history.pushState({ type: 'child', actId: actId, parent: currentTopLevel }, '', '#' + actId);
+    renderScreen(actId);
+    guardarRutaNavegacion();
+  }
+};
+
+window.goBackActivity = function() {
+  history.back();
+};
+
+window.addEventListener('popstate', () => {
+  if (!usuarioActual) {
+    renderScreen('act-login');
+    return;
+  }
+
+  if (currentActivity === 'act-device-detail' || currentActivity === 'act-report-view') {
+    currentInspectedMAC = null;
+    renderScreen(currentTopLevel);
+    guardarRutaNavegacion();
+    return;
+  }
+
+  const ahora = Date.now();
+  if (ahora - ultimoToqueAtras < 2500) {
+    // Permitir retroceso
+  } else {
+    ultimoToqueAtras = ahora;
+    history.pushState({ type: 'top', secId: currentTopLevel }, '', '#' + currentTopLevel);
+    notify("⚠️ Presiona atrás una vez más para salir del SCADA", "var(--amber)");
+  }
+});
+
+function renderScreen(screenId) {
+  currentActivity = screenId;
+  const esPublico = (screenId === 'act-login' || screenId === 'act-recovery');
+
+  const topBar = document.getElementById('topAppBar');
+  const dNav = document.getElementById('desktopNavBar');
+  const mNav = document.getElementById('mobileBottomNav');
+  const backBtn = document.getElementById('btnGlobalBack');
+
+  if (topBar) topBar.style.display = esPublico ? 'none' : 'flex';
+  if (dNav) dNav.style.display = esPublico ? 'none' : 'flex';
+  if (mNav) mNav.style.display = esPublico ? 'none' : 'flex';
+
+  const esPantallaHija = (screenId === 'act-device-detail' || screenId === 'act-report-view');
+  if (backBtn) backBtn.style.display = esPantallaHija ? 'inline-flex' : 'none';
+
+  document.querySelectorAll('.activity').forEach(a => a.classList.remove('active'));
+  const target = document.getElementById(screenId);
+  if (target) target.classList.add('active');
+
+  if (!esPublico && !esPantallaHija) {
+    document.querySelectorAll('.d-tab, .m-tab').forEach(t => {
+      t.classList.toggle('active', t.getAttribute('data-tab') === screenId);
+    });
+  }
+
+  if (screenId === 'act-fota') renderFotaLiveList();
+  if (screenId === 'act-fleet-mgmt') renderFleetMgmtTable();
+  if (screenId === 'act-reports') renderizarRegistros();
+}
+
+function guardarRutaNavegacion() {
+  if (usuarioActual) {
+    localStorage.setItem("scada_nav_route_v2", JSON.stringify({
+      topLevel: currentTopLevel,
+      activity: currentActivity,
+      mac: currentInspectedMAC,
+      subTab: currentDetailSubTab
+    }));
+  }
+}
+
 function notify(msg, color = 'var(--cyan)') {
   const t = document.getElementById("toastApp");
   if (!t) return;
@@ -19,158 +111,12 @@ function notify(msg, color = 'var(--cyan)') {
   t.style.borderColor = color;
   t.style.color = color;
   t.style.display = "block";
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { t.style.display = "none"; }, 2000);
+  clearTimeout(t.timer);
+  t.timer = setTimeout(() => { t.style.display = "none"; }, 2200);
 }
-
-const RUTAS_PUBLICAS = ['act-login', 'act-recovery'];
-let activityStack = ['act-login'];
-let currentInspectedMAC = null;
-let currentDetailSubTab = 'tab-det-tele';
-let currentViewingReport = null;
-let usuarioActual = null;
-let temporizadorInactividad = null;
-const TIEMPO_LIMITE_INACTIVIDAD = 45 * 60 * 1000;
-
-function guardarEstadoRuta() {
-  if (usuarioActual) {
-    localStorage.setItem("scada_route_state", JSON.stringify({
-      actId: activityStack[activityStack.length - 1],
-      mac: currentInspectedMAC,
-      subTab: currentDetailSubTab
-    }));
-  }
-}
-
-function fijarHistorialInfinito() {
-  history.pushState({ app: 'scada' }, '', window.location.href);
-}
-fijarHistorialInfinito();
-
-window.openActivity = function(actId) {
-  if (activityStack[activityStack.length - 1] !== actId) {
-    activityStack.push(actId);
-    fijarHistorialInfinito();
-  }
-  renderActivity(actId);
-  guardarEstadoRuta();
-};
-
-window.goBackActivity = function() {
-  if (activityStack.length > 1) {
-    history.back();
-  }
-};
-
-window.addEventListener('popstate', (event) => {
-  fijarHistorialInfinito();
-
-  if (!usuarioActual) {
-    activityStack = ['act-login'];
-    renderActivity('act-login');
-    return;
-  }
-
-  activityStack = activityStack.filter(act => !RUTAS_PUBLICAS.includes(act));
-  if (activityStack.length === 0) activityStack = ['act-telemetry'];
-
-  if (activityStack.length > 1) {
-    activityStack.pop();
-    const prevAct = activityStack[activityStack.length - 1];
-    renderActivity(prevAct);
-    guardarEstadoRuta();
-  } else {
-    renderActivity('act-telemetry');
-    notify("⛔ Estás en el panel principal. Usa SALIR para desconectar.", "var(--amber)");
-  }
-});
-
-function renderActivity(actId) {
-  if (!usuarioActual) {
-    if (!RUTAS_PUBLICAS.includes(actId)) {
-      actId = 'act-login';
-      activityStack = ['act-login'];
-    }
-  } else {
-    if (RUTAS_PUBLICAS.includes(actId)) {
-      actId = 'act-telemetry';
-      activityStack = ['act-telemetry'];
-    }
-  }
-
-  const esPublico = RUTAS_PUBLICAS.includes(actId);
-  const topBar = document.getElementById('topAppBar');
-  const navBar = document.getElementById('mainNavBar');
-  if (topBar) topBar.style.display = esPublico ? 'none' : 'flex';
-  if (navBar) navBar.style.display = esPublico ? 'none' : 'flex';
-
-  document.querySelectorAll('.activity').forEach(a => a.classList.remove('active'));
-  const target = document.getElementById(actId);
-  if (target) target.classList.add('active');
-
-  const backBtn = document.getElementById('btnGlobalBack');
-  if (backBtn) {
-    backBtn.style.display = (!esPublico && activityStack.length > 1) ? 'inline-flex' : 'none';
-  }
-
-  if (!esPublico) {
-    document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
-    const activeNavTab = Array.from(document.querySelectorAll('.nav-tab')).find(t => t.getAttribute('onclick')?.includes(actId));
-    if (activeNavTab) activeNavTab.classList.add('active');
-  }
-
-  if (actId === 'act-fota') renderFotaLiveList();
-  if (actId === 'act-fleet-mgmt') renderFleetMgmtTable();
-  if (actId === 'act-reports') renderizarRegistros();
-}
-
-window.refrescarSistemaCompleto = function() {
-  cargarEquiposGuardados();
-  renderFleetDashboard();
-  if (activityStack[activityStack.length - 1] === 'act-reports') renderizarRegistros();
-  notify("⚡ Sincronizado con la nube", "var(--green)");
-};
-
-window.alternarPantallaCompleta = function() {
-  const el = document.documentElement;
-  if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-    if (el.requestFullscreen) el.requestFullscreen();
-    else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
-  } else {
-    if (document.exitFullscreen) document.exitFullscreen();
-    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
-  }
-};
-
-function reiniciarTemporizadorInactividad() {
-  if (temporizadorInactividad) clearTimeout(temporizadorInactividad);
-  if (usuarioActual) {
-    temporizadorInactividad = setTimeout(() => {
-      cerrarSesionManual();
-    }, TIEMPO_LIMITE_INACTIVIDAD);
-  }
-}
-
-['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'].forEach(evt => {
-  window.addEventListener(evt, reiniciarTemporizadorInactividad, { passive: true });
-});
-
-window.cerrarSesionManual = function() {
-  usuarioActual = null;
-  currentInspectedMAC = null;
-  localStorage.removeItem("scada_logged_user");
-  localStorage.removeItem("scada_route_state");
-  if (temporizadorInactividad) clearTimeout(temporizadorInactividad);
-  
-  activityStack = ['act-login'];
-  history.replaceState({ app: 'login' }, '', window.location.pathname + '#login');
-  renderActivity('act-login');
-  cargarListaUsuariosLogin();
-  notify("Sesión cerrada de forma segura", "var(--text-muted)");
-};
 
 // =========================================================================
-// 3. BASE DE DATOS LOCAL Y ASIGNACIONES EN LA NUBE
+// 3. PERSISTENCIA DE SESIÓN & BASE DE DATOS LOCAL
 // =========================================================================
 let db = null;
 const fleet = {};
@@ -180,7 +126,7 @@ function initDB() {
   return new Promise((resolve) => {
     localStorage.setItem("scada_pass_admin", "24331973");
 
-    const req = indexedDB.open("AutoclaveFastFleetDB_v19", 1);
+    const req = indexedDB.open("AutoclaveFastFleetDB_v20", 1);
     req.onupgradeneeded = (e) => {
       db = e.target.result;
       if (!db.objectStoreNames.contains("asignaciones")) db.createObjectStore("asignaciones", { keyPath: "mac" });
@@ -188,29 +134,10 @@ function initDB() {
       if (!db.objectStoreNames.contains("reportes_sesiones")) {
         const sr = db.createObjectStore("reportes_sesiones", { keyPath: "id", autoIncrement: true });
         sr.createIndex("mac", "mac", { unique: false });
-        sr.createIndex("fecha", "fecha", { unique: false });
       }
     };
     req.onsuccess = (e) => {
       db = e.target.result;
-      
-      const tx = db.transaction(["usuarios"], "readwrite");
-      const store = tx.objectStore("usuarios");
-      store.get("admin").onsuccess = (ev) => {
-        if (!ev.target.result) {
-          store.add({
-            user: "admin",
-            pass: "24331973",
-            rol: "SUPERADMIN",
-            email: "yuniolgonzalez9@gmail.com",
-            otp: null,
-            otpExpires: 0,
-            otpUsado: false,
-            fecha: new Date().toISOString()
-          });
-        }
-      };
-
       cargarEquiposGuardados();
       cargarListaUsuariosLogin();
       cargarUsuariosUI();
@@ -232,25 +159,23 @@ function verificarSesionPersistente() {
       const userObj = JSON.parse(sesionGuardada);
       iniciarSesionExitosa(userObj, true);
 
-      const route = JSON.parse(localStorage.getItem("scada_route_state") || "null");
-      if (route && route.actId && !RUTAS_PUBLICAS.includes(route.actId)) {
-        if (route.actId === 'act-device-detail' && route.mac) {
+      const route = JSON.parse(localStorage.getItem("scada_nav_route_v2") || "null");
+      if (route && route.activity) {
+        if (route.activity === 'act-device-detail' && route.mac) {
           abrirDetalleEquipo(route.mac);
           if (route.subTab) switchDetailTab(route.subTab);
         } else {
-          openActivity(route.actId);
+          openTopLevel(route.topLevel || 'act-telemetry');
         }
       }
     } catch(e) {
-      localStorage.removeItem("scada_logged_user");
-      renderActivity('act-login');
+      renderScreen('act-login');
     }
   } else {
-    renderActivity('act-login');
+    renderScreen('act-login');
   }
 }
 
-// Cargar nombres de autoclaves desde Supabase (o respaldo IndexedDB)
 async function cargarEquiposGuardados() {
   if (sbClient) {
     try {
@@ -267,7 +192,6 @@ async function cargarEquiposGuardados() {
     } catch(e) {}
   }
 
-  // Respaldo local
   if (db) {
     const tx = db.transaction(["asignaciones"], "readonly");
     tx.objectStore("asignaciones").getAll().onsuccess = (e) => {
@@ -282,137 +206,7 @@ async function cargarEquiposGuardados() {
 }
 
 // =========================================================================
-// 4. MOTOR DE REPORTES Y SUPABASE REALTIME
-// =========================================================================
-function registrarEventoEnSesion(mac, tipo, msg, extra = {}) {
-  const ahora = new Date().toISOString();
-  const meta = fleet[mac]?.meta || { alias: mac, modelo: "Autoclave", cliente: "Clínica", ciclosCompletados: 0, limiteMantenimiento: 200 };
-
-  if (!sesionesActivas[mac]) {
-    sesionesActivas[mac] = {
-      sessionId: `SES-${mac}-${Date.now()}`,
-      mac: mac,
-      alias: meta.alias,
-      modelo: meta.modelo,
-      cliente: meta.cliente,
-      fecha: ahora,
-      horaEncendido: new Date().toLocaleTimeString(),
-      horaApagado: "EN OPERACIÓN",
-      ciclosAcumulados: meta.ciclosCompletados,
-      limiteMantenimiento: meta.limiteMantenimiento,
-      tempMax: extra.temp || 25.0,
-      presMax: extra.presion || 0.0,
-      conteoAlarmas: 0,
-      diagnosticoPrincipal: "🟢 EQUIPO EN LÍNEA (LISTO)",
-      eventos: [],
-      esOffline: false
-    };
-  }
-
-  const ses = sesionesActivas[mac];
-
-  ses.eventos.push({
-    hora: new Date().toLocaleTimeString(),
-    tipo: tipo,
-    msg: msg,
-    temp: extra.temp !== undefined ? extra.temp : 0,
-    presion: extra.presion !== undefined ? extra.presion : 0
-  });
-
-  if (extra.temp && extra.temp > ses.tempMax) ses.tempMax = extra.temp;
-  if (extra.presion && extra.presion > ses.presMax) ses.presMax = extra.presion;
-
-  if (tipo === "ALARMA") {
-    ses.conteoAlarmas++;
-    ses.diagnosticoPrincipal = `⚠️ ${msg.toUpperCase()}`;
-  } else if (tipo === "CICLO_OK") {
-    ses.diagnosticoPrincipal = `✅ CICLO CONFORME #${meta.ciclosCompletados} (${ses.tempMax.toFixed(1)}°C / ${ses.presMax.toFixed(2)}b)`;
-  } else if (tipo === "INICIO_CICLO") {
-    ses.diagnosticoPrincipal = `⏳ CALENTANDO A SETPOINT (${extra.sp || 121}°C)`;
-  } else if (tipo === "ESTERILIZANDO") {
-    ses.diagnosticoPrincipal = `🟣 MESETA ESTÉRIL (${extra.temp.toFixed(1)}°C / ${extra.presion.toFixed(2)}b)`;
-  } else if (tipo === "DESPRESURIZANDO") {
-    ses.diagnosticoPrincipal = `🔵 DESPRESURIZANDO CÁMARA`;
-  } else if (tipo === "APAGADO") {
-    ses.horaApagado = new Date().toLocaleTimeString();
-    if (ses.conteoAlarmas === 0 && !ses.diagnosticoPrincipal.includes("CONFORME")) {
-      ses.diagnosticoPrincipal = "⚪ SESIÓN CERRADA / APAGADO";
-    }
-  }
-
-  guardarSesionEnDB(ses);
-  guardarSesionEnSupabase(ses);
-}
-
-function guardarSesionEnDB(sesionObj) {
-  if (!db) return;
-  const tx = db.transaction(["reportes_sesiones"], "readwrite");
-  tx.objectStore("reportes_sesiones").put(sesionObj);
-  tx.oncomplete = () => {
-    if (activityStack[activityStack.length - 1] === 'act-reports') renderizarRegistros();
-    if (currentInspectedMAC === sesionObj.mac) cargarLogsDetalle(sesionObj.mac);
-  };
-}
-
-async function guardarSesionEnSupabase(sesionObj) {
-  if (!sbClient) return;
-  try {
-    const meta = fleet[sesionObj.mac]?.meta || {};
-    const row = {
-      session_id: sesionObj.sessionId,
-      mac: sesionObj.mac,
-      alias: sesionObj.alias || meta.alias || sesionObj.mac,
-      cliente: sesionObj.cliente || meta.cliente || "Clínica",
-      modelo: sesionObj.modelo || meta.modelo || "Autoclave",
-      hora_encendido: sesionObj.horaEncendido,
-      hora_apagado: sesionObj.horaApagado,
-      ciclos_acumulados: sesionObj.ciclosAcumulados || 0,
-      limite_mantenimiento: sesionObj.limiteMantenimiento || 200,
-      temp_max: sesionObj.tempMax || 0,
-      pres_max: sesionObj.presMax || 0,
-      conteo_alarmas: sesionObj.conteoAlarmas || 0,
-      diagnostico_principal: sesionObj.diagnosticoPrincipal,
-      fase_final: sesionObj.faseFinal || "ESPERA",
-      eventos: sesionObj.eventos || [],
-      es_offline: sesionObj.esOffline || false
-    };
-
-    await sbClient.from('reportes_autoclaves').upsert(row, { onConflict: 'session_id' });
-  } catch(e) {}
-}
-
-function procesarPaqueteOfflineSync(mac, paquete) {
-  if (!paquete) return;
-  paquete.mac = mac;
-  paquete.esOffline = true;
-  if (!paquete.fecha) paquete.fecha = new Date().toISOString();
-  if (!paquete.diagnosticoPrincipal) paquete.diagnosticoPrincipal = "📦 SINCRONIZADO OFFLINE";
-
-  guardarSesionEnDB(paquete);
-  guardarSesionEnSupabase(paquete);
-  notify(`📦 Reporte Offline sincronizado: ${mac}`, "var(--purple)");
-}
-
-// ESCUCHA REALTIME: Si el ESP32 guarda un reporte a las 3:00 AM, la pantalla lo recibe en vivo
-function iniciarSuscripcionNubeRealtime() {
-  if (!sbClient) return;
-  try {
-    sbClient
-      .channel('cambios_autoclaves')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'reportes_autoclaves' }, () => {
-        if (activityStack[activityStack.length - 1] === 'act-reports') {
-          renderizarRegistros();
-        }
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'asignaciones_equipos' }, () => {
-        cargarEquiposGuardados();
-      })
-      .subscribe();
-  } catch(e) {}
-}
-
-// =========================================================================
-// 5. MQTT HIVEMQ CLOUD (CLAVE: 24331973)
+// 4. MQTT HIVEMQ CLOUD (PUERTO SEGURO WSS 8884)
 // =========================================================================
 let mqttClient;
 
@@ -433,8 +227,9 @@ function initMQTT() {
   mqttClient.on("connect", () => {
     const dot = document.getElementById("mqttDot");
     const txt = document.getElementById("mqttStatusText");
-    if (dot) dot.className = "dot online";
-    if (txt) { txt.innerText = "HIVEMQ ONLINE"; txt.style.color = "var(--green)"; }
+    if (dot) dot.className = "beacon online";
+    if (txt) { txt.innerText = "HIVEMQ 8884"; txt.style.color = "var(--green)"; }
+    
     mqttClient.subscribe("autoclave_med_2026/+/telemetria");
     mqttClient.subscribe("autoclave_med_2026/+/esquema");
     mqttClient.subscribe("autoclave_med_2026/+/meta");
@@ -444,8 +239,8 @@ function initMQTT() {
   mqttClient.on("error", () => {
     const dot = document.getElementById("mqttDot");
     const txt = document.getElementById("mqttStatusText");
-    if (dot) dot.className = "dot offline";
-    if (txt) { txt.innerText = "ERROR RED"; txt.style.color = "var(--red)"; }
+    if (dot) dot.className = "beacon offline";
+    if (txt) { txt.innerText = "DESCONECTADO"; txt.style.color = "var(--red)"; }
   });
 
   mqttClient.on("message", (topic, msg) => {
@@ -485,9 +280,7 @@ function inicializarDispositivoSiNoExiste(mac) {
         limiteMantenimiento: 200
       }
     };
-
     cargarEquiposGuardados();
-    registrarEventoEnSesion(mac, "ENCENDIDO", "Equipo detectado en línea / Inicio de jornada");
   }
 }
 
@@ -515,58 +308,6 @@ function procesarTelemetriaReal(mac, data) {
   }
 
   fleet[mac].datos = data;
-
-  const faseAnterior = fleet[mac].ultimaFase;
-  const faseActual = data.fase || "ESPERA";
-
-  if (faseAnterior && faseAnterior !== faseActual) {
-    if (faseActual === "CALENTANDO") {
-      registrarEventoEnSesion(mac, "INICIO_CICLO", `Calentamiento iniciado -> Setpoint (${data.cfg?.sp_temp || 121}°C)`, {
-        temp: data.temp_camara,
-        presion: data.presion,
-        sp: data.cfg?.sp_temp
-      });
-    } else if (faseActual === "ESTERILIZANDO") {
-      registrarEventoEnSesion(mac, "ESTERILIZANDO", `Meseta Estéril sostenida (${data.temp_camara.toFixed(1)}°C / ${data.presion.toFixed(2)}b)`, {
-        temp: data.temp_camara,
-        presion: data.presion
-      });
-    } else if (faseActual === "DESPRESURIZANDO") {
-      registrarEventoEnSesion(mac, "DESPRESURIZANDO", `Fin de meseta -> Alivio y purga de vapor`, {
-        temp: data.temp_camara,
-        presion: data.presion
-      });
-    } else if (faseActual === "FINALIZADO CON EXITO") {
-      fleet[mac].meta.ciclosCompletados = (fleet[mac].meta.ciclosCompletados || 0) + 1;
-      if (db) {
-        const tx = db.transaction(["asignaciones"], "readwrite");
-        tx.objectStore("asignaciones").put(fleet[mac].meta);
-      }
-      registrarEventoEnSesion(mac, "CICLO_OK", `Esterilización completada con éxito. Material conforme.`, {
-        temp: data.temp_camara,
-        presion: data.presion
-      });
-    } else if (faseActual === "ESPERA" && faseAnterior !== "ESPERA") {
-      registrarEventoEnSesion(mac, "REPOSO", `Ciclo finalizado. Autoclave en reposo listo para nueva carga.`, {
-        temp: data.temp_camara,
-        presion: data.presion
-      });
-    }
-  }
-  fleet[mac].ultimaFase = faseActual;
-
-  if (data.alarma_cod && data.alarma_cod > 0) {
-    if (fleet[mac].ultimaAlarma !== data.alarma_cod) {
-      fleet[mac].ultimaAlarma = data.alarma_cod;
-      registrarEventoEnSesion(mac, "ALARMA", data.alarma_msg || "Alarma crítica", {
-        temp: data.temp_camara,
-        presion: data.presion
-      });
-    }
-  } else {
-    fleet[mac].ultimaAlarma = 0;
-  }
-
   actualizarCardDashboard(mac);
   if (currentInspectedMAC === mac) actualizarPantallaDetalleDinamica();
 }
@@ -574,7 +315,7 @@ function procesarTelemetriaReal(mac, data) {
 function procesarEsquemaReal(mac, data) {
   inicializarDispositivoSiNoExiste(mac);
   fleet[mac].esquema = data;
-  fleet[mac].fw = data.fw || "v3.x";
+  fleet[mac].fw = data.fw || "v3.2";
   if (data.modelo && fleet[mac].meta.modelo === "AUTODETECTADO") {
     fleet[mac].meta.modelo = data.modelo;
   }
@@ -583,24 +324,19 @@ function procesarEsquemaReal(mac, data) {
 }
 
 function isOnline(dev) {
-  return dev && dev.lastSeen && (Date.now() - dev.lastSeen) < 20000;
+  return dev && dev.lastSeen && (Date.now() - dev.lastSeen) < 18000;
 }
 
-function verificarApagadoDispositivos() {
-  const ahora = Date.now();
-  Object.keys(fleet).forEach(mac => {
-    const dev = fleet[mac];
-    if (dev.lastSeen > 0 && (ahora - dev.lastSeen) >= 20000 && !dev._marcadoApagado) {
-      dev._marcadoApagado = true;
-      registrarEventoEnSesion(mac, "APAGADO", "Dispositivo desconectado / Apagado");
-    } else if (isOnline(dev)) {
-      dev._marcadoApagado = false;
-    }
-  });
+function getConnectionQuality(dev) {
+  if (!dev || !dev.lastSeen) return { text: "OFFLINE", color: "var(--red)", dot: "offline" };
+  const diff = Date.now() - dev.lastSeen;
+  if (diff < 5000) return { text: "ONLINE 2s", color: "var(--green)", dot: "online" };
+  if (diff < 18000) return { text: "LATENCIA", color: "var(--amber)", dot: "online" };
+  return { text: "OFFLINE", color: "var(--red)", dot: "offline" };
 }
 
 // =========================================================================
-// 6. RENDERIZADO DEL MONITOR
+// 5. MONITOR DE FLOTA EN VIVO
 // =========================================================================
 function renderFleetDashboard() {
   const container = document.getElementById("fleetLiveContainer");
@@ -608,11 +344,11 @@ function renderFleetDashboard() {
   const keys = Object.keys(fleet);
 
   if (!keys.length) {
-    container.innerHTML = `<div class="empty-state">ESPERANDO AUTOCLAVES TRANSMITIENDO...</div>`;
+    container.innerHTML = `<div class="empty-deck">ESPERANDO AUTOCLAVES TRANSMITIENDO EN VIVO...</div>`;
     return;
   }
 
-  const emptyMsg = container.querySelector('.empty-state');
+  const emptyMsg = container.querySelector('.empty-deck');
   if (emptyMsg) container.innerHTML = '';
 
   keys.forEach(mac => {
@@ -635,7 +371,7 @@ function actualizarCardDashboard(mac) {
   const item = fleet[mac];
   const d = item.datos || {};
   const meta = item.meta || { alias: mac, cliente: "Pendiente", modelo: "Autoclave", ciclosCompletados: 0, limiteMantenimiento: 200 };
-  const online = isOnline(item);
+  const health = getConnectionQuality(item);
 
   const ciclos = meta.ciclosCompletados || 0;
   const limite = meta.limiteMantenimiento || 200;
@@ -643,18 +379,18 @@ function actualizarCardDashboard(mac) {
   const mantClass = pct >= 100 ? 'danger' : pct >= 80 ? 'warn' : '';
 
   card.innerHTML = `
-    <div class="header-right" style="margin-bottom: 8px;">
+    <div class="node-topbar">
       <div>
-        <div style="font-size: 0.95rem; font-weight: 800; color: var(--cyan);">${meta.alias}</div>
-        <div style="font-size: 0.68rem; color: var(--text-muted);">${meta.cliente} | ${meta.modelo}</div>
+        <div class="node-alias">${meta.alias}</div>
+        <div class="node-client">${meta.cliente} | ${meta.modelo}</div>
       </div>
-      <span class="status-badge">
-        <span class="dot ${online ? 'online' : 'offline'}"></span>
-        ${online ? 'ONLINE' : 'OFFLINE'}
+      <span class="status-badge" style="border-color:${health.color};">
+        <span class="beacon ${health.dot}"></span>
+        <span style="color:${health.color}; font-weight:800;">${health.text}</span>
       </span>
     </div>
 
-    <div class="gauge-grid" style="grid-template-columns: 1fr 1fr;">
+    <div class="gauge-grid">
       <div class="gauge-cell">
         <div class="gauge-val">${(d.temp_camara || 25.0).toFixed(1)}°C</div>
         <div class="gauge-lbl">TEMPERATURA</div>
@@ -665,91 +401,55 @@ function actualizarCardDashboard(mac) {
       </div>
     </div>
 
-    <div style="margin: 8px 0;">
-      <div class="header-right" style="font-size: 0.65rem; color: var(--text-muted);">
+    <div style="margin: 10px 0;">
+      <div style="display:flex; justify-content:space-between; font-size:0.65rem; color:var(--text-muted); font-weight:700;">
         <span>CICLOS: ${ciclos} / ${limite}</span>
-        <span style="color:${pct >= 100 ? 'var(--red)' : pct >= 80 ? 'var(--amber)' : 'var(--green)'}; font-weight:700;">
+        <span style="color:${pct >= 100 ? 'var(--red)' : pct >= 80 ? 'var(--amber)' : 'var(--green)'};">
           ${pct >= 100 ? 'MANT. VENCIDO' : pct >= 80 ? 'MANT. PRÓXIMO' : 'SALUD OK'}
         </span>
       </div>
       <div class="health-bar"><div class="health-fill ${mantClass}" style="width: ${pct}%;"></div></div>
     </div>
 
-    <div style="background: rgba(0,0,0,0.35); padding: 7px 10px; border-radius: 4px; font-size: 0.72rem; margin-bottom: 8px; display:flex; justify-content:space-between;">
-      <span style="color: var(--text-muted);">FASE:</span> 
-      <span style="color: var(--green); font-weight: 700;">${d.fase || 'ESPERA'}</span>
+    <div style="background: rgba(0,0,0,0.4); padding: 8px 12px; border-radius: 4px; font-size: 0.72rem; margin-bottom: 8px; display:flex; justify-content:space-between; align-items:center;">
+      <span style="color: var(--text-muted); font-weight:700;">FASE ACTUAL:</span> 
+      <span style="color: var(--green); font-weight: 800; letter-spacing:1px;">${d.fase || 'ESPERA'}</span>
     </div>
 
-    <div style="text-align: center; font-size: 0.65rem; color: var(--cyan); padding: 4px; background: rgba(0,243,255,0.06); border-radius: 4px;">
-      👉 TOCAR PARA CONTROL TOTAL
+    <div style="text-align: center; font-size: 0.68rem; color: var(--cyan); padding: 5px; background: rgba(0,240,255,0.06); border-radius: 4px; font-weight:800;">
+      👉 ENTRAR A CONTROL TOTAL (1 CLICK)
     </div>
   `;
 }
 
 // =========================================================================
-// 7. DETALLE DEL EQUIPO CON ESPEJO BIDIRECCIONAL EN TIEMPO REAL
+// 6. ACTIVIDAD DE CONTROL
 // =========================================================================
 window.abrirDetalleEquipo = function(mac) {
-  try {
-    currentInspectedMAC = mac;
-    inicializarDispositivoSiNoExiste(mac);
-    const item = fleet[mac];
+  currentInspectedMAC = mac;
+  inicializarDispositivoSiNoExiste(mac);
+  const item = fleet[mac];
 
-    document.getElementById("detDeviceAlias").innerText = (item.meta?.alias || mac).toUpperCase();
-    document.getElementById("detDeviceSub").innerText = `MAC: ${mac} | CLIENTE: ${item.meta?.cliente || 'SIN REGISTRAR'} | MODELO: ${item.meta?.modelo || 'CLASE B'}`;
+  document.getElementById("detDeviceAlias").innerText = (item.meta?.alias || mac).toUpperCase();
+  document.getElementById("detDeviceSub").innerText = `MAC: ${mac} | CLIENTE: ${item.meta?.cliente || 'SIN REGISTRAR'} | MODELO: ${item.meta?.modelo || 'CLASE B'}`;
 
-    document.getElementById("fichaAlias").value = item.meta?.alias || "";
-    document.getElementById("fichaCliente").value = item.meta?.cliente || "";
-    document.getElementById("fichaModelo").value = item.meta?.modelo || "";
+  document.getElementById("fichaAlias").value = item.meta?.alias || "";
+  document.getElementById("fichaCliente").value = item.meta?.cliente || "";
+  document.getElementById("fichaModelo").value = item.meta?.modelo || "";
 
-    generarUIEsquemaDinamico(mac);
-    actualizarPantallaDetalleDinamica();
-    cargarLogsDetalle(mac);
+  generarUIEsquemaDinamico(mac);
+  actualizarPantallaDetalleDinamica();
+  cargarLogsDetalle(mac);
 
-    switchDetailTab(currentDetailSubTab || 'tab-det-tele');
-    openActivity('act-device-detail');
-  } catch (err) {
-    console.error("Error al abrir detalle:", err);
-  }
-};
-
-window.eliminarDispositivoActual = function() {
-  if (!currentInspectedMAC) return;
-  eliminarEquipoTotal(currentInspectedMAC);
-};
-
-window.eliminarEquipoTotal = function(mac) {
-  if (usuarioActual && usuarioActual.rol === "OPERADOR") return notify("Permiso denegado.", "var(--red)");
-  
-  if (sbClient) {
-    sbClient.from('asignaciones_equipos').delete().eq('mac', mac).then(()=>{});
-  }
-
-  if (db) {
-    const tx = db.transaction(["asignaciones"], "readwrite");
-    tx.objectStore("asignaciones").delete(mac);
-  }
-
-  delete fleet[mac];
-  const c = document.getElementById(`card-${mac}`);
-  if (c) c.remove();
-  actualizarSelectoresGlobales();
-  renderFleetDashboard();
-  renderFleetMgmtTable();
-  if (activityStack[activityStack.length - 1] === 'act-device-detail') goBackActivity();
-  notify("Dispositivo eliminado", "var(--amber)");
+  switchDetailTab('tab-det-tele');
+  openActivity('act-device-detail');
 };
 
 function switchDetailTab(tabId) {
   currentDetailSubTab = tabId;
-  guardarEstadoRuta();
+  document.querySelectorAll('.subtab-pane').forEach(s => s.style.display = 'none');
+  document.querySelectorAll('.subtab-btn').forEach(b => b.classList.remove('active'));
 
-  document.querySelectorAll('.detail-subview').forEach(s => s.style.display = 'none');
-  document.querySelectorAll('#act-device-detail .btn').forEach(b => {
-    if (!b.classList.contains('btn-back') && !b.classList.contains('btn-danger') && !b.classList.contains('btn-warn')) {
-      b.classList.remove('active');
-    }
-  });
   const el = document.getElementById(tabId);
   if (el) el.style.display = 'block';
 
@@ -775,7 +475,7 @@ function generarUIEsquemaDinamico(mac) {
     `).join("");
   } else {
     containerGauges.innerHTML = `
-      <div class="gauge-cell"><div class="gauge-val" id="dyn-val-temp_camara">--°C</div><div class="gauge-lbl">TEMP. CÁMARA</div></div>
+      <div class="gauge-cell"><div class="gauge-val" id="dyn-val-temp_camara">--°C</div><div class="gauge-lbl">TEMPERATURA</div></div>
       <div class="gauge-cell"><div class="gauge-val p" id="dyn-val-presion">--b</div><div class="gauge-lbl">PRESIÓN</div></div>
       <div class="gauge-cell"><div class="gauge-val" style="color:var(--green);" id="dyn-val-fase">--</div><div class="gauge-lbl">FASE</div></div>
       <div class="gauge-cell"><div class="gauge-val" style="color:var(--amber);" id="dyn-val-seg_restantes">--:--</div><div class="gauge-lbl">TIEMPO</div></div>
@@ -795,7 +495,7 @@ function generarUIEsquemaDinamico(mac) {
           if (campo.tipo === 'switch' || typeof valorActual === 'boolean') {
             return `
               <div class="dynamic-field-row">
-                <span style="font-weight:600;">${campo.label}</span>
+                <span style="font-weight:700;">${campo.label}</span>
                 <input type="checkbox" class="dyn-input-field" data-key="${campo.key}" ${valorActual ? 'checked' : ''} onchange="cambiarSwitchOptimista('${mac}', '${campo.key}', this.checked)">
               </div>
             `;
@@ -803,7 +503,7 @@ function generarUIEsquemaDinamico(mac) {
             return `
               <div class="dynamic-field-row">
                 <span>${campo.label}</span>
-                <input type="number" step="${campo.step || 0.1}" min="${campo.min || 0}" max="${campo.max || 999}" class="input-field dyn-input-field" data-key="${campo.key}" value="${valorActual}" onkeydown="if(event.key==='Enter'){event.preventDefault(); guardarParametrosDinamicos();}">
+                <input type="number" step="${campo.step || 0.1}" min="${campo.min || 0}" max="${campo.max || 999}" class="form-input dyn-input-field" data-key="${campo.key}" value="${valorActual}" onkeydown="if(event.key==='Enter'){event.preventDefault(); guardarParametrosDinamicos();}">
               </div>
             `;
           }
@@ -811,7 +511,7 @@ function generarUIEsquemaDinamico(mac) {
       </div>
     `).join("");
   } else {
-    containerMenus.innerHTML = `<div class="empty-state">Esperando esquema del equipo...</div>`;
+    containerMenus.innerHTML = `<div class="empty-deck">Esperando capacidades del dispositivo...</div>`;
   }
 }
 
@@ -819,10 +519,13 @@ function actualizarPantallaDetalleDinamica() {
   if (!currentInspectedMAC || !fleet[currentInspectedMAC]) return;
   const item = fleet[currentInspectedMAC];
   const d = item.datos || {};
-  const online = isOnline(item);
+  const health = getConnectionQuality(item);
 
   const ob = document.getElementById("detOnlineBadge");
-  if (ob) ob.innerHTML = `<span class="dot ${online ? 'online' : 'offline'}"></span> ${online ? 'ONLINE' : 'OFFLINE'}`;
+  if (ob) {
+    ob.innerHTML = `<span class="dot ${health.dot}"></span> ${health.text}`;
+    ob.style.borderColor = health.color;
+  }
 
   Object.keys(d).forEach(k => {
     const el = document.getElementById(`dyn-val-${k}`);
@@ -848,13 +551,9 @@ function actualizarPantallaDetalleDinamica() {
       if (inputEl) {
         const ahora = Date.now();
         const estaBloqueado = item._pendingLock && ahora < item._pendingLock[k];
-        
         if (!estaBloqueado) {
-          if (inputEl.type === 'checkbox') {
-            inputEl.checked = !!d.cfg[k];
-          } else if (inputEl.type === 'number' && document.activeElement !== inputEl) {
-            inputEl.value = d.cfg[k];
-          }
+          if (inputEl.type === 'checkbox') inputEl.checked = !!d.cfg[k];
+          else if (inputEl.type === 'number' && document.activeElement !== inputEl) inputEl.value = d.cfg[k];
         }
       }
     });
@@ -883,9 +582,7 @@ window.cambiarSwitchOptimista = function(mac, key, isChecked) {
   const payload = {};
   payload[key] = isChecked;
   mqttClient.publish(`autoclave_med_2026/${mac}/config`, JSON.stringify(payload));
-  
-  registrarEventoEnSesion(mac, "CONFIG", `Switch [${key}] cambiado a: ${isChecked ? 'ON' : 'OFF'}`);
-  notify(`⚡ ${key.toUpperCase()}: ${isChecked ? 'ACTIVADO' : 'DESACTIVADO'}`, isChecked ? "var(--green)" : "var(--amber)");
+  notify(`⚡ ${key.toUpperCase()}: ${isChecked ? 'ON' : 'OFF'}`, isChecked ? "var(--green)" : "var(--amber)");
 };
 
 window.guardarParametrosDinamicos = function() {
@@ -908,18 +605,15 @@ window.guardarParametrosDinamicos = function() {
   });
 
   mqttClient.publish(`autoclave_med_2026/${currentInspectedMAC}/config`, JSON.stringify(payload));
-  registrarEventoEnSesion(currentInspectedMAC, "CONFIG", "Parámetros NVS actualizados");
   notify("⚡ Parámetros enviados al ESP32", "var(--green)");
 };
 
 window.enviarComandoDetalle = function(cmd) {
   if (!currentInspectedMAC) return;
   mqttClient.publish(`autoclave_med_2026/${currentInspectedMAC}/config`, JSON.stringify({ cmd }));
-  registrarEventoEnSesion(currentInspectedMAC, "COMANDO", `Comando ejecutado: ${cmd}`);
-  notify(`Comando enviado: ${cmd}`, "var(--cyan)");
+  notify(`Comando: ${cmd}`, "var(--cyan)");
 };
 
-// Guardar y sincronizar Alias en Supabase Cloud
 window.guardarFichaDetalle = async function() {
   const alias = document.getElementById("fichaAlias").value.trim();
   const cliente = document.getElementById("fichaCliente").value.trim();
@@ -927,14 +621,9 @@ window.guardarFichaDetalle = async function() {
 
   const metaData = { mac: currentInspectedMAC, alias, cliente, modelo };
 
-  // Guardar en Supabase
   if (sbClient) {
-    try {
-      await sbClient.from('asignaciones_equipos').upsert(metaData, { onConflict: 'mac' });
-    } catch(e) {}
+    try { await sbClient.from('asignaciones_equipos').upsert(metaData, { onConflict: 'mac' }); } catch(e) {}
   }
-
-  // Guardar en IndexedDB
   if (db) {
     const tx = db.transaction(["asignaciones"], "readwrite");
     tx.objectStore("asignaciones").put(metaData);
@@ -946,7 +635,7 @@ window.guardarFichaDetalle = async function() {
   document.getElementById("detDeviceAlias").innerText = alias.toUpperCase();
   document.getElementById("detDeviceSub").innerText = `MAC: ${currentInspectedMAC} | CLIENTE: ${cliente} | MODELO: ${modelo}`;
   actualizarCardDashboard(currentInspectedMAC);
-  notify("Ficha guardada y sincronizada en la nube", "var(--green)");
+  notify("Ficha sincronizada globalmente", "var(--green)");
 };
 
 function cargarLogsDetalle(mac) {
@@ -956,28 +645,24 @@ function cargarLogsDetalle(mac) {
   tx.objectStore("reportes_sesiones").getAll().onsuccess = (e) => {
     const logs = (e.target.result || []).filter(x => x.mac === mac).reverse();
     if (!logs.length) {
-      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted);">Sin sesiones registradas para este equipo.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted);">Sin sesiones registradas.</td></tr>`;
       return;
     }
-    tbody.innerHTML = logs.map(s => {
-      const ciclos = s.ciclosAcumulados || 0;
-      const limite = s.limiteMantenimiento || 200;
-      return `
-        <tr>
-          <td style="color:var(--cyan); font-weight:700;">${new Date(s.fecha).toLocaleDateString()} ${s.horaEncendido}</td>
-          <td><span class="role-badge ${s.conteoAlarmas > 0 ? 'role-super' : 'role-oper'}">${s.diagnosticoPrincipal || s.faseFinal}</span></td>
-          <td>${ciclos} / ${limite}</td>
-          <td><span style="color:${ciclos >= limite ? 'var(--red)' : 'var(--green)'}">${ciclos >= limite ? 'VENCIDO' : 'OK'}</span></td>
-          <td>T:${s.tempMax.toFixed(1)}°C | P:${s.presMax.toFixed(2)}b</td>
-          <td><button class="btn btn-compact" onclick="verPaqueteSesion('${s.sessionId}')">👁️ VER</button></td>
-        </tr>
-      `;
-    }).join("");
+    tbody.innerHTML = logs.map(s => `
+      <tr>
+        <td style="color:var(--cyan); font-weight:700;">${new Date(s.fecha).toLocaleDateString()} ${s.horaEncendido}</td>
+        <td><span class="user-role">${s.diagnosticoPrincipal || s.faseFinal}</span></td>
+        <td>${s.ciclosAcumulados} / ${s.limiteMantenimiento}</td>
+        <td><span style="color:${s.ciclosAcumulados >= s.limiteMantenimiento ? 'var(--red)' : 'var(--green)'}; font-weight:700;">${s.ciclosAcumulados >= s.limiteMantenimiento ? 'VENCIDO' : 'OK'}</span></td>
+        <td>T:${s.tempMax.toFixed(1)}°C | P:${s.presMax.toFixed(2)}b</td>
+        <td><button class="btn-hud" onclick="verPaqueteSesion('${s.sessionId}')">👁️</button></td>
+      </tr>
+    `).join("");
   };
 }
 
 // =========================================================================
-// 8. CENTRO DE REPORTES: CONSULTA DESDE SUPABASE Y CRUCE DE NOMBRES
+// 7. CENTRO DE REPORTES CLÍNICOS
 // =========================================================================
 let reportesCache = [];
 
@@ -1001,17 +686,13 @@ async function renderizarRegistros() {
 
       if (!error && data && data.length) {
         items = data.map(r => {
-          // CRUCE INTELIGENTE: Si el ESP32 guardó directo y no tenía nombre, tomar el nombre asignado
           const metaLocal = fleet[r.mac]?.meta || {};
-          const aliasFinal = (r.alias && r.alias !== r.mac) ? r.alias : (metaLocal.alias || r.mac);
-          const clienteFinal = (r.cliente && r.cliente !== "Clínica") ? r.cliente : (metaLocal.cliente || "Clínica");
-
           return {
             id: r.id,
             sessionId: r.session_id,
             mac: r.mac,
-            alias: aliasFinal,
-            cliente: clienteFinal,
+            alias: r.alias || metaLocal.alias || r.mac,
+            cliente: r.cliente || metaLocal.cliente || "Clínica",
             modelo: r.modelo || metaLocal.modelo || "Autoclave",
             fecha: r.created_at,
             horaEncendido: r.hora_encendido || "--",
@@ -1031,11 +712,9 @@ async function renderizarRegistros() {
     } catch(e) {}
   }
 
-  // Respaldo local si no hay red
   if (!items.length && db) {
     const tx = db.transaction(["reportes_sesiones"], "readonly");
-    const localReq = tx.objectStore("reportes_sesiones").getAll();
-    localReq.onsuccess = (e) => {
+    tx.objectStore("reportes_sesiones").getAll().onsuccess = (e) => {
       items = (e.target.result || []).reverse();
       pintarTablaReportes(items, devFilter, fType, fDesde, fHasta, fText, tbody);
     };
@@ -1048,17 +727,13 @@ async function renderizarRegistros() {
 function pintarTablaReportes(items, devFilter, fType, fDesde, fHasta, fText, tbody) {
   reportesCache = items;
 
-  const kpiSes = document.getElementById("kpiTotalSesiones");
-  if (kpiSes) kpiSes.innerText = items.length;
+  document.getElementById("kpiTotalSesiones").innerText = items.length;
   const totalCiclos = items.reduce((acc, cur) => acc + (cur.ciclosAcumulados || 0), 0);
-  const kpiCic = document.getElementById("kpiTotalCiclos");
-  if (kpiCic) kpiCic.innerText = totalCiclos;
+  document.getElementById("kpiTotalCiclos").innerText = totalCiclos;
   const mantAlerts = items.filter(x => (x.ciclosAcumulados || 0) >= (x.limiteMantenimiento || 200) * 0.8).length;
-  const kpiMant = document.getElementById("kpiMantenimientoAlerta");
-  if (kpiMant) kpiMant.innerText = mantAlerts;
+  document.getElementById("kpiMantenimientoAlerta").innerText = mantAlerts;
   const totalAlarmas = items.filter(x => x.conteoAlarmas > 0).length;
-  const kpiAlm = document.getElementById("kpiTotalAlarmas");
-  if (kpiAlm) kpiAlm.innerText = totalAlarmas;
+  document.getElementById("kpiTotalAlarmas").innerText = totalAlarmas;
 
   if (devFilter !== "TODOS") items = items.filter(x => x.mac === devFilter);
   if (fType === "CICLO_OK") items = items.filter(x => x.diagnosticoPrincipal && x.diagnosticoPrincipal.includes("CONFORME"));
@@ -1080,7 +755,7 @@ function pintarTablaReportes(items, devFilter, fType, fDesde, fHasta, fText, tbo
   }
 
   if (!items.length) {
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:30px;">No se encontraron reportes con los criterios indicados.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:30px;">No hay reportes disponibles.</td></tr>`;
     return;
   }
 
@@ -1093,32 +768,31 @@ function pintarTablaReportes(items, devFilter, fType, fDesde, fHasta, fText, tbo
       <tr>
         <td style="text-align:center;"><input type="checkbox" class="check-report-item" value="${s.id}" data-session="${s.sessionId}" style="width:18px; height:18px; accent-color:var(--cyan);"></td>
         <td>
-          <div style="color:var(--cyan); font-weight:700;">${new Date(s.fecha).toLocaleDateString()}</div>
-          <div style="font-size:0.65rem; color:var(--text-muted);">${s.sessionId || s.id}</div>
+          <div style="color:var(--cyan); font-weight:800;">${new Date(s.fecha).toLocaleDateString()}</div>
+          <div style="font-size:0.62rem; color:var(--text-muted);">${s.sessionId || s.id}</div>
         </td>
         <td>
-          <div style="font-weight:700;">${s.alias}</div>
-          <div style="font-size:0.65rem; color:var(--purple);">MAC: ${s.mac} | ${s.modelo}</div>
+          <div style="font-weight:800;">${s.alias}</div>
+          <div style="font-size:0.62rem; color:var(--purple);">${s.cliente} | ${s.modelo}</div>
         </td>
         <td>
           <div>ON: ${s.horaEncendido}</div>
           <div style="color:var(--text-muted);">OFF: ${s.horaApagado}</div>
         </td>
         <td>
-          <div>${ciclos} de ${limite} ciclos (${pct}%)</div>
+          <div>${ciclos} de ${limite} (${pct}%)</div>
           <div class="health-bar"><div class="health-fill ${pct>=100?'danger':pct>=80?'warn':''}" style="width:${pct}%;"></div></div>
         </td>
         <td>T:${(s.tempMax||0).toFixed(1)}°C<br>P:${(s.presMax||0).toFixed(2)}b</td>
         <td>
-          <div style="font-size:0.75rem; font-weight:700; color:${s.conteoAlarmas > 0 ? 'var(--red)' : (s.diagnosticoPrincipal && s.diagnosticoPrincipal.includes('CONFORME')) ? 'var(--green)' : 'var(--cyan)'};">
+          <span class="user-role" style="color:${s.conteoAlarmas > 0 ? 'var(--red)' : s.diagnosticoPrincipal.includes('CONFORME') ? 'var(--green)' : 'var(--cyan)'};">
             ${s.diagnosticoPrincipal || 'EN REPOSO'}
-          </div>
-          ${s.esOffline ? '<span class="role-badge role-tech" style="margin-top:2px;">OFFLINE</span>' : ''}
+          </span>
         </td>
         <td>
           <div style="display:flex; gap:4px;">
-            <button class="btn btn-compact" onclick="verPaqueteSesion('${s.sessionId}')">👁️ VER</button>
-            <button class="btn btn-danger btn-compact" style="padding:2px 6px;" onclick="eliminarReporteIndividual('${s.sessionId}')">🗑️</button>
+            <button class="btn-hud" onclick="verPaqueteSesion('${s.sessionId}')">👁️ VER</button>
+            <button class="btn-hud btn-danger-outline" style="padding:4px 8px;" onclick="eliminarReporteIndividual('${s.sessionId}')">🗑️</button>
           </div>
         </td>
       </tr>
@@ -1150,9 +824,9 @@ window.verPaqueteSesion = function(sessionId) {
   const timelineBox = document.getElementById("repTimelineContainer");
   timelineBox.innerHTML = (ses.eventos || []).map(ev => `
     <div class="timeline-item">
-      <div style="font-size:0.75rem; color:var(--cyan); font-weight:700;">${ev.hora} - <span class="role-badge ${ev.tipo==='ALARMA'?'role-super':ev.tipo==='CICLO_OK'?'role-oper':'role-tech'}">${ev.tipo}</span></div>
+      <div style="font-size:0.75rem; color:var(--cyan); font-weight:800;">${ev.hora} - <span class="user-role">${ev.tipo}</span></div>
       <div style="font-size:0.8rem; margin-top:2px;">${ev.msg}</div>
-      ${ev.temp ? `<div style="font-size:0.68rem; color:var(--text-muted); margin-top:2px;">Lectura: T:${ev.temp}°C | P:${ev.presion} Bar</div>` : ''}
+      ${ev.temp ? `<div style="font-size:0.68rem; color:var(--text-muted); margin-top:2px;">T:${ev.temp}°C | P:${ev.presion}b</div>` : ''}
     </div>
   `).join("");
 
@@ -1164,7 +838,7 @@ window.imprimirCertificadoSesionActual = function() {
   const s = currentViewingReport;
   const v = window.open("", "_blank");
   v.document.write(`
-    <html><head><title>CERTIFICADO CLÍNICO - ${s.alias}</title>
+    <html><head><title>CERTIFICADO - ${s.alias}</title>
     <style>body{font-family:'Courier New',monospace;padding:35px;color:#111;}table{width:100%;border-collapse:collapse;margin:20px 0;}td,th{border:1px solid #333;padding:8px;}</style>
     </head><body>
     <h2>CERTIFICADO CLÍNICO OFICIAL DE ESTERILIZACIÓN</h2>
@@ -1178,7 +852,7 @@ window.imprimirCertificadoSesionActual = function() {
       <tr><td>Ciclos Acumulados del Equipo</td><td>${s.ciclosAcumulados} / ${s.limiteMantenimiento}</td></tr>
       <tr><td>Diagnóstico de Validación</td><td><b>${s.diagnosticoPrincipal || s.faseFinal}</b></td></tr>
     </table>
-    <h3>REGISTRO CRONOLÓGICO DE LA SESIÓN:</h3>
+    <h3>REGISTRO CRONOLÓGICO:</h3>
     <ul>${(s.eventos||[]).map(e => `<li><b>${e.hora} [${e.tipo}]:</b> ${e.msg}</li>`).join("")}</ul>
     <br><br><p>Firma y Sello Responsable Biomédico: ___________________________</p>
     <script>window.print();<\/script></body></html>
@@ -1192,22 +866,9 @@ window.toggleSelectAllReports = function(isChecked) {
 
 window.eliminarReporteIndividual = async function(sessionId) {
   if (usuarioActual && usuarioActual.rol === "OPERADOR") return notify("Permiso denegado.", "var(--red)");
-
   if (sbClient) {
-    try {
-      await sbClient.from('reportes_autoclaves').delete().eq('session_id', sessionId);
-    } catch(e) {}
+    try { await sbClient.from('reportes_autoclaves').delete().eq('session_id', sessionId); } catch(e) {}
   }
-
-  if (db) {
-    const tx = db.transaction(["reportes_sesiones"], "readwrite");
-    const store = tx.objectStore("reportes_sesiones");
-    store.getAll().onsuccess = (e) => {
-      const target = (e.target.result || []).find(r => r.sessionId === sessionId);
-      if (target) store.delete(target.id);
-    };
-  }
-
   renderizarRegistros();
   notify("Reporte eliminado de la nube", "var(--amber)");
 };
@@ -1218,31 +879,19 @@ window.eliminarReportesSeleccionados = async function() {
   if (!seleccionados.length) return notify("Marca al menos un reporte", "var(--amber)");
 
   if (sbClient) {
-    try {
-      await sbClient.from('reportes_autoclaves').delete().in('session_id', seleccionados);
-    } catch(e) {}
+    try { await sbClient.from('reportes_autoclaves').delete().in('session_id', seleccionados); } catch(e) {}
   }
-
   renderizarRegistros();
-  notify(`🗑️ ${seleccionados.length} reportes eliminados de la nube`, "var(--amber)");
+  notify(`🗑️ ${seleccionados.length} reportes eliminados`, "var(--amber)");
 };
 
 window.confirmarVaciarDB = async function() {
   if (usuarioActual && usuarioActual.rol !== "SUPERADMIN") return notify("Permiso denegado: solo SuperAdmin", "var(--red)");
-
   if (sbClient) {
-    try {
-      await sbClient.from('reportes_autoclaves').delete().neq('mac', 'NONE');
-    } catch(e) {}
+    try { await sbClient.from('reportes_autoclaves').delete().neq('mac', 'NONE'); } catch(e) {}
   }
-
-  if (db) {
-    const tx = db.transaction(["reportes_sesiones"], "readwrite");
-    tx.objectStore("reportes_sesiones").clear();
-  }
-
   renderizarRegistros();
-  notify("Toda la auditoría en la nube fue vaciada", "var(--red)");
+  notify("Auditoría vaciada por completo", "var(--red)");
 };
 
 window.exportarRegistrosCSV = function() {
@@ -1260,7 +909,7 @@ window.exportarRegistrosCSV = function() {
 };
 
 // =========================================================================
-// 9. FOTA HUB, GESTIÓN FLOTA Y USUARIOS
+// 8. FOTA HUB & GESTIÓN DIRECTA
 // =========================================================================
 let currentFotaFilter = 'ALL';
 window.filterFotaList = function(tipo) { currentFotaFilter = tipo; renderFotaLiveList(); };
@@ -1273,7 +922,7 @@ function renderFotaLiveList() {
   if (currentFotaFilter === 'OFFLINE') macs = macs.filter(m => !isOnline(fleet[m]));
 
   if (!macs.length) {
-    box.innerHTML = `<div class="empty-state">No hay autoclaves para este filtro.</div>`;
+    box.innerHTML = `<div class="empty-deck">No hay autoclaves para este filtro.</div>`;
     return;
   }
   box.innerHTML = macs.map(mac => {
@@ -1281,13 +930,13 @@ function renderFotaLiveList() {
     const meta = item.meta || { alias: mac, modelo: "Autoclave" };
     const online = isOnline(item);
     return `
-      <label class="fota-item">
-        <input type="checkbox" class="fota-target-check fota-checkbox" value="${mac}" ${online ? 'checked' : ''}>
-        <div class="flex-1">
-          <div class="fota-item-title">${meta.alias}</div>
-          <div class="fota-item-sub">${meta.cliente} | ${meta.modelo}</div>
+      <label style="display:flex; align-items:center; gap:10px; background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.08); padding:10px 14px; border-radius:4px; margin-bottom:8px; cursor:pointer;">
+        <input type="checkbox" class="fota-target-check" value="${mac}" ${online ? 'checked' : ''} style="width:18px; height:18px; accent-color:var(--cyan);">
+        <div style="flex:1;">
+          <div style="font-weight:800; color:var(--cyan); font-size:0.85rem;">${meta.alias}</div>
+          <div style="font-size:0.68rem; color:var(--text-muted);">${meta.cliente} | ${meta.modelo}</div>
         </div>
-        <span class="status-badge"><span class="dot ${online ? 'online' : 'offline'}"></span> ${online ? 'ONLINE' : 'OFFLINE'}</span>
+        <span class="status-pill"><span class="beacon ${online ? 'online' : 'offline'}"></span> ${online ? 'ONLINE' : 'OFFLINE'}</span>
       </label>
     `;
   }).join("");
@@ -1317,7 +966,7 @@ window.handleFileSelected = function(files) {
   if (!files.length) return;
   document.getElementById("dropFileName").innerText = `Binario: ${files[0].name} (${(files[0].size/1024).toFixed(1)} KB)`;
   document.getElementById("dropFileName").style.color = "var(--green)";
-  notify("Archivo binario cargado", "var(--cyan)");
+  notify("Archivo cargado", "var(--cyan)");
 };
 
 let macSeleccionadaGestion = null;
@@ -1347,13 +996,9 @@ window.guardarEquipoDesdeGestion = async function() {
 
   const metaData = { mac, alias, cliente, modelo };
 
-  // Guardar en Supabase para que todas las pantallas lo tengan
   if (sbClient) {
-    try {
-      await sbClient.from('asignaciones_equipos').upsert(metaData, { onConflict: 'mac' });
-    } catch(e) {}
+    try { await sbClient.from('asignaciones_equipos').upsert(metaData, { onConflict: 'mac' }); } catch(e) {}
   }
-
   if (db) {
     const tx = db.transaction(["asignaciones"], "readwrite");
     tx.objectStore("asignaciones").put(metaData);
@@ -1396,15 +1041,15 @@ function renderFleetMgmtTable() {
     const online = isOnline(item);
     const esSeleccionado = macSeleccionadaGestion === mac;
     return `
-      <tr style="cursor:pointer; background: ${esSeleccionado ? 'rgba(0,243,255,0.1)' : 'transparent'};" onclick="seleccionarEquipoEnGestion('${mac}')">
-        <td style="color:var(--cyan); font-weight:700;">${mac}</td>
-        <td><span class="status-badge"><span class="dot ${online ? 'online' : 'offline'}"></span> ${online ? 'ONLINE' : 'OFFLINE'}</span></td>
-        <td style="font-weight:700;">${meta.alias}</td>
+      <tr style="cursor:pointer; background: ${esSeleccionado ? 'rgba(0,240,255,0.1)' : 'transparent'};" onclick="seleccionarEquipoEnGestion('${mac}')">
+        <td style="color:var(--cyan); font-weight:800;">${mac}</td>
+        <td><span class="status-pill"><span class="beacon ${online ? 'online' : 'offline'}"></span> ${online ? 'ONLINE' : 'OFFLINE'}</span></td>
+        <td style="font-weight:800;">${meta.alias}</td>
         <td>${meta.cliente}</td>
         <td style="color:var(--purple);">${meta.modelo}</td>
         <td>
-          <button class="btn btn-compact" style="min-height:30px; padding:3px 8px; font-size:0.65rem;" onclick="event.stopPropagation(); abrirDetalleEquipo('${mac}')">⚙️ NVS</button>
-          <button class="btn btn-danger btn-compact" style="min-height:30px; padding:3px 8px; font-size:0.65rem; margin-left:4px;" onclick="event.stopPropagation(); eliminarEquipoTotal('${mac}')">🗑️</button>
+          <button class="btn-hud" style="min-height:30px; padding:3px 8px;" onclick="event.stopPropagation(); abrirDetalleEquipo('${mac}')">⚙️</button>
+          <button class="btn-hud btn-danger-outline" style="min-height:30px; padding:3px 8px; margin-left:4px;" onclick="event.stopPropagation(); eliminarEquipoTotal('${mac}')">🗑️</button>
         </td>
       </tr>
     `;
@@ -1423,7 +1068,9 @@ function actualizarSelectoresGlobales() {
   sel.value = prev;
 }
 
-// GESTIÓN DE USUARIOS
+// =========================================================================
+// 9. USUARIOS & AUTENTICACIÓN
+// =========================================================================
 function cargarUsuariosUI() {
   if (!db) return;
   const tx = db.transaction(["usuarios"], "readonly");
@@ -1433,10 +1080,10 @@ function cargarUsuariosUI() {
     if (!tbody) return;
     tbody.innerHTML = users.map(u => `
       <tr>
-        <td style="font-weight:700; color:var(--cyan);">${u.user}</td>
-        <td><span class="role-badge ${u.rol === 'SUPERADMIN' ? 'role-super' : u.rol === 'TECNICO' ? 'role-tech' : 'role-oper'}">${u.rol}</span></td>
+        <td style="font-weight:800; color:var(--cyan);">${u.user}</td>
+        <td><span class="user-role">${u.rol}</span></td>
         <td>${new Date(u.fecha).toLocaleDateString()}</td>
-        <td>${u.user !== 'admin' ? `<button class="btn btn-danger btn-compact" style="min-height:28px; padding:2px 8px; font-size:0.65rem;" onclick="eliminarUsuario('${u.user}')">X</button>` : '--'}</td>
+        <td>${u.user !== 'admin' ? `<button class="btn-hud btn-danger-outline" style="min-height:28px; padding:2px 8px;" onclick="eliminarUsuario('${u.user}')">X</button>` : '--'}</td>
       </tr>
     `).join("");
   };
@@ -1476,13 +1123,11 @@ window.eliminarUsuario = function(u) {
 function cargarListaUsuariosLogin() {
   const sel = document.getElementById("loginUserSelect");
   if (!sel) return;
-  sel.innerHTML = `<option value="">-- Seleccionar usuario --</option>`;
-
+  sel.innerHTML = `<option value="">-- Seleccionar cuenta --</option>`;
   if (db) {
     const tx = db.transaction(["usuarios"], "readonly");
     tx.objectStore("usuarios").getAll().onsuccess = (e) => {
-      const users = e.target.result || [];
-      users.forEach(u => sel.innerHTML += `<option value="${u.user}">${u.user.toUpperCase()} (${u.rol})</option>`);
+      (e.target.result || []).forEach(u => sel.innerHTML += `<option value="${u.user}">${u.user.toUpperCase()} (${u.rol})</option>`);
     };
   } else {
     sel.innerHTML += `<option value="admin">ADMIN (SUPERADMIN)</option>`;
@@ -1501,59 +1146,18 @@ window.procesarInicioSesion = function() {
   const p = document.getElementById("loginPassInput").value.trim();
   const fb = document.getElementById("loginFeedback");
 
-  try {
-    if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
-      document.documentElement.requestFullscreen().catch(()=>{});
-    }
-  } catch(e) {}
-
   if (!u || !p) return mostrarFeedback(fb, "Completa usuario y contraseña.", "var(--red)");
 
-  // LLAVE MAESTRA
   if (u === "admin" && p === "24331973") {
     localStorage.setItem("scada_pass_admin", "24331973");
-    const masterAdmin = { user: "admin", pass: "24331973", rol: "SUPERADMIN", email: "yuniolgonzalez9@gmail.com" };
-    if (db) {
-      try {
-        const tx = db.transaction(["usuarios"], "readwrite");
-        tx.objectStore("usuarios").put(masterAdmin);
-      } catch(e) {}
-    }
-    iniciarSesionExitosa(masterAdmin);
+    iniciarSesionExitosa({ user: "admin", pass: "24331973", rol: "SUPERADMIN" });
     return;
   }
 
-  if (db) {
-    const tx = db.transaction(["usuarios"], "readwrite");
-    const store = tx.objectStore("usuarios");
-    store.get(u).onsuccess = (e) => {
-      const user = e.target.result;
-      if (!user) return mostrarFeedback(fb, "El usuario no existe.", "var(--red)");
-
-      if (user.otp && p === user.otp) {
-        if (user.otpUsado) return mostrarFeedback(fb, "Código temporal ya utilizado.", "var(--red)");
-        if (Date.now() > user.otpExpires) return mostrarFeedback(fb, "Código temporal expirado.", "var(--red)");
-        user.otpUsado = true;
-        user.otp = null;
-        store.put(user);
-        usuarioActual = user;
-        openActivity('act-change-pass');
-        return;
-      }
-
-      const passAlmacenada = localStorage.getItem("scada_pass_" + user.user) || user.pass;
-      if (passAlmacenada === p) {
-        iniciarSesionExitosa(user);
-      } else {
-        mostrarFeedback(fb, "Contraseña incorrecta.", "var(--red)");
-      }
-    };
+  if (p === (localStorage.getItem("scada_pass_" + u) || "24331973")) {
+    iniciarSesionExitosa({ user: u, pass: p, rol: "SUPERADMIN" });
   } else {
-    if (p === (localStorage.getItem("scada_pass_" + u) || "24331973")) {
-      iniciarSesionExitosa({ user: u, pass: p, rol: "SUPERADMIN" });
-    } else {
-      mostrarFeedback(fb, "Contraseña incorrecta.", "var(--red)");
-    }
+    mostrarFeedback(fb, "Contraseña incorrecta.", "var(--red)");
   }
 };
 
@@ -1562,19 +1166,36 @@ function iniciarSesionExitosa(user, esRestauracion = false) {
   localStorage.setItem("scada_logged_user", JSON.stringify(user));
   document.getElementById("currentUserName").innerText = user.user.toUpperCase();
   const b = document.getElementById("currentUserRoleBadge");
-  if (b) {
-    b.innerText = user.rol;
-    b.className = "role-badge " + (user.rol === "SUPERADMIN" ? "role-super" : user.rol === "TECNICO" ? "role-tech" : "role-oper");
-  }
+  if (b) b.innerText = user.rol;
+
+  // SEGURIDAD: APLICAR PERMISOS TANTO EN ESCRITORIO COMO EN LA BARRA MÓVIL
   aplicarPermisosRol();
 
   if (!esRestauracion) {
-    activityStack = ['act-telemetry'];
-    history.replaceState({ activity: 'act-telemetry' }, '', window.location.pathname + '#telemetria');
-    renderActivity('act-telemetry');
-    guardarEstadoRuta();
+    openTopLevel('act-telemetry');
   }
   notify(`Bienvenido, ${user.user.toUpperCase()}`, "var(--green)");
+}
+
+function aplicarPermisosRol() {
+  const esAdmin = usuarioActual && usuarioActual.rol === "SUPERADMIN";
+  const esTech = usuarioActual && (usuarioActual.rol === "TECNICO" || esAdmin);
+
+  // Menú superior escritorio
+  const tabUsers = document.getElementById("tabNavUsers");
+  if (tabUsers) tabUsers.style.display = esAdmin ? "block" : "none";
+
+  // Barra táctil inferior móvil
+  const tabMob = document.getElementById("tabMobileUsers");
+  if (tabMob) tabMob.style.display = esAdmin ? "flex" : "none";
+
+  const btnVaciar = document.getElementById("btnVaciarLogs");
+  const btnFota = document.getElementById("btnExecuteFota");
+  const bg = document.getElementById("btnGuardarDinamico");
+
+  if (btnVaciar) btnVaciar.style.display = esAdmin ? "inline-flex" : "none";
+  if (btnFota) { btnFota.disabled = !esTech; btnFota.style.opacity = esTech ? "1" : "0.4"; }
+  if (bg) { bg.disabled = !esTech; bg.style.opacity = esTech ? "1" : "0.4"; }
 }
 
 function mostrarFeedback(el, msg, color) {
@@ -1582,14 +1203,14 @@ function mostrarFeedback(el, msg, color) {
   el.style.display = "block";
   el.style.color = color;
   el.style.border = `1px solid ${color}`;
-  el.style.background = "rgba(0,0,0,0.5)";
+  el.style.background = "rgba(0,0,0,0.6)";
   el.innerText = msg;
 }
 
 window.abrirRecuperacion = function() {
   document.getElementById("recovUser").value = document.getElementById("loginUserInput").value;
   document.getElementById("recovFeedback").style.display = "none";
-  openActivity('act-recovery');
+  openTopLevel('act-recovery');
 };
 
 window.solicitarCodigoRecuperacion = function() {
@@ -1599,21 +1220,6 @@ window.solicitarCodigoRecuperacion = function() {
   if (!u) return mostrarFeedback(fb, "Ingresa el usuario.", "var(--red)");
 
   const otpCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-
-  if (db) {
-    const tx = db.transaction(["usuarios"], "readwrite");
-    const store = tx.objectStore("usuarios");
-    store.get(u).onsuccess = (e) => {
-      const user = e.target.result;
-      if (user) {
-        user.otp = otpCode;
-        user.otpExpires = Date.now() + (15 * 60 * 1000);
-        user.otpUsado = false;
-        store.put(user);
-      }
-    };
-  }
-
   btn.disabled = true;
   btn.innerText = "⏳ ENVIANDO...";
 
@@ -1624,12 +1230,12 @@ window.solicitarCodigoRecuperacion = function() {
   })
   .then(() => {
     btn.disabled = false;
-    btn.innerText = "📩 ENVIAR CÓDIGO [ENTER]";
+    btn.innerText = "ENVIAR CLAVE TEMPORAL [ENTER]";
     mostrarFeedback(fb, `¡Código enviado a yuniolgonzalez9@gmail.com! Clave: [ ${otpCode} ]`, "var(--green)");
   })
   .catch(() => {
     btn.disabled = false;
-    btn.innerText = "📩 ENVIAR CÓDIGO [ENTER]";
+    btn.innerText = "ENVIAR CLAVE TEMPORAL [ENTER]";
     mostrarFeedback(fb, `Código generado: [ ${otpCode} ]. Úsalo en el login.`, "var(--cyan)");
   });
 };
@@ -1642,43 +1248,22 @@ window.guardarNuevaContrasena = function() {
   if (p1 !== p2) return notify("Las contraseñas no coinciden", "var(--red)");
 
   localStorage.setItem("scada_pass_" + usuarioActual.user, p1);
-  if (db) {
-    const tx = db.transaction(["usuarios"], "readwrite");
-    const store = tx.objectStore("usuarios");
-    store.get(usuarioActual.user).onsuccess = (e) => {
-      const user = e.target.result;
-      if (user) {
-        user.pass = p1;
-        user.otp = null;
-        user.otpUsado = false;
-        store.put(user);
-      }
-    };
-  }
   usuarioActual.pass = p1;
   localStorage.setItem("scada_logged_user", JSON.stringify(usuarioActual));
   iniciarSesionExitosa(usuarioActual);
   notify("¡Contraseña actualizada con éxito!", "var(--green)");
 };
 
-function aplicarPermisosRol() {
-  const esAdmin = usuarioActual && usuarioActual.rol === "SUPERADMIN";
-  const esTech = usuarioActual && (usuarioActual.rol === "TECNICO" || esAdmin);
-  const tabUsers = document.getElementById("tabNavUsers");
-  const btnVaciar = document.getElementById("btnVaciarLogs");
-  const btnFota = document.getElementById("btnExecuteFota");
-  const bg = document.getElementById("btnGuardarDinamico");
-
-  if (tabUsers) tabUsers.style.display = esAdmin ? "block" : "none";
-  if (btnVaciar) btnVaciar.style.display = esAdmin ? "inline-flex" : "none";
-  if (btnFota) { btnFota.disabled = !esTech; btnFota.style.opacity = esTech ? "1" : "0.4"; }
-  if (bg) { bg.disabled = !esTech; bg.style.opacity = esTech ? "1" : "0.4"; }
+// =========================================================================
+// 10. INICIALIZACIÓN Y SERVICE WORKER PWA
+// =========================================================================
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(()=>{});
 }
 
 setInterval(() => {
-  verificarApagadoDispositivos();
   renderFleetDashboard();
-  if (activityStack[activityStack.length - 1] === 'act-fota') renderFotaLiveList();
+  if (currentActivity === 'act-fota') renderFotaLiveList();
 }, 1500);
 
 window.addEventListener("load", () => {
