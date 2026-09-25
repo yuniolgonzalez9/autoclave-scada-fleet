@@ -1,5 +1,5 @@
 // =========================================================================
-// 1. SUPABASE CLOUD (BASE DE DATOS EN LA NUBE 24/7)
+// 1. SUPABASE CLOUD & CONFIGURACIÓN
 // =========================================================================
 const SUPABASE_URL = "https://gjtqyodpgwfvfvkhlhik.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdqdHF5b2RwZ3dmdmZ2a2hsaGlrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAwNDAzNTYsImV4cCI6MjEwNTYxNjM1Nn0.g8t_PbEityaneKkOUHttQ_cZv50aczLU4Z9la8R4d_g";
@@ -9,30 +9,59 @@ const sbClient = (window.supabase && window.supabase.createClient)
   : null;
 
 // =========================================================================
-// 2. CERROJO ESTRICTO DE SEGURIDAD Y ENRUTADOR NATIVO
+// 2. ESTADO GLOBAL, PILA DE NAVEGACIÓN Y VARIABLES
 // =========================================================================
+let activityStack = ['act-login'];
 let currentTopLevel = 'act-telemetry';
 let currentActivity = 'act-login';
 let currentInspectedMAC = null;
 let currentDetailSubTab = 'tab-det-tele';
 let currentViewingReport = null;
-let currentHealthFilter = 'ONLINE'; // Por defecto solo muestra 100% ONLINE
+let currentHealthFilter = 'ONLINE';
 let usuarioActual = null;
 let ultimoToqueAtras = 0;
+let realChartInstance = null;
+let audioCtx = null;
 
-// REGLA DE SEGURIDAD ESTRICTA: ¿ESTÁ REALMENTE AUTENTICADO?
 function estaAutenticado() {
   return !!usuarioActual && !!localStorage.getItem("scada_logged_user");
 }
 
+// =========================================================================
+// 3. SINTETIZADOR DE AUDIO (ALARMAS DE QUIRÓFANO)
+// =========================================================================
+function sonarAlarmaSonora() {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(880, audioCtx.currentTime); // Tono de advertencia 880 Hz
+    osc.frequency.exponentialRampToValueAtTime(440, audioCtx.currentTime + 0.35);
+    
+    gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.35);
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.35);
+  } catch(e) {}
+}
+
+// =========================================================================
+// 4. ENRUTADOR SEGURO DE ACTIVIDADES
+// =========================================================================
 window.openTopLevel = function(secId) {
-  // SEGURIDAD: Nadie puede entrar a pantallas privadas sin iniciar sesión
   if (!estaAutenticado() && secId !== 'act-login' && secId !== 'act-recovery') {
     renderScreen('act-login');
     return;
   }
   currentTopLevel = secId;
   currentInspectedMAC = null;
+  activityStack = [secId];
   history.replaceState({ type: 'top', secId: secId }, '', '#' + secId);
   renderScreen(secId);
   guardarRutaNavegacion();
@@ -44,6 +73,7 @@ window.openActivity = function(actId) {
     return;
   }
   if (currentActivity !== actId) {
+    activityStack.push(actId);
     history.pushState({ type: 'child', actId: actId, parent: currentTopLevel }, '', '#' + actId);
     renderScreen(actId);
     guardarRutaNavegacion();
@@ -51,7 +81,13 @@ window.openActivity = function(actId) {
 };
 
 window.goBackActivity = function() {
-  history.back();
+  if (activityStack.length > 1) {
+    activityStack.pop();
+    const prev = activityStack[activityStack.length - 1];
+    renderScreen(prev);
+  } else {
+    history.back();
+  }
 };
 
 window.addEventListener('popstate', () => {
@@ -62,15 +98,14 @@ window.addEventListener('popstate', () => {
 
   if (currentActivity === 'act-device-detail' || currentActivity === 'act-report-view') {
     currentInspectedMAC = null;
+    activityStack = [currentTopLevel];
     renderScreen(currentTopLevel);
     guardarRutaNavegacion();
     return;
   }
 
   const ahora = Date.now();
-  if (ahora - ultimoToqueAtras < 2500) {
-    // Permitir retroceso
-  } else {
+  if (ahora - ultimoToqueAtras > 2500) {
     ultimoToqueAtras = ahora;
     history.pushState({ type: 'top', secId: currentTopLevel }, '', '#' + currentTopLevel);
     notify("⚠️ Presiona atrás una vez más para salir del SCADA", "var(--amber)");
@@ -78,7 +113,6 @@ window.addEventListener('popstate', () => {
 });
 
 function renderScreen(screenId) {
-  // BLOQUEO ABSOLUTO: Si no hay sesión válida, forzar LOGIN
   if (!estaAutenticado() && screenId !== 'act-login' && screenId !== 'act-recovery') {
     screenId = 'act-login';
   }
@@ -86,7 +120,6 @@ function renderScreen(screenId) {
   currentActivity = screenId;
   const esPublico = (screenId === 'act-login' || screenId === 'act-recovery');
 
-  // GOBIERNO DE SEGURIDAD EN EL BODY
   if (esPublico) {
     document.body.classList.remove('authenticated');
     document.body.classList.add('unauthenticated');
@@ -118,6 +151,7 @@ function renderScreen(screenId) {
   if (screenId === 'act-fota') renderFotaLiveList();
   if (screenId === 'act-fleet-mgmt') renderFleetMgmtTable();
   if (screenId === 'act-reports') renderizarRegistros();
+  if (screenId === 'act-telemetry') renderFleetDashboard();
 }
 
 function guardarRutaNavegacion() {
@@ -143,7 +177,7 @@ function notify(msg, color = 'var(--cyan)') {
 }
 
 // =========================================================================
-// 3. BARRA HORIZONTAL DESPLEGABLE (DOCK TÁCTICO)
+// 5. NAVEGACIÓN Y MENÚ ENGRANAJE
 // =========================================================================
 window.toggleHorizontalDock = function() {
   const dock = document.getElementById("desktopNavBar");
@@ -158,9 +192,7 @@ window.toggleHorizontalDock = function() {
 window.toggleGearMenu = function(e) {
   if (e) e.stopPropagation();
   const menu = document.getElementById("gearDropdownMenu");
-  if (menu) {
-    menu.style.display = (menu.style.display === "block") ? "none" : "block";
-  }
+  if (menu) menu.style.display = (menu.style.display === "block") ? "none" : "block";
 };
 
 window.closeGearMenu = function() {
@@ -168,15 +200,13 @@ window.closeGearMenu = function() {
   if (menu) menu.style.display = "none";
 };
 
-document.addEventListener("click", () => {
-  closeGearMenu();
-});
+document.addEventListener("click", () => closeGearMenu());
 
 window.refrescarSistemaCompleto = function() {
   cargarEquiposGuardados();
   renderFleetDashboard();
   if (currentActivity === 'act-reports') renderizarRegistros();
-  notify("⚡ Datos sincronizados en milisegundos", "var(--green)");
+  notify("⚡ Datos sincronizados en tiempo real", "var(--green)");
 };
 
 window.alternarPantallaCompleta = function() {
@@ -190,16 +220,12 @@ window.alternarPantallaCompleta = function() {
   }
 };
 
-// =========================================================================
-// 4. CIERRE DE SESIÓN BLINDADO
-// =========================================================================
 window.cerrarSesionManual = function() {
   usuarioActual = null;
   currentInspectedMAC = null;
   localStorage.removeItem("scada_logged_user");
   localStorage.removeItem("scada_nav_route_v5");
 
-  // APLICAR BLOQUEO INMEDIATO
   document.body.classList.remove('authenticated');
   document.body.classList.add('unauthenticated');
 
@@ -216,11 +242,10 @@ window.cerrarSesionManual = function() {
 };
 
 // =========================================================================
-// 5. BASE DE DATOS LOCAL
+// 6. BASE DE DATOS LOCAL (INDEXEDDB)
 // =========================================================================
 let db = null;
 const fleet = {};
-const sesionesActivas = {};
 
 function initDB() {
   return new Promise((resolve) => {
@@ -242,7 +267,6 @@ function initDB() {
       cargarListaUsuariosLogin();
       cargarUsuariosUI();
       verificarSesionPersistente();
-      iniciarSuscripcionNubeRealtime();
       resolve(db);
     };
     req.onerror = () => {
@@ -306,13 +330,12 @@ async function cargarEquiposGuardados() {
 }
 
 // =========================================================================
-// 6. MQTT HIVEMQ CLOUD (CANAL WSS 8884)
+// 7. MQTT HIVEMQ CLOUD (CANAL WSS 8884)
 // =========================================================================
 let mqttClient;
 
 function initMQTT() {
   const uniqueId = "SCADA_" + Math.random().toString(36).substring(2, 9) + "_" + Date.now().toString(36);
-
   const mqttBroker = "wss://d15a5980139147d99bb9e2ad3825e62e.s1.eu.hivemq.cloud:8884/mqtt";
   const mqttOptions = {
     clientId: uniqueId,
@@ -370,7 +393,7 @@ function inicializarDispositivoSiNoExiste(mac) {
       lastSeen: Date.now(),
       datos: { cfg: {} },
       esquema: null,
-      ultimaFase: null,
+      historyPoints: [],
       _pendingLock: {},
       meta: {
         alias: `AUTOCLAVE [${mac.substring(Math.max(0, mac.length - 4))}]`,
@@ -380,8 +403,46 @@ function inicializarDispositivoSiNoExiste(mac) {
         limiteMantenimiento: 200
       }
     };
-    cargarEquiposGuardados();
   }
+}
+
+// SINCRONIZACIÓN DE CICLOS OFFLINE (FUNCIÓN CRÍTICA IMPLEMENTADA)
+async function procesarPaqueteOfflineSync(mac, payload) {
+  inicializarDispositivoSiNoExiste(mac);
+  notify(`📥 Sincronizando ciclo offline de [${mac}]...`, "var(--purple)");
+
+  const sesId = payload.session_id || `OFF-${Date.now()}`;
+  const reportObj = {
+    session_id: sesId,
+    mac: mac,
+    alias: fleet[mac].meta.alias,
+    cliente: fleet[mac].meta.cliente,
+    modelo: fleet[mac].meta.modelo,
+    hora_encendido: payload.hora_encendido || "OFFLINE",
+    hora_apagado: payload.hora_apagado || "OFFLINE",
+    ciclos_acumulados: payload.ciclos || fleet[mac].meta.ciclosCompletados,
+    limite_mantenimiento: payload.limite || 200,
+    temp_max: payload.temp_max || 0,
+    pres_max: payload.pres_max || 0,
+    conteo_alarmas: payload.alarmas || 0,
+    diagnostico_principal: payload.diagnostico || "CICLO CONFORME (OFFLINE)",
+    fase_final: payload.fase_final || "COMPLETADO",
+    eventos: payload.eventos || [],
+    es_offline: true
+  };
+
+  if (sbClient) {
+    try { await sbClient.from('reportes_autoclaves').insert([reportObj]); } catch(e) {}
+  }
+  if (db) {
+    try {
+      const tx = db.transaction(["reportes_sesiones"], "readwrite");
+      tx.objectStore("reportes_sesiones").add(reportObj);
+    } catch(e) {}
+  }
+
+  if (currentActivity === 'act-reports') renderizarRegistros();
+  notify(`✅ Paquete offline de [${fleet[mac].meta.alias}] consolidado`, "var(--green)");
 }
 
 function procesarMetaGlobal(mac, metaData) {
@@ -389,7 +450,7 @@ function procesarMetaGlobal(mac, metaData) {
   fleet[mac].meta = Object.assign(fleet[mac].meta, metaData);
   actualizarCardDashboard(mac);
   actualizarSelectoresGlobales();
-  renderFleetMgmtTable();
+  if (currentActivity === 'act-fleet-mgmt') renderFleetMgmtTable();
   if (currentInspectedMAC === mac) {
     document.getElementById("detDeviceAlias").innerText = fleet[mac].meta.alias.toUpperCase();
     document.getElementById("detDeviceSub").innerText = `MAC: ${mac} | CLIENTE: ${fleet[mac].meta.cliente} | MODELO: ${fleet[mac].meta.modelo}`;
@@ -407,9 +468,29 @@ function procesarTelemetriaReal(mac, data) {
     });
   }
 
+  // ALERTA SONORA SI SE DISPARA ALARMA
+  if (data.alarma_cod && data.alarma_cod > 0) {
+    sonarAlarmaSonora();
+  }
+
   fleet[mac].datos = data;
+
+  // Registrar puntos para el gráfico
+  const temp = data.temp_camara || 25.0;
+  const pres = data.presion || 0.0;
+  fleet[mac].historyPoints.push({
+    time: new Date().toLocaleTimeString().split(' ')[0],
+    temp: temp,
+    pres: pres
+  });
+  if (fleet[mac].historyPoints.length > 30) fleet[mac].historyPoints.shift();
+
   actualizarCardDashboard(mac);
-  if (currentInspectedMAC === mac) actualizarPantallaDetalleDinamica();
+
+  if (currentInspectedMAC === mac) {
+    actualizarPantallaDetalleDinamica();
+    if (currentDetailSubTab === 'tab-det-graph') actualizarGraficoEnVivo();
+  }
 }
 
 function procesarEsquemaReal(mac, data) {
@@ -420,7 +501,6 @@ function procesarEsquemaReal(mac, data) {
     fleet[mac].meta.modelo = data.modelo;
   }
   if (currentInspectedMAC === mac) generarUIEsquemaDinamico(mac);
-  renderFleetDashboard();
 }
 
 function isOnline(dev) {
@@ -443,7 +523,7 @@ function getConnectionQuality(dev) {
 }
 
 // =========================================================================
-// 7. MONITOR DE FLOTA SEGMENTADO (CERO MANGÚ)
+// 8. RENDERIZADO INTELIGENTE (SIN PARPADEO)
 // =========================================================================
 window.setFleetHealthFilter = function(filterType) {
   currentHealthFilter = filterType;
@@ -454,12 +534,14 @@ window.setFleetHealthFilter = function(filterType) {
   if (filterType === 'OFFLINE') document.getElementById("filterBtnOffline")?.classList.add("active");
   if (filterType === 'ALL') document.getElementById("filterBtnAll")?.classList.add("active");
 
+  const container = document.getElementById("fleetLiveContainer");
+  if (container) container.innerHTML = '';
   renderFleetDashboard();
 };
 
 function renderFleetDashboard() {
   const container = document.getElementById("fleetLiveContainer");
-  if (!container) return;
+  if (!container || currentActivity !== 'act-telemetry') return;
   const keys = Object.keys(fleet);
 
   let countOn = 0, countLat = 0, countOff = 0;
@@ -490,13 +572,19 @@ function renderFleetDashboard() {
     return;
   }
 
-  container.innerHTML = '';
+  // Eliminar el mensaje vacío si hay elementos
+  const emptyEl = container.querySelector(".empty-deck");
+  if (emptyEl) emptyEl.remove();
+
   filteredKeys.forEach(mac => {
-    const card = document.createElement('div');
-    card.id = `card-${mac}`;
-    card.className = 'node-item';
-    card.setAttribute('onclick', `abrirDetalleEquipo('${mac}')`);
-    container.appendChild(card);
+    let card = document.getElementById(`card-${mac}`);
+    if (!card) {
+      card = document.createElement('div');
+      card.id = `card-${mac}`;
+      card.className = 'node-item';
+      card.setAttribute('onclick', `abrirDetalleEquipo('${mac}')`);
+      container.appendChild(card);
+    }
     actualizarCardDashboard(mac);
   });
 }
@@ -560,7 +648,7 @@ function actualizarCardDashboard(mac) {
 }
 
 // =========================================================================
-// 8. CONTROL TOTAL Y NVS (SINCRONIZACIÓN EN MILISEGUNDOS)
+// 9. DETALLE DEL EQUIPO Y GRÁFICO EN VIVO
 // =========================================================================
 window.abrirDetalleEquipo = function(mac) {
   currentInspectedMAC = mac;
@@ -591,9 +679,88 @@ function switchDetailTab(tabId) {
   if (el) el.style.display = 'block';
 
   if (tabId === 'tab-det-tele') document.getElementById('btnSubTele')?.classList.add('active');
+  if (tabId === 'tab-det-graph') {
+    document.getElementById('btnSubGraph')?.classList.add('active');
+    inicializarGraficoEsterilizacion();
+  }
   if (tabId === 'tab-det-cfg') document.getElementById('btnSubCfg')?.classList.add('active');
   if (tabId === 'tab-det-ficha') document.getElementById('btnSubFicha')?.classList.add('active');
   if (tabId === 'tab-det-logs') document.getElementById('btnSubLogs')?.classList.add('active');
+}
+
+function inicializarGraficoEsterilizacion() {
+  const ctx = document.getElementById('realtimeSterileChart');
+  if (!ctx) return;
+
+  if (realChartInstance) {
+    realChartInstance.destroy();
+  }
+
+  const history = fleet[currentInspectedMAC]?.historyPoints || [];
+  const labels = history.map(h => h.time);
+  const dataTemp = history.map(h => h.temp);
+  const dataPres = history.map(h => h.pres);
+
+  realChartInstance = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: 'Temperatura (°C)',
+          data: dataTemp,
+          borderColor: '#00f0ff',
+          backgroundColor: 'rgba(0, 240, 255, 0.1)',
+          yAxisID: 'yTemp',
+          tension: 0.35,
+          borderWidth: 2
+        },
+        {
+          label: 'Presión (Bar)',
+          data: dataPres,
+          borderColor: '#9d4edd',
+          backgroundColor: 'rgba(157, 78, 221, 0.1)',
+          yAxisID: 'yPres',
+          tension: 0.35,
+          borderWidth: 2
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      scales: {
+        x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#64748b' } },
+        yTemp: {
+          type: 'linear',
+          position: 'left',
+          grid: { color: 'rgba(0,240,255,0.1)' },
+          ticks: { color: '#00f0ff' },
+          title: { display: true, text: '°C', color: '#00f0ff' }
+        },
+        yPres: {
+          type: 'linear',
+          position: 'right',
+          grid: { drawOnChartArea: false },
+          ticks: { color: '#9d4edd' },
+          title: { display: true, text: 'Bar', color: '#9d4edd' }
+        }
+      },
+      plugins: {
+        legend: { labels: { color: '#f8fafc', font: { family: 'JetBrains Mono' } } }
+      }
+    }
+  });
+}
+
+function actualizarGraficoEnVivo() {
+  if (!realChartInstance || !currentInspectedMAC || !fleet[currentInspectedMAC]) return;
+  const history = fleet[currentInspectedMAC].historyPoints || [];
+  realChartInstance.data.labels = history.map(h => h.time);
+  realChartInstance.data.datasets[0].data = history.map(h => h.temp);
+  realChartInstance.data.datasets[1].data = history.map(h => h.pres);
+  realChartInstance.update();
 }
 
 function generarUIEsquemaDinamico(mac) {
@@ -700,7 +867,7 @@ function actualizarPantallaDetalleDinamica() {
   const txt = document.getElementById("detAlarmaTexto");
   if (d.alarma_cod && d.alarma_cod > 0) {
     if (banner) banner.style.display = "block";
-    if (txt) txt.innerText = d.alarma_msg || "Alarma activa";
+    if (txt) txt.innerText = d.alarma_msg || "Alarma activa en cámara";
   } else {
     if (banner) banner.style.display = "none";
   }
@@ -775,6 +942,51 @@ window.guardarFichaDetalle = async function() {
   notify("Ficha guardada y sincronizada", "var(--green)");
 };
 
+// =========================================================================
+// 10. ELIMINACIÓN DE EQUIPOS (IMPLEMENTADA COMPLETA)
+// =========================================================================
+window.eliminarDispositivoActual = function() {
+  if (!currentInspectedMAC) return;
+  eliminarEquipoTotal(currentInspectedMAC);
+};
+
+window.eliminarEquipoTotal = async function(mac) {
+  if (usuarioActual && usuarioActual.rol !== "SUPERADMIN") {
+    return notify("Permiso denegado: solo SUPERADMIN", "var(--red)");
+  }
+  
+  if (!confirm(`¿Estás seguro de eliminar el autoclave ${mac}? Esta acción no se puede deshacer.`)) {
+    return;
+  }
+
+  delete fleet[mac];
+
+  if (sbClient) {
+    try { await sbClient.from('asignaciones_equipos').delete().eq('mac', mac); } catch(e) {}
+  }
+
+  if (db) {
+    try {
+      const tx = db.transaction(["asignaciones"], "readwrite");
+      tx.objectStore("asignaciones").delete(mac);
+    } catch(e) {}
+  }
+
+  const card = document.getElementById(`card-${mac}`);
+  if (card) card.remove();
+
+  actualizarSelectoresGlobales();
+  renderFleetMgmtTable();
+  renderFleetDashboard();
+
+  if (currentInspectedMAC === mac) {
+    currentInspectedMAC = null;
+    openTopLevel('act-telemetry');
+  }
+
+  notify(`Autoclave [${mac}] eliminado del sistema`, "var(--amber)");
+};
+
 function cargarLogsDetalle(mac) {
   const tbody = document.getElementById("detLogsTbody");
   if (!tbody || !db) return;
@@ -787,19 +999,19 @@ function cargarLogsDetalle(mac) {
     }
     tbody.innerHTML = logs.map(s => `
       <tr>
-        <td style="color:var(--cyan); font-weight:700;">${new Date(s.fecha).toLocaleDateString()} ${s.horaEncendido}</td>
-        <td><span class="user-role">${s.diagnosticoPrincipal || s.faseFinal}</span></td>
-        <td>${s.ciclosAcumulados} / ${s.limiteMantenimiento}</td>
-        <td><span style="color:${s.ciclosAcumulados >= s.limiteMantenimiento ? 'var(--red)' : 'var(--green)'}; font-weight:700;">${s.ciclosAcumulados >= s.limiteMantenimiento ? 'VENCIDO' : 'OK'}</span></td>
-        <td>T:${s.tempMax.toFixed(1)}°C | P:${s.presMax.toFixed(2)}b</td>
-        <td><button class="btn btn-sm" onclick="verPaqueteSesion('${s.sessionId}')">👁️</button></td>
+        <td style="color:var(--cyan); font-weight:700;">${new Date(s.fecha || Date.now()).toLocaleDateString()} ${s.horaEncendido || s.hora_encendido || '--'}</td>
+        <td><span class="user-role">${s.diagnosticoPrincipal || s.diagnostico_principal || s.faseFinal || '--'}</span></td>
+        <td>${s.ciclosAcumulados || s.ciclos_acumulados || 0} / ${s.limiteMantenimiento || s.limite_mantenimiento || 200}</td>
+        <td><span style="color:${(s.ciclosAcumulados || 0) >= (s.limiteMantenimiento || 200) ? 'var(--red)' : 'var(--green)'}; font-weight:700;">${(s.ciclosAcumulados || 0) >= (s.limiteMantenimiento || 200) ? 'VENCIDO' : 'OK'}</span></td>
+        <td>T:${parseFloat(s.tempMax || s.temp_max || 0).toFixed(1)}°C | P:${parseFloat(s.presMax || s.pres_max || 0).toFixed(2)}b</td>
+        <td><button class="btn btn-sm" onclick="verPaqueteSesion('${s.sessionId || s.session_id}')">👁️</button></td>
       </tr>
     `).join("");
   };
 }
 
 // =========================================================================
-// 9. REPORTES & SUPABASE CLOUD
+// 11. REPORTES Y TABLAS CLÍNICAS
 // =========================================================================
 let reportesCache = [];
 
@@ -1024,6 +1236,7 @@ window.eliminarReportesSeleccionados = async function() {
 
 window.confirmarVaciarDB = async function() {
   if (usuarioActual && usuarioActual.rol !== "SUPERADMIN") return notify("Permiso denegado: solo SuperAdmin", "var(--red)");
+  if (!confirm("¿Deseas vaciar todos los reportes de la nube?")) return;
   if (sbClient) {
     try { await sbClient.from('reportes_autoclaves').delete().neq('mac', 'NONE'); } catch(e) {}
   }
@@ -1046,7 +1259,7 @@ window.exportarRegistrosCSV = function() {
 };
 
 // =========================================================================
-// 10. FOTA HUB & GESTIÓN DIRECTA
+// 12. FOTA HUB & GESTIÓN
 // =========================================================================
 let currentFotaFilter = 'ALL';
 window.filterFotaList = function(tipo) { currentFotaFilter = tipo; renderFotaLiveList(); };
@@ -1090,7 +1303,6 @@ window.ejecutarFotaSeleccionados = function() {
   const seleccionados = Array.from(document.querySelectorAll(".fota-target-check:checked")).map(c => c.value);
   if (!seleccionados.length) return notify("Selecciona al menos un equipo", "var(--amber)");
 
-  const version = document.getElementById("fotaVersionInput").value;
   const url = document.getElementById("fotaUrlInput").value;
 
   seleccionados.forEach(mac => {
@@ -1206,7 +1418,7 @@ function actualizarSelectoresGlobales() {
 }
 
 // =========================================================================
-// 11. USUARIOS & AUTENTICACIÓN
+// 13. USUARIOS Y AUTENTICACIÓN
 // =========================================================================
 function cargarUsuariosUI() {
   if (!db) return;
@@ -1236,7 +1448,7 @@ window.crearUsuario = function() {
   localStorage.setItem("scada_pass_" + user, pass);
   if (db) {
     const tx = db.transaction(["usuarios"], "readwrite");
-    tx.objectStore("usuarios").add({ user, pass, rol, email: "yuniolgonzalez9@gmail.com", otp: null, otpExpires: 0, otpUsado: false, fecha: new Date().toISOString() });
+    tx.objectStore("usuarios").add({ user, pass, rol, email: "yuniolgonzalez9@gmail.com", fecha: new Date().toISOString() });
   }
 
   document.getElementById("uUser").value = "";
@@ -1287,7 +1499,6 @@ window.procesarInicioSesion = function() {
 
   // LLAVE MAESTRA
   if (u === "admin" && p === "24331973") {
-    localStorage.setItem("scada_pass_admin", "24331973");
     iniciarSesionExitosa({ user: "admin", pass: "24331973", rol: "SUPERADMIN" });
     return;
   }
@@ -1306,7 +1517,6 @@ function iniciarSesionExitosa(user, esRestauracion = false) {
   const b = document.getElementById("currentUserRoleBadge");
   if (b) b.innerText = user.rol;
 
-  // SEGURIDAD: APLICAR PERMISOS TANTO EN ESCRITORIO COMO EN LA BARRA MÓVIL
   aplicarPermisosRol();
 
   if (!esRestauracion) {
@@ -1390,11 +1600,14 @@ window.guardarNuevaContrasena = function() {
   notify("¡Contraseña actualizada con éxito!", "var(--green)");
 };
 
-// Refresco periódico
+// =========================================================================
+// 14. MONITOREO EN SEGUNDO PLANO
+// =========================================================================
 setInterval(() => {
-  renderFleetDashboard();
-  if (currentActivity === 'act-fota') renderFotaLiveList();
-}, 1500);
+  if (currentActivity === 'act-telemetry') {
+    renderFleetDashboard();
+  }
+}, 2000);
 
 window.addEventListener("load", () => {
   initDB();
