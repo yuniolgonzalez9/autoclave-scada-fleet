@@ -1,5 +1,5 @@
 /* =========================================================================
-   SCADA CYBER-INDUSTRIAL // DISEÑO DEFINITIVO AURA-GLOW
+   SCADA CYBER-INDUSTRIAL // SISTEMA MASTER CON BLOQUEO DE SEGURIDAD
    ========================================================================= */
 :root {
   --bg-void: #020409;
@@ -46,6 +46,19 @@ html, body {
 }
 
 /* =========================================================================
+   BLINDAJE DE SEGURIDAD ABSOLUTO (ANTI-BYPASS DE LOGIN)
+   Si el usuario no está autenticado, NADA PRIVADO PUEDE SER VISIBLE
+   ========================================================================= */
+body.unauthenticated .hud-topbar,
+body.unauthenticated .desktop-dock-container,
+body.unauthenticated .mobile-bottom-nav,
+body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) {
+  display: none !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
+}
+
+/* =========================================================================
    SISTEMA DE BOTONES .btn (TODOS TIENEN AURA Y ESTILO INDUSTRIAL)
    ========================================================================= */
 .btn {
@@ -66,10 +79,8 @@ html, body {
   text-decoration: none;
   transition: all 0.18s var(--ease);
   position: relative;
-  overflow: hidden;
 }
 
-/* AURA NEÓN LUMINOSA */
 .btn:hover {
   background: var(--cyan);
   color: #000;
@@ -169,7 +180,6 @@ html, body {
   flex-wrap: wrap;
 }
 
-/* REACTOR ANIMADO */
 .hud-brand {
   display: flex;
   align-items: center;
@@ -192,7 +202,6 @@ html, body {
 .hud-glitch { font-family: 'Orbitron', sans-serif; font-size: 1.15rem; font-weight: 900; letter-spacing: 2px; color: #fff; text-shadow: 0 0 14px var(--cyan-glow); }
 .hud-subbrand { font-size: 0.58rem; font-weight: 800; letter-spacing: 2px; color: var(--cyan); }
 
-/* BALIZAS CON PULSO ANIMADO */
 .network-indicators { display: flex; gap: 6px; }
 .status-pill {
   display: inline-flex;
@@ -300,25 +309,66 @@ html, body {
 .dropdown-separator { height: 1px; background: rgba(255, 255, 255, 0.08); }
 
 /* =========================================================================
-   NAVEGACIÓN SUPERIOR (DESKTOP TABS)
+   DOCK DESPLEGABLE HORIZONTAL (DEBAJO DEL NOMBRE)
    ========================================================================= */
-.desktop-nav {
+.desktop-dock-container {
   display: flex;
+  align-items: center;
   gap: 8px;
-  padding: 10px 16px;
+  padding: 8px 16px;
   background: rgba(8, 14, 28, 0.95);
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  overflow-x: auto;
-  white-space: nowrap;
+  width: 100%;
+  position: relative;
 }
 
-.nav-tab {
+.btn-dock-toggle {
+  background: rgba(0, 240, 255, 0.1);
+  border: 1px solid var(--cyan);
+  color: var(--cyan);
+  padding: 8px 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.btn-dock-toggle:hover {
+  background: var(--cyan);
+  color: #000;
+  box-shadow: 0 0 14px var(--cyan-glow);
+}
+
+.desktop-nav-slider {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  white-space: nowrap;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  max-width: 1200px;
+  opacity: 1;
+}
+
+/* Estado plegado/oculto horizontalmente */
+.desktop-nav-slider.collapsed {
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  padding: 0;
+  pointer-events: none;
+}
+
+.nav-btn {
   background: rgba(12, 21, 42, 0.6);
   border: 1px solid var(--border-subtle);
   color: var(--text-muted);
 }
-.nav-tab:hover { color: #fff; border-color: var(--cyan); }
-.nav-tab.active {
+.nav-btn:hover { color: #fff; border-color: var(--cyan); }
+.nav-btn.active {
   background: rgba(0, 240, 255, 0.18);
   color: var(--cyan);
   border-color: var(--cyan);
@@ -445,7 +495,7 @@ html, body {
 .health-fill.danger { background: var(--red); }
 
 /* =========================================================================
-   CAMPOS DE FORMULARIO
+   CAMPOS DE ENTRADA & TABLAS
    ========================================================================= */
 .input-field {
   background: rgba(4, 8, 18, 0.85);
@@ -460,7 +510,10 @@ html, body {
   margin-bottom: 12px;
   min-height: 44px;
 }
-.input-field:focus { border-color: var(--cyan); box-shadow: 0 0 12px var(--cyan-glow); }
+.input-field:focus {
+  border-color: var(--cyan);
+  box-shadow: 0 0 12px var(--cyan-glow);
+}
 
 .input-group { margin-bottom: 12px; }
 .input-group label { font-size: 0.68rem; font-weight: 700; color: var(--text-muted); display: block; margin-bottom: 4px; }
@@ -495,7 +548,7 @@ tr:hover td { background: rgba(0, 240, 255, 0.04); }
 .kpi-lbl { font-size: 0.62rem; font-weight: 800; color: var(--text-muted); margin-top: 4px; }
 
 /* =========================================================================
-   BARRA DE NAVEGACIÓN INFERIOR PARA CELULARES
+   BARRA DE NAVEGACIÓN INFERIOR PARA MÓVILES (SOLO TRAS INICIAR SESIÓN)
    ========================================================================= */
 .mobile-bottom-nav {
   position: fixed;
@@ -528,11 +581,23 @@ tr:hover td { background: rgba(0, 240, 255, 0.04); }
 .m-label { font-size: 0.65rem; font-weight: 800; }
 .m-tab.active { color: var(--cyan); text-shadow: 0 0 10px var(--cyan-glow); }
 
+/* RESPONSIVE MÓVIL ESTRICTO */
 @media (max-width: 820px) {
-  .desktop-nav { display: none !important; }
-  .mobile-bottom-nav { display: flex !important; }
+  .desktop-dock-container { display: none !important; }
+  
+  /* La barra móvil SOLO SE MUESTRA SI BODY ESTÁ AUTENTICADO */
+  body.authenticated .mobile-bottom-nav { 
+    display: flex !important; 
+  }
+  
   .app-viewport { padding: 12px; padding-bottom: 80px; }
-  .hud-topbar { padding: 10px 12px; }
+  .hud-topbar { 
+    padding: 10px 14px; 
+    justify-content: space-between;
+  }
+  .hud-brand {
+    margin: 0 auto; /* Centrar el nombre en móviles */
+  }
 }
 
 /* TOAST */
