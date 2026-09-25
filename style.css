@@ -1,6 +1,5 @@
-
 /* =========================================================================
-   SCADA CYBER-INDUSTRIAL // SISTEMA MASTER CON BLOQUEO DE SEGURIDAD
+   SCADA CYBER-INDUSTRIAL // SISTEMA MASTER TOTALMENTE OPTIMIZADO
    ========================================================================= */
 :root {
   --bg-void: #020409;
@@ -48,7 +47,6 @@ html, body {
 
 /* =========================================================================
    BLINDAJE DE SEGURIDAD ABSOLUTO (ANTI-BYPASS DE LOGIN)
-   Si el usuario no está autenticado, NADA PRIVADO PUEDE SER VISIBLE
    ========================================================================= */
 body.unauthenticated .hud-topbar,
 body.unauthenticated .desktop-dock-container,
@@ -60,7 +58,7 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
 }
 
 /* =========================================================================
-   SISTEMA DE BOTONES .btn (TODOS TIENEN AURA Y ESTILO INDUSTRIAL)
+   SISTEMA DE BOTONES .btn (AURA Y ESTILO INDUSTRIAL)
    ========================================================================= */
 .btn {
   background: rgba(0, 240, 255, 0.12);
@@ -310,7 +308,7 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
 .dropdown-separator { height: 1px; background: rgba(255, 255, 255, 0.08); }
 
 /* =========================================================================
-   DOCK DESPLEGABLE HORIZONTAL (DEBAJO DEL NOMBRE)
+   DOCK DESPLEGABLE HORIZONTAL
    ========================================================================= */
 .desktop-dock-container {
   display: flex;
@@ -354,7 +352,6 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   opacity: 1;
 }
 
-/* Estado plegado/oculto horizontalmente */
 .desktop-nav-slider.collapsed {
   max-width: 0;
   opacity: 0;
@@ -377,7 +374,7 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
 }
 
 /* =========================================================================
-   FILTRADO TÁCTICO DE TELEMETRÍA (CERO MANGÚ)
+   FILTRADO TÁCTICO DE TELEMETRÍA
    ========================================================================= */
 .telemetry-filter-bar {
   display: flex;
@@ -457,13 +454,29 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   border-radius: 6px;
   padding: 16px;
   cursor: pointer;
-  transition: all 0.18s var(--ease);
+  transition: transform 0.18s var(--ease), border-color 0.18s var(--ease);
 }
 .node-item:hover {
   border-color: var(--cyan);
   box-shadow: 0 8px 30px rgba(0, 240, 255, 0.25);
   transform: translateY(-2px);
 }
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  border: 1px solid var(--border-subtle);
+  background: rgba(0,0,0,0.5);
+}
+
+.dot { width: 8px; height: 8px; border-radius: 50%; }
+.dot.online { background: var(--green); box-shadow: 0 0 8px var(--green); }
+.dot.offline { background: var(--red); box-shadow: 0 0 8px var(--red); }
 
 .gauge-grid { 
   display: grid; 
@@ -549,7 +562,7 @@ tr:hover td { background: rgba(0, 240, 255, 0.04); }
 .kpi-lbl { font-size: 0.62rem; font-weight: 800; color: var(--text-muted); margin-top: 4px; }
 
 /* =========================================================================
-   BARRA DE NAVEGACIÓN INFERIOR PARA MÓVILES (SOLO TRAS INICIAR SESIÓN)
+   BARRA DE NAVEGACIÓN INFERIOR PARA MÓVILES
    ========================================================================= */
 .mobile-bottom-nav {
   position: fixed;
@@ -582,23 +595,12 @@ tr:hover td { background: rgba(0, 240, 255, 0.04); }
 .m-label { font-size: 0.65rem; font-weight: 800; }
 .m-tab.active { color: var(--cyan); text-shadow: 0 0 10px var(--cyan-glow); }
 
-/* RESPONSIVE MÓVIL ESTRICTO */
 @media (max-width: 820px) {
   .desktop-dock-container { display: none !important; }
-  
-  /* La barra móvil SOLO SE MUESTRA SI BODY ESTÁ AUTENTICADO */
-  body.authenticated .mobile-bottom-nav { 
-    display: flex !important; 
-  }
-  
+  body.authenticated .mobile-bottom-nav { display: flex !important; }
   .app-viewport { padding: 12px; padding-bottom: 80px; }
-  .hud-topbar { 
-    padding: 10px 14px; 
-    justify-content: space-between;
-  }
-  .hud-brand {
-    margin: 0 auto; /* Centrar el nombre en móviles */
-  }
+  .hud-topbar { padding: 10px 14px; justify-content: space-between; }
+  .hud-brand { margin: 0 auto; }
 }
 
 /* TOAST */
@@ -620,7 +622,7 @@ tr:hover td { background: rgba(0, 240, 255, 0.04); }
   white-space: nowrap;
 }
 
-/* UTILIDADES */
+/* UTILIDADES Y ESTILOS */
 .text-cyan { color: var(--cyan); }
 .text-green { color: var(--green); }
 .text-amber { color: var(--amber); }
@@ -640,7 +642,7 @@ tr:hover td { background: rgba(0, 240, 255, 0.04); }
 .category-box { background: rgba(2, 5, 12, 0.5); border: 1px solid rgba(0, 240, 255, 0.15); border-radius: 4px; padding: 14px; margin-bottom: 14px; }
 .category-title { font-size: 0.8rem; font-weight: 800; color: var(--cyan); margin-bottom: 10px; border-bottom: 1px solid rgba(0,240,255,0.2); padding-bottom: 4px; }
 .subtab-slider { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 16px; }
-.auth-card { max-width: 440px; margin: 30px auto; background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 6px; padding: 24px; }
+.auth-box { max-width: 440px; margin: 30px auto; background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: 6px; padding: 24px; }
 .auth-badge { font-size: 0.65rem; font-weight: 800; color: var(--cyan); letter-spacing: 1.5px; margin-bottom: 4px; text-align: center; }
 .auth-title { font-family: 'Orbitron'; font-size: 1.3rem; font-weight: 900; color: #fff; text-align: center; text-shadow: 0 0 14px var(--cyan-glow); }
 .auth-desc { font-size: 0.7rem; color: var(--text-muted); text-align: center; margin-bottom: 18px; }
