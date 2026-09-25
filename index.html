@@ -8,240 +8,206 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="theme-color" content="#02040a">
+  <meta name="theme-color" content="#030611">
   
-  <title>AUTOCLAVE SCADA // NATIVE FLEET DECK</title>
+  <title>AUTOCLAVE SCADA // FLEET & AUDIT SYSTEM</title>
   
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;800&family=Orbitron:wght@600;800;900&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="style.css?v=6">
+  <link rel="stylesheet" href="style.css?v=7">
   
-  <!-- LIBRERÍAS EXTERNAS -->
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
-  <!-- TOAST HUD FLOTANTE -->
-  <div id="toastApp" class="toast-hud">Acción completada</div>
+  <!-- TOAST FLOTANTE -->
+  <div id="toastApp" class="toast-overlay">Acción completada</div>
 
-  <!-- BARRA SUPERIOR (OCULTA HASTA EL LOGIN) -->
-  <header class="hud-topbar" id="topAppBar" style="display: none;">
-    <div class="hud-left">
-      <button id="btnGlobalBack" class="btn-hud-back" style="display: none;" onclick="goBackActivity()">
-        <span class="icon">◀</span> ATRÁS
-      </button>
-      <div class="hud-brand">
-        <span class="hud-glitch">AUTOCLAVE</span>
-        <span class="hud-subbrand">SCADA OS</span>
-      </div>
-      
-      <div class="network-indicators">
-        <span class="status-pill">
-          <span class="beacon" id="mqttDot"></span>
-          <span id="mqttStatusText">HIVEMQ</span>
-        </span>
-        <span class="status-pill sync-pill">
-          <span class="beacon online"></span>
-          <span>NUBE 24/7</span>
-        </span>
-      </div>
+  <!-- BARRA SUPERIOR -->
+  <header class="app-bar" id="topAppBar" style="display: none;">
+    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+      <button id="btnGlobalBack" class="btn btn-sm btn-secondary" style="display: none;" onclick="goBackActivity()">← VOLVER</button>
+      <div class="brand-title">AUTOCLAVE SCADA</div>
+      <span class="status-badge">
+        <span class="dot" id="mqttDot"></span>
+        <span id="mqttStatusText">HIVEMQ</span>
+      </span>
+      <span class="status-badge" style="border-color: rgba(0, 255, 136, 0.3);">
+        <span class="dot online"></span>
+        <span style="color: var(--green);">NUBE SYNC</span>
+      </span>
     </div>
     
-    <div class="hud-right">
-      <button class="btn-hud btn-action" onclick="refrescarSistemaCompleto()">
-        <span class="icon">⟳</span> REFRESCAR
-      </button>
-      <button class="btn-hud btn-action" onclick="alternarPantallaCompleta()">
-        <span class="icon">⛶</span> EXPANDIR
-      </button>
-      <div class="user-chip">
-        <span class="user-name" id="currentUserName">ADMIN</span>
-        <span class="user-role" id="currentUserRoleBadge">SUPERADMIN</span>
+    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+      <button class="btn btn-sm btn-secondary" onclick="refrescarSistemaCompleto()">🔄 REFRESCAR</button>
+      <button class="btn btn-sm btn-secondary" onclick="alternarPantallaCompleta()">⛶ EXPANDIR</button>
+      <div class="status-badge user-badge">
+        <span id="currentUserName">ADMIN</span>
+        <span id="currentUserRoleBadge" class="role-badge role-super">SUPERADMIN</span>
       </div>
-      <button class="btn-hud btn-warn-outline" onclick="openTopLevel('act-change-pass')">🔑</button>
-      <button class="btn-hud btn-danger-outline" onclick="cerrarSesionManual()">SALIR</button>
+      <button class="btn btn-sm btn-warn" onclick="openTopLevel('act-change-pass')">🔑 CAMBIAR CLAVE</button>
+      <button class="btn btn-sm btn-danger" onclick="cerrarSesionManual()">SALIR</button>
     </div>
   </header>
 
-  <!-- NAVEGADOR DE ESCRITORIO -->
+  <!-- NAVEGACIÓN ESCRITORIO -->
   <nav class="desktop-nav" id="desktopNavBar" style="display: none;">
     <button class="d-tab active" data-tab="act-telemetry" onclick="openTopLevel('act-telemetry')">⚡ TELEMETRÍA EN VIVO</button>
     <button class="d-tab" data-tab="act-fleet-mgmt" onclick="openTopLevel('act-fleet-mgmt')">🏢 GESTIÓN FLOTA</button>
     <button class="d-tab" data-tab="act-fota" onclick="openTopLevel('act-fota')">🚀 FOTA HUB</button>
-    <button class="d-tab" data-tab="act-reports" onclick="openTopLevel('act-reports')">📋 AUDITORÍA & REPORTES</button>
-    <button class="d-tab" id="tabNavUsers" data-tab="act-users" onclick="openTopLevel('act-users')">🛡️ SEGURIDAD</button>
+    <button class="d-tab" data-tab="act-reports" onclick="openTopLevel('act-reports')">📋 CENTRO DE REPORTES</button>
+    <button class="d-tab" id="tabNavUsers" data-tab="act-users" onclick="openTopLevel('act-users')">🛡️ ACCESOS</button>
   </nav>
 
-  <!-- VIEWPORT DE ACTIVIDADES -->
-  <main class="app-viewport" id="appViewport">
+  <main class="activity-container">
 
     <!-- ACTIVITY 0: LOGIN -->
     <section id="act-login" class="activity active">
-      <div class="auth-card">
-        <div class="auth-badge">BIO-MEDICAL COMMAND DECK</div>
-        <div class="auth-title">AUTOCLAVE SCADA</div>
-        <p class="auth-desc">CENTRO DE CONTROL Y TELEMETRÍA EN TIEMPO REAL</p>
+      <div class="card" style="max-width: 440px; margin: 30px auto;">
+        <div style="text-align: center; margin-bottom: 20px;">
+          <div style="font-family: 'Orbitron'; font-size: 1.3rem; color: var(--cyan); letter-spacing: 2px; font-weight: 900;">AUTOCLAVE SCADA</div>
+          <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 6px;">PORTAL CLÍNICO DE ALTA SEGURIDAD</div>
+        </div>
 
         <form onsubmit="event.preventDefault(); procesarInicioSesion();">
-          <div class="input-group">
-            <label>SELECCIONAR OPERADOR:</label>
-            <select id="loginUserSelect" class="form-input" onchange="seleccionarUsuarioRegistrado(this.value)">
-              <option value="">-- Seleccionar cuenta --</option>
-            </select>
-          </div>
+          <label style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-bottom: 6px;">SELECCIONAR USUARIO:</label>
+          <select id="loginUserSelect" class="input-field" onchange="seleccionarUsuarioRegistrado(this.value)">
+            <option value="">-- Seleccionar usuario --</option>
+          </select>
 
-          <div class="input-group">
-            <label>USUARIO / IDENTIFICADOR:</label>
-            <input type="text" id="loginUserInput" class="form-input" placeholder="Usuario" autocapitalize="none" spellcheck="false" required>
-          </div>
+          <label style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-bottom: 6px;">USUARIO / ID:</label>
+          <input type="text" id="loginUserInput" class="input-field" placeholder="Ingresa tu usuario" autocapitalize="none" spellcheck="false" required>
 
-          <div class="input-group">
-            <label>CLAVE DE ACCESO [ENTER]:</label>
-            <input type="password" id="loginPassInput" class="form-input" placeholder="Contraseña de fábrica: 24331973" required>
-          </div>
+          <label style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-bottom: 6px;">CONTRASEÑA [ENTER]:</label>
+          <input type="password" id="loginPassInput" class="input-field" placeholder="Contraseña de fábrica: 24331973" required>
 
-          <button type="submit" class="btn-glow-primary w-full">
-            DESBLOQUEAR SISTEMA [ENTER]
+          <button type="submit" class="btn btn-primary w-full" style="margin-top: 6px;">
+            🔐 INICIAR SESIÓN [ENTER]
           </button>
         </form>
 
-        <div class="auth-footer">
-          <button class="btn-link" onclick="openTopLevel('act-recovery')">
-            ¿Perdiste tu contraseña? Recuperar vía correo
+        <div style="text-align: center; margin-top: 18px;">
+          <button class="btn btn-secondary w-full" style="font-size: 0.72rem;" onclick="abrirRecuperacion()">
+            ❓ ¿Olvidaste tu contraseña? (Recuperar Clave)
           </button>
         </div>
 
-        <div id="loginFeedback" class="feedback-toast"></div>
+        <div id="loginFeedback" style="display: none; padding: 10px; border-radius: 4px; font-size: 0.75rem; text-align: center; margin-top: 14px;"></div>
       </div>
     </section>
 
-    <!-- ACTIVITY: RECUPERACIÓN -->
+    <!-- ACTIVITY RECOVERY -->
     <section id="act-recovery" class="activity">
-      <div class="auth-card">
-        <div class="auth-title">RECUPERAR ACCESO</div>
-        <p class="auth-desc">Se generará una contraseña temporal enviada a:<br><b class="text-cyan">yuniolgonzalez9@gmail.com</b></p>
+      <div class="card" style="max-width: 440px; margin: 30px auto;">
+        <div style="font-family: 'Orbitron'; font-size: 1.1rem; color: var(--cyan); text-align: center; margin-bottom: 8px;">RECUPERACIÓN DE ACCESO</div>
+        <p style="font-size: 0.72rem; color: var(--text-muted); text-align: center; margin-bottom: 18px;">
+          Se enviará la clave temporal a: <br><span style="color: var(--cyan); font-weight: 700;">yuniolgonzalez9@gmail.com</span>
+        </p>
         <form onsubmit="event.preventDefault(); solicitarCodigoRecuperacion();">
-          <div class="input-group">
-            <label>USUARIO A RECUPERAR:</label>
-            <input type="text" id="recovUser" class="form-input" placeholder="Ej: admin" autocapitalize="none" required>
-          </div>
-          <button type="submit" class="btn-glow-primary w-full" id="btnSendRecovery">ENVIAR CLAVE TEMPORAL [ENTER]</button>
+          <label style="font-size: 0.72rem; color: var(--text-muted);">USUARIO A RECUPERAR:</label>
+          <input type="text" id="recovUser" class="input-field" placeholder="Ej: admin" autocapitalize="none" required>
+          <button type="submit" class="btn btn-primary w-full" id="btnSendRecovery">📩 ENVIAR CÓDIGO [ENTER]</button>
         </form>
-        <button class="btn-link w-full mt-3" onclick="openTopLevel('act-login')">← Regresar al login</button>
-        <div id="recovFeedback" class="feedback-toast"></div>
+        <button class="btn btn-secondary w-full" style="margin-top: 10px;" onclick="openTopLevel('act-login')">← VOLVER AL LOGIN</button>
+        <div id="recovFeedback" style="display: none; padding: 12px; border-radius: 4px; font-size: 0.75rem; text-align: center; margin-top: 14px;"></div>
       </div>
     </section>
 
-    <!-- ACTIVITY: CAMBIO DE CONTRASEÑA -->
+    <!-- ACTIVITY CAMBIO DE CONTRASEÑA -->
     <section id="act-change-pass" class="activity">
-      <div class="auth-card">
-        <div class="auth-title">ACTUALIZAR CONTRASEÑA</div>
-        <p class="auth-desc">Ingresa tu nueva clave permanente. La clave anterior se anula de inmediato.</p>
+      <div class="card" style="max-width: 440px; margin: 30px auto;">
+        <div style="font-family: 'Orbitron'; font-size: 1.1rem; color: var(--cyan); text-align: center; margin-bottom: 8px;">MODIFICAR CONTRASEÑA</div>
         <form onsubmit="event.preventDefault(); guardarNuevaContrasena();">
-          <div class="input-group">
-            <label>NUEVA CLAVE:</label>
-            <input type="password" id="newPassInput" class="form-input" placeholder="Mínimo 4 caracteres" required>
-          </div>
-          <div class="input-group">
-            <label>CONFIRMAR CLAVE:</label>
-            <input type="password" id="confirmPassInput" class="form-input" placeholder="Repite la clave" required>
-          </div>
-          <button type="submit" class="btn-glow-primary w-full">GUARDAR CONTRASEÑA [ENTER]</button>
+          <label style="font-size: 0.72rem; color: var(--text-muted);">NUEVA CONTRASEÑA:</label>
+          <input type="password" id="newPassInput" class="input-field" placeholder="Mínimo 4 caracteres" required>
+          <label style="font-size: 0.72rem; color: var(--text-muted);">CONFIRMAR NUEVA CONTRASEÑA:</label>
+          <input type="password" id="confirmPassInput" class="input-field" placeholder="Repite la contraseña" required>
+          <button type="submit" class="btn btn-primary w-full" style="margin-top: 8px;">💾 GUARDAR CONTRASEÑA [ENTER]</button>
         </form>
-        <button class="btn-link w-full mt-3" onclick="goBackActivity()">← Volver atrás</button>
+        <button class="btn btn-secondary w-full" style="margin-top: 10px;" onclick="goBackActivity()">← VOLVER ATRÁS</button>
       </div>
     </section>
 
-    <!-- ACTIVITY 1: TELEMETRÍA (MONITOR FLOTA) -->
+    <!-- ACTIVITY 1: TELEMETRÍA -->
     <section id="act-telemetry" class="activity">
-      <div class="section-title-bar">
+      <div class="activity-header">
         <div>
-          <div class="title-primary">ESTADO DE FLOTA EN VIVO</div>
-          <div class="title-secondary">CONSULTA Y RECEPCIÓN CONTINUA VÍA HIVEMQ CLOUD</div>
+          <div class="activity-title">ESTADO DE FLOTA EN VIVO</div>
+          <div style="font-size: 0.65rem; color: var(--text-muted);">TELEMETRÍA EN TIEMPO REAL VÍA HIVEMQ CLOUD</div>
         </div>
-        <div class="live-tag"><span class="beacon online"></span> TRANSMITIENDO EN MILISEGUNDOS</div>
+        <div class="status-badge" style="border-color: var(--green); color: var(--green); font-weight: 800;">
+          <span class="dot online"></span> TRANSMITIENDO
+        </div>
       </div>
-      <div class="fleet-deck-grid" id="fleetLiveContainer">
-        <div class="empty-deck">ESPERANDO AUTOCLAVES TRANSMITIENDO EN VIVO...</div>
+      <div class="grid-fleet" id="fleetLiveContainer">
+        <div class="empty-state">BUSCANDO AUTOCLAVES TRANSMITIENDO...</div>
       </div>
     </section>
 
-    <!-- ACTIVITY 2: DETALLE DE AUTOCLAVE (ACTIVIDAD HIJA) -->
-    <section id="act-device-detail" class="activity activity-child">
-      <div class="device-hero-bar">
-        <div class="hero-left">
-          <button class="btn-back-pill" onclick="goBackActivity()">
-            <span class="icon">◀</span> VOLVER A LA FLOTA
-          </button>
-          <div>
-            <div class="device-hero-title" id="detDeviceAlias">NOMBRE DEL EQUIPO</div>
-            <div class="device-hero-meta" id="detDeviceSub">MAC: -- | MODELO: --</div>
-          </div>
+    <!-- ACTIVITY 2: DETALLE DEL EQUIPO -->
+    <section id="act-device-detail" class="activity">
+      <div class="card" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 16px;">
+        <div>
+          <button class="btn btn-sm btn-secondary" style="margin-bottom: 8px;" onclick="goBackActivity()">← VOLVER A LA FLOTA</button>
+          <div class="activity-title" id="detDeviceAlias">NOMBRE DEL EQUIPO</div>
+          <div style="font-size: 0.7rem; color: var(--text-muted);" id="detDeviceSub">MAC: -- | MODELO: --</div>
         </div>
-        <div class="hero-right">
-          <span class="status-pill-lg" id="detOnlineBadge"><span class="dot offline"></span> OFFLINE</span>
-          <button class="btn-danger-pill" onclick="eliminarDispositivoActual()">🗑️ ELIMINAR EQUIPO</button>
+        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+          <span class="status-badge" id="detOnlineBadge"><span class="dot offline"></span> OFFLINE</span>
+          <button class="btn btn-sm btn-danger" onclick="eliminarDispositivoActual()">🗑️ ELIMINAR</button>
         </div>
       </div>
 
-      <div class="subtab-slider">
-        <button class="subtab-btn active" id="btnSubTele" onclick="switchDetailTab('tab-det-tele')">📊 SENSORES & ESTADO</button>
-        <button class="subtab-btn" id="btnSubCfg" onclick="switchDetailTab('tab-det-cfg')">⚙️ NVS & PARÁMETROS</button>
-        <button class="subtab-btn" id="btnSubFicha" onclick="switchDetailTab('tab-det-ficha')">🏢 ASIGNAR CLIENTE</button>
-        <button class="subtab-btn" id="btnSubLogs" onclick="switchDetailTab('tab-det-logs')">📋 HISTORIAL DE CICLOS</button>
+      <div style="display: flex; gap: 8px; overflow-x: auto; margin-bottom: 16px; padding-bottom: 6px;">
+        <button class="btn btn-sm active" id="btnSubTele" onclick="switchDetailTab('tab-det-tele')">📊 SENSORES</button>
+        <button class="btn btn-sm btn-secondary" id="btnSubCfg" onclick="switchDetailTab('tab-det-cfg')">⚙️ NVS ESP32</button>
+        <button class="btn btn-sm btn-secondary" id="btnSubFicha" onclick="switchDetailTab('tab-det-ficha')">🏢 ASIGNAR CLIENTE</button>
+        <button class="btn btn-sm btn-secondary" id="btnSubLogs" onclick="switchDetailTab('tab-det-logs')">📋 HISTORIAL SESIONES</button>
       </div>
 
-      <div id="tab-det-tele" class="subtab-pane">
-        <div class="cockpit-card">
-          <div class="cockpit-gauges" id="containerDynamicGauges"></div>
-          <div id="detAlarmaBanner" class="alarm-callout">⚠️ ALARMA CRÍTICA: <span id="detAlarmaTexto"></span></div>
-          <div class="cockpit-actions">
-            <button class="btn-cycle-start" onclick="enviarComandoDetalle('INICIAR_CICLO')">▶ INICIAR CICLO CLÍNICO</button>
-            <button class="btn-cycle-abort" onclick="enviarComandoDetalle('ABORTAR_CICLO')">⏹ PARO DE EMERGENCIA</button>
-            <button class="btn-cycle-reset" onclick="enviarComandoDetalle('RESET_ALARMA')">🔄 RESETEAR ALARMA</button>
+      <div id="tab-det-tele" class="detail-subview">
+        <div class="card">
+          <div class="gauge-grid" id="containerDynamicGauges"></div>
+          <div id="detAlarmaBanner" class="alarm-banner">⚠️ ALARMA: <span id="detAlarmaTexto"></span></div>
+          <div style="display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap;">
+            <button class="btn btn-success flex-2" onclick="enviarComandoDetalle('INICIAR_CICLO')">▶ INICIAR CICLO</button>
+            <button class="btn btn-danger flex-1" onclick="enviarComandoDetalle('ABORTAR_CICLO')">⏹ PARO EMERGENCIA</button>
+            <button class="btn btn-warn flex-1" onclick="enviarComandoDetalle('RESET_ALARMA')">🔄 RESET ALARMA</button>
           </div>
         </div>
       </div>
 
-      <div id="tab-det-cfg" class="subtab-pane" style="display: none;">
-        <div class="cockpit-card">
-          <div class="pane-header">PARÁMETROS DECLARADOS POR EL DISPOSITIVO (EN FLASH NVS)</div>
+      <div id="tab-det-cfg" class="detail-subview" style="display: none;">
+        <div class="card">
           <form id="formDynamicParams" onsubmit="event.preventDefault(); guardarParametrosDinamicos();">
             <div id="containerDynamicMenus"></div>
-            <button type="submit" id="btnGuardarDinamico" class="btn-glow-primary w-full mt-3">💾 TRANSMITIR Y GUARDAR EN ESP32 [ENTER]</button>
+            <button type="submit" id="btnGuardarDinamico" class="btn btn-primary w-full" style="margin-top: 14px;">💾 TRANSMITIR AJUSTES [ENTER]</button>
           </form>
         </div>
       </div>
 
-      <div id="tab-det-ficha" class="subtab-pane" style="display: none;">
-        <div class="cockpit-card">
-          <div class="pane-header">FICHA DE ASIGNACIÓN HOSPITALARIA</div>
+      <div id="tab-det-ficha" class="detail-subview" style="display: none;">
+        <div class="card">
           <form onsubmit="event.preventDefault(); guardarFichaDetalle();">
-            <div class="input-group">
-              <label>ALIAS EN PANTALLA:</label>
-              <input type="text" id="fichaAlias" class="form-input" placeholder="Ej: Quirófano Central 1" required>
-            </div>
-            <div class="input-group">
-              <label>HOSPITAL / CLÍNICA / CLIENTE:</label>
-              <input type="text" id="fichaCliente" class="form-input" placeholder="Ej: Hospital Metropolitano" required>
-            </div>
-            <div class="input-group">
-              <label>MODELO OFICIAL:</label>
-              <input type="text" id="fichaModelo" class="form-input" placeholder="Ej: Getinge 133HC" required>
-            </div>
-            <button type="submit" class="btn-glow-primary w-full">VINCULAR Y GUARDAR EN NUBE [ENTER]</button>
+            <label style="font-size: 0.72rem; color: var(--text-muted);">ALIAS EN PANTALLA:</label>
+            <input type="text" id="fichaAlias" class="input-field" placeholder="Ej: Quirófano Central 1" required>
+            <label style="font-size: 0.72rem; color: var(--text-muted);">CLIENTE / HOSPITAL:</label>
+            <input type="text" id="fichaCliente" class="input-field" placeholder="Ej: Hospital Metropolitano" required>
+            <label style="font-size: 0.72rem; color: var(--text-muted);">MODELO OFICIAL:</label>
+            <input type="text" id="fichaModelo" class="input-field" placeholder="Ej: Getinge 133HC" required>
+            <button type="submit" class="btn btn-primary w-full">VINCULAR Y GUARDAR EN NUBE [ENTER]</button>
           </form>
         </div>
       </div>
 
-      <div id="tab-det-logs" class="subtab-pane" style="display: none;">
-        <div class="cockpit-card">
-          <div class="pane-header">REGISTROS CLÍNICOS EXCLUSIVOS DE ESTA MÁQUINA</div>
-          <div class="table-responsive-hud">
+      <div id="tab-det-logs" class="detail-subview" style="display: none;">
+        <div class="card">
+          <div style="font-size: 0.8rem; color: var(--cyan); font-weight: 800; margin-bottom: 12px;">HISTORIAL DE ESTE EQUIPO:</div>
+          <div class="table-container">
             <table>
-              <thead><tr><th>SESIÓN / FECHA</th><th>ESTADO</th><th>CICLOS ACUM.</th><th>SALUD MANT.</th><th>PICOS T/P</th><th>ACCIÓN</th></tr></thead>
+              <thead><tr><th>SESIÓN / FECHA</th><th>ESTADO</th><th>CICLOS ACUM.</th><th>MANTENIMIENTO</th><th>MAX T/P</th><th>ACCIÓN</th></tr></thead>
               <tbody id="detLogsTbody"></tbody>
             </table>
           </div>
@@ -251,97 +217,66 @@
 
     <!-- ACTIVITY 3: FOTA HUB -->
     <section id="act-fota" class="activity">
-      <div class="section-title-bar">
-        <div>
-          <div class="title-primary">FOTA CLOUD HUB</div>
-          <div class="title-secondary">DESPLIEGUE MASIVO Y SELECTIVO DE FIRMWARES COMPILADOS</div>
-        </div>
-      </div>
-
-      <div class="dual-deck-grid">
-        <div class="card-deck">
-          <div class="deck-header">1. PARÁMETROS DEL BINARIO</div>
-          <div class="input-group">
-            <label>VERSIÓN A DESPLEGAR:</label>
-            <input type="text" id="fotaVersionInput" class="form-input" value="v3.3.0">
-          </div>
-          <div class="input-group">
-            <label>URL DIRECTA DE GITHUB (.BIN):</label>
-            <input type="text" id="fotaUrlInput" class="form-input" value="https://raw.githubusercontent.com/yuniolgonzalez9/Autoclave-Scada-Fleet/Principal/firmwares/firmware.bin">
-          </div>
-          <div class="input-group">
-            <label>CARGA DIRECTA DE ARCHIVO:</label>
-            <div class="file-drop-box" onclick="document.getElementById('fileBinInput').click()">
-              <input type="file" id="fileBinInput" accept=".bin" style="display: none;" onchange="handleFileSelected(this.files)">
-              <div id="dropFileName" class="text-cyan font-bold">📦 Click para cargar firmware.bin</div>
-            </div>
+      <div class="activity-header"><div class="activity-title">DESPLIEGUE REMOTO (FOTA HUB)</div></div>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 16px;">
+        <div class="card">
+          <label style="font-size: 0.72rem; color: var(--text-muted);">VERSIÓN A DESPLEGAR:</label>
+          <input type="text" id="fotaVersionInput" class="input-field" value="v3.3.0">
+          <label style="font-size: 0.72rem; color: var(--text-muted);">URL DIRECTA DEL BINARIO (.BIN):</label>
+          <input type="text" id="fotaUrlInput" class="input-field" value="https://raw.githubusercontent.com/yuniolgonzalez9/Autoclave-Scada-Fleet/Principal/firmwares/firmware.bin">
+          <label style="font-size: 0.72rem; color: var(--text-muted);">SELECCIONAR ARCHIVO BINARIO:</label>
+          <div class="drop-zone" onclick="document.getElementById('fileBinInput').click()">
+            <input type="file" id="fileBinInput" accept=".bin" style="display: none;" onchange="handleFileSelected(this.files)">
+            <div id="dropFileName" style="color: var(--cyan); font-weight: 700;">Click para cargar firmware.bin</div>
           </div>
         </div>
 
-        <div class="card-deck">
-          <div class="deck-header-actions">
-            <span>2. SELECCIÓN DE FLOTA OBJETIVO:</span>
-            <div class="filter-pills">
-              <button class="pill" onclick="filterFotaList('ALL')">TODOS</button>
-              <button class="pill" onclick="filterFotaList('ONLINE')">ONLINE</button>
-              <button class="pill" onclick="filterFotaList('OFFLINE')">OFFLINE</button>
-              <button class="pill pill-warn" onclick="toggleSelectAllFota()">INVERTIR</button>
+        <div class="card">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 6px;">
+            <div style="font-family: 'Orbitron'; font-size: 0.85rem; color: var(--cyan); font-weight: 800;">SELECCIÓN DE EQUIPOS:</div>
+            <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+              <button class="btn btn-sm btn-secondary" onclick="filterFotaList('ALL')">TODOS</button>
+              <button class="btn btn-sm btn-secondary" onclick="filterFotaList('ONLINE')">ONLINE</button>
+              <button class="btn btn-sm btn-secondary" onclick="filterFotaList('OFFLINE')">OFFLINE</button>
+              <button class="btn btn-sm btn-warn" onclick="toggleSelectAllFota()">INVERTIR</button>
             </div>
           </div>
-          <div id="fotaDevicesLiveList" class="fota-device-scroller"></div>
-          <button class="btn-glow-primary w-full" id="btnExecuteFota" onclick="ejecutarFotaSeleccionados()">
-            🚀 TRANSMITIR ACTUALIZACIÓN FOTA AHORA
-          </button>
+          <div id="fotaDevicesLiveList" style="max-height: 260px; overflow-y: auto; margin-bottom: 14px;"></div>
+          <button class="btn btn-primary w-full" id="btnExecuteFota" onclick="ejecutarFotaSeleccionados()">🚀 TRANSMITIR ACTUALIZACIÓN FOTA</button>
         </div>
       </div>
     </section>
 
     <!-- ACTIVITY 4: GESTIÓN DE FLOTA -->
     <section id="act-fleet-mgmt" class="activity">
-      <div class="section-title-bar">
-        <div>
-          <div class="title-primary">DIRECTORIO & GESTIÓN DE FLOTA</div>
-          <div class="title-secondary">ASIGNACIÓN, CONTROL RÁPIDO Y REGISTRO CENTRALIZADO</div>
-        </div>
-      </div>
-
-      <div class="dual-deck-grid">
-        <div class="card-deck">
-          <div class="deck-header" id="titleFleetForm">+ REGISTRAR NUEVO AUTOCLAVE</div>
+      <div class="activity-header"><div class="activity-title">REGISTRO Y GESTIÓN DE FLOTA</div></div>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 16px;">
+        <div class="card" id="cardFleetQuickEdit">
+          <div style="font-family: 'Orbitron'; font-size: 0.85rem; color: var(--cyan); margin-bottom: 12px; font-weight: 800;" id="titleFleetForm">+ REGISTRAR NUEVO EQUIPO</div>
           <form onsubmit="event.preventDefault(); guardarEquipoDesdeGestion();">
-            <div class="input-group">
-              <label>MAC DEL ESP32 (SIN DOS PUNTOS):</label>
-              <input type="text" id="addMac" class="form-input" placeholder="Ej: 30AEA4070FB4" required>
-            </div>
-            <div class="input-group">
-              <label>ALIAS / SALA / QUIRÓFANO:</label>
-              <input type="text" id="addAlias" class="form-input" placeholder="Ej: Quirófano 2" required>
-            </div>
-            <div class="input-group">
-              <label>HOSPITAL O CLIENTE:</label>
-              <input type="text" id="addCliente" class="form-input" placeholder="Ej: Hospital Metropolitano" required>
-            </div>
-            <div class="input-group">
-              <label>MODELO DE LA MÁQUINA:</label>
-              <input type="text" id="addModelo" class="form-input" placeholder="Ej: Getinge 133HC" required>
-            </div>
-            <button type="submit" class="btn-glow-primary w-full" id="btnSubmitFleet">
-              💾 GUARDAR Y PROPAGAR EN LA NUBE [ENTER]
-            </button>
+            <label style="font-size: 0.72rem; color: var(--text-muted);">DIRECCIÓN MAC (SIN DOS PUNTOS):</label>
+            <input type="text" id="addMac" class="input-field" placeholder="Ej: 30AEA4070FB4" required>
+            <label style="font-size: 0.72rem; color: var(--text-muted);">ALIAS / SALA:</label>
+            <input type="text" id="addAlias" class="input-field" placeholder="Ej: Quirófano 2" required>
+            <label style="font-size: 0.72rem; color: var(--text-muted);">CLIENTE / HOSPITAL:</label>
+            <input type="text" id="addCliente" class="input-field" placeholder="Ej: Hospital Metropolitano" required>
+            <label style="font-size: 0.72rem; color: var(--text-muted);">MODELO DE AUTOCLAVE:</label>
+            <input type="text" id="addModelo" class="input-field" placeholder="Ej: Getinge 133HC" required>
+            <button type="submit" class="btn btn-primary w-full" id="btnSubmitFleet">💾 GUARDAR Y PROPAGAR EN LA NUBE [ENTER]</button>
           </form>
 
-          <div id="quickDeviceActions" class="quick-test-box" style="display: none;">
-            <div class="quick-title">PRUEBAS EN VIVO SOBRE EL HARDWARE:</div>
-            <div class="quick-buttons">
-              <button class="btn-hud flex-1" onclick="testToggleMotor()">💡 PROBAR LED (GPIO 2)</button>
-              <button class="btn-hud btn-warn-outline flex-1" onclick="testResetAlarma()">🔄 RESET ALARMA</button>
+          <div id="quickDeviceActions" style="display: none; margin-top: 15px; border-top: 1px solid var(--border-subtle); padding-top: 12px;">
+            <div style="font-size: 0.72rem; color: var(--cyan); font-weight: 800; margin-bottom: 8px;">PRUEBAS EN VIVO SOBRE EL HARDWARE:</div>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn btn-sm btn-secondary flex-1" onclick="testToggleMotor()">💡 PROBAR LED (GPIO 2)</button>
+              <button class="btn btn-sm btn-warn flex-1" onclick="testResetAlarma()">🔄 RESET ALARMA</button>
             </div>
           </div>
         </div>
 
-        <div class="card-deck">
-          <div class="deck-header">EQUIPOS VINCULADOS (TOCA PARA EDITAR O PROBAR)</div>
-          <div class="table-responsive-hud">
+        <div class="card">
+          <div style="font-size: 0.72rem; color: var(--text-muted); margin-bottom: 8px;">👉 Toca cualquier equipo para editarlo o probarlo en vivo:</div>
+          <div class="table-container">
             <table>
               <thead><tr><th>MAC</th><th>ESTADO</th><th>ALIAS</th><th>CLIENTE</th><th>MODELO</th><th>ACCIONES</th></tr></thead>
               <tbody id="fleetMgmtTbody"></tbody>
@@ -353,49 +288,35 @@
 
     <!-- ACTIVITY 5: REPORTES -->
     <section id="act-reports" class="activity">
-      <div class="section-title-bar">
+      <div class="activity-header">
         <div>
-          <div class="title-primary">CENTRO DE AUDITORÍA CLÍNICA</div>
-          <div class="title-secondary">REPORTES DE CICLO, EVENTOS 24/7 Y SALUD PREVENTIVA</div>
+          <div class="activity-title">CENTRO DE AUDITORÍA CLÍNICA</div>
+          <div style="font-size: 0.65rem; color: var(--text-muted);">REPORTES DE CICLO 24/7 Y SALUD PREVENTIVA</div>
         </div>
-        <div class="actions-group">
-          <button class="btn-hud btn-warn-outline" onclick="eliminarReportesSeleccionados()">🗑️ ELIMINAR MARCADOS</button>
-          <button class="btn-hud btn-danger-outline" id="btnVaciarLogs" onclick="confirmarVaciarDB()">🧹 VACIAR NUBE</button>
-          <button class="btn-hud" onclick="exportarRegistrosCSV()">📥 EXPORTAR CSV</button>
-        </div>
-      </div>
-
-      <div class="kpi-cockpit-grid">
-        <div class="kpi-cell">
-          <div class="kpi-num" id="kpiTotalSesiones">0</div>
-          <div class="kpi-label">SESIONES AUDITADAS</div>
-        </div>
-        <div class="kpi-cell">
-          <div class="kpi-num text-green" id="kpiTotalCiclos">0</div>
-          <div class="kpi-label">CICLOS ESTÉRILES</div>
-        </div>
-        <div class="kpi-cell">
-          <div class="kpi-num text-amber" id="kpiMantenimientoAlerta">0</div>
-          <div class="kpi-label">ALERTAS MANTENIMIENTO</div>
-        </div>
-        <div class="kpi-cell">
-          <div class="kpi-num text-red" id="kpiTotalAlarmas">0</div>
-          <div class="kpi-label">INCIDENTES TÉRMICOS</div>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <button class="btn btn-sm btn-warn" onclick="eliminarReportesSeleccionados()">🗑️ ELIMINAR MARCADOS</button>
+          <button class="btn btn-sm btn-danger" id="btnVaciarLogs" onclick="confirmarVaciarDB()">🧹 VACIAR NUBE</button>
+          <button class="btn btn-sm btn-secondary" onclick="exportarRegistrosCSV()">📥 EXPORTAR CSV</button>
         </div>
       </div>
 
-      <div class="filter-panel-card">
-        <div class="filter-hud-grid">
+      <div class="kpi-grid">
+        <div class="kpi-card"><div class="kpi-val" id="kpiTotalSesiones">0</div><div class="kpi-lbl">SESIONES AUDITADAS</div></div>
+        <div class="kpi-card"><div class="kpi-val text-green" id="kpiTotalCiclos">0</div><div class="kpi-lbl">CICLOS ESTÉRILES</div></div>
+        <div class="kpi-card"><div class="kpi-val text-amber" id="kpiMantenimientoAlerta">0</div><div class="kpi-lbl">ALERTAS MANTENIMIENTO</div></div>
+        <div class="kpi-card"><div class="kpi-val text-red" id="kpiTotalAlarmas">0</div><div class="kpi-lbl">INCIDENTES TÉRMICOS</div></div>
+      </div>
+
+      <div class="card" style="margin-bottom: 14px; padding: 12px;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px;">
           <div>
-            <label>EQUIPO:</label>
-            <select id="filterDeviceSelect" class="form-input" onchange="renderizarRegistros()">
-              <option value="TODOS">TODOS LOS EQUIPOS</option>
-            </select>
+            <label style="font-size: 0.68rem; color: var(--text-muted);">EQUIPO:</label>
+            <select id="filterDeviceSelect" class="input-field" onchange="renderizarRegistros()"><option value="TODOS">TODOS LOS EQUIPOS</option></select>
           </div>
           <div>
-            <label>TIPO DE EVENTO:</label>
-            <select id="filterType" class="form-input" onchange="renderizarRegistros()">
-              <option value="TODOS">TODOS LOS REGISTROS</option>
+            <label style="font-size: 0.68rem; color: var(--text-muted);">FILTRAR ESTADO:</label>
+            <select id="filterType" class="input-field" onchange="renderizarRegistros()">
+              <option value="TODOS">TODAS LAS SESIONES</option>
               <option value="CICLO_OK">CICLOS COMPLETADOS (CONFORME)</option>
               <option value="ALARMA">SESIONES CON FALLOS</option>
               <option value="MANT_WARN">PRÓXIMOS A MANTENIMIENTO</option>
@@ -403,21 +324,21 @@
             </select>
           </div>
           <div>
-            <label>DESDE:</label>
-            <input type="date" id="filterFechaDesde" class="form-input" onchange="renderizarRegistros()">
+            <label style="font-size: 0.68rem; color: var(--text-muted);">DESDE:</label>
+            <input type="date" id="filterFechaDesde" class="input-field" onchange="renderizarRegistros()">
           </div>
           <div>
-            <label>HASTA:</label>
-            <input type="date" id="filterFechaHasta" class="form-input" onchange="renderizarRegistros()">
+            <label style="font-size: 0.68rem; color: var(--text-muted);">HASTA:</label>
+            <input type="date" id="filterFechaHasta" class="input-field" onchange="renderizarRegistros()">
           </div>
           <div>
-            <label>BUSCADOR UNIVERSAL [ENTER]:</label>
-            <input type="text" id="filterInput" class="form-input" placeholder="Buscar sala, error..." onkeyup="renderizarRegistros()">
+            <label style="font-size: 0.68rem; color: var(--text-muted);">BUSCADOR UNIVERSAL [ENTER]:</label>
+            <input type="text" id="filterInput" class="input-field" placeholder="Buscar texto, clínica..." onkeyup="renderizarRegistros()">
           </div>
         </div>
       </div>
 
-      <div class="table-responsive-hud">
+      <div class="table-container">
         <table>
           <thead>
             <tr>
@@ -437,78 +358,61 @@
     </section>
 
     <!-- ACTIVITY: VISOR DETALLADO DEL PAQUETE CLÍNICO -->
-    <section id="act-report-view" class="activity activity-child">
-      <div class="device-hero-bar">
-        <div class="hero-left">
-          <button class="btn-back-pill" onclick="goBackActivity()">
-            <span class="icon">◀</span> VOLVER A REPORTES
-          </button>
-          <div>
-            <div class="device-hero-title" id="repPkgTitle">INFORME DE CICLO ESTÉRIL</div>
-            <div class="device-hero-meta" id="repPkgSub">ID: -- | EQUIPO: --</div>
-          </div>
+    <section id="act-report-view" class="activity">
+      <div class="card" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+        <div>
+          <button class="btn btn-sm btn-secondary" style="margin-bottom: 8px;" onclick="goBackActivity()">← VOLVER A REPORTES</button>
+          <div class="activity-title" id="repPkgTitle">INFORME DE CICLO ESTÉRIL</div>
+          <div style="font-size: 0.7rem; color: var(--text-muted);" id="repPkgSub">ID: -- | EQUIPO: --</div>
         </div>
-        <button class="btn-glow-primary" onclick="imprimirCertificadoSesionActual()">
-          🖨️ IMPRIMIR CERTIFICADO MÉDICO
-        </button>
+        <button class="btn btn-primary" onclick="imprimirCertificadoSesionActual()">🖨️ IMPRIMIR CERTIFICADO MÉDICO</button>
       </div>
 
-      <div class="cockpit-card">
-        <div class="stats-summary-grid">
-          <div class="stat-box"><span>ENCENDIDO:</span><b class="text-cyan" id="repEncendidoVal">--</b></div>
-          <div class="stat-box"><span>APAGADO / FIN:</span><b id="repApagadoVal">--</b></div>
-          <div class="stat-box"><span>TOTAL EVENTOS:</span><b class="text-green" id="repUptimeVal">--</b></div>
-          <div class="stat-box"><span>CICLOS EQUIPO:</span><b class="text-amber" id="repCiclosVal">--</b></div>
+      <div class="card">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 20px;">
+          <div><span style="color:var(--text-muted); font-size:0.7rem;">HORA ENCENDIDO:</span> <div id="repEncendidoVal" style="font-weight:800; color:var(--cyan);">--</div></div>
+          <div><span style="color:var(--text-muted); font-size:0.7rem;">HORA APAGADO / FIN:</span> <div id="repApagadoVal" style="font-weight:800; color:var(--text-main);">--</div></div>
+          <div><span style="color:var(--text-muted); font-size:0.7rem;">TOTAL EVENTOS:</span> <div id="repUptimeVal" style="font-weight:800; color:var(--green);">--</div></div>
+          <div><span style="color:var(--text-muted); font-size:0.7rem;">CICLOS EQUIPO:</span> <div id="repCiclosVal" style="font-weight:800; color:var(--amber);">--</div></div>
         </div>
 
-        <div class="health-overview-box">
-          <div class="flex-between">
-            <span class="text-muted">CONDICIÓN DE MANTENIMIENTO PREVENTIVO:</span>
-            <span id="repMantText" class="font-bold text-green">--</span>
+        <div style="margin-bottom: 25px;">
+          <div style="display:flex; justify-content:space-between; font-size:0.72rem; color:var(--text-muted); margin-bottom:4px;">
+            <span>ESTADO DEL MANTENIMIENTO PREVENTIVO</span>
+            <span id="repMantText" style="font-weight:800; color:var(--green);">--</span>
           </div>
           <div class="health-bar"><div class="health-fill" id="repMantBar" style="width: 0%;"></div></div>
         </div>
 
-        <div class="timeline-heading">REGISTRO CRONOLÓGICO CONTINUO DE LA SESIÓN:</div>
-        <div id="repTimelineContainer" class="timeline-flow"></div>
+        <div style="font-family:'Orbitron'; font-size:0.9rem; color:var(--cyan); font-weight:800; margin-bottom:14px;">REGISTRO CRONOLÓGICO CONTINUO DE LA SESIÓN:</div>
+        <div id="repTimelineContainer" style="padding-left: 14px;"></div>
       </div>
     </section>
 
     <!-- ACTIVITY 6: USUARIOS -->
     <section id="act-users" class="activity">
-      <div class="section-title-bar">
-        <div>
-          <div class="title-primary">CONTROL DE ACCESO & ROLES</div>
-          <div class="title-secondary">JERARQUÍA MULTIUSUARIO RBAC</div>
-        </div>
-      </div>
-      <div class="dual-deck-grid">
-        <div class="card-deck">
-          <div class="deck-header">+ NUEVA CREDENCIAL</div>
+      <div class="activity-header"><div class="activity-title">CONTROL DE ACCESO & ROLES</div></div>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 16px;">
+        <div class="card">
+          <div style="font-family:'Orbitron'; font-size:0.85rem; color:var(--cyan); font-weight:800; margin-bottom:12px;">+ NUEVA CREDENCIAL</div>
           <form onsubmit="event.preventDefault(); crearUsuario();">
-            <div class="input-group">
-              <label>NOMBRE DE USUARIO:</label>
-              <input type="text" id="uUser" class="form-input" placeholder="Ej: enfermero_quirofano" required>
-            </div>
-            <div class="input-group">
-              <label>CONTRASEÑA:</label>
-              <input type="password" id="uPass" class="form-input" placeholder="Mínimo 4 caracteres" required>
-            </div>
-            <div class="input-group">
-              <label>NIVEL DE PRIVILEGIO:</label>
-              <select id="uRol" class="form-input">
-                <option value="OPERADOR">OPERADOR (NIVEL 3: Solo ciclos)</option>
-                <option value="TECNICO">TÉCNICO (NIVEL 2: FOTA y Calibración)</option>
-                <option value="SUPERADMIN">SUPERADMIN (NIVEL 1: Control Total)</option>
-              </select>
-            </div>
-            <button type="submit" class="btn-glow-primary w-full">+ CREAR USUARIO [ENTER]</button>
+            <label style="font-size: 0.72rem; color: var(--text-muted);">NOMBRE DE USUARIO:</label>
+            <input type="text" id="uUser" class="input-field" placeholder="Ej: enfermero_quirofano" required>
+            <label style="font-size: 0.72rem; color: var(--text-muted);">CONTRASEÑA:</label>
+            <input type="password" id="uPass" class="input-field" placeholder="Mínimo 4 caracteres" required>
+            <label style="font-size: 0.72rem; color: var(--text-muted);">NIVEL DE PRIVILEGIO:</label>
+            <select id="uRol" class="input-field">
+              <option value="OPERADOR">OPERADOR (NIVEL 3: Solo ciclos)</option>
+              <option value="TECNICO">TÉCNICO (NIVEL 2: FOTA y Calibración)</option>
+              <option value="SUPERADMIN">SUPERADMIN (NIVEL 1: Control Total)</option>
+            </select>
+            <button type="submit" class="btn btn-primary w-full">+ CREAR USUARIO [ENTER]</button>
           </form>
         </div>
 
-        <div class="card-deck">
-          <div class="deck-header">USUARIOS ACTIVOS EN EL SISTEMA</div>
-          <div class="table-responsive-hud">
+        <div class="card">
+          <div style="font-family:'Orbitron'; font-size:0.85rem; color:var(--cyan); font-weight:800; margin-bottom:12px;">USUARIOS ACTIVOS</div>
+          <div class="table-container">
             <table>
               <thead><tr><th>USUARIO</th><th>ROL</th><th>FECHA ALTA</th><th>ACCIÓN</th></tr></thead>
               <tbody id="tablaUsuariosBody"></tbody>
@@ -544,6 +448,6 @@
     </button>
   </nav>
 
-  <script src="app.js?v=6"></script>
+  <script src="app.js?v=7"></script>
 </body>
 </html>
