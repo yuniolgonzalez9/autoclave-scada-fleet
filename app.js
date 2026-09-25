@@ -1,5 +1,5 @@
 // =========================================================================
-// 1. SUPABASE CLOUD & SINCRONIZACIÓN EN TIEMPO REAL (NUBE 24/7)
+// 1. SUPABASE CLOUD & SINCRONIZACIÓN EN TIEMPO REAL
 // =========================================================================
 const SUPABASE_URL = "https://gjtqyodpgwfvfvkhlhik.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdqdHF5b2RwZ3dmdmZ2a2hsaGlrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAwNDAzNTYsImV4cCI6MjEwNTYxNjM1Nn0.g8t_PbEityaneKkOUHttQ_cZv50aczLU4Z9la8R4d_g";
@@ -9,7 +9,7 @@ const sbClient = (window.supabase && window.supabase.createClient)
   : null;
 
 // =========================================================================
-// 2. ESTADO GLOBAL, VARIABLES Y NAVEGACIÓN
+// 2. ESTADO GLOBAL, PILA DE NAVEGACIÓN Y VARIABLES
 // =========================================================================
 let activityStack = ['act-login'];
 let currentTopLevel = 'act-telemetry';
@@ -53,7 +53,7 @@ function sonarAlarmaSonora() {
 }
 
 // =========================================================================
-// 4. MODAL DE CONFIRMACIÓN TÁCTIL (PREVENCIÓN DE ACCIDENTES)
+// 4. VENTANA EMERGENTE FLOTANTE CENTRALIZADA (MODAL DE CONFIRMACIÓN)
 // =========================================================================
 function mostrarModalConfirmacion({ icon = '⚠️', title = 'CONFIRMAR ACCIÓN', msg = '¿Deseas continuar?', okText = 'EJECUTAR', okClass = 'btn-danger', onConfirm = null }) {
   modalConfirmCallback = onConfirm;
@@ -84,7 +84,7 @@ window.cerrarModalConfirmacion = function(confirmado) {
 
 window.pedirConfirmacionComando = function(cmd, msg, btnText) {
   if (usuarioActual && usuarioActual.rol === "OPERADOR" && cmd !== 'INICIAR_CICLO') {
-    return notify("Permiso denegado para tu rol", "var(--red)");
+    return notify("Permiso denegado para tu nivel", "var(--red)");
   }
   mostrarModalConfirmacion({
     icon: cmd === 'ABORTAR_CICLO' ? '🛑' : '⚡',
@@ -97,11 +97,11 @@ window.pedirConfirmacionComando = function(cmd, msg, btnText) {
 };
 
 window.pedirConfirmacionFota = function() {
-  if (usuarioActual && usuarioActual.rol === "OPERADOR") return notify("Permiso denegado", "var(--red)");
+  if (usuarioActual && usuarioActual.rol === "OPERADOR") return notify("Permiso denegado: solo Técnicos o SuperAdmin", "var(--red)");
   mostrarModalConfirmacion({
     icon: '🚀',
-    title: 'ACTUALIZACIÓN FOTA EN NUBE',
-    msg: '¿Confirmas la transmisión inalámbrica del firmware a los autoclaves seleccionados?',
+    title: 'TRANSMISIÓN FOTA',
+    msg: '¿Confirmas el despliegue del binario hacia los autoclaves seleccionados?',
     okText: '🚀 TRANSMITIR AHORA',
     okClass: 'btn-primary',
     onConfirm: () => ejecutarFotaSeleccionados()
@@ -116,6 +116,17 @@ window.openTopLevel = function(secId) {
     renderScreen('act-login');
     return;
   }
+
+  // Comprobar jerarquía antes de acceder a la sección
+  if (usuarioActual && usuarioActual.rol === "OPERADOR" && (secId === 'act-fota' || secId === 'act-fleet-mgmt' || secId === 'act-users')) {
+    notify("Acceso restringido por jerarquía RBAC", "var(--red)");
+    return;
+  }
+  if (usuarioActual && usuarioActual.rol === "TECNICO" && secId === 'act-users') {
+    notify("Acceso exclusivo para SuperAdmin", "var(--red)");
+    return;
+  }
+
   currentTopLevel = secId;
   currentInspectedMAC = null;
   activityStack = [secId];
@@ -309,9 +320,7 @@ const fleet = {};
 
 function initDB() {
   return new Promise((resolve) => {
-    localStorage.setItem("scada_pass_admin", "24331973");
-
-    const req = indexedDB.open("AutoclaveFastFleetDB_v23", 1);
+    const req = indexedDB.open("AutoclaveFastFleetDB_v24", 1);
     req.onupgradeneeded = (e) => {
       db = e.target.result;
       if (!db.objectStoreNames.contains("asignaciones")) db.createObjectStore("asignaciones", { keyPath: "mac" });
@@ -338,23 +347,19 @@ function initDB() {
   });
 }
 
-// MOTOR DE ESCUCHA EN TIEMPO REAL DE SUPABASE CLOUD
 function iniciarSuscripcionNubeRealtime() {
   if (!sbClient) return;
-
   try {
-    // 1. Escuchar nuevos reportes guardados por clientes o autoclaves en la nube
     sbClient
       .channel('realtime_reportes_canal')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'reportes_autoclaves' }, (payload) => {
         const syncText = document.getElementById("syncStatusText");
-        if (syncText) syncText.innerText = "NUEVO REPORTE EN NUBE";
-        notify(`📋 Reporte registrado en la nube [${payload.eventType}]`, "var(--green)");
+        if (syncText) syncText.innerText = "NUBE CONECTADA";
+        notify(`📋 Paquete de sesión actualizado [${payload.eventType}]`, "var(--green)");
         if (currentActivity === 'act-reports') renderizarRegistros();
       })
       .subscribe();
 
-    // 2. Escuchar cambios o registros de flota enviados por clientes
     sbClient
       .channel('realtime_equipos_canal')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'asignaciones_equipos' }, () => {
@@ -362,6 +367,13 @@ function iniciarSuscripcionNubeRealtime() {
       })
       .subscribe();
 
+    sbClient
+      .channel('realtime_usuarios_canal')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'usuarios_scada' }, () => {
+        cargarUsuariosUI();
+        cargarListaUsuariosLogin();
+      })
+      .subscribe();
   } catch(e) {}
 }
 
@@ -495,10 +507,10 @@ function inicializarDispositivoSiNoExiste(mac) {
   }
 }
 
-// SINCRONIZACIÓN AUTOMÁTICA DE CICLOS DESDE HARDWARE HACIA SUPABASE
+// SINCRONIZACIÓN DE PAQUETES DE SESIÓN (DESDE ENCENDIDO HASTA APAGADO)
 async function procesarPaqueteOfflineSync(mac, payload) {
   inicializarDispositivoSiNoExiste(mac);
-  notify(`📥 Guardando reporte del autoclave [${mac}] en base de datos...`, "var(--purple)");
+  notify(`📥 Guardando paquete de sesión del autoclave [${mac}]...`, "var(--purple)");
 
   const sesId = payload.session_id || `SES-${Date.now()}`;
   const reportObj = {
@@ -514,17 +526,16 @@ async function procesarPaqueteOfflineSync(mac, payload) {
     temp_max: parseFloat(payload.temp_max) || 0,
     pres_max: parseFloat(payload.pres_max) || 0,
     conteo_alarmas: payload.alarmas || 0,
-    diagnostico_principal: payload.diagnostico || "CICLO CONFORME",
-    fase_final: payload.fase_final || "COMPLETADO",
+    diagnostico_principal: payload.diagnostico || "SESIÓN CONFORME",
+    fase_final: payload.fase_final || "APAGADO_SEGURO",
+    ciclos_detalle: payload.ciclos_detalle || [],
     eventos: payload.eventos || [],
     es_offline: !!payload.es_offline
   };
 
-  // 1. Guardar en Supabase Cloud
   if (sbClient) {
     try { await sbClient.from('reportes_autoclaves').insert([reportObj]); } catch(e) {}
   }
-  // 2. Guardar en IndexedDB local
   if (db) {
     try {
       const tx = db.transaction(["reportes_sesiones"], "readwrite");
@@ -533,7 +544,7 @@ async function procesarPaqueteOfflineSync(mac, payload) {
   }
 
   if (currentActivity === 'act-reports') renderizarRegistros();
-  notify(`✅ Reporte de [${fleet[mac].meta.alias}] consolidado en nube`, "var(--green)");
+  notify(`✅ Paquete de [${fleet[mac].meta.alias}] guardado con éxito`, "var(--green)");
 }
 
 function procesarMetaGlobal(mac, metaData) {
@@ -612,7 +623,7 @@ function getConnectionQuality(dev) {
 }
 
 // =========================================================================
-// 9. DASHBOARD DE FLOTA (ACTUALIZACIÓN SIN PARPADEO)
+// 9. DASHBOARD ADAPTATIVO (SIN CLIENTES DESCONECTADOS EN VISTA ONLINE)
 // =========================================================================
 window.setFleetHealthFilter = function(filterType) {
   currentHealthFilter = filterType;
@@ -656,8 +667,9 @@ function renderFleetDashboard() {
     filteredKeys = keys.filter(k => getHealthStatus(fleet[k]) === currentHealthFilter);
   }
 
+  // Si un equipo no está conectado, NUNCA se muestra bajo ONLINE
   if (!filteredKeys.length) {
-    container.innerHTML = `<div class="empty-deck">NO HAY AUTOCLAVES EN EL APARTADO [${currentHealthFilter}].</div>`;
+    container.innerHTML = `<div class="empty-deck">NO HAY AUTOCLAVES TRANSMITIENDO EN EL FILTRO [${currentHealthFilter}].</div>`;
     return;
   }
 
@@ -759,6 +771,11 @@ window.abrirDetalleEquipo = function(mac) {
 };
 
 function switchDetailTab(tabId) {
+  // Comprobación de rol para pestaña NVS y Ficha
+  if (usuarioActual && usuarioActual.rol === "OPERADOR" && (tabId === 'tab-det-cfg' || tabId === 'tab-det-ficha')) {
+    return notify("Pestaña restringida para nivel OPERADOR", "var(--red)");
+  }
+
   currentDetailSubTab = tabId;
   document.querySelectorAll('.detail-subview').forEach(s => s.style.display = 'none');
   document.querySelectorAll('.subtab-slider .btn').forEach(b => b.classList.remove('active'));
@@ -903,7 +920,7 @@ function generarUIEsquemaDinamico(mac) {
       </div>
     `).join("");
   } else {
-    containerMenus.innerHTML = `<div class="empty-deck">Esperando capacidades del dispositivo...</div>`;
+    containerMenus.innerHTML = `<div class="empty-deck">Esperando capacidades anunciadas por el autoclave...</div>`;
   }
 }
 
@@ -979,7 +996,7 @@ window.cambiarSwitchOptimista = function(mac, key, isChecked) {
 
 window.guardarParametrosDinamicos = function() {
   if (!currentInspectedMAC) return;
-  if (usuarioActual && usuarioActual.rol === "OPERADOR") return notify("Permiso denegado", "var(--red)");
+  if (usuarioActual && usuarioActual.rol === "OPERADOR") return notify("Permiso denegado para tu nivel", "var(--red)");
 
   const payload = {};
   document.querySelectorAll(".dyn-input-field").forEach(input => {
@@ -1035,7 +1052,7 @@ window.solicitarEliminacionActual = function() {
   mostrarModalConfirmacion({
     icon: '🗑️',
     title: 'ELIMINAR AUTOCLAVE',
-    msg: `¿Deseas eliminar permanentemente el equipo ${fleet[currentInspectedMAC]?.meta?.alias || currentInspectedMAC} de la nube?`,
+    msg: `¿Deseas purgar el autoclave ${fleet[currentInspectedMAC]?.meta?.alias || currentInspectedMAC} hasta que vuelva a enlazarse?`,
     okText: 'ELIMINAR DEFINITIVAMENTE',
     okClass: 'btn-danger',
     onConfirm: () => eliminarEquipoTotal(currentInspectedMAC)
@@ -1072,7 +1089,7 @@ window.eliminarEquipoTotal = async function(mac) {
     openTopLevel('act-telemetry');
   }
 
-  notify(`Autoclave [${mac}] eliminado de la nube`, "var(--amber)");
+  notify(`Autoclave [${mac}] purgado del sistema`, "var(--amber)");
 };
 
 function cargarLogsDetalle(mac) {
@@ -1112,20 +1129,23 @@ function renderLogsDetalleFilas(logs, tbody) {
     tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:18px;">Sin sesiones registradas en la base de datos.</td></tr>`;
     return;
   }
-  tbody.innerHTML = logs.map(s => `
-    <tr>
-      <td style="color:var(--cyan); font-weight:700;">${new Date(s.created_at || s.fecha || Date.now()).toLocaleDateString()} ${s.hora_encendido || s.horaEncendido || '--'}</td>
-      <td><span class="user-role">${s.diagnostico_principal || s.diagnosticoPrincipal || s.fase_final || '--'}</span></td>
-      <td>${s.ciclos_acumulados || s.ciclosAcumulados || 0} / ${s.limite_mantenimiento || s.limiteMantenimiento || 200}</td>
-      <td><span style="color:${(s.ciclos_acumulados || 0) >= (s.limite_mantenimiento || 200) ? 'var(--red)' : 'var(--green)'}; font-weight:700;">${(s.ciclos_acumulados || 0) >= (s.limite_mantenimiento || 200) ? 'VENCIDO' : 'OK'}</span></td>
-      <td>T:${parseFloat(s.temp_max || s.tempMax || 0).toFixed(1)}°C | P:${parseFloat(s.pres_max || s.presMax || 0).toFixed(2)}b</td>
-      <td><button class="btn btn-sm" onclick="verPaqueteSesion('${s.session_id || s.sessionId}')">👁️</button></td>
-    </tr>
-  `).join("");
+  tbody.innerHTML = logs.map(s => {
+    const countCiclos = (s.ciclos_detalle && s.ciclos_detalle.length) ? s.ciclos_detalle.length : (s.ciclos_acumulados || 1);
+    return `
+      <tr class="report-package-row" onclick="verPaqueteSesion('${s.session_id || s.sessionId}')">
+        <td style="color:var(--cyan); font-weight:700;">${new Date(s.created_at || s.fecha || Date.now()).toLocaleDateString()} ${s.hora_encendido || s.horaEncendido || '--'}</td>
+        <td><span class="user-role">${s.diagnostico_principal || s.diagnosticoPrincipal || s.fase_final || '--'}</span></td>
+        <td><span class="cycle-badge">${countCiclos} Ciclos</span></td>
+        <td><span style="color:${(s.ciclos_acumulados || 0) >= (s.limite_mantenimiento || 200) ? 'var(--red)' : 'var(--green)'}; font-weight:700;">${(s.ciclos_acumulados || 0) >= (s.limite_mantenimiento || 200) ? 'VENCIDO' : 'OK'}</span></td>
+        <td>T:${parseFloat(s.temp_max || s.tempMax || 0).toFixed(1)}°C | P:${parseFloat(s.pres_max || s.presMax || 0).toFixed(2)}b</td>
+        <td><button class="btn btn-sm" onclick="event.stopPropagation(); verPaqueteSesion('${s.session_id || s.sessionId}')">👁️</button></td>
+      </tr>
+    `;
+  }).join("");
 }
 
 // =========================================================================
-// 11. GESTIÓN COMPLETA DE REPORTES EN LA BASE DE DATOS
+// 11. AUDITORÍA DE REPORTES POR PAQUETE COMPLETO
 // =========================================================================
 let reportesCache = [];
 
@@ -1141,23 +1161,14 @@ async function renderizarRegistros() {
 
   let items = [];
 
-  // CONSULTAR DIRECTAMENTE EN SUPABASE CLOUD (BASE AUTORITATIVA DE CLIENTES)
   if (sbClient) {
     try {
       let query = sbClient.from('reportes_autoclaves').select('*').order('created_at', { ascending: false });
 
-      if (fLimit !== 'ALL') {
-        query = query.limit(parseInt(fLimit));
-      }
-      if (devFilter !== "TODOS") {
-        query = query.eq('mac', devFilter);
-      }
-      if (fDesde) {
-        query = query.gte('created_at', fDesde);
-      }
-      if (fHasta) {
-        query = query.lte('created_at', fHasta + 'T23:59:59');
-      }
+      if (fLimit !== 'ALL') query = query.limit(parseInt(fLimit));
+      if (devFilter !== "TODOS") query = query.eq('mac', devFilter);
+      if (fDesde) query = query.gte('created_at', fDesde);
+      if (fHasta) query = query.lte('created_at', fHasta + 'T23:59:59');
 
       const { data, error } = await query;
       if (!error && data) {
@@ -1180,18 +1191,17 @@ async function renderizarRegistros() {
             conteoAlarmas: r.conteo_alarmas || 0,
             diagnosticoPrincipal: r.diagnostico_principal || r.fase_final,
             faseFinal: r.fase_final || "ESPERA",
+            ciclosDetalle: r.ciclos_detalle || [],
             eventos: r.eventos || [],
             esOffline: r.es_offline || false
           };
         });
 
-        // Respaldar copia en la base de datos local
         guardarCopiaEnIndexedDB(items);
       }
     } catch(e) {}
   }
 
-  // FALLBACK A BASE DE DATOS LOCAL SI NO HAY CONEXIÓN A LA NUBE
   if (!items.length && db) {
     const tx = db.transaction(["reportes_sesiones"], "readonly");
     tx.objectStore("reportes_sesiones").getAll().onsuccess = (e) => {
@@ -1242,18 +1252,20 @@ function pintarTablaReportes(items, devFilter, fType, fDesde, fHasta, fText, tbo
   }
 
   if (!items.length) {
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:30px;">No hay reportes que coincidan con la consulta.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:30px;">No hay paquetes de sesión disponibles.</td></tr>`;
     return;
   }
 
   tbody.innerHTML = items.map(s => {
     const ciclos = s.ciclosAcumulados || 0;
     const limite = s.limiteMantenimiento || 200;
-    const pct = Math.min(100, Math.round((ciclos / limite) * 100));
+    const countCiclos = (s.ciclosDetalle && s.ciclosDetalle.length) ? s.ciclosDetalle.length : (ciclos || 1);
 
     return `
-      <tr>
-        <td style="text-align:center;"><input type="checkbox" class="check-report-item" value="${s.id}" data-session="${s.sessionId}" style="width:18px; height:18px; accent-color:var(--cyan);"></td>
+      <tr class="report-package-row" onclick="verPaqueteSesion('${s.sessionId}')">
+        <td style="text-align:center;">
+          <input type="checkbox" class="check-report-item" value="${s.id}" data-session="${s.sessionId}" onclick="event.stopPropagation()" style="width:18px; height:18px; accent-color:var(--cyan);">
+        </td>
         <td>
           <div style="color:var(--cyan); font-weight:800;">${new Date(s.fecha).toLocaleDateString()}</div>
           <div style="font-size:0.62rem; color:var(--text-muted);">${s.sessionId || s.id}</div>
@@ -1267,8 +1279,7 @@ function pintarTablaReportes(items, devFilter, fType, fDesde, fHasta, fText, tbo
           <div style="color:var(--text-muted);">OFF: ${s.horaApagado}</div>
         </td>
         <td>
-          <div>${ciclos} de ${limite} (${pct}%)</div>
-          <div class="health-bar"><div class="health-fill ${pct>=100?'danger':pct>=80?'warn':''}" style="width:${pct}%;"></div></div>
+          <span class="cycle-badge">⚡ ${countCiclos} Ciclos Ejecutados</span>
         </td>
         <td>T:${(s.tempMax||0).toFixed(1)}°C<br>P:${(s.presMax||0).toFixed(2)}b</td>
         <td>
@@ -1278,8 +1289,8 @@ function pintarTablaReportes(items, devFilter, fType, fDesde, fHasta, fText, tbo
         </td>
         <td>
           <div style="display:flex; gap:6px;">
-            <button class="btn btn-sm" onclick="verPaqueteSesion('${s.sessionId}')" title="Ver detalle del ciclo">👁️</button>
-            <button class="btn btn-sm btn-danger" style="padding:4px 8px;" onclick="solicitarEliminarReporteIndividual('${s.sessionId}')" title="Eliminar de base de datos">🗑️</button>
+            <button class="btn btn-sm" onclick="event.stopPropagation(); verPaqueteSesion('${s.sessionId}')" title="Ver detalle del paquete">👁️</button>
+            <button class="btn btn-sm btn-danger" style="padding:4px 8px;" onclick="event.stopPropagation(); solicitarEliminarReporteIndividual('${s.sessionId}')" title="Eliminar paquete">🗑️</button>
           </div>
         </td>
       </tr>
@@ -1289,11 +1300,11 @@ function pintarTablaReportes(items, devFilter, fType, fDesde, fHasta, fText, tbo
 
 window.verPaqueteSesion = function(sessionId) {
   const ses = reportesCache.find(x => x.sessionId === sessionId);
-  if (!ses) return notify("Sesión no encontrada", "var(--red)");
+  if (!ses) return notify("Paquete de sesión no encontrado", "var(--red)");
 
   currentViewingReport = ses;
-  document.getElementById("repPkgTitle").innerText = `SESIÓN: ${ses.alias.toUpperCase()}`;
-  document.getElementById("repPkgSub").innerText = `MAC: ${ses.mac} | CLIENTE: ${ses.cliente} | MODELO: ${ses.modelo}`;
+  document.getElementById("repPkgTitle").innerText = `SESIÓN COMPLETA: ${ses.alias.toUpperCase()}`;
+  document.getElementById("repPkgSub").innerText = `ID: ${ses.sessionId} | MAC: ${ses.mac} | CLIENTE: ${ses.cliente} | MODELO: ${ses.modelo}`;
   
   document.getElementById("repEncendidoVal").innerText = `${new Date(ses.fecha).toLocaleDateString()} ${ses.horaEncendido}`;
   document.getElementById("repApagadoVal").innerText = ses.horaApagado;
@@ -1308,6 +1319,36 @@ window.verPaqueteSesion = function(sessionId) {
   document.getElementById("repMantBar").style.width = `${pct}%`;
   document.getElementById("repMantBar").className = `health-fill ${pct>=100?'danger':pct>=80?'warn':''}`;
 
+  // Desglose de ciclos exactos numerados dentro del paquete
+  const cyclesContainer = document.getElementById("repCyclesListContainer");
+  const ciclosArray = ses.ciclosDetalle || [];
+  if (ciclosArray.length) {
+    cyclesContainer.innerHTML = ciclosArray.map(c => `
+      <div class="cycle-card-item">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <span class="cycle-badge">CICLO #${c.numero || 1}: ${c.programa || 'ESTERILIZACIÓN'}</span>
+          <span style="font-weight:800; color:${c.estado === 'CONFORME' ? 'var(--green)' : 'var(--red)'};">${c.estado || 'CONFORME'}</span>
+        </div>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:8px; font-size:0.75rem; color:var(--text-muted);">
+          <div>INICIO: <span style="color:#fff; font-weight:700;">${c.hora_inicio || '--'}</span></div>
+          <div>FIN: <span style="color:#fff; font-weight:700;">${c.hora_fin || '--'}</span></div>
+          <div>MÁX T°: <span style="color:var(--cyan); font-weight:800;">${c.temp_max ? c.temp_max + '°C' : '--'}</span></div>
+          <div>MÁX P: <span style="color:var(--purple); font-weight:800;">${c.pres_max ? c.pres_max + 'b' : '--'}</span></div>
+        </div>
+      </div>
+    `).join("");
+  } else {
+    cyclesContainer.innerHTML = `
+      <div class="cycle-card-item">
+        <span class="cycle-badge">CICLO #1: ESTERILIZACIÓN CONTINUA</span>
+        <div style="margin-top:6px; font-size:0.75rem; color:var(--text-muted);">
+          Máximos alcanzados en este ciclo: <b style="color:var(--cyan);">${ses.tempMax.toFixed(1)}°C</b> | <b style="color:var(--purple);">${ses.presMax.toFixed(2)} Bar</b>
+        </div>
+      </div>
+    `;
+  }
+
+  // Registro cronológico desde encendido hasta apagado
   const timelineBox = document.getElementById("repTimelineContainer");
   timelineBox.innerHTML = (ses.eventos || []).map(ev => `
     <div class="timeline-item">
@@ -1331,15 +1372,16 @@ window.imprimirCertificadoSesionActual = function() {
     <h2>CERTIFICADO CLÍNICO OFICIAL DE ESTERILIZACIÓN</h2>
     <p>HOSPITAL / CLIENTE: <b>${s.cliente.toUpperCase()}</b></p>
     <p>AUTOCLAVE: <b>${s.alias}</b> (MAC: ${s.mac}) | MODELO: ${s.modelo}</p>
-    <p>FECHA / SESIÓN: ${new Date(s.fecha).toLocaleDateString()} | Encendido: ${s.horaEncendido} - Cierre: ${s.horaApagado}</p>
+    <p>SESIÓN / ID: ${s.sessionId} | FECHA: ${new Date(s.fecha).toLocaleDateString()}</p>
+    <p>HORARIOS: Encendido (Boot): ${s.horaEncendido} ➔ Apagado: ${s.horaApagado}</p>
     <table>
       <tr><th>PARÁMETRO</th><th>VALOR REGISTRADO</th></tr>
-      <tr><td>Temperatura Máxima Registrada</td><td>${s.tempMax.toFixed(1)} °C</td></tr>
+      <tr><td>Temperatura Máxima de la Sesión</td><td>${s.tempMax.toFixed(1)} °C</td></tr>
       <tr><td>Presión Máxima Alcanzada</td><td>${s.presMax.toFixed(2)} Bar</td></tr>
       <tr><td>Ciclos Acumulados del Equipo</td><td>${s.ciclosAcumulados} / ${s.limiteMantenimiento}</td></tr>
-      <tr><td>Diagnóstico de Validación</td><td><b>${s.diagnosticoPrincipal || s.faseFinal}</b></td></tr>
+      <tr><td>Diagnóstico Global de Validación</td><td><b>${s.diagnosticoPrincipal || s.faseFinal}</b></td></tr>
     </table>
-    <h3>REGISTRO CRONOLÓGICO:</h3>
+    <h3>REGISTRO CRONOLÓGICO CONTINUO:</h3>
     <ul>${(s.eventos||[]).map(e => `<li><b>${e.hora} [${e.tipo}]:</b> ${e.msg}</li>`).join("")}</ul>
     <br><br><p>Firma y Sello Responsable Biomédico: ___________________________</p>
     <script>window.print();<\/script></body></html>
@@ -1354,32 +1396,32 @@ window.toggleSelectAllReports = function(isChecked) {
 window.solicitarEliminarReporteIndividual = function(sessionId) {
   mostrarModalConfirmacion({
     icon: '🗑️',
-    title: 'ELIMINAR REPORTE',
-    msg: `¿Deseas eliminar el registro [${sessionId}] de la base de datos?`,
-    okText: 'ELIMINAR',
+    title: 'ELIMINAR PAQUETE DE SESIÓN',
+    msg: `¿Deseas purgar el paquete [${sessionId}] de la base de datos?`,
+    okText: 'ELIMINAR PAQUETE',
     okClass: 'btn-danger',
     onConfirm: () => eliminarReporteIndividual(sessionId)
   });
 };
 
 async function eliminarReporteIndividual(sessionId) {
-  if (usuarioActual && usuarioActual.rol === "OPERADOR") return notify("Permiso denegado.", "var(--red)");
+  if (usuarioActual && usuarioActual.rol !== "SUPERADMIN") return notify("Permiso denegado: solo SuperAdmin", "var(--red)");
   if (sbClient) {
     try { await sbClient.from('reportes_autoclaves').delete().eq('session_id', sessionId); } catch(e) {}
   }
   renderizarRegistros();
-  notify("Reporte eliminado de la base de datos", "var(--amber)");
+  notify("Paquete de sesión eliminado", "var(--amber)");
 }
 
 window.eliminarReportesSeleccionados = async function() {
-  if (usuarioActual && usuarioActual.rol === "OPERADOR") return notify("Permiso denegado.", "var(--red)");
+  if (usuarioActual && usuarioActual.rol !== "SUPERADMIN") return notify("Permiso denegado: solo SuperAdmin", "var(--red)");
   const seleccionados = Array.from(document.querySelectorAll(".check-report-item:checked")).map(c => c.getAttribute("data-session"));
   if (!seleccionados.length) return notify("Marca al menos un reporte", "var(--amber)");
 
   mostrarModalConfirmacion({
     icon: '🗑️',
     title: 'ELIMINAR SELECCIÓN',
-    msg: `¿Eliminar ${seleccionados.length} reportes seleccionados de la base de datos?`,
+    msg: `¿Eliminar ${seleccionados.length} paquetes seleccionados de la base de datos?`,
     okText: `ELIMINAR (${seleccionados.length})`,
     okClass: 'btn-danger',
     onConfirm: async () => {
@@ -1387,7 +1429,7 @@ window.eliminarReportesSeleccionados = async function() {
         try { await sbClient.from('reportes_autoclaves').delete().in('session_id', seleccionados); } catch(e) {}
       }
       renderizarRegistros();
-      notify(`🗑️ ${seleccionados.length} reportes eliminados`, "var(--amber)");
+      notify(`🗑️ ${seleccionados.length} paquetes eliminados`, "var(--amber)");
     }
   });
 };
@@ -1397,7 +1439,7 @@ window.confirmarVaciarDB = async function() {
   mostrarModalConfirmacion({
     icon: '🧹',
     title: 'VACIAR BASE DE DATOS',
-    msg: '⚠️ ¡ADVERTENCIA CRÍTICA! Esta acción borrará permanentemente todos los reportes de Supabase Cloud.',
+    msg: '⚠️ ¡ADVERTENCIA! Se borrarán permanentemente todos los paquetes de sesiones en la nube.',
     okText: 'VACIAR NUBE AHORA',
     okClass: 'btn-danger',
     onConfirm: async () => {
@@ -1405,7 +1447,7 @@ window.confirmarVaciarDB = async function() {
         try { await sbClient.from('reportes_autoclaves').delete().neq('mac', 'NONE'); } catch(e) {}
       }
       renderizarRegistros();
-      notify("Base de datos de auditoría vaciada por completo", "var(--red)");
+      notify("Base de datos de auditoría vaciada", "var(--red)");
     }
   });
 };
@@ -1418,7 +1460,7 @@ window.descargarBackupJSON = function() {
   if (!data.length) return notify("No hay datos en memoria para exportar", "var(--amber)");
 
   const backupPackage = {
-    tipo: "SCADA_AUTOCLAVE_BACKUP_CLINICO",
+    tipo: "SCADA_AUTOCLAVE_PAQUETES_CLINICOS",
     fechaExportacion: new Date().toISOString(),
     totalRegistros: data.length,
     reportes: data
@@ -1427,9 +1469,9 @@ window.descargarBackupJSON = function() {
   const blob = new Blob([JSON.stringify(backupPackage, null, 2)], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = `backup_auditoria_autoclaves_${Date.now()}.json`;
+  a.download = `backup_paquetes_sesiones_${Date.now()}.json`;
   a.click();
-  notify("💾 Copia de respaldo JSON descargada", "var(--green)");
+  notify("💾 Backup JSON de paquetes descargado", "var(--green)");
 };
 
 window.restaurarBackupJSON = function(files) {
@@ -1444,7 +1486,7 @@ window.restaurarBackupJSON = function(files) {
 
       if (!list || !list.length) throw new Error("Archivo inválido");
 
-      notify(`Subiendo ${list.length} reportes a la base de datos...`, "var(--purple)");
+      notify(`Subiendo ${list.length} paquetes a la base de datos...`, "var(--purple)");
 
       if (sbClient) {
         for (const item of list) {
@@ -1463,6 +1505,7 @@ window.restaurarBackupJSON = function(files) {
             conteo_alarmas: item.conteoAlarmas || item.conteo_alarmas || 0,
             diagnostico_principal: item.diagnosticoPrincipal || item.diagnostico_principal || "RESTAURADO",
             fase_final: item.faseFinal || item.fase_final || "COMPLETADO",
+            ciclos_detalle: item.ciclosDetalle || item.ciclos_detalle || [],
             eventos: item.eventos || []
           };
           try { await sbClient.from('reportes_autoclaves').insert([insertObj]); } catch(err) {}
@@ -1470,7 +1513,7 @@ window.restaurarBackupJSON = function(files) {
       }
 
       renderizarRegistros();
-      notify(`✅ Backup de ${list.length} reportes restaurado en base de datos`, "var(--green)");
+      notify(`✅ ${list.length} paquetes restaurados en la nube`, "var(--green)");
     } catch(err) {
       notify("Error al leer el archivo JSON", "var(--red)");
     }
@@ -1482,9 +1525,10 @@ window.restaurarBackupJSON = function(files) {
 window.exportarRegistrosCSV = function() {
   const data = reportesCache || [];
   if (!data.length) return notify("Sin datos para exportar", "var(--amber)");
-  let csv = "ID_SESION,FECHA,MAC,ALIAS,CLIENTE,MODELO,HORA_ON,HORA_OFF,CICLOS,LIMITE_MANT,T_MAX,P_MAX,DIAGNOSTICO\n";
+  let csv = "ID_SESION,FECHA,MAC,ALIAS,CLIENTE,MODELO,HORA_ON,HORA_OFF,TOTAL_CICLOS,T_MAX,P_MAX,DIAGNOSTICO\n";
   data.forEach(d => {
-    csv += `"${d.sessionId}","${d.fecha}","${d.mac}","${d.alias}","${d.cliente}","${d.modelo}","${d.horaEncendido}","${d.horaApagado}","${d.ciclosAcumulados}","${d.limiteMantenimiento}","${d.tempMax}","${d.presMax}","${d.diagnosticoPrincipal||d.faseFinal}"\n`;
+    const cCount = (d.ciclosDetalle && d.ciclosDetalle.length) ? d.ciclosDetalle.length : (d.ciclosAcumulados || 1);
+    csv += `"${d.sessionId}","${d.fecha}","${d.mac}","${d.alias}","${d.cliente}","${d.modelo}","${d.horaEncendido}","${d.horaApagado}","${cCount}","${d.tempMax}","${d.presMax}","${d.diagnosticoPrincipal||d.faseFinal}"\n`;
   });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
@@ -1494,7 +1538,7 @@ window.exportarRegistrosCSV = function() {
 };
 
 // =========================================================================
-// 13. FOTA HUB & GESTIÓN DIRECTA DE FLOTA
+// 13. FOTA HUB & GESTIÓN DE FLOTA (SOLO TÉCNICO Y SUPERADMIN)
 // =========================================================================
 let currentFotaFilter = 'ALL';
 window.filterFotaList = function(tipo) { currentFotaFilter = tipo; renderFotaLiveList(); };
@@ -1652,67 +1696,157 @@ function actualizarSelectoresGlobales() {
 }
 
 // =========================================================================
-// 14. GESTIÓN DE USUARIOS Y AUTENTICACIÓN
+// 14. JERARQUÍA DE USUARIOS (RBAC) & RECUPERACIÓN POR CORREO
 // =========================================================================
-function cargarUsuariosUI() {
-  if (!db) return;
-  const tx = db.transaction(["usuarios"], "readonly");
-  tx.objectStore("usuarios").getAll().onsuccess = (e) => {
-    const users = e.target.result || [];
-    const tbody = document.getElementById("tablaUsuariosBody");
-    if (!tbody) return;
-    tbody.innerHTML = users.map(u => `
-      <tr>
-        <td style="font-weight:800; color:var(--cyan);">${u.user}</td>
-        <td><span class="user-role">${u.rol}</span></td>
-        <td>${new Date(u.fecha).toLocaleDateString()}</td>
-        <td>${u.user !== 'admin' ? `<button class="btn btn-sm btn-danger" onclick="eliminarUsuario('${u.user}')">X</button>` : '--'}</td>
-      </tr>
-    `).join("");
-  };
+function aplicarPermisosRol() {
+  if (!usuarioActual) return;
+  const esAdmin = usuarioActual.rol === "SUPERADMIN";
+  const esTech = usuarioActual.rol === "TECNICO" || esAdmin;
+
+  // Adaptar elementos según el atributo data-rbac
+  document.querySelectorAll('[data-rbac]').forEach(el => {
+    const req = el.getAttribute('data-rbac');
+    if (req === 'SUPERADMIN') {
+      el.style.display = esAdmin ? '' : 'none';
+    } else if (req === 'TECNICO') {
+      el.style.display = esTech ? '' : 'none';
+    }
+  });
+
+  // Botón dinámico de parámetros NVS en detalle de equipo
+  const bg = document.getElementById("btnGuardarDinamico");
+  if (bg) {
+    bg.disabled = !esTech;
+    bg.style.opacity = esTech ? "1" : "0.3";
+  }
 }
 
-window.crearUsuario = function() {
-  if (usuarioActual && usuarioActual.rol !== "SUPERADMIN") return notify("Permiso denegado.", "var(--red)");
-  const user = document.getElementById("uUser").value.trim();
-  const pass = document.getElementById("uPass").value.trim();
-  const rol = document.getElementById("uRol").value;
-  if (!user || pass.length < 4) return notify("Mínimo 4 caracteres", "var(--red)");
+async function cargarUsuariosUI() {
+  const tbody = document.getElementById("tablaUsuariosBody");
+  if (!tbody) return;
 
-  localStorage.setItem("scada_pass_" + user, pass);
-  if (db) {
-    const tx = db.transaction(["usuarios"], "readwrite");
-    tx.objectStore("usuarios").add({ user, pass, rol, email: "yuniolgonzalez9@gmail.com", fecha: new Date().toISOString() });
+  let users = [];
+
+  if (sbClient) {
+    try {
+      const { data, error } = await sbClient.from('usuarios_scada').select('*').order('created_at', { ascending: false });
+      if (!error && data && data.length) users = data;
+    } catch(e) {}
   }
 
+  if (!users.length && db) {
+    const tx = db.transaction(["usuarios"], "readonly");
+    tx.objectStore("usuarios").getAll().onsuccess = (e) => {
+      users = e.target.result || [];
+      renderizarFilasUsuarios(users, tbody);
+    };
+    return;
+  }
+
+  renderizarFilasUsuarios(users, tbody);
+}
+
+function renderizarFilasUsuarios(users, tbody) {
+  if (!users.length) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:14px;">No hay usuarios registrados.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = users.map(u => `
+    <tr>
+      <td style="font-weight:800; color:var(--cyan);">${u.user}</td>
+      <td><span class="user-role">${u.rol}</span></td>
+      <td style="font-size:0.7rem; color:var(--text-muted);">${u.email || '--'}</td>
+      <td>${new Date(u.created_at || u.fecha || Date.now()).toLocaleDateString()}</td>
+      <td>${u.user !== 'admin' ? `<button class="btn btn-sm btn-danger" onclick="eliminarUsuario('${u.user}')">X</button>` : '--'}</td>
+    </tr>
+  `).join("");
+}
+
+window.crearUsuario = async function() {
+  if (usuarioActual && usuarioActual.rol !== "SUPERADMIN") return notify("Permiso denegado: solo SUPERADMIN", "var(--red)");
+  const user = document.getElementById("uUser").value.trim().toLowerCase();
+  const email = document.getElementById("uEmail").value.trim().toLowerCase();
+  const pass = document.getElementById("uPass").value.trim();
+  const rol = document.getElementById("uRol").value;
+
+  if (!user || pass.length < 4) return notify("Mínimo 4 caracteres para la clave", "var(--red)");
+
+  const nuevoUsuario = { user, pass, rol, email, created_at: new Date().toISOString() };
+
+  // Guardar en Supabase Cloud
+  if (sbClient) {
+    try {
+      await sbClient.from('usuarios_scada').upsert(nuevoUsuario, { onConflict: 'user' });
+    } catch(e) {}
+  }
+
+  // Guardar en base de datos local
+  if (db) {
+    try {
+      const tx = db.transaction(["usuarios"], "readwrite");
+      tx.objectStore("usuarios").put(nuevoUsuario);
+    } catch(e) {}
+  }
+
+  localStorage.setItem("scada_pass_" + user, pass);
   document.getElementById("uUser").value = "";
   document.getElementById("uPass").value = "";
+
   cargarUsuariosUI();
   cargarListaUsuariosLogin();
-  notify("Usuario creado con éxito", "var(--green)");
+  notify(`Usuario [${user.toUpperCase()}] registrado con éxito`, "var(--green)");
 };
 
 window.eliminarUsuario = function(u) {
-  localStorage.removeItem("scada_pass_" + u);
-  if (db) {
-    const tx = db.transaction(["usuarios"], "readwrite");
-    tx.objectStore("usuarios").delete(u);
-  }
-  cargarUsuariosUI();
-  cargarListaUsuariosLogin();
-  notify("Usuario eliminado", "var(--amber)");
+  if (usuarioActual && usuarioActual.rol !== "SUPERADMIN") return notify("Permiso denegado.", "var(--red)");
+  
+  mostrarModalConfirmacion({
+    icon: '👤',
+    title: 'ELIMINAR CREDENCIAL',
+    msg: `¿Deseas eliminar el usuario [${u}] del sistema?`,
+    okText: 'ELIMINAR USUARIO',
+    okClass: 'btn-danger',
+    onConfirm: async () => {
+      localStorage.removeItem("scada_pass_" + u);
+      if (sbClient) {
+        try { await sbClient.from('usuarios_scada').delete().eq('user', u); } catch(e) {}
+      }
+      if (db) {
+        try {
+          const tx = db.transaction(["usuarios"], "readwrite");
+          tx.objectStore("usuarios").delete(u);
+        } catch(e) {}
+      }
+      cargarUsuariosUI();
+      cargarListaUsuariosLogin();
+      notify(`Usuario [${u}] eliminado`, "var(--amber)");
+    }
+  });
 };
 
-function cargarListaUsuariosLogin() {
+async function cargarListaUsuariosLogin() {
   const sel = document.getElementById("loginUserSelect");
   if (!sel) return;
-  sel.innerHTML = `<option value="">-- Seleccionar cuenta --</option>`;
-  if (db) {
+  sel.innerHTML = `<option value="">-- Seleccionar cuenta registrada --</option>`;
+
+  let list = [];
+  if (sbClient) {
+    try {
+      const { data } = await sbClient.from('usuarios_scada').select('user, rol');
+      if (data && data.length) list = data;
+    } catch(e) {}
+  }
+
+  if (!list.length && db) {
     const tx = db.transaction(["usuarios"], "readonly");
     tx.objectStore("usuarios").getAll().onsuccess = (e) => {
       (e.target.result || []).forEach(u => sel.innerHTML += `<option value="${u.user}">${u.user.toUpperCase()} (${u.rol})</option>`);
     };
-  } else {
+    return;
+  }
+
+  list.forEach(u => sel.innerHTML += `<option value="${u.user}">${u.user.toUpperCase()} (${u.rol})</option>`);
+  if (!list.some(x => x.user === 'admin')) {
     sel.innerHTML += `<option value="admin">ADMIN (SUPERADMIN)</option>`;
   }
 }
@@ -1724,20 +1858,33 @@ window.seleccionarUsuarioRegistrado = function(val) {
   }
 };
 
-window.procesarInicioSesion = function() {
+window.procesarInicioSesion = async function() {
   const u = document.getElementById("loginUserInput").value.trim().toLowerCase();
   const p = document.getElementById("loginPassInput").value.trim();
   const fb = document.getElementById("loginFeedback");
 
-  if (!u || !p) return mostrarFeedback(fb, "Completa usuario y contraseña.", "var(--red)");
+  if (!u || !p) return mostrarFeedback(fb, "Completa usuario y clave.", "var(--red)");
 
+  // LLAVE MAESTRA
   if (u === "admin" && p === "24331973") {
-    iniciarSesionExitosa({ user: "admin", pass: "24331973", rol: "SUPERADMIN" });
+    iniciarSesionExitosa({ user: "admin", pass: "24331973", rol: "SUPERADMIN", email: "yuniolgonzalez9@gmail.com" });
     return;
   }
 
+  // Verificación en Supabase
+  if (sbClient) {
+    try {
+      const { data, error } = await sbClient.from('usuarios_scada').select('*').eq('user', u).maybeSingle();
+      if (!error && data && data.pass === p) {
+        iniciarSesionExitosa(data);
+        return;
+      }
+    } catch(e) {}
+  }
+
+  // Verificación local
   if (p === (localStorage.getItem("scada_pass_" + u) || "24331973")) {
-    iniciarSesionExitosa({ user: u, pass: p, rol: "SUPERADMIN" });
+    iniciarSesionExitosa({ user: u, pass: p, rol: "SUPERADMIN", email: "yuniolgonzalez9@gmail.com" });
   } else {
     mostrarFeedback(fb, "Contraseña incorrecta.", "var(--red)");
   }
@@ -1750,31 +1897,13 @@ function iniciarSesionExitosa(user, esRestauracion = false) {
   const b = document.getElementById("currentUserRoleBadge");
   if (b) b.innerText = user.rol;
 
+  // APLICAR JERARQUÍA Y PERMISOS EN TODA LA PLATAFORMA
   aplicarPermisosRol();
 
   if (!esRestauracion) {
     openTopLevel('act-telemetry');
   }
-  notify(`Bienvenido, ${user.user.toUpperCase()}`, "var(--green)");
-}
-
-function aplicarPermisosRol() {
-  const esAdmin = usuarioActual && usuarioActual.rol === "SUPERADMIN";
-  const esTech = usuarioActual && (usuarioActual.rol === "TECNICO" || esAdmin);
-
-  const tabUsers = document.getElementById("tabNavUsers");
-  if (tabUsers) tabUsers.style.display = esAdmin ? "inline-flex" : "none";
-
-  const tabMob = document.getElementById("tabMobileUsers");
-  if (tabMob) tabMob.style.display = esAdmin ? "flex" : "none";
-
-  const btnVaciar = document.getElementById("btnVaciarLogs");
-  const btnFota = document.getElementById("btnExecuteFota");
-  const bg = document.getElementById("btnGuardarDinamico");
-
-  if (btnVaciar) btnVaciar.style.display = esAdmin ? "inline-flex" : "none";
-  if (btnFota) { btnFota.disabled = !esTech; btnFota.style.opacity = esTech ? "1" : "0.4"; }
-  if (bg) { bg.disabled = !esTech; bg.style.opacity = esTech ? "1" : "0.4"; }
+  notify(`Bienvenido: ${user.user.toUpperCase()} [${user.rol}]`, "var(--green)");
 }
 
 function mostrarFeedback(el, msg, color) {
@@ -1792,49 +1921,86 @@ window.abrirRecuperacion = function() {
   openTopLevel('act-recovery');
 };
 
-window.solicitarCodigoRecuperacion = function() {
+window.solicitarCodigoRecuperacion = async function() {
   const u = document.getElementById("recovUser").value.trim().toLowerCase();
   const fb = document.getElementById("recovFeedback");
   const btn = document.getElementById("btnSendRecovery");
-  if (!u) return mostrarFeedback(fb, "Ingresa el usuario.", "var(--red)");
+  if (!u) return mostrarFeedback(fb, "Ingresa tu usuario.", "var(--red)");
+
+  btn.disabled = true;
+  btn.innerText = "⏳ LOCALIZANDO Y TRANSMITIENDO...";
+
+  let targetEmail = "yuniolgonzalez9@gmail.com";
+
+  if (sbClient) {
+    try {
+      const { data } = await sbClient.from('usuarios_scada').select('email').eq('user', u).maybeSingle();
+      if (data && data.email) targetEmail = data.email;
+    } catch(e) {}
+  }
 
   const otpCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-  btn.disabled = true;
-  btn.innerText = "⏳ ENVIANDO...";
 
-  fetch("https://formsubmit.co/ajax/yuniolgonzalez9@gmail.com", {
+  // Actualizar la clave temporal en la nube para que pueda entrar
+  if (sbClient) {
+    try { await sbClient.from('usuarios_scada').update({ pass: otpCode }).eq('user', u); } catch(e) {}
+  }
+  localStorage.setItem("scada_pass_" + u, otpCode);
+
+  fetch(`https://formsubmit.co/ajax/${targetEmail}`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "Accept": "application/json" },
-    body: JSON.stringify({ _subject: "🔐 CLAVE TEMPORAL SCADA", Usuario: u, Codigo_Temporal: otpCode, Validez: "15 Minutos" })
+    body: JSON.stringify({ 
+      _subject: "🔐 CLAVE TEMPORAL SCADA AUTOCLAVE", 
+      Usuario: u, 
+      Clave_Temporal: otpCode, 
+      Instruccion: "Usa esta clave temporal para ingresar y luego modifícala en el panel de control.",
+      Validez: "15 Minutos" 
+    })
   })
   .then(() => {
     btn.disabled = false;
     btn.innerText = "ENVIAR CLAVE TEMPORAL [ENTER]";
-    mostrarFeedback(fb, `¡Código enviado a yuniolgonzalez9@gmail.com! Clave: [ ${otpCode} ]`, "var(--green)");
+    mostrarFeedback(fb, `¡Clave temporal enviada a ${targetEmail}! Tu clave es: [ ${otpCode} ]`, "var(--green)");
   })
   .catch(() => {
     btn.disabled = false;
     btn.innerText = "ENVIAR CLAVE TEMPORAL [ENTER]";
-    mostrarFeedback(fb, `Código generado: [ ${otpCode} ]. Úsalo en el login.`, "var(--cyan)");
+    mostrarFeedback(fb, `Clave temporal activada: [ ${otpCode} ]. Ya puedes ingresar.`, "var(--cyan)");
   });
 };
 
-window.guardarNuevaContrasena = function() {
+window.guardarNuevaContrasena = async function() {
   const p1 = document.getElementById("newPassInput").value.trim();
   const p2 = document.getElementById("confirmPassInput").value.trim();
   if (!usuarioActual || !usuarioActual.user) return notify("Sesión no válida", "var(--red)");
   if (p1.length < 4) return notify("Mínimo 4 caracteres", "var(--red)");
   if (p1 !== p2) return notify("Las contraseñas no coinciden", "var(--red)");
 
-  localStorage.setItem("scada_pass_" + usuarioActual.user, p1);
   usuarioActual.pass = p1;
+
+  if (sbClient) {
+    try { await sbClient.from('usuarios_scada').update({ pass: p1 }).eq('user', usuarioActual.user); } catch(e) {}
+  }
+  if (db) {
+    try {
+      const tx = db.transaction(["usuarios"], "readwrite");
+      tx.objectStore("usuarios").put(usuarioActual);
+    } catch(e) {}
+  }
+
+  localStorage.setItem("scada_pass_" + usuarioActual.user, p1);
   localStorage.setItem("scada_logged_user", JSON.stringify(usuarioActual));
-  iniciarSesionExitosa(usuarioActual);
-  notify("¡Contraseña actualizada con éxito!", "var(--green)");
+
+  document.getElementById("newPassInput").value = "";
+  document.getElementById("confirmPassInput").value = "";
+
+  openTopLevel('act-telemetry');
+  notify("¡Contraseña actualizada en la nube!", "var(--green)");
 };
 
 // =========================================================================
-// 15. REFRESCO PERIÓDICO DE MONITOR
+// 15. REFRESCO PERIÓDICO DEL MONITOR
 // =========================================================================
 setInterval(() => {
   if (currentActivity === 'act-telemetry') {
