@@ -1,5 +1,5 @@
 // =========================================================================
-// 1. SUPABASE CLOUD & SINCRONIZACIÓN EN TIEMPO REAL
+// 1. CONEXIÓN CLOUD SUPABASE & REALTIME (NUBE 24/7)
 // =========================================================================
 const SUPABASE_URL = "https://gjtqyodpgwfvfvkhlhik.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdqdHF5b2RwZ3dmdmZ2a2hsaGlrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAwNDAzNTYsImV4cCI6MjEwNTYxNjM1Nn0.g8t_PbEityaneKkOUHttQ_cZv50aczLU4Z9la8R4d_g";
@@ -70,7 +70,7 @@ function mostrarModalConfirmacion({ icon = '⚠️', title = 'CONFIRMAR ACCIÓN'
     bEl.innerText = okText;
     bEl.className = `btn flex-1 ${okClass}`;
   }
-  if (overlay) overlay.style.display = "flex";
+  if (overlay) overlay.style.display = "grid";
 }
 
 window.cerrarModalConfirmacion = function(confirmado) {
@@ -117,7 +117,7 @@ window.openTopLevel = function(secId) {
     return;
   }
 
-  // RESTRICCIÓN JERÁRQUICA ACTIVA
+  // RESTRICCIÓN JERÁRQUICA ESTRICTA
   if (usuarioActual && usuarioActual.rol === "OPERADOR") {
     if (secId === 'act-fota' || secId === 'act-fleet-mgmt' || secId === 'act-users') {
       notify("⛔ Acceso restringido para el rol OPERADOR", "var(--red)");
@@ -221,14 +221,12 @@ function renderScreen(screenId) {
     });
   }
 
-  // Ejecución según la vista activa
   if (screenId === 'act-fota') renderFotaLiveList();
   if (screenId === 'act-fleet-mgmt') renderFleetMgmtTable();
   if (screenId === 'act-reports') renderizarRegistros();
   if (screenId === 'act-telemetry') renderFleetDashboard();
   if (screenId === 'act-users') cargarUsuariosUI();
 
-  // Re-aplicar jerarquía para blindar la pantalla
   if (!esPublico) aplicarPermisosRol();
 }
 
@@ -330,7 +328,7 @@ const fleet = {};
 
 function initDB() {
   return new Promise((resolve) => {
-    const req = indexedDB.open("AutoclaveFastFleetDB_v25", 1);
+    const req = indexedDB.open("AutoclaveFastFleetDB_v26", 1);
     req.onupgradeneeded = (e) => {
       db = e.target.result;
       if (!db.objectStoreNames.contains("asignaciones")) db.createObjectStore("asignaciones", { keyPath: "mac" });
@@ -365,7 +363,7 @@ function iniciarSuscripcionNubeRealtime() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'reportes_autoclaves' }, (payload) => {
         const syncText = document.getElementById("syncStatusText");
         if (syncText) syncText.innerText = "NUBE CONECTADA";
-        notify(`📋 Paquete de sesión actualizado [${payload.eventType}]`, "var(--green)");
+        notify(`📋 Paquete de sesión actualizado en nube [${payload.eventType}]`, "var(--green)");
         if (currentActivity === 'act-reports') renderizarRegistros();
       })
       .subscribe();
@@ -543,8 +541,12 @@ async function procesarPaqueteOfflineSync(mac, payload) {
     es_offline: !!payload.es_offline
   };
 
+  let guardadoEnNube = false;
   if (sbClient) {
-    try { await sbClient.from('reportes_autoclaves').insert([reportObj]); } catch(e) {}
+    try { 
+      const { error } = await sbClient.from('reportes_autoclaves').insert([reportObj]); 
+      if (!error) guardadoEnNube = true;
+    } catch(e) {}
   }
   if (db) {
     try {
@@ -554,7 +556,7 @@ async function procesarPaqueteOfflineSync(mac, payload) {
   }
 
   if (currentActivity === 'act-reports') renderizarRegistros();
-  notify(`✅ Paquete de [${fleet[mac].meta.alias}] guardado con éxito`, "var(--green)");
+  notify(guardadoEnNube ? `☁️ Paquete de [${fleet[mac].meta.alias}] guardado en la nube con éxito` : `Paquete de [${fleet[mac].meta.alias}] guardado localmente`, "var(--green)");
 }
 
 function procesarMetaGlobal(mac, metaData) {
@@ -633,7 +635,7 @@ function getConnectionQuality(dev) {
 }
 
 // =========================================================================
-// 9. DASHBOARD ADAPTATIVO
+// 9. DASHBOARD ADAPTATIVO (PURGA TOTAL DE EQUIPOS OFFLINE EN MODO ONLINE)
 // =========================================================================
 window.setFleetHealthFilter = function(filterType) {
   currentHealthFilter = filterType;
@@ -677,6 +679,7 @@ function renderFleetDashboard() {
     filteredKeys = keys.filter(k => getHealthStatus(fleet[k]) === currentHealthFilter);
   }
 
+  // Si un equipo no transmite, NUNCA aparece en la grilla ONLINE
   if (!filteredKeys.length) {
     container.innerHTML = `<div class="empty-deck">NO HAY AUTOCLAVES TRANSMITIENDO EN EL FILTRO [${currentHealthFilter}].</div>`;
     return;
@@ -1036,10 +1039,14 @@ window.guardarFichaDetalle = async function() {
   const cliente = document.getElementById("fichaCliente").value.trim();
   const modelo = document.getElementById("fichaModelo").value.trim();
 
-  const metaData = { mac: currentInspectedMAC, alias, cliente, modelo };
+  const metaData = { mac: currentInspectedMAC, alias, cliente, modelo, updated_at: new Date().toISOString() };
 
+  let guardadoNube = false;
   if (sbClient) {
-    try { await sbClient.from('asignaciones_equipos').upsert(metaData, { onConflict: 'mac' }); } catch(e) {}
+    try { 
+      const { error } = await sbClient.from('asignaciones_equipos').upsert(metaData, { onConflict: 'mac' }); 
+      if (!error) guardadoNube = true;
+    } catch(e) {}
   }
   if (db) {
     const tx = db.transaction(["asignaciones"], "readwrite");
@@ -1052,7 +1059,7 @@ window.guardarFichaDetalle = async function() {
   document.getElementById("detDeviceAlias").innerText = alias.toUpperCase();
   document.getElementById("detDeviceSub").innerText = `MAC: ${currentInspectedMAC} | CLIENTE: ${cliente} | MODELO: ${modelo}`;
   actualizarCardDashboard(currentInspectedMAC);
-  notify("Ficha guardada y sincronizada en nube", "var(--green)");
+  notify(guardadoNube ? "☁️ Ficha guardada en la nube con éxito" : "Ficha guardada localmente", "var(--green)");
 };
 
 window.solicitarEliminacionActual = function() {
@@ -1097,7 +1104,7 @@ window.eliminarEquipoTotal = async function(mac) {
     openTopLevel('act-telemetry');
   }
 
-  notify(`Autoclave [${mac}] purgado del sistema`, "var(--amber)");
+  notify(`☁️ Autoclave [${mac}] purgado de la nube`, "var(--amber)");
 };
 
 function cargarLogsDetalle(mac) {
@@ -1143,7 +1150,7 @@ function renderLogsDetalleFilas(logs, tbody) {
       <tr class="report-package-row" onclick="verPaqueteSesion('${s.session_id || s.sessionId}')">
         <td style="color:var(--cyan); font-weight:700;">${new Date(s.created_at || s.fecha || Date.now()).toLocaleDateString()} ${s.hora_encendido || s.horaEncendido || '--'}</td>
         <td><span class="user-role">${s.diagnostico_principal || s.diagnosticoPrincipal || s.fase_final || '--'}</span></td>
-        <td><span class="cycle-badge">${countCiclos} Ciclos</span></td>
+        <td><span class="cycle-badge">⚡ ${countCiclos} Ciclos</span></td>
         <td><span style="color:${(s.ciclos_acumulados || 0) >= (s.limite_mantenimiento || 200) ? 'var(--red)' : 'var(--green)'}; font-weight:700;">${(s.ciclos_acumulados || 0) >= (s.limite_mantenimiento || 200) ? 'VENCIDO' : 'OK'}</span></td>
         <td>T:${parseFloat(s.temp_max || s.tempMax || 0).toFixed(1)}°C | P:${parseFloat(s.pres_max || s.presMax || 0).toFixed(2)}b</td>
         <td><button class="btn btn-sm" onclick="event.stopPropagation(); verPaqueteSesion('${s.session_id || s.sessionId}')">👁️</button></td>
@@ -1260,7 +1267,7 @@ function pintarTablaReportes(items, devFilter, fType, fDesde, fHasta, fText, tbo
   }
 
   if (!items.length) {
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:30px;">No hay paquetes de sesión disponibles.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:30px;">No hay paquetes de sesión disponibles en la nube.</td></tr>`;
     return;
   }
 
@@ -1327,7 +1334,6 @@ window.verPaqueteSesion = function(sessionId) {
   document.getElementById("repMantBar").style.width = `${pct}%`;
   document.getElementById("repMantBar").className = `health-fill ${pct>=100?'danger':pct>=80?'warn':''}`;
 
-  // Desglose de ciclos exactos numerados dentro del paquete
   const cyclesContainer = document.getElementById("repCyclesListContainer");
   const ciclosArray = ses.ciclosDetalle || [];
   if (ciclosArray.length) {
@@ -1356,7 +1362,6 @@ window.verPaqueteSesion = function(sessionId) {
     `;
   }
 
-  // Registro cronológico desde encendido hasta apagado
   const timelineBox = document.getElementById("repTimelineContainer");
   timelineBox.innerHTML = (ses.eventos || []).map(ev => `
     <div class="timeline-item">
@@ -1418,7 +1423,7 @@ async function eliminarReporteIndividual(sessionId) {
     try { await sbClient.from('reportes_autoclaves').delete().eq('session_id', sessionId); } catch(e) {}
   }
   renderizarRegistros();
-  notify("Paquete de sesión eliminado", "var(--amber)");
+  notify("☁️ Paquete de sesión eliminado de la nube", "var(--amber)");
 }
 
 window.eliminarReportesSeleccionados = async function() {
@@ -1437,7 +1442,7 @@ window.eliminarReportesSeleccionados = async function() {
         try { await sbClient.from('reportes_autoclaves').delete().in('session_id', seleccionados); } catch(e) {}
       }
       renderizarRegistros();
-      notify(`🗑️ ${seleccionados.length} paquetes eliminados`, "var(--amber)");
+      notify(`☁️ ${seleccionados.length} paquetes eliminados de la nube`, "var(--amber)");
     }
   });
 };
@@ -1455,7 +1460,7 @@ window.confirmarVaciarDB = async function() {
         try { await sbClient.from('reportes_autoclaves').delete().neq('mac', 'NONE'); } catch(e) {}
       }
       renderizarRegistros();
-      notify("Base de datos de auditoría vaciada", "var(--red)");
+      notify("☁️ Base de datos de auditoría vaciada en la nube", "var(--red)");
     }
   });
 };
@@ -1521,7 +1526,7 @@ window.restaurarBackupJSON = function(files) {
       }
 
       renderizarRegistros();
-      notify(`✅ ${list.length} paquetes restaurados en la nube`, "var(--green)");
+      notify(`☁️ ${list.length} paquetes restaurados en la nube`, "var(--green)");
     } catch(err) {
       notify("Error al leer el archivo JSON", "var(--red)");
     }
@@ -1629,10 +1634,14 @@ window.guardarEquipoDesdeGestion = async function() {
 
   if (mac.length < 6) return notify("MAC inválida", "var(--red)");
 
-  const metaData = { mac, alias, cliente, modelo };
+  const metaData = { mac, alias, cliente, modelo, updated_at: new Date().toISOString() };
 
+  let guardadoNube = false;
   if (sbClient) {
-    try { await sbClient.from('asignaciones_equipos').upsert(metaData, { onConflict: 'mac' }); } catch(e) {}
+    try { 
+      const { error } = await sbClient.from('asignaciones_equipos').upsert(metaData, { onConflict: 'mac' }); 
+      if (!error) guardadoNube = true;
+    } catch(e) {}
   }
   if (db) {
     const tx = db.transaction(["asignaciones"], "readwrite");
@@ -1646,7 +1655,7 @@ window.guardarEquipoDesdeGestion = async function() {
   actualizarSelectoresGlobales();
   renderFleetDashboard();
   renderFleetMgmtTable();
-  notify("¡Equipo propagado globalmente!", "var(--green)");
+  notify(guardadoNube ? "☁️ Equipo propagado en la nube con éxito" : "Equipo guardado localmente", "var(--green)");
 };
 
 window.testToggleMotor = function() {
@@ -1742,13 +1751,12 @@ async function cargarUsuariosUI() {
 
   let users = [];
 
-  // 1. Intentar cargar desde Supabase Cloud
+  // 1. Cargar directamente desde Supabase Cloud
   if (sbClient) {
     try {
       const { data, error } = await sbClient.from('usuarios_scada').select('*').order('created_at', { ascending: false });
       if (!error && data && data.length) {
         users = data;
-        // Guardar copia local en IndexedDB
         if (db) {
           const tx = db.transaction(["usuarios"], "readwrite");
           const store = tx.objectStore("usuarios");
@@ -1758,7 +1766,7 @@ async function cargarUsuariosUI() {
     } catch(e) {}
   }
 
-  // 2. Si no hay nube, cargar de base de datos local
+  // 2. Si no hay red, fallback a base de datos local
   if (!users.length && db) {
     const tx = db.transaction(["usuarios"], "readonly");
     tx.objectStore("usuarios").getAll().onsuccess = (e) => {
@@ -1773,7 +1781,7 @@ async function cargarUsuariosUI() {
 
 function renderizarFilasUsuarios(users, tbody) {
   if (!users.length) {
-    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:14px;">No hay usuarios registrados.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:14px;">No hay usuarios registrados en la nube.</td></tr>`;
     return;
   }
   tbody.innerHTML = users.map(u => `
@@ -1800,16 +1808,15 @@ window.crearUsuario = async function() {
 
   let guardadoEnNube = false;
 
-  // Guardar directamente en Supabase Cloud
+  // 1. Guardar directamente en Supabase Cloud
   if (sbClient) {
     try {
       const { error } = await sbClient.from('usuarios_scada').upsert(nuevoUsuario, { onConflict: 'user' });
       if (!error) guardadoEnNube = true;
-      else notify("Atención: Ejecuta el script SQL en Supabase para habilitar la tabla", "var(--amber)");
     } catch(e) {}
   }
 
-  // Guardar en base de datos local
+  // 2. Guardar en base de datos local
   if (db) {
     try {
       const tx = db.transaction(["usuarios"], "readwrite");
@@ -1823,11 +1830,11 @@ window.crearUsuario = async function() {
 
   cargarUsuariosUI();
   cargarListaUsuariosLogin();
-  notify(guardadoEnNube ? `✅ Usuario [${user.toUpperCase()}] guardado en la nube con rol ${rol}` : `Usuario [${user.toUpperCase()}] registrado localmente`, "var(--green)");
+  notify(guardadoEnNube ? `☁️ Usuario [${user.toUpperCase()}] guardado en la nube con rol ${rol}` : `Usuario [${user.toUpperCase()}] guardado localmente`, "var(--green)");
 };
 
 window.eliminarUsuario = function(u) {
-  if (usuarioActual && usuarioActual.rol !== "SUPERADMIN") return notify("Permiso denegado: solo SUPERADMIN", "var(--red)");
+  if (usuarioActual && usuarioActual.rol !== "SUPERADMIN") return notify("Permiso denegado.", "var(--red)");
   
   mostrarModalConfirmacion({
     icon: '👤',
@@ -1848,7 +1855,7 @@ window.eliminarUsuario = function(u) {
       }
       cargarUsuariosUI();
       cargarListaUsuariosLogin();
-      notify(`Usuario [${u}] eliminado de la nube`, "var(--amber)");
+      notify(`☁️ Usuario [${u}] eliminado de la nube`, "var(--amber)");
     }
   });
 };
@@ -1894,13 +1901,13 @@ window.procesarInicioSesion = async function() {
 
   if (!u || !p) return mostrarFeedback(fb, "Completa usuario y clave.", "var(--red)");
 
-  // 1. LLAVE MAESTRA DE FABRICA
+  // 1. LLAVE MAESTRA DE FÁBRICA
   if (u === "admin" && p === "24331973") {
     iniciarSesionExitosa({ user: "admin", pass: "24331973", rol: "SUPERADMIN", email: "yuniolgonzalez9@gmail.com" });
     return;
   }
 
-  // 2. VERIFICACIÓN REAL EN SUPABASE CLOUD (RESPETA EL ROL EXACTO)
+  // 2. VERIFICACIÓN DIRECTA EN SUPABASE CLOUD (RESPETA EL ROL ASIGNADO)
   if (sbClient) {
     try {
       const { data, error } = await sbClient.from('usuarios_scada').select('*').eq('user', u).maybeSingle();
@@ -1916,7 +1923,7 @@ window.procesarInicioSesion = async function() {
     } catch(e) {}
   }
 
-  // 3. VERIFICACIÓN EN BASE DE DATOS LOCAL (INDEXEDDB) SI NO HAY CONEXIÓN
+  // 3. VERIFICACIÓN EN BASE DE DATOS LOCAL SI NO HAY INTERNET
   if (db) {
     const tx = db.transaction(["usuarios"], "readonly");
     const req = tx.objectStore("usuarios").get(u);
@@ -2046,7 +2053,7 @@ window.guardarNuevaContrasena = async function() {
   document.getElementById("confirmPassInput").value = "";
 
   openTopLevel('act-telemetry');
-  notify("¡Contraseña actualizada en la nube!", "var(--green)");
+  notify("☁️ Contraseña actualizada en la nube", "var(--green)");
 };
 
 // =========================================================================
