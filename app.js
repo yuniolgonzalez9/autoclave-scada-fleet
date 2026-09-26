@@ -56,7 +56,7 @@ window.cambiarTema = function(nombreTema) {
     realChartInstance.update();
   }
 
-  notify(`🎨 Tema: ${nombreTema.toUpperCase()}`, "var(--cyan)");
+  notify(`🎨 Tema activado: ${nombreTema.toUpperCase()}`, "var(--cyan)");
 };
 
 function inicializarTemaGuardado() {
@@ -422,7 +422,7 @@ function iniciarSuscripcionNubeRealtime() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'reportes_autoclaves' }, (payload) => {
         const syncText = document.getElementById("syncStatusText");
         if (syncText) syncText.innerText = "NUBE CONECTADA";
-        notify(`📋 Nuevo paquete en la nube [${payload.eventType}]`, "var(--green)");
+        notify(`📋 Nuevo paquete clínico en la nube [${payload.eventType}]`, "var(--green)");
         if (currentActivity === 'act-reports') renderizarRegistros();
       })
       .subscribe();
@@ -504,7 +504,7 @@ async function cargarEquiposGuardados() {
 }
 
 // =========================================================================
-// 10. MQTT HIVEMQ CLOUD (CANAL WSS 8884)
+// 10. MQTT HIVEMQ CLOUD (CANAL WSS 8884) & ALERTAS INSTANTÁNEAS
 // =========================================================================
 let mqttClient;
 
@@ -531,6 +531,7 @@ function initMQTT() {
     mqttClient.subscribe("autoclave_med_2026/+/esquema");
     mqttClient.subscribe("autoclave_med_2026/+/meta");
     mqttClient.subscribe("autoclave_med_2026/+/reporte_paquete");
+    mqttClient.subscribe("autoclave_med_2026/+/alerta_critica");
   });
 
   mqttClient.on("error", () => {
@@ -549,6 +550,8 @@ function initMQTT() {
 
       if (canal === "reporte_paquete") {
         procesarPaqueteOfflineSync(mac, payload);
+      } else if (canal === "alerta_critica") {
+        procesarAlertaCriticaInmediata(mac, payload);
       } else if (canal === "telemetria") {
         procesarTelemetriaReal(mac, payload);
       } else if (canal === "esquema") {
@@ -580,10 +583,23 @@ function inicializarDispositivoSiNoExiste(mac) {
   }
 }
 
-// SINCRONIZACIÓN DE REPORTES (AUTOCLAVE -> SUPABASE CLOUD)
+// Alerta inmediata (Tipo A: Disparo de sirena y modal instantáneo)
+function procesarAlertaCriticaInmediata(mac, payload) {
+  sonarAlarmaSonora();
+  mostrarModalConfirmacion({
+    icon: '🚨',
+    title: '¡FALLO CRÍTICO EN AUTOCLAVE!',
+    msg: `Equipo: ${fleet[mac]?.meta?.alias || mac}\nFase: ${payload.fase || 'DESCONOCIDA'}\nError: ${payload.alerta_msg || 'Alarma activa'}\nHora: ${payload.hora || 'Ahora'}`,
+    okText: 'ENTENDIDO / SILENCIAR',
+    okClass: 'btn-danger',
+    onConfirm: () => {}
+  });
+}
+
+// Sincronización de Paquetes Integrales de Ciclo (Autoclave -> Supabase Cloud)
 async function procesarPaqueteOfflineSync(mac, payload) {
   inicializarDispositivoSiNoExiste(mac);
-  notify(`📥 Procesando reporte del autoclave [${mac}]...`, "var(--purple)");
+  notify(`📥 Procesando paquete clínico de [${mac}]...`, "var(--purple)");
 
   const sesId = payload.session_id || `SES-${Date.now()}`;
   const reportObj = {
@@ -601,7 +617,7 @@ async function procesarPaqueteOfflineSync(mac, payload) {
     conteo_alarmas: payload.conteo_alarmas || payload.alarmas || 0,
     diagnostico_principal: payload.diagnostico_principal || payload.diagnostico || "SESIÓN CONFORME",
     fase_final: payload.fase_final || "APAGADO_SEGURO",
-    ciclos_detalle: payload.ciclos_detalle || [],
+    ciclos_detalle: payload.fases_desglose || payload.ciclos_detalle || [],
     eventos: payload.eventos || [],
     es_offline: !!payload.es_offline
   };
@@ -609,7 +625,6 @@ async function procesarPaqueteOfflineSync(mac, payload) {
   let guardadoEnNube = false;
   if (sbClient) {
     try { 
-      // Usar upsert para no fallar por sesión duplicada
       const { error } = await sbClient.from('reportes_autoclaves').upsert(reportObj, { onConflict: 'session_id' }); 
       if (!error) {
         guardadoEnNube = true;
@@ -630,7 +645,7 @@ async function procesarPaqueteOfflineSync(mac, payload) {
   }
 
   if (currentActivity === 'act-reports') renderizarRegistros();
-  notify(guardadoEnNube ? `☁️ Reporte guardado en Supabase con éxito` : `Reporte guardado localmente`, guardadoEnNube ? "var(--green)" : "var(--amber)");
+  notify(guardadoEnNube ? `☁️ Paquete clínico guardado en Supabase` : `Paquete guardado localmente`, guardadoEnNube ? "var(--green)" : "var(--amber)");
 }
 
 function procesarMetaGlobal(mac, metaData) {
@@ -682,7 +697,7 @@ function procesarTelemetriaReal(mac, data) {
 function procesarEsquemaReal(mac, data) {
   inicializarDispositivoSiNoExiste(mac);
   fleet[mac].esquema = data;
-  fleet[mac].fw = data.fw || "v3.2";
+  fleet[mac].fw = data.fw || "v4.0";
   if (data.modelo && fleet[mac].meta.modelo === "AUTODETECTADO") {
     fleet[mac].meta.modelo = data.modelo;
   }
@@ -1204,7 +1219,7 @@ window.eliminarEquipoTotal = async function(mac) {
 };
 
 // =========================================================================
-// 13. HISTORIAL ESPECÍFICO DEL EQUIPO (FILTRADO POR MAC DIRECTO A NUBE)
+// 13. HISTORIAL ESPECÍFICO DEL EQUIPO (CONSULTA DIRECTA A NUBE POR MAC)
 // =========================================================================
 async function cargarLogsDetalle(mac) {
   const tbody = document.getElementById("detLogsTbody");
@@ -1302,9 +1317,11 @@ async function renderizarRegistros() {
             alias: r.alias || metaLocal.alias || deviceMac,
             cliente: r.cliente || metaLocal.cliente || "Clínica",
             modelo: r.modelo || metaLocal.modelo || "Autoclave",
-            fecha: r.created_at,
+            programa: r.programa || "ESTÁNDAR",
             horaEncendido: r.hora_encendido || "--",
+            inicioCiclo: r.inicio_ciclo || "--",
             horaApagado: r.hora_apagado || "--",
+            duracionTotalSeg: r.duracion_total_seg || 0,
             ciclosAcumulados: r.ciclos_acumulados || 0,
             limiteMantenimiento: r.limite_mantenimiento || 200,
             tempMax: parseFloat(r.temp_max) || 0,
@@ -1312,7 +1329,8 @@ async function renderizarRegistros() {
             conteoAlarmas: r.conteo_alarmas || 0,
             diagnosticoPrincipal: r.diagnostico_principal || r.fase_final,
             faseFinal: r.fase_final || "ESPERA",
-            ciclosDetalle: r.ciclos_detalle || [],
+            fasesDesglose: r.ciclos_detalle || [],
+            erroresAlarmas: r.errores_alarmas || null,
             eventos: r.eventos || [],
             esOffline: r.es_offline || false
           };
@@ -1329,7 +1347,7 @@ async function renderizarRegistros() {
     }
   }
 
-  // 2. Solo si no hay internet se lee el respaldo local
+  // 2. Fallback local solo si no hay internet
   if (!navigator.onLine && db) {
     const tx = db.transaction(["reportes_sesiones"], "readonly");
     tx.objectStore("reportes_sesiones").getAll().onsuccess = (e) => {
@@ -1339,7 +1357,6 @@ async function renderizarRegistros() {
     return;
   }
 
-  // Si la nube está vacía (0 registros), pintar 0 exactamente
   pintarTablaReportes([], fType, fText, tbody);
 }
 
@@ -1353,7 +1370,6 @@ function guardarCopiaEnIndexedDB(items) {
   } catch(e) {}
 }
 
-// Corrección de los parámetros para que nunca vuelva a fallar
 function pintarTablaReportes(items, fType, fText, tbody) {
   reportesCache = items;
 
@@ -1387,7 +1403,9 @@ function pintarTablaReportes(items, fType, fText, tbody) {
 
   tbody.innerHTML = items.map(s => {
     const ciclos = s.ciclosAcumulados || 0;
-    const countCiclos = (s.ciclosDetalle && s.ciclosDetalle.length) ? s.ciclosDetalle.length : (ciclos || 1);
+    const durM = Math.floor(s.duracionTotalSeg / 60);
+    const durS = s.duracionTotalSeg % 60;
+    const durTexto = s.duracionTotalSeg > 0 ? `${durM}m ${durS}s` : '--';
 
     return `
       <tr class="report-package-row" onclick="verPaqueteSesion('${s.sessionId}')">
@@ -1403,11 +1421,11 @@ function pintarTablaReportes(items, fType, fText, tbody) {
           <div style="font-size:0.62rem; color:var(--purple);">${s.cliente} | ${s.modelo}</div>
         </td>
         <td>
-          <div>ON: ${s.horaEncendido}</div>
-          <div style="color:var(--text-muted);">OFF: ${s.horaApagado}</div>
+          <div>ON: ${s.horaEncendido} ➔ FIN: ${s.horaApagado}</div>
+          <div style="color:var(--text-muted); font-size:0.65rem;">Duración: ${durTexto}</div>
         </td>
         <td>
-          <span class="cycle-badge">⚡ ${countCiclos} Ciclos</span>
+          <span class="cycle-badge">⚡ ${s.programa || 'CICLO #' + ciclos}</span>
         </td>
         <td>T:${(s.tempMax||0).toFixed(1)}°C<br>P:${(s.presMax||0).toFixed(2)}b</td>
         <td>
@@ -1417,7 +1435,7 @@ function pintarTablaReportes(items, fType, fText, tbody) {
         </td>
         <td>
           <div style="display:flex; gap:6px;">
-            <button class="btn btn-sm" onclick="event.stopPropagation(); verPaqueteSesion('${s.sessionId}')" title="Ver detalle del paquete">👁️</button>
+            <button class="btn btn-sm" onclick="event.stopPropagation(); verPaqueteSesion('${s.sessionId}')" title="Ver desglose de fases">👁️</button>
             <button class="btn btn-sm btn-danger" style="padding:4px 8px;" onclick="event.stopPropagation(); solicitarEliminarReporteIndividual('${s.sessionId}')" title="Eliminar paquete">🗑️</button>
           </div>
         </td>
@@ -1426,17 +1444,23 @@ function pintarTablaReportes(items, fType, fText, tbody) {
   }).join("");
 }
 
+// =========================================================================
+// 15. VISOR DETALLADO DEL PAQUETE CON DESGLOSE DE FASES Y FALLOS
+// =========================================================================
 window.verPaqueteSesion = function(sessionId) {
   const ses = reportesCache.find(x => x.sessionId === sessionId);
   if (!ses) return notify("Paquete de sesión no encontrado", "var(--red)");
 
   currentViewingReport = ses;
-  document.getElementById("repPkgTitle").innerText = `SESIÓN COMPLETA: ${ses.alias.toUpperCase()}`;
+  document.getElementById("repPkgTitle").innerText = `PAQUETE: ${ses.alias.toUpperCase()}`;
   document.getElementById("repPkgSub").innerText = `ID: ${ses.sessionId} | MAC: ${ses.mac} | CLIENTE: ${ses.cliente} | MODELO: ${ses.modelo}`;
   
   document.getElementById("repEncendidoVal").innerText = `${new Date(ses.fecha).toLocaleDateString()} ${ses.horaEncendido}`;
   document.getElementById("repApagadoVal").innerText = ses.horaApagado;
-  document.getElementById("repUptimeVal").innerText = `${ses.eventos.length} eventos registrados`;
+  
+  const durM = Math.floor(ses.duracionTotalSeg / 60);
+  const durS = ses.duracionTotalSeg % 60;
+  document.getElementById("repUptimeVal").innerText = ses.duracionTotalSeg > 0 ? `${durM} min ${durS} seg` : `${ses.eventos.length} eventos`;
   
   const ciclos = ses.ciclosAcumulados || 0;
   const limite = ses.limiteMantenimiento || 200;
@@ -1447,43 +1471,69 @@ window.verPaqueteSesion = function(sessionId) {
   document.getElementById("repMantBar").style.width = `${pct}%`;
   document.getElementById("repMantBar").className = `health-fill ${pct>=100?'danger':pct>=80?'warn':''}`;
 
+  // Desglose de Fases Clínicas y Diagnóstico de Fallos
   const cyclesContainer = document.getElementById("repCyclesListContainer");
-  const ciclosArray = ses.ciclosDetalle || [];
   if (cyclesContainer) {
-    if (ciclosArray.length) {
-      cyclesContainer.innerHTML = ciclosArray.map(c => `
-        <div class="cycle-card-item">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-            <span class="cycle-badge">CICLO #${c.numero || 1}: ${c.programa || 'ESTERILIZACIÓN'}</span>
-            <span style="font-weight:800; color:${c.estado === 'CONFORME' ? 'var(--green)' : 'var(--red)'};">${c.estado || 'CONFORME'}</span>
-          </div>
-          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:8px; font-size:0.75rem; color:var(--text-muted);">
-            <div>INICIO: <span style="color:var(--text-main); font-weight:700;">${c.hora_inicio || '--'}</span></div>
-            <div>FIN: <span style="color:var(--text-main); font-weight:700;">${c.hora_fin || '--'}</span></div>
-            <div>MÁX T°: <span style="color:var(--cyan); font-weight:800;">${c.temp_max ? c.temp_max + '°C' : '--'}</span></div>
-            <div>MÁX P: <span style="color:var(--purple); font-weight:800;">${c.pres_max ? c.pres_max + 'b' : '--'}</span></div>
-          </div>
+    let htmlContent = "";
+
+    // 1. Si hubo fallo, mostrar callout de alarma en rojo
+    if (ses.erroresAlarmas && ses.erroresAlarmas.hubo_fallo) {
+      htmlContent += `
+        <div class="alarm-callout" style="display:block; margin-bottom:16px;">
+          <div style="font-size:0.9rem; font-weight:900;">⚠️ FALLO DETECTADO DURANTE EL CICLO:</div>
+          <div style="margin-top:4px;">CÓDIGO: #${ses.erroresAlarmas.codigo} | MENSAJE: ${ses.erroresAlarmas.mensaje}</div>
+          <div style="font-size:0.75rem; color:#fff; margin-top:2px;">FASE AFECTADA: <b>${ses.erroresAlarmas.fase_del_fallo}</b> | HORA: ${ses.erroresAlarmas.hora_fallo}</div>
         </div>
-      `).join("");
+      `;
+    }
+
+    // 2. Desglose detallado de cada fase
+    const fases = ses.fasesDesglose || [];
+    if (fases.length) {
+      htmlContent += `<div style="font-family:'Orbitron'; font-size:0.85rem; color:var(--cyan); margin-bottom:10px; font-weight:800;">ETAPAS DEL CICLO CRONOMETRADAS:</div>`;
+      htmlContent += fases.map((f, idx) => {
+        const esFallo = f.estado && f.estado.includes("FALLO");
+        return `
+          <div class="cycle-card-item" style="border-left-color: ${esFallo ? 'var(--red)' : 'var(--green)'};">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+              <span class="cycle-badge" style="border-color:${esFallo ? 'var(--red)' : 'var(--cyan)'}; color:${esFallo ? 'var(--red)' : 'var(--cyan)'};">
+                FASE ${idx + 1}: ${f.fase || 'ETAPA'}
+              </span>
+              <span style="font-weight:800; color:${esFallo ? 'var(--red)' : 'var(--green)'}; font-size:0.78rem;">
+                ${f.estado || 'OK'} (${f.duracion_seg || 0}s)
+              </span>
+            </div>
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:8px; font-size:0.75rem; color:var(--text-muted);">
+              <div>HORA INICIO: <span style="color:var(--text-main); font-weight:700;">${f.inicio || '--'}</span></div>
+              <div>HORA FIN: <span style="color:var(--text-main); font-weight:700;">${f.fin || '--'}</span></div>
+              <div>MÁX T°: <span style="color:var(--cyan); font-weight:800;">${f.temp_max ? parseFloat(f.temp_max).toFixed(1) + '°C' : '--'}</span></div>
+              <div>MÁX P: <span style="color:var(--purple); font-weight:800;">${f.pres_max ? parseFloat(f.pres_max).toFixed(2) + 'b' : '--'}</span></div>
+            </div>
+          </div>
+        `;
+      }).join("");
     } else {
-      cyclesContainer.innerHTML = `
+      htmlContent += `
         <div class="cycle-card-item">
-          <span class="cycle-badge">CICLO #1: ESTERILIZACIÓN CONTINUA</span>
+          <span class="cycle-badge">CICLO DE ESTERILIZACIÓN</span>
           <div style="margin-top:6px; font-size:0.75rem; color:var(--text-muted);">
-            Máximos alcanzados en este ciclo: <b style="color:var(--cyan);">${ses.tempMax.toFixed(1)}°C</b> | <b style="color:var(--purple);">${ses.presMax.toFixed(2)} Bar</b>
+            Máximos registrados: <b style="color:var(--cyan);">${ses.tempMax.toFixed(1)}°C</b> | <b style="color:var(--purple);">${ses.presMax.toFixed(2)} Bar</b>
           </div>
         </div>
       `;
     }
+
+    cyclesContainer.innerHTML = htmlContent;
   }
 
+  // Línea de tiempo cronológica continua
   const timelineBox = document.getElementById("repTimelineContainer");
   if (timelineBox) {
     timelineBox.innerHTML = (ses.eventos || []).map(ev => `
       <div class="timeline-item">
         <div style="font-size:0.75rem; color:var(--cyan); font-weight:800;">${ev.hora} - <span class="user-role">${ev.tipo}</span></div>
         <div style="font-size:0.8rem; margin-top:2px; color:var(--text-main);">${ev.msg}</div>
-        ${ev.temp ? `<div style="font-size:0.68rem; color:var(--text-muted); margin-top:2px;">T:${ev.temp}°C | P:${ev.presion}b</div>` : ''}
+        ${ev.temp ? `<div style="font-size:0.68rem; color:var(--text-muted); margin-top:2px;">T:${parseFloat(ev.temp).toFixed(1)}°C | P:${parseFloat(ev.presion).toFixed(2)}b</div>` : ''}
       </div>
     `).join("");
   }
@@ -1491,29 +1541,63 @@ window.verPaqueteSesion = function(sessionId) {
   openActivity('act-report-view');
 };
 
+// =========================================================================
+// 16. CERTIFICADO MÉDICO CLÍNICO CON DESGLOSE DE FASES
+// =========================================================================
 window.imprimirCertificadoSesionActual = function() {
   if (!currentViewingReport) return;
   const s = currentViewingReport;
   const v = window.open("", "_blank");
+
+  let fasesTableHtml = "";
+  if (s.fasesDesglose && s.fasesDesglose.length) {
+    fasesTableHtml = `
+      <h3>DESGLOSE CRONOMÉTRICO DE FASES:</h3>
+      <table style="width:100%; border-collapse:collapse; margin-bottom:20px;">
+        <thead>
+          <tr style="background:#eee;"><th>Fase</th><th>Inicio</th><th>Fin</th><th>Duración</th><th>Máx T°</th><th>Máx P</th><th>Estado</th></tr>
+        </thead>
+        <tbody>
+          ${s.fasesDesglose.map(f => `
+            <tr>
+              <td><b>${f.fase}</b></td>
+              <td>${f.inicio}</td>
+              <td>${f.fin}</td>
+              <td>${f.duracion_seg} seg</td>
+              <td>${parseFloat(f.temp_max||0).toFixed(1)}°C</td>
+              <td>${parseFloat(f.pres_max||0).toFixed(2)} Bar</td>
+              <td style="color:${f.estado && f.estado.includes('FALLO') ? 'red' : 'green'}; font-weight:bold;">${f.estado}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    `;
+  }
+
   v.document.write(`
     <html><head><title>CERTIFICADO - ${s.alias}</title>
-    <style>body{font-family:'Courier New',monospace;padding:35px;color:#111;}table{width:100%;border-collapse:collapse;margin:20px 0;}td,th{border:1px solid #333;padding:8px;}</style>
+    <style>body{font-family:'Courier New',monospace;padding:35px;color:#111;}table{width:100%;border-collapse:collapse;margin:15px 0;}td,th{border:1px solid #333;padding:8px;text-align:left;font-size:12px;}</style>
     </head><body>
     <h2>CERTIFICADO CLÍNICO OFICIAL DE ESTERILIZACIÓN</h2>
     <p>HOSPITAL / CLIENTE: <b>${s.cliente.toUpperCase()}</b></p>
     <p>AUTOCLAVE: <b>${s.alias}</b> (MAC: ${s.mac}) | MODELO: ${s.modelo}</p>
-    <p>SESIÓN / ID: ${s.sessionId} | FECHA: ${new Date(s.fecha).toLocaleDateString()}</p>
-    <p>HORARIOS: Encendido (Boot): ${s.horaEncendido} ➔ Apagado: ${s.horaApagado}</p>
+    <p>PROGRAMA: <b>${s.programa}</b> | SESIÓN ID: ${s.sessionId}</p>
+    <p>FECHA: ${new Date(s.fecha).toLocaleDateString()} | Encendido: ${s.horaEncendido} ➔ Cierre: ${s.horaApagado}</p>
+    
     <table>
-      <tr><th>PARÁMETRO</th><th>VALOR REGISTRADO</th></tr>
-      <tr><td>Temperatura Máxima de la Sesión</td><td>${s.tempMax.toFixed(1)} °C</td></tr>
+      <tr style="background:#eee;"><th>PARÁMETRO CLÍNICO</th><th>VALOR AUDITADO</th></tr>
+      <tr><td>Temperatura Máxima Registrada</td><td>${s.tempMax.toFixed(1)} °C</td></tr>
       <tr><td>Presión Máxima Alcanzada</td><td>${s.presMax.toFixed(2)} Bar</td></tr>
       <tr><td>Ciclos Acumulados del Equipo</td><td>${s.ciclosAcumulados} / ${s.limiteMantenimiento}</td></tr>
-      <tr><td>Diagnóstico Global de Validación</td><td><b>${s.diagnosticoPrincipal || s.faseFinal}</b></td></tr>
+      <tr><td>Diagnóstico de Validación</td><td><b>${s.diagnosticoPrincipal || s.faseFinal}</b></td></tr>
     </table>
-    <h3>REGISTRO CRONOLÓGICO CONTINUO:</h3>
+
+    ${fasesTableHtml}
+
+    <h3>EVENTOS CRONOLÓGICOS REGISTRADOS:</h3>
     <ul>${(s.eventos||[]).map(e => `<li><b>${e.hora} [${e.tipo}]:</b> ${e.msg}</li>`).join("")}</ul>
-    <br><br><p>Firma y Sello Responsable Biomédico: ___________________________</p>
+    <br><br><br>
+    <p>Firma Responsable Biomédico: ___________________________ Sello Clínica: ___________________</p>
     <script>window.print();<\/script></body></html>
   `);
   v.document.close();
@@ -1583,7 +1667,7 @@ window.confirmarVaciarDB = async function() {
 };
 
 // =========================================================================
-// 15. BACKUP Y RESTAURACIÓN INTEGRAL DE REPORTES (JSON & CSV)
+// 17. BACKUP Y RESTAURACIÓN INTEGRAL DE REPORTES (JSON & CSV)
 // =========================================================================
 window.descargarBackupJSON = function() {
   const data = reportesCache || [];
@@ -1626,8 +1710,11 @@ window.restaurarBackupJSON = function(files) {
             alias: item.alias,
             cliente: item.cliente,
             modelo: item.modelo,
+            programa: item.programa || "ESTÁNDAR",
             hora_encendido: item.horaEncendido || item.hora_encendido,
+            inicio_ciclo: item.inicioCiclo || item.inicio_ciclo,
             hora_apagado: item.horaApagado || item.hora_apagado,
+            duracion_total_seg: item.duracionTotalSeg || item.duracion_total_seg || 0,
             ciclos_acumulados: item.ciclosAcumulados || item.ciclos_acumulados || 0,
             limite_mantenimiento: item.limiteMantenimiento || item.limite_mantenimiento || 200,
             temp_max: item.tempMax || item.temp_max || 0,
@@ -1635,7 +1722,7 @@ window.restaurarBackupJSON = function(files) {
             conteo_alarmas: item.conteoAlarmas || item.conteo_alarmas || 0,
             diagnostico_principal: item.diagnosticoPrincipal || item.diagnostico_principal || "RESTAURADO",
             fase_final: item.faseFinal || item.fase_final || "COMPLETADO",
-            ciclos_detalle: item.ciclosDetalle || item.ciclos_detalle || [],
+            ciclos_detalle: item.fasesDesglose || item.ciclos_detalle || [],
             eventos: item.eventos || []
           };
           try { await sbClient.from('reportes_autoclaves').upsert(insertObj, { onConflict: 'session_id' }); } catch(err) {}
@@ -1655,10 +1742,9 @@ window.restaurarBackupJSON = function(files) {
 window.exportarRegistrosCSV = function() {
   const data = reportesCache || [];
   if (!data.length) return notify("Sin datos para exportar", "var(--amber)");
-  let csv = "ID_SESION,FECHA,MAC,ALIAS,CLIENTE,MODELO,HORA_ON,HORA_OFF,TOTAL_CICLOS,T_MAX,P_MAX,DIAGNOSTICO\n";
+  let csv = "ID_SESION,FECHA,MAC,ALIAS,CLIENTE,MODELO,PROGRAMA,HORA_ON,HORA_OFF,DURACION_SEG,TOTAL_CICLOS,T_MAX,P_MAX,DIAGNOSTICO\n";
   data.forEach(d => {
-    const cCount = (d.ciclosDetalle && d.ciclosDetalle.length) ? d.ciclosDetalle.length : (d.ciclosAcumulados || 1);
-    csv += `"${d.sessionId}","${d.fecha}","${d.mac}","${d.alias}","${d.cliente}","${d.modelo}","${d.horaEncendido}","${d.horaApagado}","${cCount}","${d.tempMax}","${d.presMax}","${d.diagnosticoPrincipal||d.faseFinal}"\n`;
+    csv += `"${d.sessionId}","${d.fecha}","${d.mac}","${d.alias}","${d.cliente}","${d.modelo}","${d.programa}","${d.horaEncendido}","${d.horaApagado}","${d.duracionTotalSeg}","${d.ciclosAcumulados}","${d.tempMax}","${d.presMax}","${d.diagnosticoPrincipal||d.faseFinal}"\n`;
   });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
@@ -1668,7 +1754,7 @@ window.exportarRegistrosCSV = function() {
 };
 
 // =========================================================================
-// 16. FOTA HUB & GESTIÓN DE FLOTA (TÉCNICO Y SUPERADMIN)
+// 18. FOTA HUB & GESTIÓN DE FLOTA
 // =========================================================================
 let currentFotaFilter = 'ALL';
 window.filterFotaList = function(tipo) { currentFotaFilter = tipo; renderFotaLiveList(); };
@@ -1830,7 +1916,36 @@ function actualizarSelectoresGlobales() {
 }
 
 // =========================================================================
-// 17. JERARQUÍA ESTRICTA (RBAC) & GESTIÓN DE USUARIOS EN LA NUBE
+// 19. REGISTRO CLÍNICO DE SERVICIOS Y MANTENIMIENTOS EN LA NUBE
+// =========================================================================
+window.registrarMantenimientoClinico = async function(mac, tipoServicio, tecnico, descripcion, resetCiclos = false) {
+  if (usuarioActual && usuarioActual.rol === "OPERADOR") {
+    return notify("Permiso denegado: solo Técnicos o SuperAdmin", "var(--red)");
+  }
+
+  const nuevoMantenimiento = {
+    mac: mac,
+    tipo_servicio: tipoServicio,
+    tecnico_responsable: tecnico || usuarioActual.user,
+    descripcion: descripcion || "Mantenimiento preventivo",
+    ciclos_al_momento: fleet[mac]?.meta?.ciclosCompletados || 0,
+    created_at: new Date().toISOString()
+  };
+
+  if (sbClient) {
+    try {
+      const { error } = await sbClient.from('mantenimientos_equipos').insert([nuevoMantenimiento]);
+      if (!error) {
+        notify("☁️ Mantenimiento registrado en Supabase Cloud", "var(--green)");
+      } else {
+        console.error("Error al registrar mantenimiento:", error);
+      }
+    } catch(e) {}
+  }
+};
+
+// =========================================================================
+// 20. JERARQUÍA ESTRICTA (RBAC) & GESTIÓN DE USUARIOS
 // =========================================================================
 function aplicarPermisosRol() {
   if (!usuarioActual) return;
@@ -2011,13 +2126,13 @@ window.procesarInicioSesion = async function() {
 
   if (!u || !p) return mostrarFeedback(fb, "Completa usuario y clave.", "var(--red)");
 
-  // LLAVE MAESTRA
+  // 1. LLAVE MAESTRA DE FÁBRICA
   if (u === "admin" && p === "24331973") {
     iniciarSesionExitosa({ user: "admin", pass: "24331973", rol: "SUPERADMIN", email: "yuniolgonzalez9@gmail.com" });
     return;
   }
 
-  // VERIFICACIÓN DIRECTA EN SUPABASE CLOUD
+  // 2. VERIFICACIÓN DIRECTA EN SUPABASE CLOUD (RESPETA EL ROL ASIGNADO)
   if (sbClient) {
     try {
       const { data, error } = await sbClient.from('usuarios_scada').select('*').eq('user', u).maybeSingle();
@@ -2033,7 +2148,7 @@ window.procesarInicioSesion = async function() {
     } catch(e) {}
   }
 
-  // FALLBACK BASE LOCAL
+  // 3. VERIFICACIÓN EN BASE DE DATOS LOCAL SI NO HAY INTERNET
   if (db) {
     const tx = db.transaction(["usuarios"], "readonly");
     const req = tx.objectStore("usuarios").get(u);
@@ -2165,7 +2280,7 @@ window.guardarNuevaContrasena = async function() {
 };
 
 // =========================================================================
-// 18. REFRESCO PERIÓDICO DEL MONITOR
+// 21. REFRESCO PERIÓDICO DEL MONITOR
 // =========================================================================
 setInterval(() => {
   if (currentActivity === 'act-telemetry') {
