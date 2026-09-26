@@ -1,5 +1,5 @@
 // =========================================================================
-// 1. CONEXIÓN CLOUD SUPABASE & REALTIME (NUBE 24/7)
+// 1. CONEXIÓN CLOUD SUPABASE & REALTIME (NUBE CENTRAL 24/7)
 // =========================================================================
 const SUPABASE_URL = "https://gjtqyodpgwfvfvkhlhik.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdqdHF5b2RwZ3dmdmZ2a2hsaGlrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAwNDAzNTYsImV4cCI6MjEwNTYxNjM1Nn0.g8t_PbEityaneKkOUHttQ_cZv50aczLU4Z9la8R4d_g";
@@ -29,23 +29,25 @@ function estaAutenticado() {
 }
 
 // =========================================================================
-// 3. MOTOR DEL SELECTOR DE TEMAS VISUALES (3 MUNDOS)
+// 3. MOTOR DEL SELECTOR DE TEMAS (4 MUNDOS VISUALES)
 // =========================================================================
 window.cambiarTema = function(nombreTema) {
-  if (!['clinical', 'cyber', 'tactical'].includes(nombreTema)) nombreTema = 'cyber';
+  if (!['clinical', 'cyber', 'tactical', 'hybrid'].includes(nombreTema)) nombreTema = 'cyber';
   
   document.documentElement.setAttribute('data-theme', nombreTema);
   localStorage.setItem("scada_theme", nombreTema);
 
-  // Actualizar botones en el menú del engranaje
+  // Actualizar estado de los botones en el menú
   document.querySelectorAll('.btn-theme-opt').forEach(btn => btn.classList.remove('active'));
-  const btnId = nombreTema === 'clinical' ? 'themeBtnClinical' : (nombreTema === 'tactical' ? 'themeBtnTactical' : 'themeBtnCyber');
+  const btnId = nombreTema === 'clinical' ? 'themeBtnClinical' : 
+               (nombreTema === 'hybrid' ? 'themeBtnHybrid' : 
+               (nombreTema === 'tactical' ? 'themeBtnTactical' : 'themeBtnCyber'));
   const btnActivo = document.getElementById(btnId);
   if (btnActivo) btnActivo.classList.add('active');
 
-  // Adaptar colores de la gráfica de esterilización si está abierta
+  // Adaptar colores de la gráfica de Chart.js según el tema
   if (realChartInstance) {
-    const esClaro = (nombreTema === 'clinical');
+    const esClaro = (nombreTema === 'clinical' || nombreTema === 'hybrid');
     const colorTexto = esClaro ? '#0f172a' : '#f8fafc';
     const colorGrid = esClaro ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.06)';
 
@@ -153,7 +155,7 @@ window.openTopLevel = function(secId) {
     return;
   }
 
-  // RESTRICCIÓN JERÁRQUICA ESTRICTA
+  // RESTRICCIÓN JERÁRQUICA ACTIVA
   if (usuarioActual && usuarioActual.rol === "OPERADOR") {
     if (secId === 'act-fota' || secId === 'act-fleet-mgmt' || secId === 'act-users') {
       notify("⛔ Acceso restringido para el rol OPERADOR", "var(--red)");
@@ -357,14 +359,38 @@ window.cerrarSesionManual = function() {
 };
 
 // =========================================================================
-// 8. BASE DE DATOS LOCAL Y TIEMPO REAL NUBE (SUPABASE REALTIME)
+// 8. PURGA Y RESET DE CACHÉ LOCAL DESFASADA
+// =========================================================================
+window.solicitarLimpiezaCacheLocal = function() {
+  mostrarModalConfirmacion({
+    icon: '🔄',
+    title: 'FORZAR SINCRONIZACIÓN NUBE',
+    msg: '¿Deseas purgar la memoria local desfasada de este navegador y sincronizar directamente con Supabase Cloud?',
+    okText: 'FORZAR NUBE AHORA',
+    okClass: 'btn-primary',
+    onConfirm: async () => {
+      if (db) {
+        try {
+          const tx = db.transaction(["reportes_sesiones"], "readwrite");
+          tx.objectStore("reportes_sesiones").clear();
+        } catch(e) {}
+      }
+      reportesCache = [];
+      await renderizarRegistros();
+      notify("☁️ Memoria local purgada. Sincronizado 100% con Supabase", "var(--green)");
+    }
+  });
+};
+
+// =========================================================================
+// 9. BASE DE DATOS LOCAL Y TIEMPO REAL NUBE (SUPABASE REALTIME)
 // =========================================================================
 let db = null;
 const fleet = {};
 
 function initDB() {
   return new Promise((resolve) => {
-    const req = indexedDB.open("AutoclaveFastFleetDB_v26", 1);
+    const req = indexedDB.open("AutoclaveFastFleetDB_v27", 1);
     req.onupgradeneeded = (e) => {
       db = e.target.result;
       if (!db.objectStoreNames.contains("asignaciones")) db.createObjectStore("asignaciones", { keyPath: "mac" });
@@ -399,7 +425,7 @@ function iniciarSuscripcionNubeRealtime() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'reportes_autoclaves' }, (payload) => {
         const syncText = document.getElementById("syncStatusText");
         if (syncText) syncText.innerText = "NUBE CONECTADA";
-        notify(`📋 Paquete de sesión actualizado en nube [${payload.eventType}]`, "var(--green)");
+        notify(`📋 Nuevo paquete registrado en la nube [${payload.eventType}]`, "var(--green)");
         if (currentActivity === 'act-reports') renderizarRegistros();
       })
       .subscribe();
@@ -451,8 +477,11 @@ async function cargarEquiposGuardados() {
       const { data, error } = await sbClient.from('asignaciones_equipos').select('*');
       if (!error && data && data.length) {
         data.forEach(item => {
-          inicializarDispositivoSiNoExiste(item.mac);
-          fleet[item.mac].meta = Object.assign(fleet[item.mac].meta, item);
+          const devMac = item.mac || item.Mac;
+          if (devMac) {
+            inicializarDispositivoSiNoExiste(devMac);
+            fleet[devMac].meta = Object.assign(fleet[devMac].meta, item);
+          }
         });
         actualizarSelectoresGlobales();
         renderFleetDashboard();
@@ -465,8 +494,11 @@ async function cargarEquiposGuardados() {
     const tx = db.transaction(["asignaciones"], "readonly");
     tx.objectStore("asignaciones").getAll().onsuccess = (e) => {
       (e.target.result || []).forEach(item => {
-        inicializarDispositivoSiNoExiste(item.mac);
-        fleet[item.mac].meta = Object.assign(fleet[item.mac].meta, item);
+        const devMac = item.mac || item.Mac;
+        if (devMac) {
+          inicializarDispositivoSiNoExiste(devMac);
+          fleet[devMac].meta = Object.assign(fleet[devMac].meta, item);
+        }
       });
       actualizarSelectoresGlobales();
       renderFleetDashboard();
@@ -475,7 +507,7 @@ async function cargarEquiposGuardados() {
 }
 
 // =========================================================================
-// 9. MQTT HIVEMQ CLOUD (CANAL WSS 8884)
+// 10. MQTT HIVEMQ CLOUD (CANAL WSS 8884)
 // =========================================================================
 let mqttClient;
 
@@ -551,7 +583,7 @@ function inicializarDispositivoSiNoExiste(mac) {
   }
 }
 
-// SINCRONIZACIÓN DE PAQUETES DE SESIÓN (DESDE ENCENDIDO HASTA APAGADO)
+// SINCRONIZACIÓN DE PAQUETES DE SESIÓN (AUTOCLAVE -> SUPABASE CLOUD)
 async function procesarPaqueteOfflineSync(mac, payload) {
   inicializarDispositivoSiNoExiste(mac);
   notify(`📥 Guardando paquete de sesión del autoclave [${mac}]...`, "var(--purple)");
@@ -592,7 +624,7 @@ async function procesarPaqueteOfflineSync(mac, payload) {
   }
 
   if (currentActivity === 'act-reports') renderizarRegistros();
-  notify(guardadoEnNube ? `☁️ Paquete de [${fleet[mac].meta.alias}] guardado en la nube con éxito` : `Paquete de [${fleet[mac].meta.alias}] guardado localmente`, "var(--green)");
+  notify(guardadoEnNube ? `☁️ Paquete guardado en Supabase con éxito` : `Paquete guardado localmente`, "var(--green)");
 }
 
 function procesarMetaGlobal(mac, metaData) {
@@ -644,7 +676,7 @@ function procesarTelemetriaReal(mac, data) {
 function procesarEsquemaReal(mac, data) {
   inicializarDispositivoSiNoExiste(mac);
   fleet[mac].esquema = data;
-  fleet[mac].fw = data.fw || "v3.2";
+  fleet[mac].fw = data.fw || "v3.3";
   if (data.modelo && fleet[mac].meta.modelo === "AUTODETECTADO") {
     fleet[mac].meta.modelo = data.modelo;
   }
@@ -671,7 +703,7 @@ function getConnectionQuality(dev) {
 }
 
 // =========================================================================
-// 10. DASHBOARD ADAPTATIVO
+// 11. DASHBOARD ADAPTATIVO
 // =========================================================================
 window.setFleetHealthFilter = function(filterType) {
   currentHealthFilter = filterType;
@@ -715,7 +747,6 @@ function renderFleetDashboard() {
     filteredKeys = keys.filter(k => getHealthStatus(fleet[k]) === currentHealthFilter);
   }
 
-  // Si un equipo no transmite, NUNCA aparece en la grilla ONLINE
   if (!filteredKeys.length) {
     container.innerHTML = `<div class="empty-deck">NO HAY AUTOCLAVES TRANSMITIENDO EN EL FILTRO [${currentHealthFilter}].</div>`;
     return;
@@ -784,7 +815,7 @@ function actualizarCardDashboard(mac) {
       <div class="health-bar"><div class="health-fill ${mantClass}" style="width: ${pct}%;"></div></div>
     </div>
 
-    <div style="background: rgba(0,0,0,0.06); padding: 7px 10px; border-radius: 4px; font-size: 0.72rem; margin-bottom: 8px; display:flex; justify-content:space-between; align-items:center;">
+    <div style="background: var(--bg-surface); padding: 7px 10px; border-radius: 4px; font-size: 0.72rem; margin-bottom: 8px; display:flex; justify-content:space-between; align-items:center;">
       <span style="color: var(--text-muted); font-weight:700;">FASE ACTUAL:</span> 
       <span style="color: var(--green); font-weight: 800; letter-spacing:1px;">${d.fase || 'ESPERA'}</span>
     </div>
@@ -796,7 +827,7 @@ function actualizarCardDashboard(mac) {
 }
 
 // =========================================================================
-// 11. DETALLE DEL EQUIPO Y GRÁFICO EN VIVO ADAPTATIVO
+// 12. DETALLE DEL EQUIPO Y GRÁFICO EN VIVO ADAPTATIVO
 // =========================================================================
 window.abrirDetalleEquipo = function(mac) {
   currentInspectedMAC = mac;
@@ -837,7 +868,10 @@ function switchDetailTab(tabId) {
   }
   if (tabId === 'tab-det-cfg') document.getElementById('btnSubCfg')?.classList.add('active');
   if (tabId === 'tab-det-ficha') document.getElementById('btnSubFicha')?.classList.add('active');
-  if (tabId === 'tab-det-logs') document.getElementById('btnSubLogs')?.classList.add('active');
+  if (tabId === 'tab-det-logs') {
+    document.getElementById('btnSubLogs')?.classList.add('active');
+    if (currentInspectedMAC) cargarLogsDetalle(currentInspectedMAC);
+  }
 }
 
 function inicializarGraficoEsterilizacion() {
@@ -854,7 +888,7 @@ function inicializarGraficoEsterilizacion() {
   const dataPres = history.map(h => h.pres);
 
   const temaActual = document.documentElement.getAttribute('data-theme') || 'cyber';
-  const esClaro = (temaActual === 'clinical');
+  const esClaro = (temaActual === 'clinical' || temaActual === 'hybrid');
   const colorTexto = esClaro ? '#0f172a' : '#f8fafc';
   const colorGrid = esClaro ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.06)';
 
@@ -1151,41 +1185,51 @@ window.eliminarEquipoTotal = async function(mac) {
   notify(`☁️ Autoclave [${mac}] purgado de la nube`, "var(--amber)");
 };
 
-function cargarLogsDetalle(mac) {
+// =========================================================================
+// 13. HISTORIAL ESPECÍFICO DEL EQUIPO (FILTRADO POR MAC EN SUPABASE)
+// =========================================================================
+async function cargarLogsDetalle(mac) {
   const tbody = document.getElementById("detLogsTbody");
   if (!tbody) return;
 
-  if (sbClient) {
-    sbClient
-      .from('reportes_autoclaves')
-      .select('*')
-      .eq('mac', mac)
-      .order('created_at', { ascending: false })
-      .limit(20)
-      .then(({ data, error }) => {
-        if (!error && data && data.length) {
-          renderLogsDetalleFilas(data, tbody);
-          return;
-        }
-        fallbackLocalLogsDetalle(mac, tbody);
-      });
-  } else {
-    fallbackLocalLogsDetalle(mac, tbody);
-  }
-}
+  tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:16px;">Consultando historial en Supabase Cloud...</td></tr>`;
 
-function fallbackLocalLogsDetalle(mac, tbody) {
-  if (!db) return;
-  const tx = db.transaction(["reportes_sesiones"], "readonly");
-  tx.objectStore("reportes_sesiones").getAll().onsuccess = (e) => {
-    const logs = (e.target.result || []).filter(x => x.mac === mac).reverse();
-    renderLogsDetalleFilas(logs, tbody);
-  };
+  let logs = [];
+
+  // Consultar directamente en Supabase con filtro de MAC
+  if (sbClient) {
+    try {
+      const { data, error } = await sbClient
+        .from('reportes_autoclaves')
+        .select('*')
+        .or(`mac.eq.${mac},Mac.eq.${mac}`)
+        .order('created_at', { ascending: false })
+        .limit(30);
+
+      if (!error && data) {
+        logs = data;
+        renderLogsDetalleFilas(logs, tbody);
+        return;
+      }
+    } catch(e) {}
+  }
+
+  // Si no hay red, consultar respaldo local
+  if (db) {
+    const tx = db.transaction(["reportes_sesiones"], "readonly");
+    tx.objectStore("reportes_sesiones").getAll().onsuccess = (e) => {
+      const localLogs = (e.target.result || []).filter(x => (x.mac === mac || x.Mac === mac)).reverse();
+      renderLogsDetalleFilas(localLogs, tbody);
+    };
+    return;
+  }
+
+  renderLogsDetalleFilas([], tbody);
 }
 
 function renderLogsDetalleFilas(logs, tbody) {
   if (!logs.length) {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:18px;">Sin sesiones registradas en la base de datos.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:18px;">Sin sesiones registradas en la nube para este equipo.</td></tr>`;
     return;
   }
   tbody.innerHTML = logs.map(s => {
@@ -1204,7 +1248,7 @@ function renderLogsDetalleFilas(logs, tbody) {
 }
 
 // =========================================================================
-// 12. AUDITORÍA DE REPORTES POR PAQUETE COMPLETO
+// 14. CENTRO DE AUDITORÍA CLÍNICA (SUPABASE COMO ÚNICA FUENTE DE LA VERDAD)
 // =========================================================================
 let reportesCache = [];
 
@@ -1214,30 +1258,32 @@ async function renderizarRegistros() {
   const fDesde = document.getElementById("filterFechaDesde")?.value;
   const fHasta = document.getElementById("filterFechaHasta")?.value;
   const fLimit = document.getElementById("filterLimit")?.value || "100";
-  const fText = document.getElementById("filterInput")?.value.toUpperCase() || "";
+  const fText = document.getElementById("filterInput")?.value.trim().toUpperCase() || "";
   const tbody = document.getElementById("auditTableBody");
   if (!tbody) return;
 
   let items = [];
 
+  // CONSULTA DIRECTA Y EXCLUSIVA A SUPABASE CLOUD
   if (sbClient) {
     try {
       let query = sbClient.from('reportes_autoclaves').select('*').order('created_at', { ascending: false });
 
       if (fLimit !== 'ALL') query = query.limit(parseInt(fLimit));
-      if (devFilter !== "TODOS") query = query.eq('mac', devFilter);
-      if (fDesde) query = query.gte('created_at', fDesde);
-      if (fHasta) query = query.lte('created_at', fHasta + 'T23:59:59');
+      if (devFilter !== "TODOS") query = query.or(`mac.eq.${devFilter},Mac.eq.${devFilter}`);
+      if (fDesde && fDesde.trim() !== "") query = query.gte('created_at', fDesde);
+      if (fHasta && fHasta.trim() !== "") query = query.lte('created_at', fHasta + 'T23:59:59');
 
       const { data, error } = await query;
       if (!error && data) {
         items = data.map(r => {
-          const metaLocal = fleet[r.mac]?.meta || {};
+          const deviceMac = r.mac || r.Mac || '';
+          const metaLocal = fleet[deviceMac]?.meta || {};
           return {
             id: r.id,
             sessionId: r.session_id,
-            mac: r.mac,
-            alias: r.alias || metaLocal.alias || r.mac,
+            mac: deviceMac,
+            alias: r.alias || metaLocal.alias || deviceMac,
             cliente: r.cliente || metaLocal.cliente || "Clínica",
             modelo: r.modelo || metaLocal.modelo || "Autoclave",
             fecha: r.created_at,
@@ -1256,21 +1302,26 @@ async function renderizarRegistros() {
           };
         });
 
+        // Actualizar espejo en base local para cuando no haya red
         guardarCopiaEnIndexedDB(items);
+        pintarTablaReportes(items, devFilter, fType, fText, tbody);
+        return;
       }
     } catch(e) {}
   }
 
-  if (!items.length && db) {
+  // Solo si Supabase está completamente inaccesible por falta de internet
+  if (!navigator.onLine && db) {
     const tx = db.transaction(["reportes_sesiones"], "readonly");
     tx.objectStore("reportes_sesiones").getAll().onsuccess = (e) => {
       items = (e.target.result || []).reverse();
-      pintarTablaReportes(items, devFilter, fType, fDesde, fHasta, fText, tbody);
+      pintarTablaReportes(items, devFilter, fType, fText, tbody);
     };
     return;
   }
 
-  pintarTablaReportes(items, devFilter, fType, fDesde, fHasta, fText, tbody);
+  // Si la nube está vacía (0 registros), pintar 0 registros fielmente
+  pintarTablaReportes([], devFilter, fType, fText, tbody);
 }
 
 function guardarCopiaEnIndexedDB(items) {
@@ -1278,15 +1329,15 @@ function guardarCopiaEnIndexedDB(items) {
   try {
     const tx = db.transaction(["reportes_sesiones"], "readwrite");
     const store = tx.objectStore("reportes_sesiones");
-    items.slice(0, 50).forEach(item => {
-      store.put(item);
-    });
+    store.clear(); // Limpiar residuos anteriores para sincronizar exactamente con la nube
+    items.slice(0, 100).forEach(item => store.put(item));
   } catch(e) {}
 }
 
-function pintarTablaReportes(items, devFilter, fType, fDesde, fHasta, fText, tbody) {
+function pintarTablaReportes(items, devFilter, fType, fText, tbody) {
   reportesCache = items;
 
+  // KPIs calculados estrictamente de la nube
   document.getElementById("kpiTotalSesiones").innerText = items.length;
   const totalCiclos = items.reduce((acc, cur) => acc + (cur.ciclosAcumulados || 0), 0);
   document.getElementById("kpiTotalCiclos").innerText = totalCiclos;
@@ -1295,6 +1346,7 @@ function pintarTablaReportes(items, devFilter, fType, fDesde, fHasta, fText, tbo
   const totalAlarmas = items.filter(x => x.conteoAlarmas > 0).length;
   document.getElementById("kpiTotalAlarmas").innerText = totalAlarmas;
 
+  // Filtrado reactivo en pantalla
   if (fType === "CICLO_OK") items = items.filter(x => x.diagnosticoPrincipal && x.diagnosticoPrincipal.includes("CONFORME"));
   if (fType === "ALARMA") items = items.filter(x => x.conteoAlarmas > 0);
   if (fType === "MANT_WARN") items = items.filter(x => (x.ciclosAcumulados || 0) >= (x.limiteMantenimiento || 200) * 0.8);
@@ -1311,7 +1363,7 @@ function pintarTablaReportes(items, devFilter, fType, fDesde, fHasta, fText, tbo
   }
 
   if (!items.length) {
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:30px;">No hay paquetes de sesión disponibles en la nube.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:35px;">No hay paquetes de sesión registrados en la base de datos de la nube.</td></tr>`;
     return;
   }
 
@@ -1330,7 +1382,7 @@ function pintarTablaReportes(items, devFilter, fType, fDesde, fHasta, fText, tbo
           <div style="font-size:0.62rem; color:var(--text-muted);">${s.sessionId || s.id}</div>
         </td>
         <td>
-          <div style="font-weight:800;">${s.alias}</div>
+          <div style="font-weight:800; color:var(--text-main);">${s.alias}</div>
           <div style="font-size:0.62rem; color:var(--purple);">${s.cliente} | ${s.modelo}</div>
         </td>
         <td>
@@ -1338,7 +1390,7 @@ function pintarTablaReportes(items, devFilter, fType, fDesde, fHasta, fText, tbo
           <div style="color:var(--text-muted);">OFF: ${s.horaApagado}</div>
         </td>
         <td>
-          <span class="cycle-badge">⚡ ${countCiclos} Ciclos Ejecutados</span>
+          <span class="cycle-badge">⚡ ${countCiclos} Ciclos</span>
         </td>
         <td>T:${(s.tempMax||0).toFixed(1)}°C<br>P:${(s.presMax||0).toFixed(2)}b</td>
         <td>
@@ -1512,7 +1564,7 @@ window.confirmarVaciarDB = async function() {
 };
 
 // =========================================================================
-// 13. BACKUP Y RESTAURACIÓN INTEGRAL DE REPORTES (JSON & CSV)
+// 15. BACKUP Y RESTAURACIÓN INTEGRAL DE REPORTES (JSON & CSV)
 // =========================================================================
 window.descargarBackupJSON = function() {
   const data = reportesCache || [];
@@ -1551,7 +1603,7 @@ window.restaurarBackupJSON = function(files) {
         for (const item of list) {
           const insertObj = {
             session_id: item.sessionId || item.session_id || `REST-${Math.random().toString(36).substring(7)}`,
-            mac: item.mac,
+            mac: item.mac || item.Mac,
             alias: item.alias,
             cliente: item.cliente,
             modelo: item.modelo,
@@ -1597,7 +1649,7 @@ window.exportarRegistrosCSV = function() {
 };
 
 // =========================================================================
-// 14. FOTA HUB & GESTIÓN DE FLOTA (TÉCNICO Y SUPERADMIN)
+// 16. FOTA HUB & GESTIÓN DE FLOTA (TÉCNICO Y SUPERADMIN)
 // =========================================================================
 let currentFotaFilter = 'ALL';
 window.filterFotaList = function(tipo) { currentFotaFilter = tipo; renderFotaLiveList(); };
@@ -1759,7 +1811,7 @@ function actualizarSelectoresGlobales() {
 }
 
 // =========================================================================
-// 15. JERARQUÍA ESTRICTA (RBAC) & GESTIÓN DE USUARIOS EN LA NUBE
+// 17. JERARQUÍA ESTRICTA (RBAC) & GESTIÓN DE USUARIOS EN LA NUBE
 // =========================================================================
 function aplicarPermisosRol() {
   if (!usuarioActual) return;
@@ -2094,7 +2146,7 @@ window.guardarNuevaContrasena = async function() {
 };
 
 // =========================================================================
-// 16. REFRESCO PERIÓDICO DEL MONITOR
+// 18. REFRESCO PERIÓDICO DEL MONITOR
 // =========================================================================
 setInterval(() => {
   if (currentActivity === 'act-telemetry') {
