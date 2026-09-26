@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" data-theme="cyber">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
@@ -15,9 +15,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;800&family=Orbitron:wght@600;800;900&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="style.css?v=13">
+  <link rel="stylesheet" href="style.css?v=14">
   
-  <!-- Dependencias Externas -->
+  <!-- Dependencias Externas Esenciales -->
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -83,12 +83,29 @@
       </div>
 
       <div class="gear-menu-wrapper">
-        <button class="btn btn-gear" id="btnGearToggle" onclick="toggleGearMenu(event)">
+        <button class="btn btn-gear" id="btnGearToggle" onclick="toggleGearMenu(event)" title="Panel de Ajustes">
           ⚙️
         </button>
 
         <div class="gear-dropdown" id="gearDropdownMenu">
           <div class="dropdown-header">PANEL DE CONTROL</div>
+          
+          <!-- SELECTOR DE LOS 3 MUNDOS VISUALES -->
+          <div class="theme-picker-header">🎨 TEMA VISUAL:</div>
+          <div class="theme-picker-grid">
+            <button class="btn-theme-opt" id="themeBtnClinical" onclick="cambiarTema('clinical')">
+              <span>🏥</span> Clínico
+            </button>
+            <button class="btn-theme-opt active" id="themeBtnCyber" onclick="cambiarTema('cyber')">
+              <span>🌙</span> Cyber
+            </button>
+            <button class="btn-theme-opt" id="themeBtnTactical" onclick="cambiarTema('tactical')">
+              <span>🛡️</span> Pizarra
+            </button>
+          </div>
+
+          <div class="dropdown-separator"></div>
+
           <button class="dropdown-item" onclick="refrescarSistemaCompleto(); closeGearMenu();">
             <span>🔄</span> Refrescar Datos en Vivo
           </button>
@@ -107,7 +124,7 @@
     </div>
   </header>
 
-  <!-- CONTENEDOR DESPLEGABLE HORIZONTAL (DOCK PLEGABLE CON CONTROL JERÁRQUICO) -->
+  <!-- CONTENEDOR DESPLEGABLE HORIZONTAL (DOCK PLEGABLE) -->
   <div class="desktop-dock-container" id="desktopDockContainer">
     <button class="btn-dock-toggle" onclick="toggleHorizontalDock()">
       <span class="dock-arrow" id="dockArrow">◀</span> 🗂️ SECCIONES
@@ -203,7 +220,7 @@
       </div>
     </section>
 
-    <!-- ACTIVITY 1: TELEMETRÍA DE FLOTA (ADAPTATIVA Y SIN HARDCODEO) -->
+    <!-- ACTIVITY 1: TELEMETRÍA DE FLOTA (ADAPTATIVA) -->
     <section id="act-telemetry" class="activity">
       <div class="section-title-bar">
         <div>
@@ -227,13 +244,12 @@
         </button>
       </div>
 
-      <!-- CONTENEDOR DINÁMICO DE TARJETAS DE AUTOCLAVES -->
       <div class="fleet-deck-grid" id="fleetLiveContainer">
         <div class="empty-deck">BUSCANDO AUTOCLAVES TRANSMITIENDO CAPACIDADES...</div>
       </div>
     </section>
 
-    <!-- ACTIVITY 2: DETALLE DEL EQUIPO (ESQUEMA ADAPTATIVO DEL CLIENTE) -->
+    <!-- ACTIVITY 2: DETALLE DEL EQUIPO (ESQUEMA ADAPTATIVO) -->
     <section id="act-device-detail" class="activity activity-child">
       <div class="card" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 16px;">
         <div>
@@ -283,7 +299,7 @@
         </div>
       </div>
 
-      <!-- SUBTAB 3: CONFIGURACIÓN DINÁMICA (GENERADA POR ESQUEMA) -->
+      <!-- SUBTAB 3: CONFIGURACIÓN DINÁMICA -->
       <div id="tab-det-cfg" class="detail-subview" style="display: none;">
         <div class="card">
           <form id="formDynamicParams" onsubmit="event.preventDefault(); guardarParametrosDinamicos();">
@@ -328,7 +344,7 @@
       </div>
     </section>
 
-    <!-- ACTIVITY 3: FOTA HUB (SOLO TÉCNICO Y SUPERADMIN) -->
+    <!-- ACTIVITY 3: FOTA HUB (TÉCNICO Y SUPERADMIN) -->
     <section id="act-fota" class="activity">
       <div class="section-title-bar">
         <div>
@@ -372,7 +388,7 @@
       </div>
     </section>
 
-    <!-- ACTIVITY 4: GESTIÓN DE FLOTA (SOLO TÉCNICO Y SUPERADMIN) -->
+    <!-- ACTIVITY 4: GESTIÓN DE FLOTA (TÉCNICO Y SUPERADMIN) -->
     <section id="act-fleet-mgmt" class="activity">
       <div class="section-title-bar">
         <div>
@@ -550,7 +566,7 @@
       </div>
     </section>
 
-    <!-- ACTIVITY 6: CONTROL DE ACCESOS Y USUARIOS RBAC (SOLO SUPERADMIN) -->
+    <!-- ACTIVITY 6: CONTROL DE ACCESOS Y USUARIOS RBAC (SUPERADMIN) -->
     <section id="act-users" class="activity">
       <div class="section-title-bar">
         <div>
@@ -624,6 +640,6 @@
     </button>
   </nav>
 
-  <script src="app.js?v=13"></script>
+  <script src="app.js?v=14"></script>
 </body>
 </html>
