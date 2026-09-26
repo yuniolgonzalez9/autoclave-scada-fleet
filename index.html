@@ -15,9 +15,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;800&family=Orbitron:wght@600;800;900&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="style.css?v=14">
+  <link rel="stylesheet" href="style.css?v=15">
   
-  <!-- Dependencias Externas Esenciales -->
+  <!-- Dependencias Externas -->
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -90,11 +90,14 @@
         <div class="gear-dropdown" id="gearDropdownMenu">
           <div class="dropdown-header">PANEL DE CONTROL</div>
           
-          <!-- SELECTOR DE LOS 3 MUNDOS VISUALES -->
+          <!-- SELECTOR DE LOS 4 MUNDOS VISUALES -->
           <div class="theme-picker-header">🎨 TEMA VISUAL:</div>
           <div class="theme-picker-grid">
             <button class="btn-theme-opt" id="themeBtnClinical" onclick="cambiarTema('clinical')">
               <span>🏥</span> Clínico
+            </button>
+            <button class="btn-theme-opt" id="themeBtnHybrid" onclick="cambiarTema('hybrid')">
+              <span>⚡</span> Híbrido
             </button>
             <button class="btn-theme-opt active" id="themeBtnCyber" onclick="cambiarTema('cyber')">
               <span>🌙</span> Cyber
@@ -106,8 +109,11 @@
 
           <div class="dropdown-separator"></div>
 
+          <button class="dropdown-item" onclick="solicitarLimpiezaCacheLocal(); closeGearMenu();">
+            <span>🔄</span> Forzar Sincronización Nube (Reset)
+          </button>
           <button class="dropdown-item" onclick="refrescarSistemaCompleto(); closeGearMenu();">
-            <span>🔄</span> Refrescar Datos en Vivo
+            <span>⚡</span> Refrescar Datos en Vivo
           </button>
           <button class="dropdown-item" onclick="alternarPantallaCompleta(); closeGearMenu();">
             <span>⛶</span> Pantalla Completa
@@ -330,13 +336,13 @@
         </div>
       </div>
 
-      <!-- SUBTAB 5: HISTORIAL ESPECÍFICO -->
+      <!-- SUBTAB 5: HISTORIAL ESPECÍFICO DE ESTE EQUIPO (FILTRADO POR MAC EN LA NUBE) -->
       <div id="tab-det-logs" class="detail-subview" style="display: none;">
         <div class="card">
-          <div style="font-size: 0.8rem; color: var(--cyan); font-weight: 800; margin-bottom: 12px;">PAQUETES DE SESIÓN DE ESTE EQUIPO:</div>
+          <div style="font-size: 0.8rem; color: var(--cyan); font-weight: 800; margin-bottom: 12px;">HISTORIAL CLÍNICO DE ESTE AUTOCLAVE (FILTRADO EN NUBE):</div>
           <div class="table-container">
             <table>
-              <thead><tr><th>FECHA / SESIÓN</th><th>ESTADO</th><th>CICLOS EXACTOS</th><th>SALUD MANT.</th><th>MÁXIMOS</th><th>ACCIÓN</th></tr></thead>
+              <thead><tr><th>FECHA / SESIÓN</th><th>ESTADO</th><th>CICLOS EN SESIÓN</th><th>SALUD MANT.</th><th>MÁXIMOS</th><th>ACCIÓN</th></tr></thead>
               <tbody id="detLogsTbody"></tbody>
             </table>
           </div>
@@ -455,6 +461,7 @@
           <button class="btn btn-sm btn-secondary" data-rbac="SUPERADMIN" onclick="document.getElementById('inputRestoreJSON').click()" title="Restaurar copia local">📤 RESTAURAR</button>
           <input type="file" id="inputRestoreJSON" accept=".json" style="display:none;" onchange="restaurarBackupJSON(this.files)">
           <button class="btn btn-sm btn-secondary" onclick="exportarRegistrosCSV()">📥 EXPORTAR CSV</button>
+          <button class="btn btn-sm btn-warn" onclick="solicitarLimpiezaCacheLocal()" title="Elimina registros desincronizados y fuerza la lectura de la nube">🔄 FORZAR NUBE</button>
           <button class="btn btn-sm btn-warn" id="btnEliminarReportes" data-rbac="SUPERADMIN" onclick="eliminarReportesSeleccionados()">🗑️ ELIMINAR MARCADOS</button>
           <button class="btn btn-sm btn-danger" id="btnVaciarLogs" data-rbac="SUPERADMIN" onclick="confirmarVaciarDB()">🧹 VACIAR NUBE</button>
         </div>
@@ -468,11 +475,11 @@
         <div class="kpi-card"><div class="kpi-val text-red" id="kpiTotalAlarmas">0</div><div class="kpi-lbl">INCIDENTES TÉRMICOS</div></div>
       </div>
 
-      <!-- FILTRADO AVANZADO -->
+      <!-- FILTRADO AVANZADO (DIRECTO EN SUPABASE CLOUD) -->
       <div class="card" style="margin-bottom: 14px; padding: 14px;">
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px;">
           <div>
-            <label style="font-size: 0.68rem; color: var(--cyan); font-weight:800;">EQUIPO / CLIENTE:</label>
+            <label style="font-size: 0.68rem; color: var(--cyan); font-weight:800;">EQUIPO / MAC:</label>
             <select id="filterDeviceSelect" class="input-field" onchange="renderizarRegistros()"><option value="TODOS">TODOS LOS EQUIPOS</option></select>
           </div>
           <div>
@@ -640,6 +647,6 @@
     </button>
   </nav>
 
-  <script src="app.js?v=14"></script>
+  <script src="app.js?v=15"></script>
 </body>
 </html>
