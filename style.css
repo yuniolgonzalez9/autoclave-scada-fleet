@@ -1,13 +1,13 @@
 /* =========================================================================
-   SCADA CYBER-INDUSTRIAL // SISTEMA MULTI-TEMA (CLÍNICO, CYBER Y PIZARRA)
+   SCADA BIOMÉDICO // SISTEMA MULTI-TEMA (CYBER, CLÍNICO, PIZARRA E HÍBRIDO)
    ========================================================================= */
 
-/* 1. TEMA CYBER DECK (OSCURO NEÓN - POR DEFECTO) */
+/* 1. TEMA CYBER DECK (OSCURO NEÓN) */
 :root, [data-theme="cyber"] {
   --bg-void: #020409;
   --bg-surface: rgba(6, 12, 24, 0.88);
-  --bg-card: rgba(11, 20, 38, 0.82);
-  --bg-card-hover: rgba(16, 30, 58, 0.92);
+  --bg-card: rgba(11, 20, 38, 0.85);
+  --bg-card-hover: rgba(16, 30, 58, 0.95);
   --bg-gauge: radial-gradient(circle at 50% 30%, rgba(15, 25, 48, 0.8) 0%, rgba(3, 7, 16, 0.95) 100%);
   --bg-input: rgba(3, 7, 16, 0.85);
   --border-subtle: rgba(0, 240, 255, 0.22);
@@ -33,7 +33,7 @@
                  linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
 }
 
-/* 2. TEMA BLANCO CLÍNICO (MÁXIMO CONTRASTE QUIRÚRGICO) */
+/* 2. TEMA BLANCO CLÍNICO (HOSPITALARIO SUAVE) */
 [data-theme="clinical"] {
   --bg-void: #f1f5f9;
   --bg-surface: #ffffff;
@@ -54,7 +54,7 @@
   --amber-glow: rgba(217, 119, 6, 0.2);
   --purple: #7c3aed;
   --purple-glow: rgba(124, 58, 237, 0.2);
-  --text-main: #0f172a; /* Pizarra casi negro para contraste 21:1 */
+  --text-main: #0f172a;
   --text-muted: #64748b;
   --panel-shadow: 0 4px 18px -2px rgba(15, 23, 42, 0.08), 0 2px 6px -1px rgba(15, 23, 42, 0.04), inset 0 1px 0 #ffffff;
   --bg-gradient: radial-gradient(circle at 10% 10%, rgba(2, 132, 199, 0.04) 0%, transparent 40%),
@@ -93,6 +93,36 @@
                  linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
 }
 
+/* 4. TEMA CYBER-LIGHT (HÍBRIDO: FONDO BLANCO PURO CON ALTO CONTRASTE NEÓN) */
+[data-theme="hybrid"] {
+  --bg-void: #f8fafc;
+  --bg-surface: #ffffff;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f1f5f9;
+  --bg-gauge: radial-gradient(circle at 50% 30%, #ffffff 0%, #f1f5f9 100%);
+  --bg-input: #ffffff;
+  --border-subtle: rgba(0, 180, 216, 0.35);
+  --border-bright: #0096c7;
+  --cyan: #0077b6;
+  --cyan-glow: rgba(0, 150, 199, 0.3);
+  --cyan-deep: rgba(0, 180, 216, 0.12);
+  --green: #00875a;
+  --green-glow: rgba(0, 135, 90, 0.25);
+  --red: #de350b;
+  --red-glow: rgba(222, 53, 11, 0.25);
+  --amber: #d97706;
+  --amber-glow: rgba(217, 119, 6, 0.25);
+  --purple: #6b21a8;
+  --purple-glow: rgba(107, 33, 168, 0.25);
+  --text-main: #050b14; /* Negro de máximo impacto */
+  --text-muted: #475569;
+  --panel-shadow: 0 6px 20px -2px rgba(0, 119, 182, 0.1), 0 2px 8px -1px rgba(0, 0, 0, 0.06), inset 0 1px 0 #ffffff;
+  --bg-gradient: radial-gradient(circle at 10% 10%, rgba(0, 180, 216, 0.06) 0%, transparent 40%),
+                 radial-gradient(circle at 90% 90%, rgba(107, 33, 168, 0.05) 0%, transparent 40%),
+                 linear-gradient(rgba(0, 119, 182, 0.03) 1px, transparent 1px),
+                 linear-gradient(90deg, rgba(0, 119, 182, 0.03) 1px, transparent 1px);
+}
+
 * { 
   box-sizing: border-box; 
   margin: 0; 
@@ -127,7 +157,7 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
 }
 
 /* =========================================================================
-   SELECTOR VISUAL DE TEMAS (BOTONES ENGRANAJE)
+   SELECTOR VISUAL DE TEMAS (BOTONERA 4 OPCIONES)
    ========================================================================= */
 .theme-picker-header {
   padding: 8px 16px 4px 16px;
@@ -138,13 +168,13 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
 }
 .theme-picker-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 6px;
-  padding: 6px 14px 12px 14px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 5px;
+  padding: 6px 12px 12px 12px;
 }
 .btn-theme-opt {
-  padding: 8px 4px;
-  font-size: 0.68rem;
+  padding: 8px 2px;
+  font-size: 0.64rem;
   font-weight: 800;
   border-radius: 4px;
   border: 1px solid var(--border-subtle);
@@ -154,7 +184,7 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   transition: all 0.16s ease;
 }
 .btn-theme-opt:hover {
@@ -170,7 +200,7 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
 }
 
 /* =========================================================================
-   MODAL DE CONFIRMACIÓN CRÍTICA (CENTRADO GEOMÉTRICO)
+   MODAL DE CONFIRMACIÓN CRÍTICA (CENTRADO EN EL MEDIO)
    ========================================================================= */
 .modal-overlay {
   position: fixed;
@@ -180,10 +210,10 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   width: 100dvw;
   height: 100vh;
   height: 100dvh;
-  background: rgba(2, 4, 10, 0.8);
+  background: rgba(2, 4, 10, 0.85);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
-  display: none; /* Controlado por JS sin !important */
+  display: none;
   place-items: center;
   z-index: 9999999;
   padding: 16px;
@@ -257,7 +287,7 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   gap: 8px;
   min-height: 42px;
   text-decoration: none;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
   transition: all 0.18s var(--ease);
   position: relative;
   user-select: none;
@@ -479,7 +509,7 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   position: absolute;
   top: calc(100% + 10px);
   right: 0;
-  width: 280px;
+  width: 290px;
   max-width: calc(100vw - 20px);
   background: var(--bg-card);
   backdrop-filter: blur(20px);
@@ -796,7 +826,7 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   background: var(--cyan-deep) !important;
 }
 .report-package-row:active {
-  background: rgba(2, 132, 199, 0.15) !important;
+  background: rgba(2, 132, 199, 0.18) !important;
 }
 
 .cycle-badge {
@@ -863,6 +893,7 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   border-radius: 6px;
   background: var(--bg-card);
   box-shadow: var(--panel-shadow);
+  min-height: 120px;
 }
 table { width: 100%; border-collapse: collapse; font-size: 0.78rem; min-width: 680px; }
 th, td { padding: 13px 16px; border-bottom: 1px solid var(--border-subtle); text-align: left; }
@@ -974,7 +1005,7 @@ th {
   .gear-dropdown {
     right: 4px !important;
     top: calc(100% + 8px);
-    width: 250px;
+    width: 280px;
   }
 }
 
