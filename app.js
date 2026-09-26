@@ -37,7 +37,6 @@ window.cambiarTema = function(nombreTema) {
   document.documentElement.setAttribute('data-theme', nombreTema);
   localStorage.setItem("scada_theme", nombreTema);
 
-  // Actualizar estado de los botones en el menú
   document.querySelectorAll('.btn-theme-opt').forEach(btn => btn.classList.remove('active'));
   const btnId = nombreTema === 'clinical' ? 'themeBtnClinical' : 
                (nombreTema === 'hybrid' ? 'themeBtnHybrid' : 
@@ -45,9 +44,8 @@ window.cambiarTema = function(nombreTema) {
   const btnActivo = document.getElementById(btnId);
   if (btnActivo) btnActivo.classList.add('active');
 
-  // Adaptar colores de la gráfica de Chart.js según el tema
   if (realChartInstance) {
-    const esClaro = (nombreTema === 'clinical' || nombreTema === 'hybrid');
+    const esClaro = (nombreTema === 'clinical');
     const colorTexto = esClaro ? '#0f172a' : '#f8fafc';
     const colorGrid = esClaro ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.06)';
 
@@ -58,7 +56,7 @@ window.cambiarTema = function(nombreTema) {
     realChartInstance.update();
   }
 
-  notify(`🎨 Tema activado: ${nombreTema.toUpperCase()}`, "var(--cyan)");
+  notify(`🎨 Tema: ${nombreTema.toUpperCase()}`, "var(--cyan)");
 };
 
 function inicializarTemaGuardado() {
@@ -155,7 +153,6 @@ window.openTopLevel = function(secId) {
     return;
   }
 
-  // RESTRICCIÓN JERÁRQUICA ACTIVA
   if (usuarioActual && usuarioActual.rol === "OPERADOR") {
     if (secId === 'act-fota' || secId === 'act-fleet-mgmt' || secId === 'act-users') {
       notify("⛔ Acceso restringido para el rol OPERADOR", "var(--red)");
@@ -359,13 +356,13 @@ window.cerrarSesionManual = function() {
 };
 
 // =========================================================================
-// 8. PURGA Y RESET DE CACHÉ LOCAL DESFASADA
+// 8. PURGA Y RESET DE CACHÉ LOCAL
 // =========================================================================
 window.solicitarLimpiezaCacheLocal = function() {
   mostrarModalConfirmacion({
     icon: '🔄',
     title: 'FORZAR SINCRONIZACIÓN NUBE',
-    msg: '¿Deseas purgar la memoria local desfasada de este navegador y sincronizar directamente con Supabase Cloud?',
+    msg: '¿Deseas purgar la memoria local desfasada y forzar la lectura 100% directa desde Supabase Cloud?',
     okText: 'FORZAR NUBE AHORA',
     okClass: 'btn-primary',
     onConfirm: async () => {
@@ -377,20 +374,20 @@ window.solicitarLimpiezaCacheLocal = function() {
       }
       reportesCache = [];
       await renderizarRegistros();
-      notify("☁️ Memoria local purgada. Sincronizado 100% con Supabase", "var(--green)");
+      notify("☁️ Memoria local purgada. Sincronizado con Supabase", "var(--green)");
     }
   });
 };
 
 // =========================================================================
-// 9. BASE DE DATOS LOCAL Y TIEMPO REAL NUBE (SUPABASE REALTIME)
+// 9. BASE DE DATOS LOCAL Y TIEMPO REAL NUBE
 // =========================================================================
 let db = null;
 const fleet = {};
 
 function initDB() {
   return new Promise((resolve) => {
-    const req = indexedDB.open("AutoclaveFastFleetDB_v27", 1);
+    const req = indexedDB.open("AutoclaveFastFleetDB_v28", 1);
     req.onupgradeneeded = (e) => {
       db = e.target.result;
       if (!db.objectStoreNames.contains("asignaciones")) db.createObjectStore("asignaciones", { keyPath: "mac" });
@@ -425,7 +422,7 @@ function iniciarSuscripcionNubeRealtime() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'reportes_autoclaves' }, (payload) => {
         const syncText = document.getElementById("syncStatusText");
         if (syncText) syncText.innerText = "NUBE CONECTADA";
-        notify(`📋 Nuevo paquete registrado en la nube [${payload.eventType}]`, "var(--green)");
+        notify(`📋 Nuevo paquete en la nube [${payload.eventType}]`, "var(--green)");
         if (currentActivity === 'act-reports') renderizarRegistros();
       })
       .subscribe();
@@ -583,26 +580,26 @@ function inicializarDispositivoSiNoExiste(mac) {
   }
 }
 
-// SINCRONIZACIÓN DE PAQUETES DE SESIÓN (AUTOCLAVE -> SUPABASE CLOUD)
+// SINCRONIZACIÓN DE REPORTES (AUTOCLAVE -> SUPABASE CLOUD)
 async function procesarPaqueteOfflineSync(mac, payload) {
   inicializarDispositivoSiNoExiste(mac);
-  notify(`📥 Guardando paquete de sesión del autoclave [${mac}]...`, "var(--purple)");
+  notify(`📥 Procesando reporte del autoclave [${mac}]...`, "var(--purple)");
 
   const sesId = payload.session_id || `SES-${Date.now()}`;
   const reportObj = {
     session_id: sesId,
     mac: mac,
-    alias: fleet[mac].meta.alias,
-    cliente: fleet[mac].meta.cliente,
-    modelo: fleet[mac].meta.modelo,
+    alias: fleet[mac].meta.alias || payload.alias || mac,
+    cliente: fleet[mac].meta.cliente || payload.cliente || "Clínica",
+    modelo: fleet[mac].meta.modelo || payload.modelo || "Autoclave",
     hora_encendido: payload.hora_encendido || "00:00",
     hora_apagado: payload.hora_apagado || "00:00",
-    ciclos_acumulados: payload.ciclos || fleet[mac].meta.ciclosCompletados,
-    limite_mantenimiento: payload.limite || 200,
+    ciclos_acumulados: payload.ciclos_acumulados || payload.ciclos || fleet[mac].meta.ciclosCompletados || 0,
+    limite_mantenimiento: payload.limite_mantenimiento || payload.limite || 200,
     temp_max: parseFloat(payload.temp_max) || 0,
     pres_max: parseFloat(payload.pres_max) || 0,
-    conteo_alarmas: payload.alarmas || 0,
-    diagnostico_principal: payload.diagnostico || "SESIÓN CONFORME",
+    conteo_alarmas: payload.conteo_alarmas || payload.alarmas || 0,
+    diagnostico_principal: payload.diagnostico_principal || payload.diagnostico || "SESIÓN CONFORME",
     fase_final: payload.fase_final || "APAGADO_SEGURO",
     ciclos_detalle: payload.ciclos_detalle || [],
     eventos: payload.eventos || [],
@@ -612,10 +609,19 @@ async function procesarPaqueteOfflineSync(mac, payload) {
   let guardadoEnNube = false;
   if (sbClient) {
     try { 
-      const { error } = await sbClient.from('reportes_autoclaves').insert([reportObj]); 
-      if (!error) guardadoEnNube = true;
-    } catch(e) {}
+      // Usar upsert para no fallar por sesión duplicada
+      const { error } = await sbClient.from('reportes_autoclaves').upsert(reportObj, { onConflict: 'session_id' }); 
+      if (!error) {
+        guardadoEnNube = true;
+      } else {
+        console.error("Error al guardar en Supabase:", error);
+        notify("Aviso Supabase: " + (error.message || "Error al insertar"), "var(--red)");
+      }
+    } catch(err) {
+      console.error("Excepción Supabase:", err);
+    }
   }
+
   if (db) {
     try {
       const tx = db.transaction(["reportes_sesiones"], "readwrite");
@@ -624,7 +630,7 @@ async function procesarPaqueteOfflineSync(mac, payload) {
   }
 
   if (currentActivity === 'act-reports') renderizarRegistros();
-  notify(guardadoEnNube ? `☁️ Paquete guardado en Supabase con éxito` : `Paquete guardado localmente`, "var(--green)");
+  notify(guardadoEnNube ? `☁️ Reporte guardado en Supabase con éxito` : `Reporte guardado localmente`, guardadoEnNube ? "var(--green)" : "var(--amber)");
 }
 
 function procesarMetaGlobal(mac, metaData) {
@@ -676,7 +682,7 @@ function procesarTelemetriaReal(mac, data) {
 function procesarEsquemaReal(mac, data) {
   inicializarDispositivoSiNoExiste(mac);
   fleet[mac].esquema = data;
-  fleet[mac].fw = data.fw || "v3.3";
+  fleet[mac].fw = data.fw || "v3.2";
   if (data.modelo && fleet[mac].meta.modelo === "AUTODETECTADO") {
     fleet[mac].meta.modelo = data.modelo;
   }
@@ -827,7 +833,7 @@ function actualizarCardDashboard(mac) {
 }
 
 // =========================================================================
-// 12. DETALLE DEL EQUIPO Y GRÁFICO EN VIVO ADAPTATIVO
+// 12. DETALLE DEL EQUIPO Y GRÁFICO EN VIVO
 // =========================================================================
 window.abrirDetalleEquipo = function(mac) {
   currentInspectedMAC = mac;
@@ -888,7 +894,7 @@ function inicializarGraficoEsterilizacion() {
   const dataPres = history.map(h => h.pres);
 
   const temaActual = document.documentElement.getAttribute('data-theme') || 'cyber';
-  const esClaro = (temaActual === 'clinical' || temaActual === 'hybrid');
+  const esClaro = (temaActual === 'clinical');
   const colorTexto = esClaro ? '#0f172a' : '#f8fafc';
   const colorGrid = esClaro ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.06)';
 
@@ -1117,13 +1123,23 @@ window.guardarFichaDetalle = async function() {
   const cliente = document.getElementById("fichaCliente").value.trim();
   const modelo = document.getElementById("fichaModelo").value.trim();
 
-  const metaData = { mac: currentInspectedMAC, alias, cliente, modelo, updated_at: new Date().toISOString() };
+  const metaData = { 
+    mac: currentInspectedMAC, 
+    alias: alias, 
+    cliente: cliente, 
+    modelo: modelo, 
+    updated_at: new Date().toISOString() 
+  };
 
   let guardadoNube = false;
   if (sbClient) {
     try { 
       const { error } = await sbClient.from('asignaciones_equipos').upsert(metaData, { onConflict: 'mac' }); 
-      if (!error) guardadoNube = true;
+      if (!error) {
+        guardadoNube = true;
+      } else {
+        console.error("Error al guardar equipo en Supabase:", error);
+      }
     } catch(e) {}
   }
   if (db) {
@@ -1160,7 +1176,9 @@ window.eliminarEquipoTotal = async function(mac) {
   delete fleet[mac];
 
   if (sbClient) {
-    try { await sbClient.from('asignaciones_equipos').delete().eq('mac', mac); } catch(e) {}
+    try { 
+      await sbClient.from('asignaciones_equipos').delete().or(`mac.eq.${mac},Mac.eq.${mac}`); 
+    } catch(e) {}
   }
 
   if (db) {
@@ -1186,7 +1204,7 @@ window.eliminarEquipoTotal = async function(mac) {
 };
 
 // =========================================================================
-// 13. HISTORIAL ESPECÍFICO DEL EQUIPO (FILTRADO POR MAC EN SUPABASE)
+// 13. HISTORIAL ESPECÍFICO DEL EQUIPO (FILTRADO POR MAC DIRECTO A NUBE)
 // =========================================================================
 async function cargarLogsDetalle(mac) {
   const tbody = document.getElementById("detLogsTbody");
@@ -1196,7 +1214,6 @@ async function cargarLogsDetalle(mac) {
 
   let logs = [];
 
-  // Consultar directamente en Supabase con filtro de MAC
   if (sbClient) {
     try {
       const { data, error } = await sbClient
@@ -1214,7 +1231,6 @@ async function cargarLogsDetalle(mac) {
     } catch(e) {}
   }
 
-  // Si no hay red, consultar respaldo local
   if (db) {
     const tx = db.transaction(["reportes_sesiones"], "readonly");
     tx.objectStore("reportes_sesiones").getAll().onsuccess = (e) => {
@@ -1248,7 +1264,7 @@ function renderLogsDetalleFilas(logs, tbody) {
 }
 
 // =========================================================================
-// 14. CENTRO DE AUDITORÍA CLÍNICA (SUPABASE COMO ÚNICA FUENTE DE LA VERDAD)
+// 14. CENTRO DE AUDITORÍA CLÍNICA (SUPABASE COMO ÚNICA FUENTE DE VERDAD)
 // =========================================================================
 let reportesCache = [];
 
@@ -1264,7 +1280,7 @@ async function renderizarRegistros() {
 
   let items = [];
 
-  // CONSULTA DIRECTA Y EXCLUSIVA A SUPABASE CLOUD
+  // 1. CONSULTA DIRECTA A SUPABASE CLOUD
   if (sbClient) {
     try {
       let query = sbClient.from('reportes_autoclaves').select('*').order('created_at', { ascending: false });
@@ -1302,26 +1318,29 @@ async function renderizarRegistros() {
           };
         });
 
-        // Actualizar espejo en base local para cuando no haya red
         guardarCopiaEnIndexedDB(items);
-        pintarTablaReportes(items, devFilter, fType, fText, tbody);
+        pintarTablaReportes(items, fType, fText, tbody);
         return;
+      } else if (error) {
+        console.error("Error al consultar Supabase:", error);
       }
-    } catch(e) {}
+    } catch(err) {
+      console.error("Excepción en renderizarRegistros:", err);
+    }
   }
 
-  // Solo si Supabase está completamente inaccesible por falta de internet
+  // 2. Solo si no hay internet se lee el respaldo local
   if (!navigator.onLine && db) {
     const tx = db.transaction(["reportes_sesiones"], "readonly");
     tx.objectStore("reportes_sesiones").getAll().onsuccess = (e) => {
       items = (e.target.result || []).reverse();
-      pintarTablaReportes(items, devFilter, fType, fText, tbody);
+      pintarTablaReportes(items, fType, fText, tbody);
     };
     return;
   }
 
-  // Si la nube está vacía (0 registros), pintar 0 registros fielmente
-  pintarTablaReportes([], devFilter, fType, fText, tbody);
+  // Si la nube está vacía (0 registros), pintar 0 exactamente
+  pintarTablaReportes([], fType, fText, tbody);
 }
 
 function guardarCopiaEnIndexedDB(items) {
@@ -1329,15 +1348,15 @@ function guardarCopiaEnIndexedDB(items) {
   try {
     const tx = db.transaction(["reportes_sesiones"], "readwrite");
     const store = tx.objectStore("reportes_sesiones");
-    store.clear(); // Limpiar residuos anteriores para sincronizar exactamente con la nube
+    store.clear();
     items.slice(0, 100).forEach(item => store.put(item));
   } catch(e) {}
 }
 
-function pintarTablaReportes(items, devFilter, fType, fText, tbody) {
+// Corrección de los parámetros para que nunca vuelva a fallar
+function pintarTablaReportes(items, fType, fText, tbody) {
   reportesCache = items;
 
-  // KPIs calculados estrictamente de la nube
   document.getElementById("kpiTotalSesiones").innerText = items.length;
   const totalCiclos = items.reduce((acc, cur) => acc + (cur.ciclosAcumulados || 0), 0);
   document.getElementById("kpiTotalCiclos").innerText = totalCiclos;
@@ -1346,13 +1365,12 @@ function pintarTablaReportes(items, devFilter, fType, fText, tbody) {
   const totalAlarmas = items.filter(x => x.conteoAlarmas > 0).length;
   document.getElementById("kpiTotalAlarmas").innerText = totalAlarmas;
 
-  // Filtrado reactivo en pantalla
   if (fType === "CICLO_OK") items = items.filter(x => x.diagnosticoPrincipal && x.diagnosticoPrincipal.includes("CONFORME"));
   if (fType === "ALARMA") items = items.filter(x => x.conteoAlarmas > 0);
   if (fType === "MANT_WARN") items = items.filter(x => (x.ciclosAcumulados || 0) >= (x.limiteMantenimiento || 200) * 0.8);
   if (fType === "OFFLINE_SYNC") items = items.filter(x => x.esOffline === true);
 
-  if (fText) {
+  if (fText && fText.trim() !== "") {
     items = items.filter(x => 
       x.mac.toUpperCase().includes(fText) || 
       x.alias.toUpperCase().includes(fText) || 
@@ -1369,7 +1387,6 @@ function pintarTablaReportes(items, devFilter, fType, fText, tbody) {
 
   tbody.innerHTML = items.map(s => {
     const ciclos = s.ciclosAcumulados || 0;
-    const limite = s.limiteMantenimiento || 200;
     const countCiclos = (s.ciclosDetalle && s.ciclosDetalle.length) ? s.ciclosDetalle.length : (ciclos || 1);
 
     return `
@@ -1430,44 +1447,46 @@ window.verPaqueteSesion = function(sessionId) {
   document.getElementById("repMantBar").style.width = `${pct}%`;
   document.getElementById("repMantBar").className = `health-fill ${pct>=100?'danger':pct>=80?'warn':''}`;
 
-  // Desglose de ciclos exactos numerados dentro del paquete
   const cyclesContainer = document.getElementById("repCyclesListContainer");
   const ciclosArray = ses.ciclosDetalle || [];
-  if (ciclosArray.length) {
-    cyclesContainer.innerHTML = ciclosArray.map(c => `
-      <div class="cycle-card-item">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-          <span class="cycle-badge">CICLO #${c.numero || 1}: ${c.programa || 'ESTERILIZACIÓN'}</span>
-          <span style="font-weight:800; color:${c.estado === 'CONFORME' ? 'var(--green)' : 'var(--red)'};">${c.estado || 'CONFORME'}</span>
+  if (cyclesContainer) {
+    if (ciclosArray.length) {
+      cyclesContainer.innerHTML = ciclosArray.map(c => `
+        <div class="cycle-card-item">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <span class="cycle-badge">CICLO #${c.numero || 1}: ${c.programa || 'ESTERILIZACIÓN'}</span>
+            <span style="font-weight:800; color:${c.estado === 'CONFORME' ? 'var(--green)' : 'var(--red)'};">${c.estado || 'CONFORME'}</span>
+          </div>
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:8px; font-size:0.75rem; color:var(--text-muted);">
+            <div>INICIO: <span style="color:var(--text-main); font-weight:700;">${c.hora_inicio || '--'}</span></div>
+            <div>FIN: <span style="color:var(--text-main); font-weight:700;">${c.hora_fin || '--'}</span></div>
+            <div>MÁX T°: <span style="color:var(--cyan); font-weight:800;">${c.temp_max ? c.temp_max + '°C' : '--'}</span></div>
+            <div>MÁX P: <span style="color:var(--purple); font-weight:800;">${c.pres_max ? c.pres_max + 'b' : '--'}</span></div>
+          </div>
         </div>
-        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:8px; font-size:0.75rem; color:var(--text-muted);">
-          <div>INICIO: <span style="color:var(--text-main); font-weight:700;">${c.hora_inicio || '--'}</span></div>
-          <div>FIN: <span style="color:var(--text-main); font-weight:700;">${c.hora_fin || '--'}</span></div>
-          <div>MÁX T°: <span style="color:var(--cyan); font-weight:800;">${c.temp_max ? c.temp_max + '°C' : '--'}</span></div>
-          <div>MÁX P: <span style="color:var(--purple); font-weight:800;">${c.pres_max ? c.pres_max + 'b' : '--'}</span></div>
+      `).join("");
+    } else {
+      cyclesContainer.innerHTML = `
+        <div class="cycle-card-item">
+          <span class="cycle-badge">CICLO #1: ESTERILIZACIÓN CONTINUA</span>
+          <div style="margin-top:6px; font-size:0.75rem; color:var(--text-muted);">
+            Máximos alcanzados en este ciclo: <b style="color:var(--cyan);">${ses.tempMax.toFixed(1)}°C</b> | <b style="color:var(--purple);">${ses.presMax.toFixed(2)} Bar</b>
+          </div>
         </div>
-      </div>
-    `).join("");
-  } else {
-    cyclesContainer.innerHTML = `
-      <div class="cycle-card-item">
-        <span class="cycle-badge">CICLO #1: ESTERILIZACIÓN CONTINUA</span>
-        <div style="margin-top:6px; font-size:0.75rem; color:var(--text-muted);">
-          Máximos alcanzados en este ciclo: <b style="color:var(--cyan);">${ses.tempMax.toFixed(1)}°C</b> | <b style="color:var(--purple);">${ses.presMax.toFixed(2)} Bar</b>
-        </div>
-      </div>
-    `;
+      `;
+    }
   }
 
-  // Registro cronológico desde encendido hasta apagado
   const timelineBox = document.getElementById("repTimelineContainer");
-  timelineBox.innerHTML = (ses.eventos || []).map(ev => `
-    <div class="timeline-item">
-      <div style="font-size:0.75rem; color:var(--cyan); font-weight:800;">${ev.hora} - <span class="user-role">${ev.tipo}</span></div>
-      <div style="font-size:0.8rem; margin-top:2px; color:var(--text-main);">${ev.msg}</div>
-      ${ev.temp ? `<div style="font-size:0.68rem; color:var(--text-muted); margin-top:2px;">T:${ev.temp}°C | P:${ev.presion}b</div>` : ''}
-    </div>
-  `).join("");
+  if (timelineBox) {
+    timelineBox.innerHTML = (ses.eventos || []).map(ev => `
+      <div class="timeline-item">
+        <div style="font-size:0.75rem; color:var(--cyan); font-weight:800;">${ev.hora} - <span class="user-role">${ev.tipo}</span></div>
+        <div style="font-size:0.8rem; margin-top:2px; color:var(--text-main);">${ev.msg}</div>
+        ${ev.temp ? `<div style="font-size:0.68rem; color:var(--text-muted); margin-top:2px;">T:${ev.temp}°C | P:${ev.presion}b</div>` : ''}
+      </div>
+    `).join("");
+  }
 
   openActivity('act-report-view');
 };
@@ -1508,7 +1527,7 @@ window.solicitarEliminarReporteIndividual = function(sessionId) {
   mostrarModalConfirmacion({
     icon: '🗑️',
     title: 'ELIMINAR PAQUETE DE SESIÓN',
-    msg: `¿Deseas purgar el paquete [${sessionId}] de la base de datos?`,
+    msg: `¿Deseas purgar el paquete [${sessionId}] de la base de datos de la nube?`,
     okText: 'ELIMINAR PAQUETE',
     okClass: 'btn-danger',
     onConfirm: () => eliminarReporteIndividual(sessionId)
@@ -1582,7 +1601,7 @@ window.descargarBackupJSON = function() {
   a.href = URL.createObjectURL(blob);
   a.download = `backup_paquetes_sesiones_${Date.now()}.json`;
   a.click();
-  notify("💾 Backup JSON de paquetes descargado", "var(--green)");
+  notify("💾 Backup JSON descargado", "var(--green)");
 };
 
 window.restaurarBackupJSON = function(files) {
@@ -1597,7 +1616,7 @@ window.restaurarBackupJSON = function(files) {
 
       if (!list || !list.length) throw new Error("Archivo inválido");
 
-      notify(`Subiendo ${list.length} paquetes a la base de datos...`, "var(--purple)");
+      notify(`Subiendo ${list.length} paquetes a la nube...`, "var(--purple)");
 
       if (sbClient) {
         for (const item of list) {
@@ -1619,7 +1638,7 @@ window.restaurarBackupJSON = function(files) {
             ciclos_detalle: item.ciclosDetalle || item.ciclos_detalle || [],
             eventos: item.eventos || []
           };
-          try { await sbClient.from('reportes_autoclaves').insert([insertObj]); } catch(err) {}
+          try { await sbClient.from('reportes_autoclaves').upsert(insertObj, { onConflict: 'session_id' }); } catch(err) {}
         }
       }
 
@@ -1732,7 +1751,7 @@ window.guardarEquipoDesdeGestion = async function() {
 
   if (mac.length < 6) return notify("MAC inválida", "var(--red)");
 
-  const metaData = { mac, alias, cliente, modelo, updated_at: new Date().toISOString() };
+  const metaData = { mac: mac, alias: alias, cliente: cliente, modelo: modelo, updated_at: new Date().toISOString() };
 
   let guardadoNube = false;
   if (sbClient) {
@@ -1992,13 +2011,13 @@ window.procesarInicioSesion = async function() {
 
   if (!u || !p) return mostrarFeedback(fb, "Completa usuario y clave.", "var(--red)");
 
-  // 1. LLAVE MAESTRA DE FÁBRICA
+  // LLAVE MAESTRA
   if (u === "admin" && p === "24331973") {
     iniciarSesionExitosa({ user: "admin", pass: "24331973", rol: "SUPERADMIN", email: "yuniolgonzalez9@gmail.com" });
     return;
   }
 
-  // 2. VERIFICACIÓN DIRECTA EN SUPABASE CLOUD (RESPETA EL ROL ASIGNADO)
+  // VERIFICACIÓN DIRECTA EN SUPABASE CLOUD
   if (sbClient) {
     try {
       const { data, error } = await sbClient.from('usuarios_scada').select('*').eq('user', u).maybeSingle();
@@ -2014,7 +2033,7 @@ window.procesarInicioSesion = async function() {
     } catch(e) {}
   }
 
-  // 3. VERIFICACIÓN EN BASE DE DATOS LOCAL SI NO HAY INTERNET
+  // FALLBACK BASE LOCAL
   if (db) {
     const tx = db.transaction(["usuarios"], "readonly");
     const req = tx.objectStore("usuarios").get(u);
