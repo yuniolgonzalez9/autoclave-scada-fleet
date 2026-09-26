@@ -62,26 +62,24 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
 }
 
 /* =========================================================================
-   MODAL DE CONFIRMACIÓN CRÍTICA (CENTRADO MATEMÁTICO ABSOLUTO)
+   MODAL DE CONFIRMACIÓN CRÍTICA (CENTRADO Y CONTROLABLE POR JS)
    ========================================================================= */
 .modal-overlay {
-  position: fixed !important;
-  top: 0 !important;
-  left: 0 !important;
-  right: 0 !important;
-  bottom: 0 !important;
-  width: 100vw !important;
-  width: 100dvw !important;
-  height: 100vh !important;
-  height: 100dvh !important;
-  background: rgba(2, 4, 10, 0.88) !important;
-  backdrop-filter: blur(18px) !important;
-  -webkit-backdrop-filter: blur(18px) !important;
-  display: grid !important;
-  place-items: center !important; /* CENTRADO VERTICAL Y HORIZONTAL INQUEBRANTABLE */
-  z-index: 9999999 !important;
-  padding: 16px !important;
-  margin: 0 !important;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  width: 100dvw;
+  height: 100vh;
+  height: 100dvh;
+  background: rgba(2, 4, 10, 0.88);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  display: none; /* OCULTO POR DEFECTO (SIN !important) */
+  place-items: center;
+  z-index: 9999999;
+  padding: 16px;
+  margin: 0;
   animation: modalFadeIn 0.2s var(--ease) forwards;
 }
 
@@ -91,17 +89,17 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
 }
 
 .modal-card {
-  background: linear-gradient(145deg, rgba(14, 25, 48, 0.98) 0%, rgba(6, 11, 24, 0.98) 100%) !important;
-  border: 1px solid var(--cyan) !important;
-  border-radius: 14px !important;
-  padding: 28px 24px !important;
-  max-width: 440px !important;
-  width: 100% !important;
-  margin: auto !important;
-  text-align: center !important;
-  box-shadow: 0 25px 70px rgba(0, 0, 0, 0.95), 0 0 40px var(--cyan-glow), inset 0 1px 0 rgba(255, 255, 255, 0.15) !important;
+  background: linear-gradient(145deg, rgba(14, 25, 48, 0.98) 0%, rgba(6, 11, 24, 0.98) 100%);
+  border: 1px solid var(--cyan);
+  border-radius: 14px;
+  padding: 28px 24px;
+  max-width: 440px;
+  width: 100%;
+  margin: auto;
+  text-align: center;
+  box-shadow: 0 25px 70px rgba(0, 0, 0, 0.95), 0 0 40px var(--cyan-glow), inset 0 1px 0 rgba(255, 255, 255, 0.15);
   animation: modalPopUp 0.25s var(--ease) forwards;
-  position: relative !important;
+  position: relative;
 }
 
 @keyframes modalPopUp {
