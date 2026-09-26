@@ -29,7 +29,43 @@ function estaAutenticado() {
 }
 
 // =========================================================================
-// 3. SINTETIZADOR DE AUDIO (ALARMAS MÉDICAS)
+// 3. MOTOR DEL SELECTOR DE TEMAS VISUALES (3 MUNDOS)
+// =========================================================================
+window.cambiarTema = function(nombreTema) {
+  if (!['clinical', 'cyber', 'tactical'].includes(nombreTema)) nombreTema = 'cyber';
+  
+  document.documentElement.setAttribute('data-theme', nombreTema);
+  localStorage.setItem("scada_theme", nombreTema);
+
+  // Actualizar botones en el menú del engranaje
+  document.querySelectorAll('.btn-theme-opt').forEach(btn => btn.classList.remove('active'));
+  const btnId = nombreTema === 'clinical' ? 'themeBtnClinical' : (nombreTema === 'tactical' ? 'themeBtnTactical' : 'themeBtnCyber');
+  const btnActivo = document.getElementById(btnId);
+  if (btnActivo) btnActivo.classList.add('active');
+
+  // Adaptar colores de la gráfica de esterilización si está abierta
+  if (realChartInstance) {
+    const esClaro = (nombreTema === 'clinical');
+    const colorTexto = esClaro ? '#0f172a' : '#f8fafc';
+    const colorGrid = esClaro ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.06)';
+
+    realChartInstance.options.scales.x.ticks.color = esClaro ? '#64748b' : '#9ca3af';
+    realChartInstance.options.scales.x.grid.color = colorGrid;
+    realChartInstance.options.scales.yTemp.grid.color = colorGrid;
+    realChartInstance.options.plugins.legend.labels.color = colorTexto;
+    realChartInstance.update();
+  }
+
+  notify(`🎨 Tema activado: ${nombreTema.toUpperCase()}`, "var(--cyan)");
+};
+
+function inicializarTemaGuardado() {
+  const temaGuardado = localStorage.getItem("scada_theme") || "cyber";
+  cambiarTema(temaGuardado);
+}
+
+// =========================================================================
+// 4. SINTETIZADOR DE AUDIO (ALARMAS MÉDICAS)
 // =========================================================================
 function sonarAlarmaSonora() {
   try {
@@ -53,7 +89,7 @@ function sonarAlarmaSonora() {
 }
 
 // =========================================================================
-// 4. VENTANA EMERGENTE FLOTANTE CENTRALIZADA (MODAL DE CONFIRMACIÓN)
+// 5. VENTANA EMERGENTE FLOTANTE CENTRALIZADA (MODAL DE CONFIRMACIÓN)
 // =========================================================================
 function mostrarModalConfirmacion({ icon = '⚠️', title = 'CONFIRMAR ACCIÓN', msg = '¿Deseas continuar?', okText = 'EJECUTAR', okClass = 'btn-danger', onConfirm = null }) {
   modalConfirmCallback = onConfirm;
@@ -109,7 +145,7 @@ window.pedirConfirmacionFota = function() {
 };
 
 // =========================================================================
-// 5. ENRUTADOR SEGURO DE ACTIVIDADES & BLOQUEO JERÁRQUICO
+// 6. ENRUTADOR SEGURO DE ACTIVIDADES & BLOQUEO JERÁRQUICO
 // =========================================================================
 window.openTopLevel = function(secId) {
   if (!estaAutenticado() && secId !== 'act-login' && secId !== 'act-recovery') {
@@ -253,7 +289,7 @@ function notify(msg, color = 'var(--cyan)') {
 }
 
 // =========================================================================
-// 6. NAVEGACIÓN Y MENÚ ENGRANAJE
+// 7. NAVEGACIÓN Y MENÚ ENGRANAJE
 // =========================================================================
 window.toggleHorizontalDock = function() {
   const dock = document.getElementById("desktopNavBar");
@@ -321,7 +357,7 @@ window.cerrarSesionManual = function() {
 };
 
 // =========================================================================
-// 7. BASE DE DATOS LOCAL Y TIEMPO REAL NUBE (SUPABASE REALTIME)
+// 8. BASE DE DATOS LOCAL Y TIEMPO REAL NUBE (SUPABASE REALTIME)
 // =========================================================================
 let db = null;
 const fleet = {};
@@ -439,7 +475,7 @@ async function cargarEquiposGuardados() {
 }
 
 // =========================================================================
-// 8. MQTT HIVEMQ CLOUD (CANAL WSS 8884)
+// 9. MQTT HIVEMQ CLOUD (CANAL WSS 8884)
 // =========================================================================
 let mqttClient;
 
@@ -635,7 +671,7 @@ function getConnectionQuality(dev) {
 }
 
 // =========================================================================
-// 9. DASHBOARD ADAPTATIVO (PURGA TOTAL DE EQUIPOS OFFLINE EN MODO ONLINE)
+// 10. DASHBOARD ADAPTATIVO
 // =========================================================================
 window.setFleetHealthFilter = function(filterType) {
   currentHealthFilter = filterType;
@@ -748,19 +784,19 @@ function actualizarCardDashboard(mac) {
       <div class="health-bar"><div class="health-fill ${mantClass}" style="width: ${pct}%;"></div></div>
     </div>
 
-    <div style="background: rgba(0,0,0,0.35); padding: 7px 10px; border-radius: 4px; font-size: 0.72rem; margin-bottom: 8px; display:flex; justify-content:space-between; align-items:center;">
+    <div style="background: rgba(0,0,0,0.06); padding: 7px 10px; border-radius: 4px; font-size: 0.72rem; margin-bottom: 8px; display:flex; justify-content:space-between; align-items:center;">
       <span style="color: var(--text-muted); font-weight:700;">FASE ACTUAL:</span> 
       <span style="color: var(--green); font-weight: 800; letter-spacing:1px;">${d.fase || 'ESPERA'}</span>
     </div>
 
-    <div style="text-align: center; font-size: 0.68rem; color: var(--cyan); padding: 5px; background: rgba(0,240,255,0.06); border-radius: 4px; font-weight:800;">
+    <div style="text-align: center; font-size: 0.68rem; color: var(--cyan); padding: 5px; background: var(--cyan-deep); border-radius: 4px; font-weight:800;">
       👉 ENTRAR A CONTROL TOTAL (1 CLICK)
     </div>
   `;
 }
 
 // =========================================================================
-// 10. DETALLE DEL EQUIPO Y GRÁFICO EN VIVO
+// 11. DETALLE DEL EQUIPO Y GRÁFICO EN VIVO ADAPTATIVO
 // =========================================================================
 window.abrirDetalleEquipo = function(mac) {
   currentInspectedMAC = mac;
@@ -817,6 +853,11 @@ function inicializarGraficoEsterilizacion() {
   const dataTemp = history.map(h => h.temp);
   const dataPres = history.map(h => h.pres);
 
+  const temaActual = document.documentElement.getAttribute('data-theme') || 'cyber';
+  const esClaro = (temaActual === 'clinical');
+  const colorTexto = esClaro ? '#0f172a' : '#f8fafc';
+  const colorGrid = esClaro ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.06)';
+
   realChartInstance = new Chart(ctx, {
     type: 'line',
     data: {
@@ -825,8 +866,8 @@ function inicializarGraficoEsterilizacion() {
         {
           label: 'Temperatura (°C)',
           data: dataTemp,
-          borderColor: '#00f0ff',
-          backgroundColor: 'rgba(0, 240, 255, 0.1)',
+          borderColor: '#0284c7',
+          backgroundColor: 'rgba(2, 132, 199, 0.1)',
           yAxisID: 'yTemp',
           tension: 0.35,
           borderWidth: 2
@@ -834,8 +875,8 @@ function inicializarGraficoEsterilizacion() {
         {
           label: 'Presión (Bar)',
           data: dataPres,
-          borderColor: '#bf7fff',
-          backgroundColor: 'rgba(157, 78, 221, 0.1)',
+          borderColor: '#7c3aed',
+          backgroundColor: 'rgba(124, 58, 237, 0.1)',
           yAxisID: 'yPres',
           tension: 0.35,
           borderWidth: 2
@@ -847,24 +888,27 @@ function inicializarGraficoEsterilizacion() {
       maintainAspectRatio: false,
       animation: false,
       scales: {
-        x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#64748b' } },
+        x: { 
+          grid: { color: colorGrid }, 
+          ticks: { color: esClaro ? '#64748b' : '#9ca3af' } 
+        },
         yTemp: {
           type: 'linear',
           position: 'left',
-          grid: { color: 'rgba(0,240,255,0.1)' },
-          ticks: { color: '#00f0ff' },
-          title: { display: true, text: '°C', color: '#00f0ff' }
+          grid: { color: colorGrid },
+          ticks: { color: '#0284c7' },
+          title: { display: true, text: '°C', color: '#0284c7' }
         },
         yPres: {
           type: 'linear',
           position: 'right',
           grid: { drawOnChartArea: false },
-          ticks: { color: '#bf7fff' },
-          title: { display: true, text: 'Bar', color: '#bf7fff' }
+          ticks: { color: '#7c3aed' },
+          title: { display: true, text: 'Bar', color: '#7c3aed' }
         }
       },
       plugins: {
-        legend: { labels: { color: '#f8fafc', font: { family: 'JetBrains Mono' } } }
+        legend: { labels: { color: colorTexto, font: { family: 'JetBrains Mono' } } }
       }
     }
   });
@@ -1160,7 +1204,7 @@ function renderLogsDetalleFilas(logs, tbody) {
 }
 
 // =========================================================================
-// 11. AUDITORÍA DE REPORTES POR PAQUETE COMPLETO
+// 12. AUDITORÍA DE REPORTES POR PAQUETE COMPLETO
 // =========================================================================
 let reportesCache = [];
 
@@ -1334,6 +1378,7 @@ window.verPaqueteSesion = function(sessionId) {
   document.getElementById("repMantBar").style.width = `${pct}%`;
   document.getElementById("repMantBar").className = `health-fill ${pct>=100?'danger':pct>=80?'warn':''}`;
 
+  // Desglose de ciclos exactos numerados dentro del paquete
   const cyclesContainer = document.getElementById("repCyclesListContainer");
   const ciclosArray = ses.ciclosDetalle || [];
   if (ciclosArray.length) {
@@ -1344,8 +1389,8 @@ window.verPaqueteSesion = function(sessionId) {
           <span style="font-weight:800; color:${c.estado === 'CONFORME' ? 'var(--green)' : 'var(--red)'};">${c.estado || 'CONFORME'}</span>
         </div>
         <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:8px; font-size:0.75rem; color:var(--text-muted);">
-          <div>INICIO: <span style="color:#fff; font-weight:700;">${c.hora_inicio || '--'}</span></div>
-          <div>FIN: <span style="color:#fff; font-weight:700;">${c.hora_fin || '--'}</span></div>
+          <div>INICIO: <span style="color:var(--text-main); font-weight:700;">${c.hora_inicio || '--'}</span></div>
+          <div>FIN: <span style="color:var(--text-main); font-weight:700;">${c.hora_fin || '--'}</span></div>
           <div>MÁX T°: <span style="color:var(--cyan); font-weight:800;">${c.temp_max ? c.temp_max + '°C' : '--'}</span></div>
           <div>MÁX P: <span style="color:var(--purple); font-weight:800;">${c.pres_max ? c.pres_max + 'b' : '--'}</span></div>
         </div>
@@ -1362,11 +1407,12 @@ window.verPaqueteSesion = function(sessionId) {
     `;
   }
 
+  // Registro cronológico desde encendido hasta apagado
   const timelineBox = document.getElementById("repTimelineContainer");
   timelineBox.innerHTML = (ses.eventos || []).map(ev => `
     <div class="timeline-item">
       <div style="font-size:0.75rem; color:var(--cyan); font-weight:800;">${ev.hora} - <span class="user-role">${ev.tipo}</span></div>
-      <div style="font-size:0.8rem; margin-top:2px;">${ev.msg}</div>
+      <div style="font-size:0.8rem; margin-top:2px; color:var(--text-main);">${ev.msg}</div>
       ${ev.temp ? `<div style="font-size:0.68rem; color:var(--text-muted); margin-top:2px;">T:${ev.temp}°C | P:${ev.presion}b</div>` : ''}
     </div>
   `).join("");
@@ -1466,7 +1512,7 @@ window.confirmarVaciarDB = async function() {
 };
 
 // =========================================================================
-// 12. BACKUP Y RESTAURACIÓN INTEGRAL DE REPORTES (JSON & CSV)
+// 13. BACKUP Y RESTAURACIÓN INTEGRAL DE REPORTES (JSON & CSV)
 // =========================================================================
 window.descargarBackupJSON = function() {
   const data = reportesCache || [];
@@ -1551,7 +1597,7 @@ window.exportarRegistrosCSV = function() {
 };
 
 // =========================================================================
-// 13. FOTA HUB & GESTIÓN DE FLOTA (SOLO TÉCNICO Y SUPERADMIN)
+// 14. FOTA HUB & GESTIÓN DE FLOTA (TÉCNICO Y SUPERADMIN)
 // =========================================================================
 let currentFotaFilter = 'ALL';
 window.filterFotaList = function(tipo) { currentFotaFilter = tipo; renderFotaLiveList(); };
@@ -1572,7 +1618,7 @@ function renderFotaLiveList() {
     const meta = item.meta || { alias: mac, modelo: "Autoclave" };
     const online = isOnline(item);
     return `
-      <label style="display:flex; align-items:center; gap:10px; background:rgba(0,0,0,0.4); border:1px solid rgba(255,255,255,0.08); padding:10px 14px; border-radius:4px; margin-bottom:8px; cursor:pointer;">
+      <label style="display:flex; align-items:center; gap:10px; background:var(--bg-card); border:1px solid var(--border-subtle); padding:10px 14px; border-radius:4px; margin-bottom:8px; cursor:pointer;">
         <input type="checkbox" class="fota-target-check" value="${mac}" ${online ? 'checked' : ''} style="width:18px; height:18px; accent-color:var(--cyan);">
         <div style="flex:1;">
           <div style="font-weight:800; color:var(--cyan); font-size:0.85rem;">${meta.alias}</div>
@@ -1685,10 +1731,10 @@ function renderFleetMgmtTable() {
     const online = isOnline(item);
     const esSeleccionado = macSeleccionadaGestion === mac;
     return `
-      <tr style="cursor:pointer; background: ${esSeleccionado ? 'rgba(0,240,255,0.1)' : 'transparent'};" onclick="seleccionarEquipoEnGestion('${mac}')">
+      <tr style="cursor:pointer; background: ${esSeleccionado ? 'var(--cyan-deep)' : 'transparent'};" onclick="seleccionarEquipoEnGestion('${mac}')">
         <td style="color:var(--cyan); font-weight:800;">${mac}</td>
         <td><span class="status-badge"><span class="beacon ${online ? 'online' : 'offline'}"></span> ${online ? 'ONLINE' : 'OFFLINE'}</span></td>
-        <td style="font-weight:800;">${meta.alias}</td>
+        <td style="font-weight:800; color:var(--text-main);">${meta.alias}</td>
         <td>${meta.cliente}</td>
         <td style="color:var(--purple);">${meta.modelo}</td>
         <td>
@@ -1713,7 +1759,7 @@ function actualizarSelectoresGlobales() {
 }
 
 // =========================================================================
-// 14. JERARQUÍA ESTRICTA (RBAC) & GESTIÓN DE USUARIOS EN LA NUBE
+// 15. JERARQUÍA ESTRICTA (RBAC) & GESTIÓN DE USUARIOS EN LA NUBE
 // =========================================================================
 function aplicarPermisosRol() {
   if (!usuarioActual) return;
@@ -1721,7 +1767,6 @@ function aplicarPermisosRol() {
   const esAdmin = rol === "SUPERADMIN";
   const esTech = rol === "TECNICO" || esAdmin;
 
-  // 1. Ocultar o mostrar pestañas y botones según atributo data-rbac
   document.querySelectorAll('[data-rbac]').forEach(el => {
     const req = el.getAttribute('data-rbac');
     if (req === 'SUPERADMIN') {
@@ -1731,14 +1776,12 @@ function aplicarPermisosRol() {
     }
   });
 
-  // 2. Proteger controles dinámicos de parámetros NVS
   const bg = document.getElementById("btnGuardarDinamico");
   if (bg) {
     bg.disabled = !esTech;
     bg.style.opacity = esTech ? "1" : "0.3";
   }
 
-  // 3. Proteger botón de eliminación de autoclave en detalle
   const btnDetDel = document.getElementById("btnDetDeleteDevice");
   if (btnDetDel) {
     btnDetDel.style.display = esAdmin ? 'inline-flex' : 'none';
@@ -1751,7 +1794,6 @@ async function cargarUsuariosUI() {
 
   let users = [];
 
-  // 1. Cargar directamente desde Supabase Cloud
   if (sbClient) {
     try {
       const { data, error } = await sbClient.from('usuarios_scada').select('*').order('created_at', { ascending: false });
@@ -1766,7 +1808,6 @@ async function cargarUsuariosUI() {
     } catch(e) {}
   }
 
-  // 2. Si no hay red, fallback a base de datos local
   if (!users.length && db) {
     const tx = db.transaction(["usuarios"], "readonly");
     tx.objectStore("usuarios").getAll().onsuccess = (e) => {
@@ -1808,7 +1849,6 @@ window.crearUsuario = async function() {
 
   let guardadoEnNube = false;
 
-  // 1. Guardar directamente en Supabase Cloud
   if (sbClient) {
     try {
       const { error } = await sbClient.from('usuarios_scada').upsert(nuevoUsuario, { onConflict: 'user' });
@@ -1816,7 +1856,6 @@ window.crearUsuario = async function() {
     } catch(e) {}
   }
 
-  // 2. Guardar en base de datos local
   if (db) {
     try {
       const tx = db.transaction(["usuarios"], "readwrite");
@@ -1915,7 +1954,7 @@ window.procesarInicioSesion = async function() {
         iniciarSesionExitosa({
           user: data.user,
           pass: data.pass,
-          rol: data.rol, // ROL VERDADERO DE LA NUBE
+          rol: data.rol,
           email: data.email
         });
         return;
@@ -1933,7 +1972,7 @@ window.procesarInicioSesion = async function() {
         iniciarSesionExitosa({
           user: usuarioLocal.user,
           pass: usuarioLocal.pass,
-          rol: usuarioLocal.rol || "OPERADOR", // NUNCA FORZAR SUPERADMIN
+          rol: usuarioLocal.rol || "OPERADOR",
           email: usuarioLocal.email || "yuniolgonzalez9@gmail.com"
         });
         return;
@@ -1954,7 +1993,6 @@ function iniciarSesionExitosa(user, esRestauracion = false) {
   const b = document.getElementById("currentUserRoleBadge");
   if (b) b.innerText = user.rol;
 
-  // APLICAR JERARQUÍA DE INMEDIATO
   aplicarPermisosRol();
 
   if (!esRestauracion) {
@@ -1968,7 +2006,7 @@ function mostrarFeedback(el, msg, color) {
   el.style.display = "block";
   el.style.color = color;
   el.style.border = `1px solid ${color}`;
-  el.style.background = "rgba(0,0,0,0.6)";
+  el.style.background = "var(--bg-card)";
   el.innerText = msg;
 }
 
@@ -1998,7 +2036,6 @@ window.solicitarCodigoRecuperacion = async function() {
 
   const otpCode = Math.random().toString(36).substring(2, 8).toUpperCase();
 
-  // Actualizar la clave temporal en la nube para que pueda entrar
   if (sbClient) {
     try { await sbClient.from('usuarios_scada').update({ pass: otpCode }).eq('user', u); } catch(e) {}
   }
@@ -2057,7 +2094,7 @@ window.guardarNuevaContrasena = async function() {
 };
 
 // =========================================================================
-// 15. REFRESCO PERIÓDICO DEL MONITOR
+// 16. REFRESCO PERIÓDICO DEL MONITOR
 // =========================================================================
 setInterval(() => {
   if (currentActivity === 'act-telemetry') {
@@ -2066,6 +2103,7 @@ setInterval(() => {
 }, 2000);
 
 window.addEventListener("load", () => {
+  inicializarTemaGuardado();
   initDB();
   initMQTT();
 });
