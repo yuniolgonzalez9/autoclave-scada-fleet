@@ -15,12 +15,11 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;800&family=Orbitron:wght@600;800;900&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="style.css?v=15">
+  <link rel="stylesheet" href="style.css?v=16">
   
-  <!-- Dependencias Externas -->
+  <!-- Dependencias Externas (Ligero y sin Chart.js) -->
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body class="unauthenticated">
 
@@ -271,12 +270,13 @@
         </div>
       </div>
 
+      <!-- PESTAÑAS (SIN LA GRÁFICA, CON MANTENIMIENTOS Y REGISTRO EN NUBE) -->
       <div class="subtab-slider">
         <button class="btn btn-sm nav-tab active" id="btnSubTele" onclick="switchDetailTab('tab-det-tele')">📊 SENSORES & ESTADO</button>
-        <button class="btn btn-sm nav-tab" id="btnSubGraph" onclick="switchDetailTab('tab-det-graph')">📈 CURVA ESTERILIZACIÓN</button>
         <button class="btn btn-sm nav-tab" id="btnSubCfg" data-rbac="TECNICO" onclick="switchDetailTab('tab-det-cfg')">⚙️ NVS & PARÁMETROS</button>
         <button class="btn btn-sm nav-tab" id="btnSubFicha" data-rbac="TECNICO" onclick="switchDetailTab('tab-det-ficha')">🏢 ASIGNAR CLIENTE</button>
         <button class="btn btn-sm nav-tab" id="btnSubLogs" onclick="switchDetailTab('tab-det-logs')">📋 HISTORIAL DE CICLOS</button>
+        <button class="btn btn-sm nav-tab" id="btnSubMaint" data-rbac="TECNICO" onclick="switchDetailTab('tab-det-maint')">🛠️ MANTENIMIENTOS & ALERTAS</button>
       </div>
 
       <!-- SUBTAB 1: SENSORES DINÁMICOS -->
@@ -292,20 +292,7 @@
         </div>
       </div>
 
-      <!-- SUBTAB 2: CURVA CLÍNICA EN TIEMPO REAL (CHART.JS) -->
-      <div id="tab-det-graph" class="detail-subview" style="display: none;">
-        <div class="card">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
-            <div style="font-family:'Orbitron'; font-size:0.85rem; color:var(--cyan); font-weight:800;">MONITOR DINÁMICO T° vs PRESIÓN</div>
-            <span style="font-size:0.68rem; color:var(--text-muted);">Muestreo continuo cada 2 segundos</span>
-          </div>
-          <div style="position: relative; height: 330px; width: 100%;">
-            <canvas id="realtimeSterileChart"></canvas>
-          </div>
-        </div>
-      </div>
-
-      <!-- SUBTAB 3: CONFIGURACIÓN DINÁMICA -->
+      <!-- SUBTAB 2: CONFIGURACIÓN DINÁMICA -->
       <div id="tab-det-cfg" class="detail-subview" style="display: none;">
         <div class="card">
           <form id="formDynamicParams" onsubmit="event.preventDefault(); guardarParametrosDinamicos();">
@@ -315,7 +302,7 @@
         </div>
       </div>
 
-      <!-- SUBTAB 4: FICHA DE CLIENTE -->
+      <!-- SUBTAB 3: FICHA DE CLIENTE -->
       <div id="tab-det-ficha" class="detail-subview" style="display: none;">
         <div class="card">
           <form onsubmit="event.preventDefault(); guardarFichaDetalle();">
@@ -336,10 +323,13 @@
         </div>
       </div>
 
-      <!-- SUBTAB 5: HISTORIAL ESPECÍFICO DE ESTE EQUIPO (FILTRADO POR MAC EN LA NUBE) -->
+      <!-- SUBTAB 4: HISTORIAL DE CICLOS (FILTRADO POR MAC DIRECTAMENTE EN NUBE) -->
       <div id="tab-det-logs" class="detail-subview" style="display: none;">
         <div class="card">
-          <div style="font-size: 0.8rem; color: var(--cyan); font-weight: 800; margin-bottom: 12px;">HISTORIAL CLÍNICO DE ESTE AUTOCLAVE (FILTRADO EN NUBE):</div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+            <div style="font-size: 0.82rem; color: var(--cyan); font-weight: 800;">HISTORIAL DE CICLOS (FILTRADO EN NUBE POR MAC):</div>
+            <button class="btn btn-sm btn-secondary" onclick="if(currentInspectedMAC) cargarLogsDetalle(currentInspectedMAC)">🔄 Recargar Nube</button>
+          </div>
           <div class="table-container">
             <table>
               <thead><tr><th>FECHA / SESIÓN</th><th>ESTADO</th><th>CICLOS EN SESIÓN</th><th>SALUD MANT.</th><th>MÁXIMOS</th><th>ACCIÓN</th></tr></thead>
@@ -348,6 +338,65 @@
           </div>
         </div>
       </div>
+
+      <!-- SUBTAB 5: MANTENIMIENTOS CLÍNICOS & ALERTAS PROGRAMADAS -->
+      <div id="tab-det-maint" class="detail-subview" style="display: none;">
+        <div class="grid-split">
+          <!-- REGISTRAR O PROGRAMAR MANTENIMIENTO -->
+          <div class="card">
+            <div style="font-family:'Orbitron'; font-size:0.85rem; color:var(--cyan); font-weight:800; margin-bottom:12px;">📅 PROGRAMAR MANTENIMIENTO CLÍNICO</div>
+            
+            <form onsubmit="event.preventDefault(); guardarProgramacionMantenimiento();">
+              <div class="input-group">
+                <label>FECHA PROGRAMADA (RECORDATORIO 8:00 AM):</label>
+                <input type="date" id="maintFechaProgramada" class="input-field" required>
+              </div>
+
+              <div class="input-group">
+                <label>TIPO DE SERVICIO / INTERVENCIÓN:</label>
+                <select id="maintTipoServicio" class="input-field">
+                  <option value="PREVENTIVO_GENERAL">Mantenimiento Preventivo General</option>
+                  <option value="CAMBIO_SELLOS">Cambio de Empacadura / Sellos de Puerta</option>
+                  <option value="CALIBRACION_PT100_PRESION">Calibración de Sensores (T° y Presión)</option>
+                  <option value="CAMBIO_RESISTENCIAS">Sustitución de Calentador / Resistencias</option>
+                  <option value="FILTRO_BACTERIOLOGICO">Cambio de Filtro Bacteriológico</option>
+                  <option value="CORRECTIVO_URGENTE">Servicio Correctivo por Avería</option>
+                </select>
+              </div>
+
+              <div class="input-group">
+                <label>TÉCNICO / BIOMÉDICO RESPONSABLE:</label>
+                <input type="text" id="maintTecnico" class="input-field" placeholder="Nombre del técnico responsable" required>
+              </div>
+
+              <div class="input-group">
+                <label>DETALLES O NOTAS DE LA INTERVENCIÓN:</label>
+                <input type="text" id="maintNotas" class="input-field" placeholder="Ej: Calibración anual certificada">
+              </div>
+
+              <button type="submit" class="btn btn-primary w-full">💾 AGENDAR MANTENIMIENTO EN NUBE [ENTER]</button>
+            </form>
+          </div>
+
+          <!-- HISTORIAL Y ALERTAS DE MANTENIMIENTO -->
+          <div class="card">
+            <div style="font-family:'Orbitron'; font-size:0.85rem; color:var(--cyan); font-weight:800; margin-bottom:12px;">ESTADO DE SALUD & SERVICIOS REALIZADOS</div>
+            
+            <!-- Banner de Alerta en Caliente -->
+            <div id="maintAlarmBanner" class="alarm-callout" style="display:none; margin-bottom:14px;">
+              <span id="maintAlarmText"></span>
+            </div>
+
+            <div class="table-container">
+              <table>
+                <thead><tr><th>FECHA</th><th>SERVICIO</th><th>TÉCNICO</th><th>CICLOS</th><th>ESTADO</th></tr></thead>
+                <tbody id="maintHistoryTbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </section>
 
     <!-- ACTIVITY 3: FOTA HUB (TÉCNICO Y SUPERADMIN) -->
@@ -363,7 +412,7 @@
         <div class="card">
           <div class="input-group">
             <label>VERSIÓN A DESPLEGAR:</label>
-            <input type="text" id="fotaVersionInput" class="input-field" value="v3.3.0">
+            <input type="text" id="fotaVersionInput" class="input-field" value="v4.0">
           </div>
           <div class="input-group">
             <label>URL DEL BINARIO (.BIN):</label>
@@ -475,7 +524,7 @@
         <div class="kpi-card"><div class="kpi-val text-red" id="kpiTotalAlarmas">0</div><div class="kpi-lbl">INCIDENTES TÉRMICOS</div></div>
       </div>
 
-      <!-- FILTRADO AVANZADO (DIRECTO EN SUPABASE CLOUD) -->
+      <!-- FILTRADO AVANZADO DIRECTO EN SUPABASE -->
       <div class="card" style="margin-bottom: 14px; padding: 14px;">
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px;">
           <div>
@@ -516,7 +565,7 @@
         </div>
       </div>
 
-      <!-- TABLA DE PAQUETES CLICKEABLES (SELECCIÓN AL TOCAR CUALQUIER PARTE) -->
+      <!-- TABLA DE PAQUETES CLICKEABLES -->
       <div class="table-container">
         <table>
           <thead>
@@ -525,7 +574,7 @@
               <th>FECHA / SESIÓN</th>
               <th>AUTOCLAVE & CLIENTE</th>
               <th>HORARIOS (ENCENDIDO / APAGADO)</th>
-              <th>CICLOS EN ESTA SESIÓN</th>
+              <th>PROGRAMA / CICLO</th>
               <th>PICO MÁXIMO (T° / P)</th>
               <th>DIAGNÓSTICO GLOBAL</th>
               <th>ACCIONES</th>
@@ -536,7 +585,7 @@
       </div>
     </section>
 
-    <!-- ACTIVITY: VISOR DETALLADO DEL PAQUETE DE SESIÓN -->
+    <!-- ACTIVITY: VISOR DETALLADO DEL PAQUETE CLÍNICO -->
     <section id="act-report-view" class="activity activity-child">
       <div class="card" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
         <div>
@@ -551,7 +600,7 @@
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 20px;">
           <div><span style="color:var(--text-muted); font-size:0.7rem;">HORA ENCENDIDO (BOOT):</span> <div id="repEncendidoVal" style="font-weight:800; color:var(--cyan);">--</div></div>
           <div><span style="color:var(--text-muted); font-size:0.7rem;">HORA APAGADO (SHUTDOWN):</span> <div id="repApagadoVal" style="font-weight:800; color:var(--text-main);">--</div></div>
-          <div><span style="color:var(--text-muted); font-size:0.7rem;">TOTAL EVENTOS:</span> <div id="repUptimeVal" style="font-weight:800; color:var(--green);">--</div></div>
+          <div><span style="color:var(--text-muted); font-size:0.7rem;">DURACIÓN TOTAL PROCESO:</span> <div id="repUptimeVal" style="font-weight:800; color:var(--green);">--</div></div>
           <div><span style="color:var(--text-muted); font-size:0.7rem;">CICLOS ACUMULADOS:</span> <div id="repCiclosVal" style="font-weight:800; color:var(--amber);">--</div></div>
         </div>
 
@@ -563,12 +612,11 @@
           <div class="health-bar"><div class="health-fill" id="repMantBar" style="width: 0%;"></div></div>
         </div>
 
-        <!-- LISTADO DE CICLOS EXACTOS NUMERADOS DENTRO DE LA SESIÓN -->
-        <div style="font-family:'Orbitron'; font-size:0.9rem; color:var(--cyan); font-weight:800; margin-bottom:14px;">CICLOS EJECUTADOS EN ESTA SESIÓN:</div>
+        <!-- CONTENEDOR DE FASES CRONOMETRADAS Y ALERTAS -->
         <div id="repCyclesListContainer" style="margin-bottom: 24px;"></div>
 
         <!-- REGISTRO CRONOLÓGICO CONTINUO -->
-        <div style="font-family:'Orbitron'; font-size:0.9rem; color:var(--cyan); font-weight:800; margin-bottom:14px;">REGISTRO CRONOLÓGICO DESDE ENCENDIDO HASTA APAGADO:</div>
+        <div style="font-family:'Orbitron'; font-size:0.9rem; color:var(--cyan); font-weight:800; margin-bottom:14px;">REGISTRO CRONOLÓGICO CONTINUO (EVENTOS):</div>
         <div id="repTimelineContainer" style="padding-left: 14px;"></div>
       </div>
     </section>
@@ -647,6 +695,6 @@
     </button>
   </nav>
 
-  <script src="app.js?v=15"></script>
+  <script src="app.js?v=16"></script>
 </body>
 </html>
