@@ -1,3 +1,23 @@
+Aquí tienes el ARCHIVO 3/3: app.js completo de principio a fin.
+
+Correcciones clave aplicadas en este archivo:
+
+1.  Blindaje de sesión instantáneo (Fin a las expulsiones al login): La sesión
+    del usuario se lee y restaura de forma síncrona en la primera línea de
+    ejecución del script. Nunca más te devolverá a la pantalla de login al
+    retroceder, refrescar o cambiar de pantalla.
+2.  Control inteligente de cierre del menú: El evento global de clic ahora
+    verifica si el toque ocurrió dentro del menú (menu.contains(e.target)). El
+    menú solo se cerrará cuando hagas clic intencionalmente fuera de él.
+3.  Control Ultra-Glass de 0% a 100%: Cuando colocas el deslizador al 0%, los
+    paneles y medidores se vuelven 100% cristal traslúcido, dejando ver las
+    pistas y componentes del papel tapiz por completo.
+4.  Sincronización total: Mantiene activos tus 4 temas originales (Pizarra,
+    Clínico, Híbrido, Cyber) y los 8 papeles tapiz (incluyendo tus 3 favoritos y
+    el blanco clínico restaurado) con persistencia en localStorage.
+
+ARCHIVO 3/3: app.js (Completo)
+
 // =========================================================================
 // 1. CONEXIÓN CLOUD SUPABASE & REALTIME (NUBE CENTRAL 24/7 EN VERCEL)
 // =========================================================================
@@ -9,7 +29,7 @@ const sbClient = (window.supabase && window.supabase.createClient)
   : null;
 
 // =========================================================================
-// 2. ESTADO GLOBAL, PILA DE NAVEGACIÓN Y VARIABLES
+// 2. ESTADO GLOBAL, SESIÓN SÍNCRONA INMEDIATA Y NAVEGACIÓN
 // =========================================================================
 let activityStack = ['act-login'];
 let currentTopLevel = 'act-telemetry';
@@ -23,11 +43,23 @@ let ultimoToqueAtras = 0;
 let audioCtx = null;
 let modalConfirmCallback = null;
 
+// RESTAURACIÓN SÍNCRONA INMEDIATA (EVITA EXPULSIÓN INVOLUNTARIA AL LOGIN)
+(function restaurarSesionSincrona() {
+  const sesionGuardada = localStorage.getItem("scada_logged_user");
+  if (sesionGuardada) {
+    try {
+      usuarioActual = JSON.parse(sesionGuardada);
+    } catch(e) {
+      usuarioActual = null;
+    }
+  }
+})();
+
 function estaAutenticado() {
   return !!usuarioActual && !!localStorage.getItem("scada_logged_user");
 }
 
-// Formateador clínico de fechas
+// Utilidad clínica para formatear fechas limpias
 function formatearFechaClinica(fechaRaw) {
   if (!fechaRaw) return new Date().toLocaleDateString();
   const d = new Date(fechaRaw);
@@ -41,7 +73,7 @@ function formatearFechaClinica(fechaRaw) {
   return d.toLocaleDateString();
 }
 
-// Cálculo de duración exacta de procesos
+// Cálculo de duración exacta entre marcas de tiempo
 function calcularDuracionTexto(horaInicio, horaFin, segRegistrados = 0) {
   if (segRegistrados && segRegistrados > 0) {
     const m = Math.floor(segRegistrados / 60);
@@ -66,13 +98,13 @@ function calcularDuracionTexto(horaInicio, horaFin, segRegistrados = 0) {
 }
 
 // =========================================================================
-// 3. CONTROLADOR DE TRANSPARENCIA 3D EN TIEMPO REAL (GLASSMORPHISM)
+// 3. CONTROLADOR DE TRANSPARENCIA ULTRA-GLASS (0% A 100% REAL)
 // =========================================================================
 window.ajustarTransparencia = function(valor) {
   const numVal = parseInt(valor, 10);
-  const alpha = Math.max(0.1, Math.min(1.0, numVal / 100));
+  // Permite llegar a 0.0 absoluto para transparencia de vidrio total
+  const alpha = Math.max(0.0, Math.min(1.0, numVal / 100));
 
-  // Permite ver el papel tapiz de circuitos a través de las tarjetas
   document.documentElement.style.setProperty('--card-alpha', alpha.toFixed(2));
   document.documentElement.style.setProperty('--bg-card', `rgba(17, 26, 46, ${alpha.toFixed(2)})`);
   document.documentElement.style.setProperty('--bg-surface', `rgba(10, 17, 32, ${Math.min(1.0, alpha + 0.08).toFixed(2)})`);
@@ -103,10 +135,19 @@ window.cambiarTema = function(nombreTema) {
   notify(`🎨 Tema activado: ${nombreTema.toUpperCase()}`, "var(--cyan)");
 };
 
-// 2. Papel Tapiz de Circuitos y Redes
+// 2. Papel Tapiz de Circuitos y Redes en Alta Definición
 window.cambiarFondo = function(nombreFondo) {
-  const fondosPermitidos = ['circuit-board', 'neural-network', 'cyber-matrix', 'digital-core', 'carbon', 'oled'];
-  if (!fondosPermitidos.includes(nombreFondo)) nombreFondo = 'circuit-board';
+  const fondosPermitidos = [
+    'circuit-pcb', 
+    'planet-nodes', 
+    'cyber-matrix', 
+    'motherboard-gold', 
+    'quantum-connections', 
+    'carbon', 
+    'oled',
+    'clean'
+  ];
+  if (!fondosPermitidos.includes(nombreFondo)) nombreFondo = 'circuit-pcb';
 
   document.documentElement.setAttribute('data-bg', nombreFondo);
   localStorage.setItem("scada_bg", nombreFondo);
@@ -114,27 +155,27 @@ window.cambiarFondo = function(nombreFondo) {
   const select = document.getElementById("selectFondoWallpaper");
   if (select) select.value = nombreFondo;
 
-  notify(`🖼️ Papel Tapiz activado: ${nombreFondo.toUpperCase()}`, "var(--cyan)");
+  notify(`🖼️ Papel Tapiz: ${nombreFondo.toUpperCase()}`, "var(--cyan)");
 };
 
 function inicializarConfigVisualGuardada() {
-  // Restaurar Tema
+  // 1. Restaurar Tema Original
   const temaGuardado = localStorage.getItem("scada_theme") || "tactical";
   window.cambiarTema(temaGuardado);
 
-  // Restaurar Papel Tapiz
-  const fondoGuardado = localStorage.getItem("scada_bg") || "circuit-board";
+  // 2. Restaurar Papel Tapiz
+  const fondoGuardado = localStorage.getItem("scada_bg") || "circuit-pcb";
   window.cambiarFondo(fondoGuardado);
 
-  // Restaurar Transparencia
-  const transparenciaGuardada = localStorage.getItem("scada_transparency") || "85";
+  // 3. Restaurar Transparencia Ultra-Glass
+  const transparenciaGuardada = localStorage.getItem("scada_transparency") || "82";
   const slider = document.getElementById("rangeTransparency");
   if (slider) slider.value = transparenciaGuardada;
   window.ajustarTransparencia(transparenciaGuardada);
 }
 
 // =========================================================================
-// 5. DETECTOR DE RED Y CONECTIVIDAD
+// 5. DETECTOR DE CONECTIVIDAD EN TIEMPO REAL
 // =========================================================================
 window.addEventListener('online', () => {
   notify("🟢 Red restablecida. Sincronizando con Supabase...", "var(--green)");
@@ -380,7 +421,7 @@ function notify(msg, color = 'var(--cyan)') {
 }
 
 // =========================================================================
-// 9. NAVEGACIÓN Y MENÚ ENGRANAJE
+// 9. NAVEGACIÓN Y MENÚ ENGRANAJE (CON CIERRE INTELIGENTE SEGURO)
 // =========================================================================
 window.toggleHorizontalDock = function() {
   const dock = document.getElementById("desktopNavBar");
@@ -403,7 +444,16 @@ window.closeGearMenu = function() {
   if (menu) menu.style.display = "none";
 };
 
-document.addEventListener("click", () => closeGearMenu());
+// Cierra el menú solo cuando el usuario hace clic FUERA de él
+document.addEventListener("click", (e) => {
+  const menu = document.getElementById("gearDropdownMenu");
+  const btn = document.getElementById("btnGearToggle");
+  if (menu && menu.style.display === "block") {
+    if (!menu.contains(e.target) && (!btn || !btn.contains(e.target))) {
+      menu.style.display = "none";
+    }
+  }
+});
 
 window.refrescarSistemaCompleto = function() {
   cargarEquiposGuardados();
@@ -1344,7 +1394,7 @@ function renderLogsDetalleFilas(logs, tbody) {
 }
 
 // =========================================================================
-// 16. MANTENIMIENTOS CLÍNICOS & ALERTAS
+// 16. MANTENIMIENTOS CLÍNICOS & ALERTAS PROGRAMADAS
 // =========================================================================
 window.guardarProgramacionMantenimiento = async function() {
   if (!currentInspectedMAC) return notify("Selecciona un equipo primero", "var(--amber)");
@@ -1474,6 +1524,7 @@ function verificarAlarmasMantenimiento(items) {
   }
 }
 
+// Exportar mantenimientos a Excel
 window.exportarMantenimientosExcel = function() {
   if (!currentInspectedMAC) return notify("Selecciona un autoclave primero", "var(--amber)");
   const item = fleet[currentInspectedMAC];
@@ -1513,6 +1564,7 @@ window.exportarMantenimientosExcel = function() {
     });
 };
 
+// Imprimir Acta Oficial de Mantenimiento en PDF
 window.imprimirActaMantenimiento = function() {
   if (!currentInspectedMAC) return notify("Selecciona un autoclave primero", "var(--amber)");
   const item = fleet[currentInspectedMAC];
@@ -2448,13 +2500,13 @@ window.procesarInicioSesion = async function() {
 
   if (!u || !p) return mostrarFeedback(fb, "Completa usuario y clave.", "var(--red)");
 
-  // 1. Llave Maestra
+  // 1. Llave Maestra de Seguridad
   if (u === "admin" && p === "24331973") {
     iniciarSesionExitosa({ user: "admin", pass: "24331973", rol: "SUPERADMIN", email: "yuniolgonzalez9@gmail.com" });
     return;
   }
 
-  // 2. Verificación directa en Supabase
+  // 2. Verificación directa en Supabase Cloud
   if (sbClient) {
     try {
       const { data, error } = await sbClient.from('usuarios_scada').select('*').eq('user', u).maybeSingle();
@@ -2470,7 +2522,7 @@ window.procesarInicioSesion = async function() {
     } catch(e) {}
   }
 
-  // 3. Fallback local
+  // 3. Fallback en base de datos local
   if (db) {
     const tx = db.transaction(["usuarios"], "readonly");
     const req = tx.objectStore("usuarios").get(u);
@@ -2497,7 +2549,9 @@ window.procesarInicioSesion = async function() {
 function iniciarSesionExitosa(user, esRestauracion = false) {
   usuarioActual = user;
   localStorage.setItem("scada_logged_user", JSON.stringify(user));
-  document.getElementById("currentUserName").innerText = user.user.toUpperCase();
+  
+  const un = document.getElementById("currentUserName");
+  if (un) un.innerText = user.user.toUpperCase();
   const b = document.getElementById("currentUserRoleBadge");
   if (b) b.innerText = user.rol;
 
@@ -2616,3 +2670,17 @@ window.addEventListener("load", () => {
   initMQTT();
 });
 
+Verificación final tras pegar este archivo:
+
+1.  Comprueba el menú (⚙️): Ahora puedes hacer clic en cualquier opción,
+    desplegable o arrastrar la barra de transparencia con total libertad; el
+    menú no se cerrará hasta que toques fuera de él.
+2.  Prueba el deslizador de transparencia al mínimo (0% o 10%): Observarás cómo
+    cada medidor, tarjeta y contenedor adquiere el efecto Ultra-Glass,
+    volviéndose completamente transparente para dejar ver el fondo de circuitos
+    o hardware que selecciones.
+3.  Prueba el Blanco Quirúrgico: Selecciona ⚪ Blanco Quirúrgico Limpio en el
+    menú desplegable de fondos; el sistema ajustará automáticamente el contraste
+    a un entorno clínico de alta definición.
+4.  Navegación fluida: Ya no serás expulsado a la pantalla de login al
+    retroceder o refrescar la página.
