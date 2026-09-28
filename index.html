@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es" data-theme="tactical">
+<html lang="es" data-bg="circuits-cyan">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
@@ -19,7 +19,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;800&family=Orbitron:wght@600;800;900&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="style.css?v=20">
+  <link rel="stylesheet" href="style.css?v=21">
   
   <!-- Dependencias Externas -->
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
@@ -91,32 +91,49 @@
         </button>
 
         <div class="gear-dropdown" id="gearDropdownMenu">
-          <div class="dropdown-header">PANEL DE CONTROL</div>
+          <div class="dropdown-header">PANEL DE CONTROL TÉCNICO</div>
           
-          <!-- SELECTOR DE LOS 4 MUNDOS VISUALES -->
-          <div class="theme-picker-header">🎨 TEMA VISUAL:</div>
-          <div class="theme-picker-grid">
-            <button class="btn-theme-opt" id="themeBtnClinical" onclick="cambiarTema('clinical')">
-              <span>🏥</span> Clínico
-            </button>
-            <button class="btn-theme-opt" id="themeBtnHybrid" onclick="cambiarTema('hybrid')">
-              <span>⚡</span> Híbrido
-            </button>
-            <button class="btn-theme-opt" id="themeBtnCyber" onclick="cambiarTema('cyber')">
-              <span>🌙</span> Cyber
-            </button>
-            <button class="btn-theme-opt active" id="themeBtnTactical" onclick="cambiarTema('tactical')">
-              <span>🛡️</span> Pizarra
-            </button>
+          <!-- SELECTOR VISUAL DE FONDOS DE PANTALLA Y CIRCUITOS -->
+          <div class="wallpaper-picker-box">
+            <div class="wallpaper-picker-header">⚡ FONDO // CIRCUITOS & NANO-RED:</div>
+            <div class="wallpaper-picker-grid">
+              <button class="btn-wallpaper-opt" id="bgOptCircuitsCyan" onclick="cambiarFondo('circuits-cyan')">
+                <span>⚡</span> Cyan PCB
+              </button>
+              <button class="btn-wallpaper-opt" id="bgOptNeuralNodes" onclick="cambiarFondo('neural-nodes')">
+                <span>🌐</span> Nodos
+              </button>
+              <button class="btn-wallpaper-opt" id="bgOptBioCircuit" onclick="cambiarFondo('bio-circuit')">
+                <span>🩺</span> Bio PCB
+              </button>
+              <button class="btn-wallpaper-opt" id="bgOptNanotechHex" onclick="cambiarFondo('nanotech-hex')">
+                <span>💠</span> Nano Hex
+              </button>
+              <button class="btn-wallpaper-opt" id="bgOptOled" onclick="cambiarFondo('oled')">
+                <span>⚫</span> OLED
+              </button>
+              <button class="btn-wallpaper-opt" id="bgOptCarbon" onclick="cambiarFondo('carbon')">
+                <span>🏁</span> Carbón
+              </button>
+              <button class="btn-wallpaper-opt" id="bgOptAurora" onclick="cambiarFondo('aurora')">
+                <span>🌌</span> Aurora
+              </button>
+              <button class="btn-wallpaper-opt" id="bgOptMatrix" onclick="cambiarFondo('matrix')">
+                <span>🟩</span> Matrix
+              </button>
+              <button class="btn-wallpaper-opt" id="bgOptClean" onclick="cambiarFondo('clean')">
+                <span>⚪</span> Quirúrgico
+              </button>
+            </div>
           </div>
 
           <!-- DESLIZADOR DE TRANSPARENCIA TOTAL (0% A 100%) -->
-          <div class="transparency-slider-box">
-            <div class="transparency-label-row">
-              <span>🎛️ TRANSPARENCIA 3D:</span>
+          <div class="wallpaper-picker-box" style="border-top:none;">
+            <div style="display:flex; justify-content:space-between; font-size:0.65rem; font-weight:800; color:var(--cyan); margin-bottom:6px;">
+              <span>🎛️ TRANSPARENCIA DE PANELES:</span>
               <span id="transparencyValTxt">90%</span>
             </div>
-            <input type="range" class="transparency-range" id="rangeTransparency" min="0" max="100" value="90" oninput="ajustarTransparencia(this.value)">
+            <input type="range" class="input-field" style="height:20px; padding:0; margin:0;" id="rangeTransparency" min="10" max="100" value="90" oninput="ajustarTransparencia(this.value)">
           </div>
 
           <div class="dropdown-separator"></div>
@@ -247,7 +264,7 @@
         </div>
       </div>
 
-      <div class="telemetry-filter-bar">
+      <div class="telemetry-filter-bar" style="display:flex; gap:8px; overflow-x:auto; margin-bottom:14px; padding-bottom:4px;">
         <button class="btn btn-sm btn-filter active" id="filterBtnOnline" onclick="setFleetHealthFilter('ONLINE')">
           🟢 EN LÍNEA (<span id="countOnline">0</span>)
         </button>
@@ -718,6 +735,6 @@
     </button>
   </nav>
 
-  <script src="app.js?v=20"></script>
+  <script src="app.js?v=21"></script>
 </body>
 </html>
