@@ -1,23 +1,3 @@
-Aquí tienes el ARCHIVO 3/3: app.js completo de principio a fin.
-
-Correcciones clave aplicadas en este archivo:
-
-1.  Blindaje de sesión instantáneo (Fin a las expulsiones al login): La sesión
-    del usuario se lee y restaura de forma síncrona en la primera línea de
-    ejecución del script. Nunca más te devolverá a la pantalla de login al
-    retroceder, refrescar o cambiar de pantalla.
-2.  Control inteligente de cierre del menú: El evento global de clic ahora
-    verifica si el toque ocurrió dentro del menú (menu.contains(e.target)). El
-    menú solo se cerrará cuando hagas clic intencionalmente fuera de él.
-3.  Control Ultra-Glass de 0% a 100%: Cuando colocas el deslizador al 0%, los
-    paneles y medidores se vuelven 100% cristal traslúcido, dejando ver las
-    pistas y componentes del papel tapiz por completo.
-4.  Sincronización total: Mantiene activos tus 4 temas originales (Pizarra,
-    Clínico, Híbrido, Cyber) y los 8 papeles tapiz (incluyendo tus 3 favoritos y
-    el blanco clínico restaurado) con persistencia en localStorage.
-
-ARCHIVO 3/3: app.js (Completo)
-
 // =========================================================================
 // 1. CONEXIÓN CLOUD SUPABASE & REALTIME (NUBE CENTRAL 24/7 EN VERCEL)
 // =========================================================================
@@ -29,7 +9,7 @@ const sbClient = (window.supabase && window.supabase.createClient)
   : null;
 
 // =========================================================================
-// 2. ESTADO GLOBAL, SESIÓN SÍNCRONA INMEDIATA Y NAVEGACIÓN
+// 2. ESTADO GLOBAL, PILA DE NAVEGACIÓN Y VARIABLES
 // =========================================================================
 let activityStack = ['act-login'];
 let currentTopLevel = 'act-telemetry';
@@ -42,18 +22,6 @@ let usuarioActual = null;
 let ultimoToqueAtras = 0;
 let audioCtx = null;
 let modalConfirmCallback = null;
-
-// RESTAURACIÓN SÍNCRONA INMEDIATA (EVITA EXPULSIÓN INVOLUNTARIA AL LOGIN)
-(function restaurarSesionSincrona() {
-  const sesionGuardada = localStorage.getItem("scada_logged_user");
-  if (sesionGuardada) {
-    try {
-      usuarioActual = JSON.parse(sesionGuardada);
-    } catch(e) {
-      usuarioActual = null;
-    }
-  }
-})();
 
 function estaAutenticado() {
   return !!usuarioActual && !!localStorage.getItem("scada_logged_user");
@@ -98,13 +66,13 @@ function calcularDuracionTexto(horaInicio, horaFin, segRegistrados = 0) {
 }
 
 // =========================================================================
-// 3. CONTROLADOR DE TRANSPARENCIA ULTRA-GLASS (0% A 100% REAL)
+// 3. CONTROLADOR DE TRANSPARENCIA ULTRA-GLASS (0% A 100%)
 // =========================================================================
 window.ajustarTransparencia = function(valor) {
   const numVal = parseInt(valor, 10);
-  // Permite llegar a 0.0 absoluto para transparencia de vidrio total
   const alpha = Math.max(0.0, Math.min(1.0, numVal / 100));
 
+  // Aplica la transparencia directamente a las tarjetas y barras para ver el fondo al 100%
   document.documentElement.style.setProperty('--card-alpha', alpha.toFixed(2));
   document.documentElement.style.setProperty('--bg-card', `rgba(17, 26, 46, ${alpha.toFixed(2)})`);
   document.documentElement.style.setProperty('--bg-surface', `rgba(10, 17, 32, ${Math.min(1.0, alpha + 0.08).toFixed(2)})`);
@@ -115,67 +83,15 @@ window.ajustarTransparencia = function(valor) {
   if (txt) txt.innerText = `${numVal}%`;
 };
 
-// =========================================================================
-// 4. MOTOR DUAL: TEMAS ORIGINALES + PAPEL TAPIZ DE CIRCUITOS EN HD
-// =========================================================================
-// 1. Tus 4 Temas Originales
-window.cambiarTema = function(nombreTema) {
-  if (!['clinical', 'cyber', 'tactical', 'hybrid'].includes(nombreTema)) nombreTema = 'tactical';
-  
-  document.documentElement.setAttribute('data-theme', nombreTema);
-  localStorage.setItem("scada_theme", nombreTema);
-
-  document.querySelectorAll('#themeBtnClinical, #themeBtnHybrid, #themeBtnCyber, #themeBtnTactical').forEach(btn => btn.classList.remove('active'));
-  const btnId = nombreTema === 'clinical' ? 'themeBtnClinical' : 
-               (nombreTema === 'hybrid' ? 'themeBtnHybrid' : 
-               (nombreTema === 'cyber' ? 'themeBtnCyber' : 'themeBtnTactical'));
-  const btnActivo = document.getElementById(btnId);
-  if (btnActivo) btnActivo.classList.add('active');
-
-  notify(`🎨 Tema activado: ${nombreTema.toUpperCase()}`, "var(--cyan)");
-};
-
-// 2. Papel Tapiz de Circuitos y Redes en Alta Definición
-window.cambiarFondo = function(nombreFondo) {
-  const fondosPermitidos = [
-    'circuit-pcb', 
-    'planet-nodes', 
-    'cyber-matrix', 
-    'motherboard-gold', 
-    'quantum-connections', 
-    'carbon', 
-    'oled',
-    'clean'
-  ];
-  if (!fondosPermitidos.includes(nombreFondo)) nombreFondo = 'circuit-pcb';
-
-  document.documentElement.setAttribute('data-bg', nombreFondo);
-  localStorage.setItem("scada_bg", nombreFondo);
-
-  const select = document.getElementById("selectFondoWallpaper");
-  if (select) select.value = nombreFondo;
-
-  notify(`🖼️ Papel Tapiz: ${nombreFondo.toUpperCase()}`, "var(--cyan)");
-};
-
-function inicializarConfigVisualGuardada() {
-  // 1. Restaurar Tema Original
-  const temaGuardado = localStorage.getItem("scada_theme") || "tactical";
-  window.cambiarTema(temaGuardado);
-
-  // 2. Restaurar Papel Tapiz
-  const fondoGuardado = localStorage.getItem("scada_bg") || "circuit-pcb";
-  window.cambiarFondo(fondoGuardado);
-
-  // 3. Restaurar Transparencia Ultra-Glass
-  const transparenciaGuardada = localStorage.getItem("scada_transparency") || "82";
+function inicializarTransparenciaGuardada() {
+  const guardada = localStorage.getItem("scada_transparency") || "82";
   const slider = document.getElementById("rangeTransparency");
-  if (slider) slider.value = transparenciaGuardada;
-  window.ajustarTransparencia(transparenciaGuardada);
+  if (slider) slider.value = guardada;
+  window.ajustarTransparencia(guardada);
 }
 
 // =========================================================================
-// 5. DETECTOR DE CONECTIVIDAD EN TIEMPO REAL
+// 4. DETECTOR DE CONECTIVIDAD EN TIEMPO REAL
 // =========================================================================
 window.addEventListener('online', () => {
   notify("🟢 Red restablecida. Sincronizando con Supabase...", "var(--green)");
@@ -196,6 +112,57 @@ window.addEventListener('offline', () => {
   if (dot) dot.className = "beacon offline";
   if (txt) txt.innerText = "MODO LOCAL (SIN RED)";
 });
+
+// =========================================================================
+// 5. MOTOR DE TEMAS ORIGINALES + MOTOR DE PAPEL TAPIZ
+// =========================================================================
+window.cambiarTema = function(nombreTema) {
+  if (!['clinical', 'cyber', 'tactical', 'hybrid'].includes(nombreTema)) nombreTema = 'tactical';
+  
+  document.documentElement.setAttribute('data-theme', nombreTema);
+  localStorage.setItem("scada_theme", nombreTema);
+
+  document.querySelectorAll('#themeBtnClinical, #themeBtnHybrid, #themeBtnCyber, #themeBtnTactical').forEach(btn => btn.classList.remove('active'));
+  const btnId = nombreTema === 'clinical' ? 'themeBtnClinical' : 
+               (nombreTema === 'hybrid' ? 'themeBtnHybrid' : 
+               (nombreTema === 'cyber' ? 'themeBtnCyber' : 'themeBtnTactical'));
+  const btnActivo = document.getElementById(btnId);
+  if (btnActivo) btnActivo.classList.add('active');
+
+  notify(`🎨 Tema: ${nombreTema.toUpperCase()}`, "var(--cyan)");
+};
+
+window.cambiarFondo = function(nombreFondo) {
+  const fondosValidos = [
+    'circuit-pcb', 
+    'planet-nodes', 
+    'cyber-matrix', 
+    'motherboard-gold', 
+    'quantum-connections', 
+    'carbon', 
+    'oled',
+    'clean'
+  ];
+  if (!fondosValidos.includes(nombreFondo)) nombreFondo = 'circuit-pcb';
+
+  document.documentElement.setAttribute('data-bg', nombreFondo);
+  localStorage.setItem("scada_bg", nombreFondo);
+
+  const select = document.getElementById("selectFondoWallpaper");
+  if (select) select.value = nombreFondo;
+
+  notify(`🖼️ Fondo: ${nombreFondo.toUpperCase()}`, "var(--cyan)");
+};
+
+function inicializarConfigVisualGuardada() {
+  const temaGuardado = localStorage.getItem("scada_theme") || "tactical";
+  window.cambiarTema(temaGuardado);
+
+  const fondoGuardado = localStorage.getItem("scada_bg") || "circuit-pcb";
+  window.cambiarFondo(fondoGuardado);
+
+  inicializarTransparenciaGuardada();
+}
 
 // =========================================================================
 // 6. SINTETIZADOR DE AUDIO (ALARMAS MÉDICAS)
@@ -444,7 +411,7 @@ window.closeGearMenu = function() {
   if (menu) menu.style.display = "none";
 };
 
-// Cierra el menú solo cuando el usuario hace clic FUERA de él
+// Cierra el menú solo al hacer clic fuera
 document.addEventListener("click", (e) => {
   const menu = document.getElementById("gearDropdownMenu");
   const btn = document.getElementById("btnGearToggle");
@@ -602,6 +569,7 @@ function iniciarSuscripcionNubeRealtime() {
   } catch(e) {}
 }
 
+// CORRECCIÓN EXACTA DE SESIÓN PERSISTENTE (EVITA EXPULSIÓN INVOLUNTARIA)
 function verificarSesionPersistente() {
   const sesionGuardada = localStorage.getItem("scada_logged_user");
   if (sesionGuardada) {
@@ -610,13 +578,16 @@ function verificarSesionPersistente() {
       iniciarSesionExitosa(userObj, true);
 
       const route = JSON.parse(localStorage.getItem("scada_nav_route_v5") || "null");
-      if (route && route.activity) {
+      if (route && route.activity && route.activity !== 'act-login') {
         if (route.activity === 'act-device-detail' && route.mac) {
           abrirDetalleEquipo(route.mac);
           if (route.subTab) switchDetailTab(route.subTab);
         } else {
           openTopLevel(route.topLevel || 'act-telemetry');
         }
+      } else {
+        // Redirige siempre a Telemetría si la sesión es válida
+        openTopLevel('act-telemetry');
       }
     } catch(e) {
       renderScreen('act-login');
@@ -2493,6 +2464,7 @@ window.seleccionarUsuarioRegistrado = function(val) {
   }
 };
 
+// AUTENTICACIÓN ORIGINAL CON SUPABASE 100% INTACTA
 window.procesarInicioSesion = async function() {
   const u = document.getElementById("loginUserInput").value.trim().toLowerCase();
   const p = document.getElementById("loginPassInput").value.trim();
@@ -2500,7 +2472,7 @@ window.procesarInicioSesion = async function() {
 
   if (!u || !p) return mostrarFeedback(fb, "Completa usuario y clave.", "var(--red)");
 
-  // 1. Llave Maestra de Seguridad
+  // 1. Llave Maestra
   if (u === "admin" && p === "24331973") {
     iniciarSesionExitosa({ user: "admin", pass: "24331973", rol: "SUPERADMIN", email: "yuniolgonzalez9@gmail.com" });
     return;
@@ -2522,7 +2494,7 @@ window.procesarInicioSesion = async function() {
     } catch(e) {}
   }
 
-  // 3. Fallback en base de datos local
+  // 3. Fallback local
   if (db) {
     const tx = db.transaction(["usuarios"], "readonly");
     const req = tx.objectStore("usuarios").get(u);
@@ -2669,18 +2641,3 @@ window.addEventListener("load", () => {
   initDB();
   initMQTT();
 });
-
-Verificación final tras pegar este archivo:
-
-1.  Comprueba el menú (⚙️): Ahora puedes hacer clic en cualquier opción,
-    desplegable o arrastrar la barra de transparencia con total libertad; el
-    menú no se cerrará hasta que toques fuera de él.
-2.  Prueba el deslizador de transparencia al mínimo (0% o 10%): Observarás cómo
-    cada medidor, tarjeta y contenedor adquiere el efecto Ultra-Glass,
-    volviéndose completamente transparente para dejar ver el fondo de circuitos
-    o hardware que selecciones.
-3.  Prueba el Blanco Quirúrgico: Selecciona ⚪ Blanco Quirúrgico Limpio en el
-    menú desplegable de fondos; el sistema ajustará automáticamente el contraste
-    a un entorno clínico de alta definición.
-4.  Navegación fluida: Ya no serás expulsado a la pantalla de login al
-    retroceder o refrescar la página.
