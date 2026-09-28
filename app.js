@@ -66,26 +66,28 @@ function calcularDuracionTexto(horaInicio, horaFin, segRegistrados = 0) {
 }
 
 // =========================================================================
-// 3. CONTROLADOR DEL DESLIZADOR DE TRANSPARENCIA 3D EN TIEMPO REAL
+// 3. CONTROLADOR DEL DESLIZADOR DE TRANSPARENCIA TOTAL (0% A 100%)
 // =========================================================================
 window.ajustarTransparencia = function(valor) {
-  const alpha = Math.max(0.3, Math.min(1.0, valor / 100));
+  const numVal = parseInt(valor, 10);
+  // Permite llegar a 0.0 absoluto sin frenos
+  const alpha = Math.max(0.0, Math.min(1.0, numVal / 100));
   document.documentElement.style.setProperty('--card-alpha', alpha.toFixed(2));
-  localStorage.setItem("scada_transparency", valor);
+  localStorage.setItem("scada_transparency", numVal);
 
   const txt = document.getElementById("transparencyValTxt");
-  if (txt) txt.innerText = `${valor}%`;
+  if (txt) txt.innerText = `${numVal}%`;
 };
 
 function inicializarTransparenciaGuardada() {
   const guardada = localStorage.getItem("scada_transparency") || "90";
   const slider = document.getElementById("rangeTransparency");
   if (slider) slider.value = guardada;
-  ajustarTransparencia(guardada);
+  window.ajustarTransparencia(guardada);
 }
 
 // =========================================================================
-// 4. DETECTOR DE CONECTIVIDAD HOSPITALARIA EN TIEMPO REAL
+// 4. DETECTOR DE CONECTIVIDAD EN TIEMPO REAL
 // =========================================================================
 window.addEventListener('online', () => {
   notify("🟢 Red restablecida. Sincronizando con Supabase...", "var(--green)");
@@ -423,7 +425,7 @@ window.cerrarSesionManual = function() {
 };
 
 // =========================================================================
-// 10. PURGA Y RESET DE CACHÉ LOCAL (FORZAR NUBE)
+// 10. PURGA Y RESET DE CACHÉ LOCAL
 // =========================================================================
 window.solicitarLimpiezaCacheLocal = function() {
   mostrarModalConfirmacion({
@@ -447,14 +449,14 @@ window.solicitarLimpiezaCacheLocal = function() {
 };
 
 // =========================================================================
-// 11. BASE DE DATOS LOCAL Y TIEMPO REAL NUBE (SUPABASE REALTIME)
+// 11. BASE DE DATOS LOCAL Y TIEMPO REAL NUBE
 // =========================================================================
 let db = null;
 const fleet = {};
 
 function initDB() {
   return new Promise((resolve) => {
-    const req = indexedDB.open("AutoclaveFastFleetDB_v34", 1);
+    const req = indexedDB.open("AutoclaveFastFleetDB_v35", 1);
     req.onupgradeneeded = (e) => {
       db = e.target.result;
       if (!db.objectStoreNames.contains("asignaciones")) db.createObjectStore("asignaciones", { keyPath: "mac" });
@@ -1109,7 +1111,6 @@ function actualizarPantallaDetalleDinamica() {
         el.style.color = d[k] ? "var(--green)" : "var(--text-muted)";
         el.classList.remove('is-text');
       } else {
-        // Para textos de fases u otros strings largos: aplicar auto-escala
         const valStr = String(d[k] || '--');
         el.innerText = valStr;
         if (valStr.length > 8 || valStr.includes(' ')) {
