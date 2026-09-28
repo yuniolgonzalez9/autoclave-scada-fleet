@@ -19,7 +19,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;800&family=Orbitron:wght@600;800;900&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="style.css?v=19">
+  <link rel="stylesheet" href="style.css?v=20">
   
   <!-- Dependencias Externas -->
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
@@ -110,13 +110,13 @@
             </button>
           </div>
 
-          <!-- DESLIZADOR DE TRANSPARENCIA 3D EN VIVO -->
+          <!-- DESLIZADOR DE TRANSPARENCIA TOTAL (0% A 100%) -->
           <div class="transparency-slider-box">
             <div class="transparency-label-row">
               <span>🎛️ TRANSPARENCIA 3D:</span>
               <span id="transparencyValTxt">90%</span>
             </div>
-            <input type="range" class="transparency-range" id="rangeTransparency" min="30" max="100" value="90" oninput="ajustarTransparencia(this.value)">
+            <input type="range" class="transparency-range" id="rangeTransparency" min="0" max="100" value="90" oninput="ajustarTransparencia(this.value)">
           </div>
 
           <div class="dropdown-separator"></div>
@@ -718,6 +718,6 @@
     </button>
   </nav>
 
-  <script src="app.js?v=19"></script>
+  <script src="app.js?v=20"></script>
 </body>
 </html>
