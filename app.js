@@ -9,7 +9,7 @@ const sbClient = (window.supabase && window.supabase.createClient)
   : null;
 
 // =========================================================================
-// 2. ESTADO GLOBAL, PILA DE NAVEGACIÓN Y VARIABLES
+// 2. ESTADO GLOBAL, SESIÓN SÍNCRONA INMEDIATA Y NAVEGACIÓN
 // =========================================================================
 let activityStack = ['act-login'];
 let currentTopLevel = 'act-telemetry';
@@ -22,6 +22,18 @@ let usuarioActual = null;
 let ultimoToqueAtras = 0;
 let audioCtx = null;
 let modalConfirmCallback = null;
+
+// RESTAURACIÓN SÍNCRONA INMEDIATA (EVITA EXPULSIÓN INVOLUNTARIA AL LOGIN)
+(function restaurarSesionSincrona() {
+  const sesionGuardada = localStorage.getItem("scada_logged_user");
+  if (sesionGuardada) {
+    try {
+      usuarioActual = JSON.parse(sesionGuardada);
+    } catch(e) {
+      usuarioActual = null;
+    }
+  }
+})();
 
 function estaAutenticado() {
   return !!usuarioActual && !!localStorage.getItem("scada_logged_user");
@@ -66,7 +78,7 @@ function calcularDuracionTexto(horaInicio, horaFin, segRegistrados = 0) {
 }
 
 // =========================================================================
-// 3. CONTROLADOR DE TRANSPARENCIA ULTRA-GLASS (0% A 100%)
+// 3. CONTROLADOR DE TRANSPARENCIA ULTRA-GLASS (0% A 100% REAL)
 // =========================================================================
 window.ajustarTransparencia = function(valor) {
   const numVal = parseInt(valor, 10);
@@ -1239,7 +1251,7 @@ window.guardarFichaDetalle = async function() {
     try { 
       const { error } = await sbClient.from('asignaciones_equipos').upsert(metaData, { onConflict: 'mac' }); 
       if (!error) guardadoNube = true;
-    } catch(e) {}
+    } catch(err) {}
   }
   if (db) {
     const tx = db.transaction(["asignaciones"], "readwrite");
@@ -2641,3 +2653,4 @@ window.addEventListener("load", () => {
   initDB();
   initMQTT();
 });
+
