@@ -1,4 +1,3 @@
-
 // =========================================================================
 // 1. CONEXIÓN CLOUD SUPABASE & REALTIME (NUBE CENTRAL 24/7 EN VERCEL)
 // =========================================================================
@@ -28,7 +27,7 @@ function estaAutenticado() {
   return !!usuarioActual && !!localStorage.getItem("scada_logged_user");
 }
 
-// Utilidad clínica para formatear fechas limpias
+// Formateador clínico de fechas
 function formatearFechaClinica(fechaRaw) {
   if (!fechaRaw) return new Date().toLocaleDateString();
   const d = new Date(fechaRaw);
@@ -42,7 +41,7 @@ function formatearFechaClinica(fechaRaw) {
   return d.toLocaleDateString();
 }
 
-// Cálculo de duración exacta entre marcas de tiempo
+// Cálculo de duración exacta de procesos
 function calcularDuracionTexto(horaInicio, horaFin, segRegistrados = 0) {
   if (segRegistrados && segRegistrados > 0) {
     const m = Math.floor(segRegistrados / 60);
@@ -67,16 +66,16 @@ function calcularDuracionTexto(horaInicio, horaFin, segRegistrados = 0) {
 }
 
 // =========================================================================
-// 3. CONTROLADOR DEL DESLIZADOR DE TRANSPARENCIA TOTAL (VIDRIO / GLASS)
+// 3. CONTROLADOR DE TRANSPARENCIA 3D EN TIEMPO REAL (GLASSMORPHISM)
 // =========================================================================
 window.ajustarTransparencia = function(valor) {
   const numVal = parseInt(valor, 10);
   const alpha = Math.max(0.1, Math.min(1.0, numVal / 100));
 
-  // Aplica transparencia fluida para que los circuitos se vean a través de las tarjetas
+  // Permite ver el papel tapiz de circuitos a través de las tarjetas
   document.documentElement.style.setProperty('--card-alpha', alpha.toFixed(2));
   document.documentElement.style.setProperty('--bg-card', `rgba(17, 26, 46, ${alpha.toFixed(2)})`);
-  document.documentElement.style.setProperty('--bg-surface', `rgba(10, 17, 32, ${Math.min(1.0, alpha + 0.05).toFixed(2)})`);
+  document.documentElement.style.setProperty('--bg-surface', `rgba(10, 17, 32, ${Math.min(1.0, alpha + 0.08).toFixed(2)})`);
 
   localStorage.setItem("scada_transparency", numVal);
 
@@ -84,15 +83,58 @@ window.ajustarTransparencia = function(valor) {
   if (txt) txt.innerText = `${numVal}%`;
 };
 
-function inicializarTransparenciaGuardada() {
-  const guardada = localStorage.getItem("scada_transparency") || "90";
+// =========================================================================
+// 4. MOTOR DUAL: TEMAS ORIGINALES + PAPEL TAPIZ DE CIRCUITOS EN HD
+// =========================================================================
+// 1. Tus 4 Temas Originales
+window.cambiarTema = function(nombreTema) {
+  if (!['clinical', 'cyber', 'tactical', 'hybrid'].includes(nombreTema)) nombreTema = 'tactical';
+  
+  document.documentElement.setAttribute('data-theme', nombreTema);
+  localStorage.setItem("scada_theme", nombreTema);
+
+  document.querySelectorAll('#themeBtnClinical, #themeBtnHybrid, #themeBtnCyber, #themeBtnTactical').forEach(btn => btn.classList.remove('active'));
+  const btnId = nombreTema === 'clinical' ? 'themeBtnClinical' : 
+               (nombreTema === 'hybrid' ? 'themeBtnHybrid' : 
+               (nombreTema === 'cyber' ? 'themeBtnCyber' : 'themeBtnTactical'));
+  const btnActivo = document.getElementById(btnId);
+  if (btnActivo) btnActivo.classList.add('active');
+
+  notify(`🎨 Tema activado: ${nombreTema.toUpperCase()}`, "var(--cyan)");
+};
+
+// 2. Papel Tapiz de Circuitos y Redes
+window.cambiarFondo = function(nombreFondo) {
+  const fondosPermitidos = ['circuit-board', 'neural-network', 'cyber-matrix', 'digital-core', 'carbon', 'oled'];
+  if (!fondosPermitidos.includes(nombreFondo)) nombreFondo = 'circuit-board';
+
+  document.documentElement.setAttribute('data-bg', nombreFondo);
+  localStorage.setItem("scada_bg", nombreFondo);
+
+  const select = document.getElementById("selectFondoWallpaper");
+  if (select) select.value = nombreFondo;
+
+  notify(`🖼️ Papel Tapiz activado: ${nombreFondo.toUpperCase()}`, "var(--cyan)");
+};
+
+function inicializarConfigVisualGuardada() {
+  // Restaurar Tema
+  const temaGuardado = localStorage.getItem("scada_theme") || "tactical";
+  window.cambiarTema(temaGuardado);
+
+  // Restaurar Papel Tapiz
+  const fondoGuardado = localStorage.getItem("scada_bg") || "circuit-board";
+  window.cambiarFondo(fondoGuardado);
+
+  // Restaurar Transparencia
+  const transparenciaGuardada = localStorage.getItem("scada_transparency") || "85";
   const slider = document.getElementById("rangeTransparency");
-  if (slider) slider.value = guardada;
-  window.ajustarTransparencia(guardada);
+  if (slider) slider.value = transparenciaGuardada;
+  window.ajustarTransparencia(transparenciaGuardada);
 }
 
 // =========================================================================
-// 4. DETECTOR DE CONECTIVIDAD EN TIEMPO REAL
+// 5. DETECTOR DE RED Y CONECTIVIDAD
 // =========================================================================
 window.addEventListener('online', () => {
   notify("🟢 Red restablecida. Sincronizando con Supabase...", "var(--green)");
@@ -113,42 +155,6 @@ window.addEventListener('offline', () => {
   if (dot) dot.className = "beacon offline";
   if (txt) txt.innerText = "MODO LOCAL (SIN RED)";
 });
-
-// =========================================================================
-// 5. MOTOR DEL SELECTOR DE FONDOS DE PANTALLA & CIRCUITOS
-// =========================================================================
-const MAPA_FONDOS = {
-  'circuits-cyan': 'bgOptCircuitsCyan',
-  'neural-nodes': 'bgOptNeuralNodes',
-  'bio-circuit': 'bgOptBioCircuit',
-  'nanotech-hex': 'bgOptNanotechHex',
-  'oled': 'bgOptOled',
-  'carbon': 'bgOptCarbon',
-  'aurora': 'bgOptAurora',
-  'matrix': 'bgOptMatrix',
-  'clean': 'bgOptClean'
-};
-
-window.cambiarFondo = function(nombreFondo) {
-  if (!MAPA_FONDOS[nombreFondo]) nombreFondo = 'circuits-cyan';
-  
-  document.documentElement.setAttribute('data-bg', nombreFondo);
-  localStorage.setItem("scada_bg", nombreFondo);
-
-  document.querySelectorAll('.btn-wallpaper-opt').forEach(btn => btn.classList.remove('active'));
-  const btnId = MAPA_FONDOS[nombreFondo];
-  if (btnId) {
-    const btnActivo = document.getElementById(btnId);
-    if (btnActivo) btnActivo.classList.add('active');
-  }
-
-  notify(`⚡ Fondo activado: ${nombreFondo.toUpperCase()}`, "var(--cyan)");
-};
-
-function inicializarFondoGuardado() {
-  const fondoGuardado = localStorage.getItem("scada_bg") || "circuits-cyan";
-  cambiarFondo(fondoGuardado);
-}
 
 // =========================================================================
 // 6. SINTETIZADOR DE AUDIO (ALARMAS MÉDICAS)
@@ -696,7 +702,6 @@ function procesarAlertaCriticaInmediata(mac, payload) {
   });
 }
 
-// Sincronización de Paquetes de Sesión (Autoclave -> Supabase Cloud)
 async function procesarPaqueteOfflineSync(mac, payload) {
   inicializarDispositivoSiNoExiste(mac);
   notify(`📥 Guardando paquete clínico de [${mac}]...`, "var(--purple)");
@@ -735,14 +740,8 @@ async function procesarPaqueteOfflineSync(mac, payload) {
   if (sbClient) {
     try { 
       const { error } = await sbClient.from('reportes_autoclaves').upsert(reportObj, { onConflict: 'session_id' }); 
-      if (!error) {
-        guardadoEnNube = true;
-      } else {
-        console.error("Error al guardar en Supabase:", error);
-      }
-    } catch(err) {
-      console.error("Excepción Supabase:", err);
-    }
+      if (!error) guardadoEnNube = true;
+    } catch(err) {}
   }
 
   if (db) {
@@ -772,18 +771,13 @@ function procesarMetaGlobal(mac, metaData) {
   }
 }
 
-// Sincronización en vivo del odómetro de ciclos
 function procesarTelemetriaReal(mac, data) {
   inicializarDispositivoSiNoExiste(mac);
   fleet[mac].lastSeen = Date.now();
 
   if (data.cfg) {
-    if (data.cfg.ciclos !== undefined) {
-      fleet[mac].meta.ciclosCompletados = data.cfg.ciclos;
-    }
-    if (data.cfg.lim_mant !== undefined) {
-      fleet[mac].meta.limiteMantenimiento = data.cfg.lim_mant;
-    }
+    if (data.cfg.ciclos !== undefined) fleet[mac].meta.ciclosCompletados = data.cfg.ciclos;
+    if (data.cfg.lim_mant !== undefined) fleet[mac].meta.limiteMantenimiento = data.cfg.lim_mant;
 
     if (fleet[mac]._pendingLock && fleet[mac].datos.cfg) {
       const ahora = Date.now();
@@ -835,7 +829,7 @@ function getConnectionQuality(dev) {
 }
 
 // =========================================================================
-// 13. DASHBOARD ADAPTATIVO & CÁLCULO DE ODÓMETRO REAL
+// 13. DASHBOARD ADAPTATIVO & ODÓMETRO
 // =========================================================================
 window.setFleetHealthFilter = function(filterType) {
   currentHealthFilter = filterType;
@@ -956,7 +950,7 @@ function actualizarCardDashboard(mac) {
       <div class="health-bar"><div class="health-fill ${mantClass}" style="width: ${pct}%;"></div></div>
     </div>
 
-    <div style="background: var(--bg-surface); border: 1px solid var(--border-subtle); padding: 8px 10px; border-radius: 6px; font-size: 0.72rem; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
+    <div style="background: rgba(10, 17, 32, 0.6); border: 1px solid var(--border-subtle); padding: 8px 10px; border-radius: 6px; font-size: 0.72rem; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
       <span style="color: var(--text-muted); font-weight: 800; font-size: 0.68rem;">FASE ACTUAL:</span> 
       <span style="color: ${faseColor}; font-weight: 900; letter-spacing: 0.8px; text-align: right; word-break: break-word;">${faseTexto}</span>
     </div>
@@ -1016,7 +1010,6 @@ function switchDetailTab(tabId) {
   }
 }
 
-// Botón de reseteo físico de odómetro
 window.resetearOdometroHardware = function() {
   if (!currentInspectedMAC) return notify("Selecciona un equipo primero", "var(--amber)");
   if (usuarioActual && usuarioActual.rol !== "SUPERADMIN") return notify("Permiso denegado: solo SUPERADMIN", "var(--red)");
@@ -1096,7 +1089,6 @@ function generarUIEsquemaDinamico(mac) {
   }
 }
 
-// AUTO-DIMENSIONAMIENTO DINÁMICO EN VIVO (EVITA QUE "FINALIZADO CON EXITO" DESBORDE)
 function actualizarPantallaDetalleDinamica() {
   if (!currentInspectedMAC || !fleet[currentInspectedMAC]) return;
   const item = fleet[currentInspectedMAC];
@@ -1225,11 +1217,7 @@ window.guardarFichaDetalle = async function() {
   if (sbClient) {
     try { 
       const { error } = await sbClient.from('asignaciones_equipos').upsert(metaData, { onConflict: 'mac' }); 
-      if (!error) {
-        guardadoNube = true;
-      } else {
-        console.error("Error al guardar equipo en Supabase:", error);
-      }
+      if (!error) guardadoNube = true;
     } catch(e) {}
   }
   if (db) {
@@ -1294,7 +1282,7 @@ window.eliminarEquipoTotal = async function(mac) {
 };
 
 // =========================================================================
-// 15. HISTORIAL DE CICLOS DEL EQUIPO (CONSULTA DIRECTA POR MAC A SUPABASE)
+// 15. HISTORIAL DE CICLOS DEL EQUIPO (CONSULTA POR MAC)
 // =========================================================================
 async function cargarLogsDetalle(mac) {
   const tbody = document.getElementById("detLogsTbody");
@@ -1356,7 +1344,7 @@ function renderLogsDetalleFilas(logs, tbody) {
 }
 
 // =========================================================================
-// 16. GESTIÓN DE MANTENIMIENTOS CLÍNICOS & ALARMAS (8:00 AM)
+// 16. MANTENIMIENTOS CLÍNICOS & ALERTAS
 // =========================================================================
 window.guardarProgramacionMantenimiento = async function() {
   if (!currentInspectedMAC) return notify("Selecciona un equipo primero", "var(--amber)");
@@ -1383,7 +1371,6 @@ window.guardarProgramacionMantenimiento = async function() {
     try {
       const { error } = await sbClient.from('mantenimientos_equipos').insert([registroMaint]);
       if (!error) guardadoNube = true;
-      else console.error("Error al agendar mantenimiento:", error);
     } catch(e) {}
   }
 
@@ -1481,15 +1468,12 @@ function verificarAlarmasMantenimiento(items) {
   if (alerta) {
     banner.style.display = "block";
     bannerText.innerText = alerta;
-    if (horaActual >= 8) {
-      sonarAlarmaSonora();
-    }
+    if (horaActual >= 8) sonarAlarmaSonora();
   } else {
     banner.style.display = "none";
   }
 }
 
-// Exportar mantenimientos a Microsoft Excel
 window.exportarMantenimientosExcel = function() {
   if (!currentInspectedMAC) return notify("Selecciona un autoclave primero", "var(--amber)");
   const item = fleet[currentInspectedMAC];
@@ -1529,7 +1513,6 @@ window.exportarMantenimientosExcel = function() {
     });
 };
 
-// Imprimir Acta Oficial de Mantenimiento en PDF
 window.imprimirActaMantenimiento = function() {
   if (!currentInspectedMAC) return notify("Selecciona un autoclave primero", "var(--amber)");
   const item = fleet[currentInspectedMAC];
@@ -1642,9 +1625,7 @@ async function renderizarRegistros() {
         pintarTablaReportes(items, fType, fText, tbody);
         return;
       }
-    } catch(err) {
-      console.error("Excepción en renderizarRegistros:", err);
-    }
+    } catch(err) {}
   }
 
   if (!navigator.onLine && db) {
@@ -1752,7 +1733,7 @@ function pintarTablaReportes(items, fType, fText, tbody) {
 }
 
 // =========================================================================
-// 18. VISOR DETALLADO DEL PAQUETE CON DESGLOSE DE FASES Y FALLOS
+// 18. VISOR DETALLADO DEL PAQUETE CON FASES Y FALLOS
 // =========================================================================
 window.verPaqueteSesion = function(sessionId) {
   const ses = reportesCache.find(x => x.sessionId === sessionId);
@@ -2144,7 +2125,7 @@ function renderFotaLiveList() {
     const meta = item.meta || { alias: mac, modelo: "Autoclave" };
     const online = isOnline(item);
     return `
-      <label style="display:flex; align-items:center; gap:10px; background:var(--bg-card); border:1px solid var(--border-subtle); padding:10px 14px; border-radius:4px; margin-bottom:8px; cursor:pointer;">
+      <label style="display:flex; align-items:center; gap:10px; background:rgba(17, 26, 46, 0.65); border:1px solid var(--border-subtle); padding:10px 14px; border-radius:4px; margin-bottom:8px; cursor:pointer;">
         <input type="checkbox" class="fota-target-check" value="${mac}" ${online ? 'checked' : ''} style="width:18px; height:18px; accent-color:var(--cyan);">
         <div style="flex:1;">
           <div style="font-weight:800; color:var(--cyan); font-size:0.85rem;">${meta.alias}</div>
@@ -2309,14 +2290,10 @@ function aplicarPermisosRol() {
   }
 
   const btnDetDel = document.getElementById("btnDetDeleteDevice");
-  if (btnDetDel) {
-    btnDetDel.style.display = esAdmin ? 'inline-flex' : 'none';
-  }
+  if (btnDetDel) btnDetDel.style.display = esAdmin ? 'inline-flex' : 'none';
 
   const btnDetOdom = document.getElementById("btnDetResetOdometer");
-  if (btnDetOdom) {
-    btnDetOdom.style.display = esAdmin ? 'inline-flex' : 'none';
-  }
+  if (btnDetOdom) btnDetOdom.style.display = esAdmin ? 'inline-flex' : 'none';
 }
 
 async function cargarUsuariosUI() {
@@ -2625,7 +2602,7 @@ window.guardarNuevaContrasena = async function() {
 };
 
 // =========================================================================
-// 23. REFRESCO PERIÓDICO DEL MONITOR
+// 23. REFRESCO PERIÓDICO DEL MONITOR Y CARGA INICIAL
 // =========================================================================
 setInterval(() => {
   if (currentActivity === 'act-telemetry') {
@@ -2634,8 +2611,8 @@ setInterval(() => {
 }, 2000);
 
 window.addEventListener("load", () => {
-  inicializarFondoGuardado();
-  inicializarTransparenciaGuardada();
+  inicializarConfigVisualGuardada();
   initDB();
   initMQTT();
 });
+
