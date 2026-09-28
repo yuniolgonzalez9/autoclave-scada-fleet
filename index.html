@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es" data-bg="circuits-cyan">
+<html lang="es" data-theme="tactical" data-bg="circuit-board">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
@@ -19,7 +19,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;800&family=Orbitron:wght@600;800;900&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="style.css?v=21">
+  <link rel="stylesheet" href="style.css?v=22">
   
   <!-- Dependencias Externas -->
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
@@ -93,47 +93,45 @@
         <div class="gear-dropdown" id="gearDropdownMenu">
           <div class="dropdown-header">PANEL DE CONTROL TÉCNICO</div>
           
-          <!-- SELECTOR VISUAL DE FONDOS DE PANTALLA Y CIRCUITOS -->
-          <div class="wallpaper-picker-box">
-            <div class="wallpaper-picker-header">⚡ FONDO // CIRCUITOS & NANO-RED:</div>
-            <div class="wallpaper-picker-grid">
-              <button class="btn-wallpaper-opt" id="bgOptCircuitsCyan" onclick="cambiarFondo('circuits-cyan')">
-                <span>⚡</span> Cyan PCB
-              </button>
-              <button class="btn-wallpaper-opt" id="bgOptNeuralNodes" onclick="cambiarFondo('neural-nodes')">
-                <span>🌐</span> Nodos
-              </button>
-              <button class="btn-wallpaper-opt" id="bgOptBioCircuit" onclick="cambiarFondo('bio-circuit')">
-                <span>🩺</span> Bio PCB
-              </button>
-              <button class="btn-wallpaper-opt" id="bgOptNanotechHex" onclick="cambiarFondo('nanotech-hex')">
-                <span>💠</span> Nano Hex
-              </button>
-              <button class="btn-wallpaper-opt" id="bgOptOled" onclick="cambiarFondo('oled')">
-                <span>⚫</span> OLED
-              </button>
-              <button class="btn-wallpaper-opt" id="bgOptCarbon" onclick="cambiarFondo('carbon')">
-                <span>🏁</span> Carbón
-              </button>
-              <button class="btn-wallpaper-opt" id="bgOptAurora" onclick="cambiarFondo('aurora')">
-                <span>🌌</span> Aurora
-              </button>
-              <button class="btn-wallpaper-opt" id="bgOptMatrix" onclick="cambiarFondo('matrix')">
-                <span>🟩</span> Matrix
-              </button>
-              <button class="btn-wallpaper-opt" id="bgOptClean" onclick="cambiarFondo('clean')">
-                <span>⚪</span> Quirúrgico
-              </button>
-            </div>
+          <!-- 1. TUS 4 TEMAS VISUALES ORIGINALES (INTACTOS) -->
+          <div class="theme-picker-header" style="font-size:0.65rem; font-weight:800; color:var(--cyan); padding:8px 14px 4px 14px;">🎨 TEMA VISUAL:</div>
+          <div class="theme-picker-grid">
+            <button class="btn-theme-opt" id="themeBtnClinical" onclick="cambiarTema('clinical')">
+              <span>🏥</span> Clínico
+            </button>
+            <button class="btn-theme-opt" id="themeBtnHybrid" onclick="cambiarTema('hybrid')">
+              <span>⚡</span> Híbrido
+            </button>
+            <button class="btn-theme-opt" id="themeBtnCyber" onclick="cambiarTema('cyber')">
+              <span>🌙</span> Cyber
+            </button>
+            <button class="btn-theme-opt active" id="themeBtnTactical" onclick="cambiarTema('tactical')">
+              <span>🛡️</span> Pizarra
+            </button>
           </div>
 
-          <!-- DESLIZADOR DE TRANSPARENCIA TOTAL (0% A 100%) -->
+          <!-- 2. SELECTOR DE PAPEL TAPIZ / WALLPAPER DE CIRCUITOS REALES -->
+          <div class="wallpaper-picker-box">
+            <label style="font-size:0.65rem; font-weight:800; color:var(--cyan); display:block; margin-bottom:6px;">
+              🖼️ PAPEL TAPIZ (CIRCUITOS & HD):
+            </label>
+            <select id="selectFondoWallpaper" class="input-field" style="margin-bottom:0; font-size:0.75rem; padding:8px;" onchange="cambiarFondo(this.value)">
+              <option value="circuit-board">⚡ Microchip & Pistas PCB Neón</option>
+              <option value="neural-network">🌐 Red Neuronal & Conexiones de Datos</option>
+              <option value="cyber-matrix">🏙️ Matriz Cyberpunk & Servidores</option>
+              <option value="digital-core">💻 Terminal Binaria & Núcleo SCADA</option>
+              <option value="carbon">🏁 Fibra de Carbono 3D</option>
+              <option value="oled">⚫ Negro OLED Cósmico</option>
+            </select>
+          </div>
+
+          <!-- 3. DESLIZADOR DE TRANSPARENCIA 3D (0% A 100%) -->
           <div class="wallpaper-picker-box" style="border-top:none;">
             <div style="display:flex; justify-content:space-between; font-size:0.65rem; font-weight:800; color:var(--cyan); margin-bottom:6px;">
               <span>🎛️ TRANSPARENCIA DE PANELES:</span>
-              <span id="transparencyValTxt">90%</span>
+              <span id="transparencyValTxt">85%</span>
             </div>
-            <input type="range" class="input-field" style="height:20px; padding:0; margin:0;" id="rangeTransparency" min="10" max="100" value="90" oninput="ajustarTransparencia(this.value)">
+            <input type="range" class="input-field" style="height:20px; padding:0; margin:0;" id="rangeTransparency" min="10" max="100" value="85" oninput="ajustarTransparencia(this.value)">
           </div>
 
           <div class="dropdown-separator"></div>
@@ -735,6 +733,6 @@
     </button>
   </nav>
 
-  <script src="app.js?v=21"></script>
+  <script src="app.js?v=22"></script>
 </body>
 </html>
