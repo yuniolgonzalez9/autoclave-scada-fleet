@@ -10,7 +10,7 @@ const sbClient = (window.supabase && window.supabase.createClient)
   : null;
 
 // =========================================================================
-// 2. ESTADO GLOBAL, SESIÓN SÍNCRONA INMEDIATA Y NAVEGACIÓN
+// 2. ESTADO GLOBAL, SESIÓN SÍNCRONA Y VARIABLES
 // =========================================================================
 let activityStack = ['act-login'];
 let currentTopLevel = 'act-telemetry';
@@ -24,7 +24,13 @@ let ultimoToqueAtras = 0;
 let audioCtx = null;
 let modalConfirmCallback = null;
 
-// RESTAURACIÓN SÍNCRONA INMEDIATA (EVITA EXPULSIÓN INVOLUNTARIA AL LOGIN)
+// CONTROL DE INACTIVIDAD INTELIGENTE (14 MIN ACTIVIDAD + 1 MIN CUENTA REGRESIVA = 15 MIN)
+let idleTimer = null;
+let countdownInterval = null;
+const IDLE_LIMIT_MS = 14 * 60 * 1000;
+let countdownSeconds = 60;
+
+// RESTAURACIÓN SÍNCRONA DE SESIÓN
 (function restaurarSesionSincrona() {
   const sesionGuardada = localStorage.getItem("scada_logged_user");
   if (sesionGuardada) {
@@ -38,6 +44,42 @@ let modalConfirmCallback = null;
 
 function estaAutenticado() {
   return !!usuarioActual && !!localStorage.getItem("scada_logged_user");
+}
+
+// Detector forense de terminal/dispositivo
+function detectarDispositivo() {
+  const ua = navigator.userAgent;
+  let so = "Dispositivo Desconocido";
+  if (ua.includes("Win")) so = "Windows PC";
+  else if (ua.includes("Mac")) so = "macOS";
+  else if (ua.includes("Android")) so = "Android Móvil";
+  else if (ua.includes("iPhone") || ua.includes("iPad")) so = "iOS / iPhone";
+  else if (ua.includes("Linux")) so = "Linux";
+
+  let nav = "Web";
+  if (ua.includes("Chrome") && !ua.includes("Edg")) nav = "Chrome";
+  else if (ua.includes("Edg")) nav = "Edge";
+  else if (ua.includes("Safari") && !ua.includes("Chrome")) nav = "Safari";
+  else if (ua.includes("Firefox")) nav = "Firefox";
+
+  return `${so} (${nav})`;
+}
+
+// Registro forense en Supabase
+async function registrarAuditoriaAcceso(usuario, rol, evento, detalles = '') {
+  if (!sbClient) return;
+  try {
+    await sbClient.from('auditoria_accesos').insert([{
+      usuario: usuario || 'ANÓNIMO',
+      rol: rol || 'OPERADOR',
+      evento: evento,
+      dispositivo: detectarDispositivo(),
+      detalles: detalles,
+      created_at: new Date().toISOString()
+    }]);
+  } catch(e) {
+    console.warn("Fallo registro auditoría:", e);
+  }
 }
 
 // Utilidad clínica para formatear fechas limpias
@@ -54,7 +96,6 @@ function formatearFechaClinica(fechaRaw) {
   return d.toLocaleDateString();
 }
 
-// Cálculo de duración exacta entre marcas de tiempo
 function calcularDuracionTexto(horaInicio, horaFin, segRegistrados = 0) {
   if (segRegistrados && segRegistrados > 0) {
     const m = Math.floor(segRegistrados / 60);
@@ -68,7 +109,7 @@ function calcularDuracionTexto(horaInicio, horaFin, segRegistrados = 0) {
     if (pI.length >= 2 && pF.length >= 2) {
       let sI = pI[0] * 3600 + pI[1] * 60 + (pI[2] || 0);
       let sF = pF[0] * 3600 + pF[1] * 60 + (pF[2] || 0);
-      if (sF < sI) sF += 86400; // Cruce de medianoche
+      if (sF < sI) sF += 86400;
       const diff = sF - sI;
       const m = Math.floor(diff / 60);
       const s = diff % 60;
@@ -79,13 +120,12 @@ function calcularDuracionTexto(horaInicio, horaFin, segRegistrados = 0) {
 }
 
 // =========================================================================
-// 3. CONTROLADOR DE TRANSPARENCIA ULTRA-GLASS (0% A 100% DINÁMICO)
+// 3. CONTROLADOR DE TRANSPARENCIA ULTRA-GLASS (0% A 100%)
 // =========================================================================
 window.ajustarTransparencia = function(valor) {
   const numVal = parseInt(valor, 10);
   const alpha = Math.max(0.0, Math.min(1.0, numVal / 100));
 
-  // Modifica EXCLUSIVAMENTE la variable alpha para que cada tema gestione su color sin pisarse
   document.documentElement.style.setProperty('--card-alpha', alpha.toFixed(2));
   localStorage.setItem("scada_transparency", numVal);
 
@@ -199,7 +239,7 @@ function sonarAlarmaSonora() {
 }
 
 // =========================================================================
-// 7. VENTANA EMERGENTE FLOTANTE CENTRALIZADA (MODAL)
+// 7. VENTANAS EMERGENTES (MODALES DE CONFIRMACIÓN & SEGURIDAD)
 // =========================================================================
 function mostrarModalConfirmacion({ icon = '⚠️', title = 'CONFIRMAR ACCIÓN', msg = '¿Deseas continuar?', okText = 'EJECUTAR', okClass = 'btn-danger', onConfirm = null }) {
   modalConfirmCallback = onConfirm;
@@ -227,6 +267,57 @@ window.cerrarModalConfirmacion = function(confirmado) {
   }
   modalConfirmCallback = null;
 };
+
+// Temporizador de inactividad
+function resetearTemporizadorInactividad() {
+  if (!estaAutenticado()) return;
+
+  const overlay = document.getElementById("modalTimeoutOverlay");
+  if (overlay && overlay.style.display === "grid") return;
+
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(mostrarAdvertenciaInactividad, IDLE_LIMIT_MS);
+}
+
+function mostrarAdvertenciaInactividad() {
+  if (!estaAutenticado()) return;
+  const overlay = document.getElementById("modalTimeoutOverlay");
+  const cnt = document.getElementById("timeoutCountdown");
+  if (!overlay || !cnt) return;
+
+  countdownSeconds = 60;
+  cnt.innerText = countdownSeconds;
+  overlay.style.display = "grid";
+  sonarAlarmaSonora();
+
+  clearInterval(countdownInterval);
+  countdownInterval = setInterval(() => {
+    countdownSeconds--;
+    cnt.innerText = countdownSeconds;
+    if (countdownSeconds <= 0) {
+      clearInterval(countdownInterval);
+      overlay.style.display = "none";
+      if (usuarioActual) {
+        registrarAuditoriaAcceso(usuarioActual.user, usuarioActual.rol, 'TIMEOUT_INACTIVIDAD', 'Cierre automático tras 15 minutos desatendido');
+      }
+      cerrarSesionManual();
+      notify("⚠️ Sesión cerrada por inactividad hospitalaria", "var(--amber)");
+    }
+  }, 1000);
+}
+
+window.extenderSesionInactividad = function() {
+  clearInterval(countdownInterval);
+  const overlay = document.getElementById("modalTimeoutOverlay");
+  if (overlay) overlay.style.display = "none";
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(mostrarAdvertenciaInactividad, IDLE_LIMIT_MS);
+  notify("✅ Sesión extendida con éxito", "var(--green)");
+};
+
+['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'click'].forEach(evt => {
+  window.addEventListener(evt, resetearTemporizadorInactividad, { passive: true });
+});
 
 window.pedirConfirmacionComando = function(cmd, msg, btnText) {
   if (usuarioActual && usuarioActual.rol === "OPERADOR" && cmd !== 'INICIAR_CICLO') {
@@ -370,7 +461,10 @@ function renderScreen(screenId) {
   if (screenId === 'act-fleet-mgmt') renderFleetMgmtTable();
   if (screenId === 'act-reports') renderizarRegistros();
   if (screenId === 'act-telemetry') renderFleetDashboard();
-  if (screenId === 'act-users') cargarUsuariosUI();
+  if (screenId === 'act-users') {
+    cargarUsuariosUI();
+    cargarBitacoraAccesos();
+  }
 
   if (!esPublico) aplicarPermisosRol();
 }
@@ -398,7 +492,7 @@ function notify(msg, color = 'var(--cyan)') {
 }
 
 // =========================================================================
-// 9. NAVEGACIÓN Y MENÚ ENGRANAJE (CON CIERRE INTELIGENTE SEGURO)
+// 9. NAVEGACIÓN Y MENÚ ENGRANAJE
 // =========================================================================
 window.toggleHorizontalDock = function() {
   const dock = document.getElementById("desktopNavBar");
@@ -421,7 +515,6 @@ window.closeGearMenu = function() {
   if (menu) menu.style.display = "none";
 };
 
-// Cierra el menú solo cuando el usuario hace clic FUERA de él
 document.addEventListener("click", (e) => {
   const menu = document.getElementById("gearDropdownMenu");
   const btn = document.getElementById("btnGearToggle");
@@ -451,8 +544,15 @@ window.alternarPantallaCompleta = function() {
 };
 
 window.cerrarSesionManual = function() {
+  if (usuarioActual) {
+    registrarAuditoriaAcceso(usuarioActual.user, usuarioActual.rol, 'CIERRE_SESION', 'Cierre de sesión manual');
+  }
+
   usuarioActual = null;
   currentInspectedMAC = null;
+  clearTimeout(idleTimer);
+  clearInterval(countdownInterval);
+
   localStorage.removeItem("scada_logged_user");
   localStorage.removeItem("scada_nav_route_v5");
 
@@ -471,7 +571,7 @@ window.cerrarSesionManual = function() {
   history.replaceState({ app: 'login' }, '', window.location.pathname);
   renderScreen('act-login');
   cargarListaUsuariosLogin();
-  notify("🔒 Sesión destruida y sistema bloqueado", "var(--red)");
+  notify("🔒 Sesión finalizada con seguridad", "var(--red)");
 };
 
 // =========================================================================
@@ -499,7 +599,7 @@ window.solicitarLimpiezaCacheLocal = function() {
 };
 
 // =========================================================================
-// 11. BASE DE DATOS LOCAL Y TIEMPO REAL NUBE
+// 11. BASE DE DATOS LOCAL Y TIEMPO REAL NUBE (KILL-SWITCH EN VIVO)
 // =========================================================================
 let db = null;
 const fleet = {};
@@ -560,11 +660,45 @@ function iniciarSuscripcionNubeRealtime() {
       })
       .subscribe();
 
+    // KILL-SWITCH Y MODIFICACIÓN EN CALIENTE DE ROLES / ESTADO
     sbClient
       .channel('realtime_usuarios_canal')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'usuarios_scada' }, () => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'usuarios_scada' }, (payload) => {
         cargarUsuariosUI();
         cargarListaUsuariosLogin();
+
+        if (usuarioActual && payload.new && payload.new.user.toLowerCase() === usuarioActual.user.toLowerCase()) {
+          // Si el admin suspende la cuenta en tiempo real
+          if (payload.new.estado === 'SUSPENDIDO') {
+            cerrarSesionManual();
+            sonarAlarmaSonora();
+            mostrarModalConfirmacion({
+              icon: '🚫',
+              title: 'CUENTA SUSPENDIDA',
+              msg: 'Tu cuenta ha sido bloqueada en vivo por el Administrador. El acceso ha sido revocado.',
+              okText: 'ENTENDIDO',
+              okClass: 'btn-danger',
+              onConfirm: () => {}
+            });
+            return;
+          }
+          // Si cambian su jerarquía/rol en caliente
+          if (payload.new.rol !== usuarioActual.rol) {
+            usuarioActual.rol = payload.new.rol;
+            localStorage.setItem("scada_logged_user", JSON.stringify(usuarioActual));
+            const badge = document.getElementById("currentUserRoleBadge");
+            if (badge) badge.innerText = usuarioActual.rol;
+            aplicarPermisosRol();
+            notify(`⚡ Tu jerarquía fue actualizada a: ${usuarioActual.rol}`, "var(--cyan)");
+          }
+        }
+      })
+      .subscribe();
+
+    sbClient
+      .channel('realtime_auditoria_canal')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'auditoria_accesos' }, () => {
+        if (currentActivity === 'act-users') cargarBitacoraAccesos();
       })
       .subscribe();
 
@@ -1247,7 +1381,7 @@ window.guardarFichaDetalle = async function() {
     try { 
       const { error } = await sbClient.from('asignaciones_equipos').upsert(metaData, { onConflict: 'mac' }); 
       if (!error) guardadoNube = true;
-    } catch(e) {}
+    } catch(err) {}
   }
   if (db) {
     const tx = db.transaction(["asignaciones"], "readwrite");
@@ -1311,7 +1445,7 @@ window.eliminarEquipoTotal = async function(mac) {
 };
 
 // =========================================================================
-// 15. HISTORIAL DE CICLOS DEL EQUIPO (CONSULTA POR MAC)
+// 15. HISTORIAL DE CICLOS DEL EQUIPO
 // =========================================================================
 async function cargarLogsDetalle(mac) {
   const tbody = document.getElementById("detLogsTbody");
@@ -2297,7 +2431,7 @@ function actualizarSelectoresGlobales() {
 }
 
 // =========================================================================
-// 22. JERARQUÍA ESTRICTA (RBAC) & GESTIÓN DE USUARIOS
+// 22. JERARQUÍA ESTRICTA (RBAC), GESTIÓN CLOUD & AUDITORÍA FORENSE
 // =========================================================================
 function aplicarPermisosRol() {
   if (!usuarioActual) return;
@@ -2327,6 +2461,7 @@ function aplicarPermisosRol() {
   if (btnDetOdom) btnDetOdom.style.display = esAdmin ? 'inline-flex' : 'none';
 }
 
+// Cargar usuarios con estado en tiempo real y opciones
 async function cargarUsuariosUI() {
   const tbody = document.getElementById("tablaUsuariosBody");
   if (!tbody) return;
@@ -2361,18 +2496,129 @@ async function cargarUsuariosUI() {
 
 function renderizarFilasUsuarios(users, tbody) {
   if (!users.length) {
-    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:14px;">No hay usuarios registrados en la nube.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:14px;">No hay usuarios registrados en la nube.</td></tr>`;
     return;
   }
-  tbody.innerHTML = users.map(u => `
-    <tr>
-      <td style="font-weight:800; color:var(--cyan);">${u.user}</td>
-      <td><span class="user-role">${u.rol}</span></td>
-      <td style="font-size:0.7rem; color:var(--text-muted);">${u.email || '--'}</td>
-      <td>${formatearFechaClinica(u.created_at || u.fecha)}</td>
-      <td>${u.user !== 'admin' ? `<button class="btn btn-sm btn-danger" onclick="eliminarUsuario('${u.user}')">X</button>` : '--'}</td>
-    </tr>
-  `).join("");
+  tbody.innerHTML = users.map(u => {
+    const estado = u.estado || 'ACTIVO';
+    const esActivo = estado === 'ACTIVO';
+    const esAdminRaiz = u.user === 'admin';
+
+    return `
+      <tr>
+        <td style="font-weight:800; color:var(--cyan);">${u.user}</td>
+        <td>
+          <button class="btn btn-sm" style="padding:2px 8px; font-size:0.62rem;" onclick="cambiarRolUsuario('${u.user}', '${u.rol}')" title="Clic para alternar jerarquía">
+            ${u.rol} 🔄
+          </button>
+        </td>
+        <td>
+          <span class="status-badge" style="color:${esActivo ? 'var(--green)' : 'var(--red)'}; border-color:${esActivo ? 'var(--green)' : 'var(--red)'};">
+            <span class="dot ${esActivo ? 'online' : 'offline'}"></span> ${estado}
+          </span>
+        </td>
+        <td style="font-size:0.68rem; color:var(--text-muted);">${formatearFechaClinica(u.ultimo_acceso || u.created_at)}</td>
+        <td style="font-size:0.68rem; color:var(--text-muted);">${u.dispositivo_reciente || '--'}</td>
+        <td>
+          <div style="display:flex; gap:4px;">
+            ${!esAdminRaiz ? `
+              <button class="btn btn-sm ${esActivo ? 'btn-warn' : 'btn-success'}" style="padding:2px 6px; font-size:0.65rem;" onclick="toggleEstadoUsuario('${u.user}', '${estado}')" title="${esActivo ? 'Suspender acceso' : 'Habilitar acceso'}">
+                ${esActivo ? '⏸️ Bloquear' : '▶️ Activar'}
+              </button>
+              <button class="btn btn-sm btn-danger" style="padding:2px 6px;" onclick="eliminarUsuario('${u.user}')" title="Eliminar definitivamente">🗑️</button>
+            ` : '<span style="color:var(--text-muted); font-size:0.65rem;">PROTEGIDO</span>'}
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+// Alternar estado ACTIVO <-> SUSPENDIDO
+window.toggleEstadoUsuario = async function(user, estadoActual) {
+  if (usuarioActual && usuarioActual.rol !== "SUPERADMIN") return notify("Permiso denegado: solo SUPERADMIN", "var(--red)");
+  if (user === 'admin') return notify("No se puede suspender al administrador raíz", "var(--amber)");
+
+  const nuevoEstado = (estadoActual === 'ACTIVO') ? 'SUSPENDIDO' : 'ACTIVO';
+  mostrarModalConfirmacion({
+    icon: nuevoEstado === 'SUSPENDIDO' ? '🔒' : '🔓',
+    title: nuevoEstado === 'SUSPENDIDO' ? 'SUSPENDER CUENTA' : 'ACTIVAR CUENTA',
+    msg: `¿Confirmas cambiar el estado del usuario [${user.toUpperCase()}] a ${nuevoEstado}?`,
+    okText: nuevoEstado === 'SUSPENDIDO' ? 'SUSPENDER ACCESO' : 'ACTIVAR ACCESO',
+    okClass: nuevoEstado === 'SUSPENDIDO' ? 'btn-danger' : 'btn-success',
+    onConfirm: async () => {
+      if (sbClient) {
+        await sbClient.from('usuarios_scada').update({ estado: nuevoEstado }).eq('user', user);
+        await registrarAuditoriaAcceso(usuarioActual.user, usuarioActual.rol, 'CAMBIO_ESTADO', `Usuario [${user}] establecido como ${nuevoEstado}`);
+      }
+      cargarUsuariosUI();
+      notify(`Usuario [${user.toUpperCase()}] ahora está ${nuevoEstado}`, nuevoEstado === 'ACTIVO' ? "var(--green)" : "var(--red)");
+    }
+  });
+};
+
+// Alternar jerarquía RBAC
+window.cambiarRolUsuario = async function(user, rolActual) {
+  if (usuarioActual && usuarioActual.rol !== "SUPERADMIN") return notify("Permiso denegado: solo SUPERADMIN", "var(--red)");
+  if (user === 'admin') return notify("El administrador raíz siempre es SUPERADMIN", "var(--amber)");
+
+  const roles = ['OPERADOR', 'TECNICO', 'SUPERADMIN'];
+  const nextRolIndex = (roles.indexOf(rolActual) + 1) % roles.length;
+  const nuevoRol = roles[nextRolIndex];
+
+  mostrarModalConfirmacion({
+    icon: '🛡️',
+    title: 'MODIFICAR JERARQUÍA',
+    msg: `¿Deseas cambiar el rango de [${user.toUpperCase()}] de ${rolActual} a ${nuevoRol}?`,
+    okText: `ASIGNAR: ${nuevoRol}`,
+    okClass: 'btn-primary',
+    onConfirm: async () => {
+      if (sbClient) {
+        await sbClient.from('usuarios_scada').update({ rol: nuevoRol }).eq('user', user);
+        await registrarAuditoriaAcceso(usuarioActual.user, usuarioActual.rol, 'CAMBIO_JERARQUIA', `Usuario [${user}] cambiado a ${nuevoRol}`);
+      }
+      cargarUsuariosUI();
+      notify(`Jerarquía de [${user.toUpperCase()}] actualizada a ${nuevoRol}`, "var(--green)");
+    }
+  });
+};
+
+// Cargar la bitácora forense de accesos
+async function cargarBitacoraAccesos() {
+  const tbody = document.getElementById("tablaBitacoraAccesosBody");
+  if (!tbody || !sbClient) return;
+
+  try {
+    const { data, error } = await sbClient
+      .from('auditoria_accesos')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(30);
+
+    if (!error && data && data.length) {
+      tbody.innerHTML = data.map(log => {
+        let colorStyle = 'var(--cyan)';
+        if (log.evento === 'LOGIN_EXITOSO') colorStyle = 'var(--green)';
+        else if (log.evento === 'CLAVE_INCORRECTA' || log.evento === 'CUENTA_SUSPENDIDA') colorStyle = 'var(--red)';
+        else if (log.evento === 'TIMEOUT_INACTIVIDAD') colorStyle = 'var(--amber)';
+
+        return `
+          <tr>
+            <td style="color:var(--cyan); font-weight:700;">${formatearFechaClinica(log.created_at)} ${new Date(log.created_at).toLocaleTimeString()}</td>
+            <td style="font-weight:800; color:var(--text-main);">${log.usuario.toUpperCase()}</td>
+            <td><span class="user-role">${log.rol}</span></td>
+            <td><span class="status-badge" style="color:${colorStyle}; border-color:${colorStyle}; font-size:0.65rem;">${log.evento}</span></td>
+            <td style="font-size:0.7rem; color:var(--text-muted);">${log.dispositivo || '--'}</td>
+            <td style="font-size:0.7rem; color:var(--text-muted);">${log.detalles || '--'}</td>
+          </tr>
+        `;
+      }).join('');
+    } else {
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:16px;">Sin registros recientes en la bitácora.</td></tr>`;
+    }
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:16px;">Error de lectura en Supabase.</td></tr>`;
+  }
 }
 
 window.crearUsuario = async function() {
@@ -2384,14 +2630,25 @@ window.crearUsuario = async function() {
 
   if (!user || pass.length < 4) return notify("Mínimo 4 caracteres para la clave", "var(--red)");
 
-  const nuevoUsuario = { user, pass, rol, email, created_at: new Date().toISOString() };
+  const nuevoUsuario = { 
+    user, 
+    pass, 
+    rol, 
+    email, 
+    estado: 'ACTIVO',
+    dispositivo_reciente: detectarDispositivo(),
+    created_at: new Date().toISOString() 
+  };
 
   let guardadoEnNube = false;
 
   if (sbClient) {
     try {
       const { error } = await sbClient.from('usuarios_scada').upsert(nuevoUsuario, { onConflict: 'user' });
-      if (!error) guardadoEnNube = true;
+      if (!error) {
+        guardadoEnNube = true;
+        await registrarAuditoriaAcceso(usuarioActual.user, usuarioActual.rol, 'CREACION_USUARIO', `Cuenta [${user}] registrada como ${rol}`);
+      }
     } catch(e) {}
   }
 
@@ -2408,7 +2665,7 @@ window.crearUsuario = async function() {
 
   cargarUsuariosUI();
   cargarListaUsuariosLogin();
-  notify(guardadoEnNube ? `☁️ Usuario [${user.toUpperCase()}] guardado en la nube con rol ${rol}` : `Usuario [${user.toUpperCase()}] guardado localmente`, "var(--green)");
+  notify(guardadoEnNube ? `☁️ Cuenta [${user.toUpperCase()}] creada y activa en la nube` : `Cuenta guardada localmente`, "var(--green)");
 };
 
 window.eliminarUsuario = function(u) {
@@ -2417,13 +2674,16 @@ window.eliminarUsuario = function(u) {
   mostrarModalConfirmacion({
     icon: '👤',
     title: 'ELIMINAR CREDENCIAL',
-    msg: `¿Deseas eliminar permanentemente al usuario [${u}] de la nube?`,
+    msg: `¿Deseas purgar permanentemente al usuario [${u.toUpperCase()}] de la nube?`,
     okText: 'ELIMINAR USUARIO',
     okClass: 'btn-danger',
     onConfirm: async () => {
       localStorage.removeItem("scada_pass_" + u);
       if (sbClient) {
-        try { await sbClient.from('usuarios_scada').delete().eq('user', u); } catch(e) {}
+        try { 
+          await sbClient.from('usuarios_scada').delete().eq('user', u); 
+          await registrarAuditoriaAcceso(usuarioActual.user, usuarioActual.rol, 'ELIMINACION_USUARIO', `Cuenta [${u}] purgada de la plataforma`);
+        } catch(e) {}
       }
       if (db) {
         try {
@@ -2433,7 +2693,7 @@ window.eliminarUsuario = function(u) {
       }
       cargarUsuariosUI();
       cargarListaUsuariosLogin();
-      notify(`☁️ Usuario [${u}] eliminado de la nube`, "var(--amber)");
+      notify(`☁️ Usuario [${u.toUpperCase()}] eliminado de la nube`, "var(--amber)");
     }
   });
 };
@@ -2446,7 +2706,7 @@ async function cargarListaUsuariosLogin() {
   let list = [];
   if (sbClient) {
     try {
-      const { data } = await sbClient.from('usuarios_scada').select('user, rol');
+      const { data } = await sbClient.from('usuarios_scada').select('user, rol, estado');
       if (data && data.length) list = data;
     } catch(e) {}
   }
@@ -2454,12 +2714,18 @@ async function cargarListaUsuariosLogin() {
   if (!list.length && db) {
     const tx = db.transaction(["usuarios"], "readonly");
     tx.objectStore("usuarios").getAll().onsuccess = (e) => {
-      (e.target.result || []).forEach(u => sel.innerHTML += `<option value="${u.user}">${u.user.toUpperCase()} (${u.rol})</option>`);
+      (e.target.result || []).forEach(u => {
+        const suspendido = u.estado === 'SUSPENDIDO';
+        sel.innerHTML += `<option value="${u.user}" ${suspendido ? 'disabled style="color:var(--red);"' : ''}>${u.user.toUpperCase()} (${u.rol}) ${suspendido ? '[BLOQUEADO]' : ''}</option>`;
+      });
     };
     return;
   }
 
-  list.forEach(u => sel.innerHTML += `<option value="${u.user}">${u.user.toUpperCase()} (${u.rol})</option>`);
+  list.forEach(u => {
+    const suspendido = u.estado === 'SUSPENDIDO';
+    sel.innerHTML += `<option value="${u.user}" ${suspendido ? 'disabled style="color:var(--red);"' : ''}>${u.user.toUpperCase()} (${u.rol}) ${suspendido ? '[BLOQUEADO]' : ''}</option>`;
+  });
   if (!list.some(x => x.user === 'admin')) {
     sel.innerHTML += `<option value="admin">ADMIN (SUPERADMIN)</option>`;
   }
@@ -2472,7 +2738,7 @@ window.seleccionarUsuarioRegistrado = function(val) {
   }
 };
 
-// AUTENTICACIÓN ORIGINAL CON SUPABASE 100% INTACTA
+// AUTENTICACIÓN DIRECTA, VALIDACIÓN DE ESTADO Y REGISTRO FORENSE
 window.procesarInicioSesion = async function() {
   const u = document.getElementById("loginUserInput").value.trim().toLowerCase();
   const p = document.getElementById("loginPassInput").value.trim();
@@ -2480,40 +2746,68 @@ window.procesarInicioSesion = async function() {
 
   if (!u || !p) return mostrarFeedback(fb, "Completa usuario y clave.", "var(--red)");
 
-  // 1. Llave Maestra
+  const dispositivoActual = detectarDispositivo();
+
+  // 1. Llave Maestra Raíz
   if (u === "admin" && p === "24331973") {
-    iniciarSesionExitosa({ user: "admin", pass: "24331973", rol: "SUPERADMIN", email: "yuniolgonzalez9@gmail.com" });
+    await registrarAuditoriaAcceso("admin", "SUPERADMIN", 'LOGIN_EXITOSO', `Acceso concedido desde ${dispositivoActual}`);
+    iniciarSesionExitosa({ user: "admin", pass: "24331973", rol: "SUPERADMIN", email: "yuniolgonzalez9@gmail.com", estado: "ACTIVO" });
     return;
   }
 
-  // 2. Verificación directa en Supabase Cloud
+  // 2. Consulta y validación directa en Supabase Cloud
   if (sbClient) {
     try {
       const { data, error } = await sbClient.from('usuarios_scada').select('*').eq('user', u).maybeSingle();
-      if (!error && data && data.pass === p) {
-        iniciarSesionExitosa({
-          user: data.user,
-          pass: data.pass,
-          rol: data.rol,
-          email: data.email
-        });
-        return;
+      
+      if (!error && data) {
+        // Validación de Estado (Cuenta Suspendida)
+        if (data.estado === 'SUSPENDIDO') {
+          await registrarAuditoriaAcceso(u, data.rol || 'OPERADOR', 'CUENTA_SUSPENDIDA', 'Intento de acceso bloqueado');
+          return mostrarFeedback(fb, "⛔ Cuenta suspendida por la administración.", "var(--red)");
+        }
+
+        // Validación de Contraseña
+        if (data.pass === p) {
+          // Actualización de último acceso y terminal
+          await sbClient.from('usuarios_scada').update({
+            ultimo_acceso: new Date().toISOString(),
+            dispositivo_reciente: dispositivoActual
+          }).eq('user', u);
+
+          await registrarAuditoriaAcceso(u, data.rol, 'LOGIN_EXITOSO', `Conexión verificada desde ${dispositivoActual}`);
+
+          iniciarSesionExitosa({
+            user: data.user,
+            pass: data.pass,
+            rol: data.rol,
+            email: data.email,
+            estado: data.estado || 'ACTIVO'
+          });
+          return;
+        } else {
+          await registrarAuditoriaAcceso(u, data.rol || 'OPERADOR', 'CLAVE_INCORRECTA', 'Intento con credencial errónea');
+        }
       }
     } catch(e) {}
   }
 
-  // 3. Fallback local
+  // 3. Fallback de contingencia local
   if (db) {
     const tx = db.transaction(["usuarios"], "readonly");
     const req = tx.objectStore("usuarios").get(u);
     req.onsuccess = (e) => {
       const usuarioLocal = e.target.result;
       if (usuarioLocal && usuarioLocal.pass === p) {
+        if (usuarioLocal.estado === 'SUSPENDIDO') {
+          return mostrarFeedback(fb, "⛔ Cuenta suspendida por la administración.", "var(--red)");
+        }
         iniciarSesionExitosa({
           user: usuarioLocal.user,
           pass: usuarioLocal.pass,
           rol: usuarioLocal.rol || "OPERADOR",
-          email: usuarioLocal.email || "yuniolgonzalez9@gmail.com"
+          email: usuarioLocal.email || "yuniolgonzalez9@gmail.com",
+          estado: usuarioLocal.estado || "ACTIVO"
         });
         return;
       }
@@ -2536,6 +2830,7 @@ function iniciarSesionExitosa(user, esRestauracion = false) {
   if (b) b.innerText = user.rol;
 
   aplicarPermisosRol();
+  resetearTemporizadorInactividad();
 
   if (!esRestauracion) {
     openTopLevel('act-telemetry');
@@ -2616,7 +2911,10 @@ window.guardarNuevaContrasena = async function() {
   usuarioActual.pass = p1;
 
   if (sbClient) {
-    try { await sbClient.from('usuarios_scada').update({ pass: p1 }).eq('user', usuarioActual.user); } catch(e) {}
+    try { 
+      await sbClient.from('usuarios_scada').update({ pass: p1 }).eq('user', usuarioActual.user); 
+      await registrarAuditoriaAcceso(usuarioActual.user, usuarioActual.rol, 'CAMBIO_CLAVE', 'Contraseña modificada con éxito');
+    } catch(e) {}
   }
   if (db) {
     try {
