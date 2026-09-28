@@ -66,7 +66,26 @@ function calcularDuracionTexto(horaInicio, horaFin, segRegistrados = 0) {
 }
 
 // =========================================================================
-// 3. DETECTOR DE CONECTIVIDAD HOSPITALARIA EN TIEMPO REAL
+// 3. CONTROLADOR DEL DESLIZADOR DE TRANSPARENCIA 3D EN TIEMPO REAL
+// =========================================================================
+window.ajustarTransparencia = function(valor) {
+  const alpha = Math.max(0.3, Math.min(1.0, valor / 100));
+  document.documentElement.style.setProperty('--card-alpha', alpha.toFixed(2));
+  localStorage.setItem("scada_transparency", valor);
+
+  const txt = document.getElementById("transparencyValTxt");
+  if (txt) txt.innerText = `${valor}%`;
+};
+
+function inicializarTransparenciaGuardada() {
+  const guardada = localStorage.getItem("scada_transparency") || "90";
+  const slider = document.getElementById("rangeTransparency");
+  if (slider) slider.value = guardada;
+  ajustarTransparencia(guardada);
+}
+
+// =========================================================================
+// 4. DETECTOR DE CONECTIVIDAD HOSPITALARIA EN TIEMPO REAL
 // =========================================================================
 window.addEventListener('online', () => {
   notify("🟢 Red restablecida. Sincronizando con Supabase...", "var(--green)");
@@ -89,7 +108,7 @@ window.addEventListener('offline', () => {
 });
 
 // =========================================================================
-// 4. MOTOR DEL SELECTOR DE TEMAS (4 MUNDOS VISUALES)
+// 5. MOTOR DEL SELECTOR DE TEMAS (4 MUNDOS VISUALES)
 // =========================================================================
 window.cambiarTema = function(nombreTema) {
   if (!['clinical', 'cyber', 'tactical', 'hybrid'].includes(nombreTema)) nombreTema = 'tactical';
@@ -113,7 +132,7 @@ function inicializarTemaGuardado() {
 }
 
 // =========================================================================
-// 5. SINTETIZADOR DE AUDIO (ALARMAS MÉDICAS)
+// 6. SINTETIZADOR DE AUDIO (ALARMAS MÉDICAS)
 // =========================================================================
 function sonarAlarmaSonora() {
   try {
@@ -137,7 +156,7 @@ function sonarAlarmaSonora() {
 }
 
 // =========================================================================
-// 6. VENTANA EMERGENTE FLOTANTE CENTRALIZADA (MODAL)
+// 7. VENTANA EMERGENTE FLOTANTE CENTRALIZADA (MODAL)
 // =========================================================================
 function mostrarModalConfirmacion({ icon = '⚠️', title = 'CONFIRMAR ACCIÓN', msg = '¿Deseas continuar?', okText = 'EJECUTAR', okClass = 'btn-danger', onConfirm = null }) {
   modalConfirmCallback = onConfirm;
@@ -193,7 +212,7 @@ window.pedirConfirmacionFota = function() {
 };
 
 // =========================================================================
-// 7. ENRUTADOR SEGURO DE ACTIVIDADES & BLOQUEO JERÁRQUICO
+// 8. ENRUTADOR SEGURO DE ACTIVIDADES & BLOQUEO JERÁRQUICO
 // =========================================================================
 window.openTopLevel = function(secId) {
   if (!estaAutenticado() && secId !== 'act-login' && secId !== 'act-recovery') {
@@ -336,7 +355,7 @@ function notify(msg, color = 'var(--cyan)') {
 }
 
 // =========================================================================
-// 8. NAVEGACIÓN Y MENÚ ENGRANAJE
+// 9. NAVEGACIÓN Y MENÚ ENGRANAJE
 // =========================================================================
 window.toggleHorizontalDock = function() {
   const dock = document.getElementById("desktopNavBar");
@@ -404,7 +423,7 @@ window.cerrarSesionManual = function() {
 };
 
 // =========================================================================
-// 9. PURGA Y RESET DE CACHÉ LOCAL (FORZAR NUBE)
+// 10. PURGA Y RESET DE CACHÉ LOCAL (FORZAR NUBE)
 // =========================================================================
 window.solicitarLimpiezaCacheLocal = function() {
   mostrarModalConfirmacion({
@@ -428,14 +447,14 @@ window.solicitarLimpiezaCacheLocal = function() {
 };
 
 // =========================================================================
-// 10. BASE DE DATOS LOCAL Y TIEMPO REAL NUBE (SUPABASE REALTIME)
+// 11. BASE DE DATOS LOCAL Y TIEMPO REAL NUBE (SUPABASE REALTIME)
 // =========================================================================
 let db = null;
 const fleet = {};
 
 function initDB() {
   return new Promise((resolve) => {
-    const req = indexedDB.open("AutoclaveFastFleetDB_v33", 1);
+    const req = indexedDB.open("AutoclaveFastFleetDB_v34", 1);
     req.onupgradeneeded = (e) => {
       db = e.target.result;
       if (!db.objectStoreNames.contains("asignaciones")) db.createObjectStore("asignaciones", { keyPath: "mac" });
@@ -568,7 +587,7 @@ async function cargarEquiposGuardados() {
 }
 
 // =========================================================================
-// 11. MQTT HIVEMQ CLOUD (CANAL WSS 8884) & ALERTAS INSTANTÁNEAS
+// 12. MQTT HIVEMQ CLOUD (CANAL WSS 8884) & ALERTAS INSTANTÁNEAS
 // =========================================================================
 let mqttClient;
 
@@ -797,7 +816,7 @@ function getConnectionQuality(dev) {
 }
 
 // =========================================================================
-// 12. DASHBOARD ADAPTATIVO & CÁLCULO DE ODÓMETRO REAL
+// 13. DASHBOARD ADAPTATIVO & CÁLCULO DE ODÓMETRO REAL
 // =========================================================================
 window.setFleetHealthFilter = function(filterType) {
   currentHealthFilter = filterType;
@@ -930,7 +949,7 @@ function actualizarCardDashboard(mac) {
 }
 
 // =========================================================================
-// 13. DETALLE DEL EQUIPO Y ACCIONES DE ODÓMETRO
+// 14. DETALLE DEL EQUIPO Y ACCIONES DE ODÓMETRO
 // =========================================================================
 window.abrirDetalleEquipo = function(mac) {
   currentInspectedMAC = mac;
@@ -978,7 +997,7 @@ function switchDetailTab(tabId) {
   }
 }
 
-// Botón: Resetear odómetro de ciclos a cero en hardware
+// Botón de reseteo físico de odómetro
 window.resetearOdometroHardware = function() {
   if (!currentInspectedMAC) return notify("Selecciona un equipo primero", "var(--amber)");
   if (usuarioActual && usuarioActual.rol !== "SUPERADMIN") return notify("Permiso denegado: solo SUPERADMIN", "var(--red)");
@@ -1007,17 +1026,20 @@ function generarUIEsquemaDinamico(mac) {
   const teleDef = item.esquema?.telemetria_def;
 
   if (teleDef && teleDef.length) {
-    containerGauges.innerHTML = teleDef.map(t => `
-      <div class="gauge-cell">
-        <div class="gauge-val ${t.key === 'presion' ? 'p' : ''}" id="dyn-val-${t.key}">--</div>
-        <div class="gauge-lbl">${t.label} ${t.unidad ? '(' + t.unidad + ')' : ''}</div>
-      </div>
-    `).join("");
+    containerGauges.innerHTML = teleDef.map(t => {
+      const esTexto = (t.tipo === 'texto' || t.key === 'fase');
+      return `
+        <div class="gauge-cell">
+          <div class="gauge-val ${t.key === 'presion' ? 'p' : ''} ${esTexto ? 'is-text' : ''}" id="dyn-val-${t.key}">--</div>
+          <div class="gauge-lbl">${t.label} ${t.unidad ? '(' + t.unidad + ')' : ''}</div>
+        </div>
+      `;
+    }).join("");
   } else {
     containerGauges.innerHTML = `
       <div class="gauge-cell"><div class="gauge-val" id="dyn-val-temp_camara">--°C</div><div class="gauge-lbl">TEMPERATURA</div></div>
       <div class="gauge-cell"><div class="gauge-val p" id="dyn-val-presion">--b</div><div class="gauge-lbl">PRESIÓN</div></div>
-      <div class="gauge-cell"><div class="gauge-val" style="color:var(--green);" id="dyn-val-fase">--</div><div class="gauge-lbl">FASE</div></div>
+      <div class="gauge-cell"><div class="gauge-val is-text" style="color:var(--green);" id="dyn-val-fase">--</div><div class="gauge-lbl">FASE</div></div>
       <div class="gauge-cell"><div class="gauge-val" style="color:var(--amber);" id="dyn-val-seg_restantes">--:--</div><div class="gauge-lbl">TIEMPO</div></div>
     `;
   }
@@ -1055,6 +1077,7 @@ function generarUIEsquemaDinamico(mac) {
   }
 }
 
+// AUTO-DIMENSIONAMIENTO DINÁMICO EN VIVO (EVITA QUE "FINALIZADO CON EXITO" DESBORDE)
 function actualizarPantallaDetalleDinamica() {
   if (!currentInspectedMAC || !fleet[currentInspectedMAC]) return;
   const item = fleet[currentInspectedMAC];
@@ -1070,17 +1093,30 @@ function actualizarPantallaDetalleDinamica() {
   Object.keys(d).forEach(k => {
     const el = document.getElementById(`dyn-val-${k}`);
     if (el) {
-      if (k === 'temp_camara') el.innerText = (d[k] || 0).toFixed(1) + "°C";
-      else if (k === 'presion') el.innerText = (d[k] || 0).toFixed(2) + "b";
-      else if (k === 'seg_restantes') {
+      if (k === 'temp_camara') {
+        el.innerText = (d[k] || 0).toFixed(1) + "°C";
+        el.classList.remove('is-text');
+      } else if (k === 'presion') {
+        el.innerText = (d[k] || 0).toFixed(2) + "b";
+        el.classList.remove('is-text');
+      } else if (k === 'seg_restantes') {
         const m = Math.floor(d[k] / 60);
         const s = d[k] % 60;
         el.innerText = `${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
+        el.classList.remove('is-text');
       } else if (typeof d[k] === 'boolean') {
         el.innerText = d[k] ? "ACTIVO" : "INACTIVO";
         el.style.color = d[k] ? "var(--green)" : "var(--text-muted)";
+        el.classList.remove('is-text');
       } else {
-        el.innerText = d[k];
+        // Para textos de fases u otros strings largos: aplicar auto-escala
+        const valStr = String(d[k] || '--');
+        el.innerText = valStr;
+        if (valStr.length > 8 || valStr.includes(' ')) {
+          el.classList.add('is-text');
+        } else {
+          el.classList.remove('is-text');
+        }
       }
     }
   });
@@ -1240,7 +1276,7 @@ window.eliminarEquipoTotal = async function(mac) {
 };
 
 // =========================================================================
-// 14. HISTORIAL DE CICLOS DEL EQUIPO (CONSULTA DIRECTA POR MAC A SUPABASE)
+// 15. HISTORIAL DE CICLOS DEL EQUIPO (CONSULTA DIRECTA POR MAC A SUPABASE)
 // =========================================================================
 async function cargarLogsDetalle(mac) {
   const tbody = document.getElementById("detLogsTbody");
@@ -1302,7 +1338,7 @@ function renderLogsDetalleFilas(logs, tbody) {
 }
 
 // =========================================================================
-// 15. GESTIÓN DE MANTENIMIENTOS CLÍNICOS & ALARMAS (8:00 AM)
+// 16. GESTIÓN DE MANTENIMIENTOS CLÍNICOS & ALARMAS (8:00 AM)
 // =========================================================================
 window.guardarProgramacionMantenimiento = async function() {
   if (!currentInspectedMAC) return notify("Selecciona un equipo primero", "var(--amber)");
@@ -1435,7 +1471,7 @@ function verificarAlarmasMantenimiento(items) {
   }
 }
 
-// Exportar historial de mantenimientos a Excel
+// Exportar mantenimientos a Microsoft Excel
 window.exportarMantenimientosExcel = function() {
   if (!currentInspectedMAC) return notify("Selecciona un autoclave primero", "var(--amber)");
   const item = fleet[currentInspectedMAC];
@@ -1450,7 +1486,7 @@ window.exportarMantenimientosExcel = function() {
       const records = data || [];
       if (!records.length) return notify("Sin registros de mantenimiento para exportar", "var(--amber)");
 
-      let csv = "\uFEFF"; // UTF-8 BOM para que Excel respete acentos y caracteres
+      let csv = "\uFEFF";
       csv += "HISTORIAL TÉCNICO DE MANTENIMIENTO Y SERVICIO BIOMÉDICO\n";
       csv += `AUTOCLAVE,"${meta.alias}",MAC,"${currentInspectedMAC}",CLIENTE,"${meta.cliente}",MODELO,"${meta.modelo}"\n\n`;
       csv += "ID,FECHA_INTERVENCION,TIPO_SERVICIO,TECNICO_RESPONSABLE,CICLOS_ODOMETRO,FECHA_PROGRAMADA,NOTAS_DETALLES\n";
@@ -1475,7 +1511,7 @@ window.exportarMantenimientosExcel = function() {
     });
 };
 
-// Imprimir Acta Oficial de Mantenimiento Biomédico en PDF
+// Imprimir Acta Oficial de Mantenimiento en PDF
 window.imprimirActaMantenimiento = function() {
   if (!currentInspectedMAC) return notify("Selecciona un autoclave primero", "var(--amber)");
   const item = fleet[currentInspectedMAC];
@@ -1491,7 +1527,7 @@ window.imprimirActaMantenimiento = function() {
       const v = window.open("", "_blank");
       v.document.write(`
         <html><head><title>ACTA DE SERVICIO TÉCNICO - ${meta.alias}</title>
-        <style>body{font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;padding:40px;color:#111;}table{width:100%;border-collapse:collapse;margin:20px 0;}th,td{border:1px solid #ccc;padding:10px;text-align:left;font-size:12px;}th{background:#f4f6f8;}</style>
+        <style>body{font-family:'Segoe UI',sans-serif;padding:40px;color:#111;}table{width:100%;border-collapse:collapse;margin:20px 0;}th,td{border:1px solid #ccc;padding:10px;text-align:left;font-size:12px;}th{background:#f4f6f8;}</style>
         </head><body>
         <h2>ACTA TÉCNICA DE MANTENIMIENTO Y CALIBRACIÓN BIOMÉDICA</h2>
         <p>HOSPITAL / CLÍNICA: <b>${meta.cliente.toUpperCase()}</b></p>
@@ -1528,7 +1564,7 @@ window.imprimirActaMantenimiento = function() {
 };
 
 // =========================================================================
-// 16. CENTRO DE AUDITORÍA CLÍNICA (SUPABASE DIRECTO)
+// 17. CENTRO DE AUDITORÍA CLÍNICA (SUPABASE DIRECTO)
 // =========================================================================
 let reportesCache = [];
 
@@ -1698,7 +1734,7 @@ function pintarTablaReportes(items, fType, fText, tbody) {
 }
 
 // =========================================================================
-// 17. VISOR DETALLADO DEL PAQUETE CON DESGLOSE DE FASES Y FALLOS
+// 18. VISOR DETALLADO DEL PAQUETE CON DESGLOSE DE FASES Y FALLOS
 // =========================================================================
 window.verPaqueteSesion = function(sessionId) {
   const ses = reportesCache.find(x => x.sessionId === sessionId);
@@ -1791,10 +1827,8 @@ window.verPaqueteSesion = function(sessionId) {
 };
 
 // =========================================================================
-// 18. EXPORTACIONES AVANZADAS (EXCEL & PDF DE AUDITORÍA)
+// 19. EXPORTACIONES AVANZADAS (EXCEL & PDF DE AUDITORÍA)
 // =========================================================================
-
-// Exportar auditoría de sesiones a Excel (.csv con formato UTF-8 profesional)
 window.exportarAuditoriaExcel = function() {
   const seleccionadosChecks = Array.from(document.querySelectorAll(".check-report-item:checked"));
   let dataParaExportar = [];
@@ -1808,7 +1842,7 @@ window.exportarAuditoriaExcel = function() {
 
   if (!dataParaExportar.length) return notify("No hay datos de auditoría para exportar", "var(--amber)");
 
-  let csv = "\uFEFF"; // BOM UTF-8 para visualización perfecta de tildes en Excel
+  let csv = "\uFEFF";
   csv += "AUDITORÍA CLÍNICA DE SESIONES Y CICLOS DE ESTERILIZACIÓN\n";
   csv += `GENERADO EL,"${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}",TOTAL_REGISTROS,"${dataParaExportar.length}"\n\n`;
   csv += "ID_SESION,FECHA,MAC,ALIAS_EQUIPO,CLIENTE_HOSPITAL,MODELO,PROGRAMA,HORA_BOOT,INICIO_CICLO,HORA_FIN,DURACION,ODOMETRO_CICLOS,T_MAX_C,P_MAX_BAR,DIAGNOSTICO_GLOBAL,FALLO_DETECTADO,MENSAJE_FALLO\n";
@@ -1829,7 +1863,6 @@ window.exportarAuditoriaExcel = function() {
   notify("📊 Archivo de auditoría generado para Microsoft Excel", "var(--green)");
 };
 
-// Imprimir reporte completo de auditoría en formato PDF profesional
 window.imprimirReporteAuditoriaCompleta = function() {
   const data = reportesCache || [];
   if (!data.length) return notify("Sin datos para imprimir", "var(--amber)");
@@ -1876,7 +1909,6 @@ window.imprimirReporteAuditoriaCompleta = function() {
   v.document.close();
 };
 
-// Imprimir Certificado de una sesión individual
 window.imprimirCertificadoSesionActual = function() {
   if (!currentViewingReport) return;
   const s = currentViewingReport;
@@ -2000,7 +2032,7 @@ window.confirmarVaciarDB = async function() {
 };
 
 // =========================================================================
-// 19. BACKUP Y RESTAURACIÓN INTEGRAL DE REPORTES (JSON)
+// 20. BACKUP Y RESTAURACIÓN INTEGRAL DE REPORTES (JSON)
 // =========================================================================
 window.descargarBackupJSON = function() {
   const data = reportesCache || [];
@@ -2073,7 +2105,7 @@ window.restaurarBackupJSON = function(files) {
 };
 
 // =========================================================================
-// 20. FOTA HUB & GESTIÓN DE FLOTA
+// 21. FOTA HUB & GESTIÓN DE FLOTA
 // =========================================================================
 let currentFotaFilter = 'ALL';
 window.filterFotaList = function(tipo) { currentFotaFilter = tipo; renderFotaLiveList(); };
@@ -2235,7 +2267,7 @@ function actualizarSelectoresGlobales() {
 }
 
 // =========================================================================
-// 21. JERARQUÍA ESTRICTA (RBAC) & GESTIÓN DE USUARIOS
+// 22. JERARQUÍA ESTRICTA (RBAC) & GESTIÓN DE USUARIOS
 // =========================================================================
 function aplicarPermisosRol() {
   if (!usuarioActual) return;
@@ -2575,7 +2607,7 @@ window.guardarNuevaContrasena = async function() {
 };
 
 // =========================================================================
-// 22. REFRESCO PERIÓDICO DEL MONITOR
+// 23. REFRESCO PERIÓDICO DEL MONITOR
 // =========================================================================
 setInterval(() => {
   if (currentActivity === 'act-telemetry') {
@@ -2585,6 +2617,7 @@ setInterval(() => {
 
 window.addEventListener("load", () => {
   inicializarTemaGuardado();
+  inicializarTransparenciaGuardada();
   initDB();
   initMQTT();
 });
