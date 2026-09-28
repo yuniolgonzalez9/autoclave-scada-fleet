@@ -1,3 +1,4 @@
+
 // =========================================================================
 // 1. CONEXIÓN CLOUD SUPABASE & REALTIME (NUBE CENTRAL 24/7 EN VERCEL)
 // =========================================================================
@@ -78,17 +79,14 @@ function calcularDuracionTexto(horaInicio, horaFin, segRegistrados = 0) {
 }
 
 // =========================================================================
-// 3. CONTROLADOR DE TRANSPARENCIA ULTRA-GLASS (0% A 100% REAL)
+// 3. CONTROLADOR DE TRANSPARENCIA ULTRA-GLASS (0% A 100% DINÁMICO)
 // =========================================================================
 window.ajustarTransparencia = function(valor) {
   const numVal = parseInt(valor, 10);
   const alpha = Math.max(0.0, Math.min(1.0, numVal / 100));
 
-  // Aplica la transparencia directamente a las tarjetas y barras para ver el fondo al 100%
+  // Modifica EXCLUSIVAMENTE la variable alpha para que cada tema gestione su color sin pisarse
   document.documentElement.style.setProperty('--card-alpha', alpha.toFixed(2));
-  document.documentElement.style.setProperty('--bg-card', `rgba(17, 26, 46, ${alpha.toFixed(2)})`);
-  document.documentElement.style.setProperty('--bg-surface', `rgba(10, 17, 32, ${Math.min(1.0, alpha + 0.08).toFixed(2)})`);
-
   localStorage.setItem("scada_transparency", numVal);
 
   const txt = document.getElementById("transparencyValTxt");
@@ -423,7 +421,7 @@ window.closeGearMenu = function() {
   if (menu) menu.style.display = "none";
 };
 
-// Cierra el menú solo al hacer clic fuera
+// Cierra el menú solo cuando el usuario hace clic FUERA de él
 document.addEventListener("click", (e) => {
   const menu = document.getElementById("gearDropdownMenu");
   const btn = document.getElementById("btnGearToggle");
@@ -581,7 +579,6 @@ function iniciarSuscripcionNubeRealtime() {
   } catch(e) {}
 }
 
-// CORRECCIÓN EXACTA DE SESIÓN PERSISTENTE (EVITA EXPULSIÓN INVOLUNTARIA)
 function verificarSesionPersistente() {
   const sesionGuardada = localStorage.getItem("scada_logged_user");
   if (sesionGuardada) {
@@ -598,7 +595,6 @@ function verificarSesionPersistente() {
           openTopLevel(route.topLevel || 'act-telemetry');
         }
       } else {
-        // Redirige siempre a Telemetría si la sesión es válida
         openTopLevel('act-telemetry');
       }
     } catch(e) {
@@ -1251,7 +1247,7 @@ window.guardarFichaDetalle = async function() {
     try { 
       const { error } = await sbClient.from('asignaciones_equipos').upsert(metaData, { onConflict: 'mac' }); 
       if (!error) guardadoNube = true;
-    } catch(err) {}
+    } catch(e) {}
   }
   if (db) {
     const tx = db.transaction(["asignaciones"], "readwrite");
