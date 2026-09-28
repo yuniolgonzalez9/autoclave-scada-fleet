@@ -1,7 +1,8 @@
 // =========================================================================
 // SCADA AUTOCLAVE // SERVICE WORKER (NETWORK-FIRST & AUTO-PURGA DE CACHÉ)
 // =========================================================================
-const CACHE_VERSION = 'scada-cache-v18-solid';
+const CACHE_VERSION = 'scada-cache-v25-laser';
+
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -16,12 +17,14 @@ self.addEventListener('install', (event) => {
   self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_VERSION).then((cache) => {
-      return cache.addAll(ASSETS_TO_CACHE).catch(() => {});
+      return cache.addAll(ASSETS_TO_CACHE).catch((err) => {
+        console.warn('[SW] Aviso precaching:', err);
+      });
     })
   );
 });
 
-// 2. Activación: Purga obligatoria de cachés viejas (elimina la de hace 3 semanas)
+// 2. Activación: Purga obligatoria de cachés viejas (elimina v18 y anteriores)
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
