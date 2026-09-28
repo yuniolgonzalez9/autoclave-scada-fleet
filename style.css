@@ -1,21 +1,20 @@
 /* =========================================================================
-   SCADA BIOMÉDICO MASTER // SISTEMA DE FONDOS ULTRA-GLASS & 3D PRO
+   SCADA BIOMÉDICO MASTER // SISTEMA LÁSER MULTICOLOR & ULTRA-GLASS PRO
    ========================================================================= */
 
 /* =========================================================================
-   1. PALETA DE COLORES BASE Y CONTROL ULTRA-GLASS (0% A 100%)
+   1. VARIABLES BASE Y CONTROL ULTRA-GLASS (0% A 100%)
    ========================================================================= */
 :root {
-  --card-alpha: 0.82; /* Nivel de opacidad por defecto (82%) */
+  --card-alpha: 0.82;
   
-  /* Sistema Ultra-Glass dinámico */
   --bg-surface: rgba(10, 17, 32, var(--card-alpha));
   --bg-card: rgba(17, 26, 46, var(--card-alpha));
-  --bg-card-hover: rgba(22, 35, 61, calc(var(--card-alpha) + 0.1));
+  --bg-card-hover: rgba(22, 35, 61, calc(var(--card-alpha) + 0.12));
   --bg-gauge: radial-gradient(circle at 50% 25%, rgba(25, 37, 66, var(--card-alpha)) 0%, rgba(10, 15, 29, var(--card-alpha)) 100%);
   --bg-input: rgba(10, 15, 29, 0.92);
   
-  --border-subtle: rgba(0, 229, 255, 0.28);
+  --border-subtle: rgba(0, 229, 255, 0.3);
   --border-bright: #00e5ff;
   --cyan: #00e5ff;
   --cyan-glow: rgba(0, 229, 255, 0.45);
@@ -33,67 +32,134 @@
   --ease: cubic-bezier(0.16, 1, 0.3, 1);
   
   --glass-blur: 16px;
+  --laser-gradient: linear-gradient(135deg, #00e5ff 0%, #8b5cf6 100%);
+  --laser-glow: 0 0 16px rgba(0, 229, 255, 0.35);
+  
   --panel-shadow: 0 16px 40px -5px rgba(0, 0, 0, 0.8), 
-                  0 0 0 1px rgba(255, 255, 255, 0.12), 
-                  inset 0 1px 0 rgba(255, 255, 255, 0.22), 
+                  0 0 0 1px rgba(255, 255, 255, 0.1), 
+                  inset 0 1px 0 rgba(255, 255, 255, 0.2), 
                   0 0 25px rgba(0, 229, 255, 0.08);
 }
 
 /* =========================================================================
-   2. TUS 4 TEMAS VISUALES ORIGINALES ([data-theme])
+   2. TEMAS VISUALES CON BORDES LÁSER MULTICOLOR & CLÍNICO
    ========================================================================= */
-/* TEMA PIZARRA TÁCTICA (DEFECTO) */
+
+/* TEMA 1: PIZARRA TÁCTICA (CABINA SCADA OSCURA) */
 [data-theme="tactical"] {
   --cyan: #00e5ff;
   --border-bright: #00e5ff;
-  --border-subtle: rgba(0, 229, 255, 0.3);
+  --laser-gradient: linear-gradient(135deg, #00e5ff 0%, #3b82f6 50%, #00ff88 100%);
+  --laser-glow: 0 0 14px rgba(0, 229, 255, 0.3);
 }
 
-/* TEMA CLÍNICO QUIRÚRGICO */
-[data-theme="clinical"] {
-  --cyan: #38bdf8;
-  --border-bright: #38bdf8;
-  --border-subtle: rgba(56, 189, 248, 0.35);
-  --cyan-deep: rgba(56, 189, 248, 0.16);
+/* TEMA 2: CYBER (LÁSER MULTICOLOR ESTILO SPEEDTEST: FUCSIA ➔ MORADO ➔ CIAN) */
+[data-theme="cyber"] {
+  --cyan: #00e5ff;
+  --border-bright: #ff007f;
+  --border-subtle: rgba(255, 0, 127, 0.4);
+  --laser-gradient: linear-gradient(90deg, #ff007f 0%, #8b5cf6 50%, #00e5ff 100%);
+  --laser-glow: 0 0 20px rgba(255, 0, 127, 0.4), 0 0 25px rgba(0, 229, 255, 0.3);
+  --cyan-deep: rgba(255, 0, 127, 0.15);
 }
 
-/* TEMA HÍBRIDO NEÓN */
+/* TEMA 3: HÍBRIDO (FLUJO CUÁNTICO: CIAN ➔ ESMERALDA ➔ LIMA NEÓN) */
 [data-theme="hybrid"] {
   --cyan: #00ff88;
   --border-bright: #00ff88;
-  --border-subtle: rgba(0, 255, 136, 0.35);
-  --cyan-glow: rgba(0, 255, 136, 0.45);
-  --cyan-deep: rgba(0, 255, 136, 0.16);
+  --border-subtle: rgba(0, 255, 136, 0.4);
+  --laser-gradient: linear-gradient(90deg, #00e5ff 0%, #00ff88 50%, #facc15 100%);
+  --laser-glow: 0 0 20px rgba(0, 255, 136, 0.45), 0 0 25px rgba(0, 229, 255, 0.3);
+  --cyan-deep: rgba(0, 255, 136, 0.15);
 }
 
-/* TEMA CYBERPUNK */
-[data-theme="cyber"] {
-  --cyan: #d946ef;
-  --border-bright: #d946ef;
-  --border-subtle: rgba(217, 70, 239, 0.35);
-  --cyan-glow: rgba(217, 70, 239, 0.45);
-  --cyan-deep: rgba(217, 70, 239, 0.16);
+/* TEMA 4: CLÍNICO QUIRÚRGICO (RESTAURADO SEGÚN TU CAPTURA #1: BLUEPRINT GRID) */
+[data-theme="clinical"] {
+  --bg-current: #f0f4f9;
+  --bg-image: linear-gradient(to right, rgba(2, 132, 199, 0.08) 1px, transparent 1px),
+              linear-gradient(to bottom, rgba(2, 132, 199, 0.08) 1px, transparent 1px),
+              linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
+  --laser-gradient: linear-gradient(135deg, #0284c7 0%, #00e5ff 100%);
+  --laser-glow: 0 0 12px rgba(2, 132, 199, 0.25);
+  --text-main: #0f172a !important;
+  --text-muted: #475569 !important;
+  --border-subtle: rgba(2, 132, 199, 0.28) !important;
+  --border-bright: #0284c7 !important;
+  --cyan: #0284c7 !important;
+  --cyan-deep: rgba(2, 132, 199, 0.12) !important;
+}
+
+[data-theme="clinical"] .title-primary { color: #0284c7 !important; }
+[data-theme="clinical"] .title-secondary { color: #334155 !important; font-weight: 700 !important; }
+[data-theme="clinical"] .card,
+[data-theme="clinical"] .node-item,
+[data-theme="clinical"] .category-box,
+[data-theme="clinical"] .modal-card,
+[data-theme="clinical"] .table-container {
+  background: rgba(255, 255, 255, var(--card-alpha)) !important;
+  color: #0f172a !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06) !important;
+}
+[data-theme="clinical"] .hud-topbar,
+[data-theme="clinical"] .desktop-dock-container,
+[data-theme="clinical"] .mobile-bottom-nav,
+[data-theme="clinical"] .gear-dropdown {
+  background: rgba(248, 250, 252, var(--card-alpha)) !important;
+  color: #0f172a !important;
+}
+[data-theme="clinical"] .input-field {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+[data-theme="clinical"] .gauge-cell {
+  background: rgba(241, 245, 249, var(--card-alpha)) !important;
+  border-color: #cbd5e1 !important;
 }
 
 /* =========================================================================
-   3. PAPEL TAPIZ // WALLPAPERS DE CIRCUITOS, REDES Y BLANCO CLÍNICO
+   3. APLICACIÓN DE BORDES LÁSER MULTICOLOR SPEEDTEST
+   ========================================================================= */
+[data-theme="cyber"] .card,
+[data-theme="cyber"] .node-item,
+[data-theme="cyber"] .btn-primary,
+[data-theme="hybrid"] .card,
+[data-theme="hybrid"] .node-item,
+[data-theme="hybrid"] .btn-primary {
+  border: 1px solid transparent !important;
+  background-image: linear-gradient(var(--bg-card), var(--bg-card)), var(--laser-gradient) !important;
+  background-origin: padding-box, border-box !important;
+  background-clip: padding-box, border-box !important;
+  box-shadow: var(--laser-glow), var(--panel-shadow) !important;
+}
+
+[data-theme="cyber"] .hud-topbar,
+[data-theme="hybrid"] .hud-topbar {
+  border-bottom: 2px solid transparent !important;
+  background-image: linear-gradient(var(--bg-surface), var(--bg-surface)), var(--laser-gradient) !important;
+  background-origin: padding-box, border-box !important;
+  background-clip: padding-box, border-box !important;
+}
+
+/* =========================================================================
+   4. PAPEL TAPIZ DE CIRCUITOS, REDES Y BLANCO CLÍNICO
    ========================================================================= */
 
-/* WALLPAPER 1: LA PCB / MICROCHIP NEÓN */
+/* WALLPAPER 1: LA PCB / MICROCHIP NEÓN (FAVORITO) */
 html, [data-bg="circuit-pcb"] {
   --bg-current: #020617;
   --bg-image: linear-gradient(180deg, rgba(2, 6, 23, 0.65) 0%, rgba(2, 6, 23, 0.85) 100%),
               url('https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=2000&q=80');
 }
 
-/* WALLPAPER 2: EL PLANETA / RED NEURONAL & NODOS GLOBALES */
+/* WALLPAPER 2: EL PLANETA / RED NEURONAL & NODOS GLOBALES (FAVORITO) */
 [data-bg="planet-nodes"] {
   --bg-current: #030712;
   --bg-image: linear-gradient(180deg, rgba(3, 7, 18, 0.65) 0%, rgba(3, 7, 18, 0.85) 100%),
               url('https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=2000&q=80');
 }
 
-/* WALLPAPER 3: LA MATRIZ CYBERPUNK DE SERVIDORES */
+/* WALLPAPER 3: LA MATRIZ CYBERPUNK DE SERVIDORES (FAVORITO) */
 [data-bg="cyber-matrix"] {
   --bg-current: #02050e;
   --bg-image: linear-gradient(180deg, rgba(2, 5, 14, 0.65) 0%, rgba(2, 5, 14, 0.88) 100%),
@@ -131,40 +197,17 @@ html, [data-bg="circuit-pcb"] {
               radial-gradient(circle at 0% 100%, rgba(0, 255, 136, 0.08) 0%, transparent 45%);
 }
 
-/* WALLPAPER 8: BLANCO QUIRÚRGICO LIMPIO (RESTAURADO CON CONTRASTE) */
+/* WALLPAPER 8: BLANCO QUIRÚRGICO LIMPIO (BLUEPRINT GRID DE TU CAPTURA #1) */
 [data-bg="clean"] {
-  --bg-current: #f1f5f9;
-  --bg-image: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
+  --bg-current: #f0f4f9;
+  --bg-image: linear-gradient(to right, rgba(2, 132, 199, 0.08) 1px, transparent 1px),
+              linear-gradient(to bottom, rgba(2, 132, 199, 0.08) 1px, transparent 1px),
+              linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
+  background-size: 24px 24px, 24px 24px, 100% 100% !important;
   --text-main: #0f172a !important;
   --text-muted: #475569 !important;
-  --border-subtle: rgba(2, 132, 199, 0.3) !important;
+  --border-subtle: rgba(2, 132, 199, 0.28) !important;
   --border-bright: #0284c7 !important;
-}
-[data-bg="clean"] .title-primary { color: #0284c7 !important; }
-[data-bg="clean"] .title-secondary { color: #334155 !important; font-weight: 700 !important; }
-[data-bg="clean"] .card,
-[data-bg="clean"] .node-item,
-[data-bg="clean"] .category-box,
-[data-bg="clean"] .modal-card {
-  background: rgba(255, 255, 255, var(--card-alpha)) !important;
-  color: #0f172a !important;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08) !important;
-}
-[data-bg="clean"] .hud-topbar,
-[data-bg="clean"] .desktop-dock-container,
-[data-bg="clean"] .mobile-bottom-nav,
-[data-bg="clean"] .gear-dropdown {
-  background: rgba(248, 250, 252, var(--card-alpha)) !important;
-  color: #0f172a !important;
-}
-[data-bg="clean"] .input-field {
-  background: #ffffff !important;
-  color: #0f172a !important;
-  border-color: #cbd5e1 !important;
-}
-[data-bg="clean"] .gauge-cell {
-  background: rgba(241, 245, 249, var(--card-alpha)) !important;
-  border-color: #cbd5e1 !important;
 }
 
 /* =========================================================================
@@ -194,7 +237,7 @@ html, body {
 }
 
 /* =========================================================================
-   4. EFECTO ULTRA-GLASSMORPHISM (CRISTAL TRASLÚCIDO PURIFICADO)
+   5. EFECTO ULTRA-GLASSMORPHISM (CRISTAL TRASLÚCIDO PURIFICADO)
    ========================================================================= */
 .card, 
 .node-item, 
@@ -202,7 +245,7 @@ html, body {
 .kpi-card,
 .modal-card,
 .auth-box {
-  background: var(--bg-card) !important;
+  background: var(--bg-card);
   backdrop-filter: blur(var(--glass-blur)) !important;
   -webkit-backdrop-filter: blur(var(--glass-blur)) !important;
   border: 1px solid var(--border-subtle);
@@ -221,7 +264,7 @@ html, body {
 }
 
 /* =========================================================================
-   5. BLINDAJE DE SEGURIDAD ABSOLUTO
+   6. BLINDAJE DE SEGURIDAD ABSOLUTO
    ========================================================================= */
 body.unauthenticated .hud-topbar,
 body.unauthenticated .desktop-dock-container,
@@ -233,7 +276,7 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
 }
 
 /* =========================================================================
-   6. MENÚ ENGRANAJE & SELECTORES VISUALES
+   7. MENÚ ENGRANAJE & SELECTORES VISUALES
    ========================================================================= */
 .gear-menu-wrapper { 
   position: relative; 
@@ -346,7 +389,7 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
 .dropdown-separator { height: 1px; background: var(--border-subtle); }
 
 /* =========================================================================
-   7. BOTONES 3D TÁCTILES CON BISEL Y RELIEVE
+   8. BOTONES 3D TÁCTILES CON BISEL Y RELIEVE
    ========================================================================= */
 .btn {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(0, 0, 0, 0.4) 100%), var(--bg-surface);
@@ -453,7 +496,7 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
 .flex-2 { flex: 2; }
 
 /* =========================================================================
-   8. BADGES Y MEDIDORES TÁCTILES
+   9. BADGES Y MEDIDORES TÁCTILES
    ========================================================================= */
 .user-role, .cycle-badge, .status-badge {
   white-space: nowrap !important;
@@ -498,7 +541,7 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
 .dot.offline { background: var(--red); box-shadow: 0 0 8px var(--red); }
 
 /* =========================================================================
-   9. HUD COMMAND BAR (BARRA SUPERIOR)
+   10. HUD COMMAND BAR (BARRA SUPERIOR)
    ========================================================================= */
 .hud-topbar {
   border-bottom: 1px solid var(--border-subtle);
@@ -650,7 +693,7 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
 }
 
 /* =========================================================================
-   10. MODAL FLOTANTE CENTRALIZADO
+   11. MODAL FLOTANTE CENTRALIZADO
    ========================================================================= */
 .modal-overlay {
   position: fixed;
@@ -695,7 +738,7 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
 .modal-actions { display: flex; gap: 12px; }
 
 /* =========================================================================
-   11. CONTENEDORES Y GRILLAS SCADA
+   12. CONTENEDORES Y GRILLAS SCADA
    ========================================================================= */
 .app-viewport {
   max-width: 1440px;
@@ -879,7 +922,7 @@ th { background: var(--cyan-deep); color: var(--cyan); font-weight: 800; }
 .m-tab.active { color: var(--cyan); transform: translateY(-2px); text-shadow: 0 0 10px var(--cyan-glow); }
 
 /* =========================================================================
-   12. RESPONSIVIDAD MÓVIL ESTRICTA (ROBUSTA)
+   13. RESPONSIVIDAD MÓVIL ESTRICTA
    ========================================================================= */
 @media (max-width: 820px) {
   .desktop-dock-container { display: none !important; }
