@@ -55,7 +55,7 @@ function calcularDuracionTexto(horaInicio, horaFin, segRegistrados = 0) {
     if (pI.length >= 2 && pF.length >= 2) {
       let sI = pI[0] * 3600 + pI[1] * 60 + (pI[2] || 0);
       let sF = pF[0] * 3600 + pF[1] * 60 + (pF[2] || 0);
-      if (sF < sI) sF += 86400; // Cambio de día
+      if (sF < sI) sF += 86400; // Si cruzó la medianoche
       const diff = sF - sI;
       const m = Math.floor(diff / 60);
       const s = diff % 60;
@@ -66,7 +66,30 @@ function calcularDuracionTexto(horaInicio, horaFin, segRegistrados = 0) {
 }
 
 // =========================================================================
-// 3. MOTOR DEL SELECTOR DE TEMAS (4 MUNDOS VISUALES)
+// 3. DETECTOR DE CONECTIVIDAD HOSPITALARIA EN TIEMPO REAL
+// =========================================================================
+window.addEventListener('online', () => {
+  notify("🟢 Conexión restablecida. Sincronizando con la nube...", "var(--green)");
+  const dot = document.getElementById("syncDot");
+  const txt = document.getElementById("syncStatusText");
+  if (dot) dot.className = "beacon online";
+  if (txt) txt.innerText = "NUBE CONECTADA";
+  refrescarSistemaCompleto();
+  if (mqttClient && !mqttClient.connected) {
+    initMQTT();
+  }
+});
+
+window.addEventListener('offline', () => {
+  notify("🔴 Sin conexión de red. Operando en modo local", "var(--red)");
+  const dot = document.getElementById("syncDot");
+  const txt = document.getElementById("syncStatusText");
+  if (dot) dot.className = "beacon offline";
+  if (txt) txt.innerText = "MODO LOCAL (SIN RED)";
+});
+
+// =========================================================================
+// 4. MOTOR DEL SELECTOR DE TEMAS (4 MUNDOS VISUALES)
 // =========================================================================
 window.cambiarTema = function(nombreTema) {
   if (!['clinical', 'cyber', 'tactical', 'hybrid'].includes(nombreTema)) nombreTema = 'cyber';
@@ -90,7 +113,7 @@ function inicializarTemaGuardado() {
 }
 
 // =========================================================================
-// 4. SINTETIZADOR DE AUDIO (ALARMAS MÉDICAS)
+// 5. SINTETIZADOR DE AUDIO (ALARMAS MÉDICAS)
 // =========================================================================
 function sonarAlarmaSonora() {
   try {
@@ -114,7 +137,7 @@ function sonarAlarmaSonora() {
 }
 
 // =========================================================================
-// 5. VENTANA EMERGENTE FLOTANTE CENTRALIZADA (MODAL)
+// 6. VENTANA EMERGENTE FLOTANTE CENTRALIZADA (MODAL)
 // =========================================================================
 function mostrarModalConfirmacion({ icon = '⚠️', title = 'CONFIRMAR ACCIÓN', msg = '¿Deseas continuar?', okText = 'EJECUTAR', okClass = 'btn-danger', onConfirm = null }) {
   modalConfirmCallback = onConfirm;
@@ -170,7 +193,7 @@ window.pedirConfirmacionFota = function() {
 };
 
 // =========================================================================
-// 6. ENRUTADOR SEGURO DE ACTIVIDADES & BLOQUEO JERÁRQUICO
+// 7. ENRUTADOR SEGURO DE ACTIVIDADES & BLOQUEO JERÁRQUICO
 // =========================================================================
 window.openTopLevel = function(secId) {
   if (!estaAutenticado() && secId !== 'act-login' && secId !== 'act-recovery') {
@@ -313,7 +336,7 @@ function notify(msg, color = 'var(--cyan)') {
 }
 
 // =========================================================================
-// 7. NAVEGACIÓN Y MENÚ ENGRANAJE
+// 8. NAVEGACIÓN Y MENÚ ENGRANAJE
 // =========================================================================
 window.toggleHorizontalDock = function() {
   const dock = document.getElementById("desktopNavBar");
@@ -381,7 +404,7 @@ window.cerrarSesionManual = function() {
 };
 
 // =========================================================================
-// 8. PURGA Y RESET DE CACHÉ LOCAL (FORZAR NUBE)
+// 9. PURGA Y RESET DE CACHÉ LOCAL (FORZAR NUBE)
 // =========================================================================
 window.solicitarLimpiezaCacheLocal = function() {
   mostrarModalConfirmacion({
@@ -405,14 +428,14 @@ window.solicitarLimpiezaCacheLocal = function() {
 };
 
 // =========================================================================
-// 9. BASE DE DATOS LOCAL Y TIEMPO REAL NUBE (SUPABASE REALTIME)
+// 10. BASE DE DATOS LOCAL Y TIEMPO REAL NUBE (SUPABASE REALTIME)
 // =========================================================================
 let db = null;
 const fleet = {};
 
 function initDB() {
   return new Promise((resolve) => {
-    const req = indexedDB.open("AutoclaveFastFleetDB_v30", 1);
+    const req = indexedDB.open("AutoclaveFastFleetDB_v31", 1);
     req.onupgradeneeded = (e) => {
       db = e.target.result;
       if (!db.objectStoreNames.contains("asignaciones")) db.createObjectStore("asignaciones", { keyPath: "mac" });
@@ -545,7 +568,7 @@ async function cargarEquiposGuardados() {
 }
 
 // =========================================================================
-// 10. MQTT HIVEMQ CLOUD (CANAL WSS 8884) & ALERTAS INSTANTÁNEAS
+// 11. MQTT HIVEMQ CLOUD (CANAL WSS 8884) & ALERTAS INSTANTÁNEAS
 // =========================================================================
 let mqttClient;
 
@@ -635,7 +658,7 @@ function procesarAlertaCriticaInmediata(mac, payload) {
   });
 }
 
-// Sincronización de Paquetes Integrales de Ciclo (Autoclave -> Supabase Cloud)
+// Sincronización de Paquetes de Sesión (Autoclave -> Supabase Cloud)
 async function procesarPaqueteOfflineSync(mac, payload) {
   inicializarDispositivoSiNoExiste(mac);
   notify(`📥 Guardando paquete clínico de [${mac}]...`, "var(--purple)");
@@ -647,8 +670,11 @@ async function procesarPaqueteOfflineSync(mac, payload) {
     alias: fleet[mac].meta.alias || payload.alias || mac,
     cliente: fleet[mac].meta.cliente || payload.cliente || "Clínica",
     modelo: fleet[mac].meta.modelo || payload.modelo || "Autoclave",
+    programa: payload.programa || "ESTÁNDAR",
     hora_encendido: payload.hora_encendido || "00:00",
+    inicio_ciclo: payload.inicio_ciclo || payload.hora_encendido || "00:00",
     hora_apagado: payload.hora_apagado || "00:00",
+    duracion_total_seg: payload.duracion_total_seg || 0,
     ciclos_acumulados: payload.ciclos_acumulados || payload.ciclos || fleet[mac].meta.ciclosCompletados || 0,
     limite_mantenimiento: payload.limite_mantenimiento || payload.limite || 200,
     temp_max: parseFloat(payload.temp_max) || 0,
@@ -657,6 +683,7 @@ async function procesarPaqueteOfflineSync(mac, payload) {
     diagnostico_principal: payload.diagnostico_principal || payload.diagnostico || "SESIÓN CONFORME",
     fase_final: payload.fase_final || "APAGADO_SEGURO",
     ciclos_detalle: payload.fases_desglose || payload.ciclos_detalle || [],
+    errores_alarmas: payload.errores_alarmas || null,
     eventos: payload.eventos || [],
     es_offline: !!payload.es_offline
   };
@@ -669,7 +696,6 @@ async function procesarPaqueteOfflineSync(mac, payload) {
         guardadoEnNube = true;
       } else {
         console.error("Error al guardar en Supabase:", error);
-        notify("Aviso Supabase: " + (error.message || "Error al insertar"), "var(--red)");
       }
     } catch(err) {
       console.error("Excepción Supabase:", err);
@@ -755,7 +781,7 @@ function getConnectionQuality(dev) {
 }
 
 // =========================================================================
-// 11. DASHBOARD ADAPTATIVO & CÁLCULO DE MANTENIMIENTO PREVENTIVO
+// 12. DASHBOARD ADAPTATIVO & CÁLCULO DE MANTENIMIENTO PREVENTIVO (10%)
 // =========================================================================
 window.setFleetHealthFilter = function(filterType) {
   currentHealthFilter = filterType;
@@ -833,9 +859,9 @@ function actualizarCardDashboard(mac) {
   const limite = meta.limiteMantenimiento || 200;
   const pct = Math.min(100, Math.round((ciclos / limite) * 100));
 
-  // Alerta preventiva a partir del 90% (margen del 10% restante)
+  // Alerta preventiva estricta al 10% restante o vencido
   const esVencido = ciclos >= limite;
-  const esAlertaProximo = (limite - ciclos) <= (limite * 0.10); // Menos del 10% restante
+  const esAlertaProximo = (limite - ciclos) <= (limite * 0.10);
   const mantClass = esVencido ? 'danger' : (esAlertaProximo ? 'warn' : '');
   const estadoTexto = esVencido ? 'MANT. VENCIDO' : (esAlertaProximo ? 'MANT. PRÓXIMO (10%)' : 'SALUD ÓPTIMA');
 
@@ -884,7 +910,7 @@ function actualizarCardDashboard(mac) {
 }
 
 // =========================================================================
-// 12. DETALLE DEL EQUIPO Y COMANDOS TÁCTICOS
+// 13. DETALLE DEL EQUIPO Y ACCIONES DE ODÓMETRO
 // =========================================================================
 window.abrirDetalleEquipo = function(mac) {
   currentInspectedMAC = mac;
@@ -932,22 +958,22 @@ function switchDetailTab(tabId) {
   }
 }
 
-// Resetear el odómetro físico del hardware a 0 mediante MQTT
+// Botón: Resetear el odómetro físico en el microcontrolador a 0
 window.resetearOdometroHardware = function() {
-  if (!currentInspectedMAC) return;
+  if (!currentInspectedMAC) return notify("Selecciona un equipo primero", "var(--amber)");
   if (usuarioActual && usuarioActual.rol !== "SUPERADMIN") return notify("Permiso denegado: solo SUPERADMIN", "var(--red)");
 
   mostrarModalConfirmacion({
     icon: '🔄',
     title: 'RESETEAR ODÓMETRO DE CICLOS',
-    msg: `¿Deseas reiniciar a 0 el odómetro de ciclos del autoclave ${fleet[currentInspectedMAC]?.meta?.alias || currentInspectedMAC}?`,
+    msg: `¿Deseas reiniciar a 0 el odómetro físico de ciclos del autoclave ${fleet[currentInspectedMAC]?.meta?.alias || currentInspectedMAC}? El siguiente ciclo comenzará como #1.`,
     okText: 'RESETEAR A CERO',
     okClass: 'btn-danger',
     onConfirm: () => {
       mqttClient.publish(`autoclave_med_2026/${currentInspectedMAC}/config`, JSON.stringify({ cmd: "RESET_ODOMETRO" }));
       if (fleet[currentInspectedMAC]?.meta) fleet[currentInspectedMAC].meta.ciclosCompletados = 0;
       actualizarCardDashboard(currentInspectedMAC);
-      notify("Odómetro reiniciado a 0 en la memoria del hardware", "var(--green)");
+      notify("Odómetro reiniciado a 0 en la memoria física del equipo", "var(--green)");
     }
   });
 };
@@ -1193,7 +1219,7 @@ window.eliminarEquipoTotal = async function(mac) {
 };
 
 // =========================================================================
-// 13. HISTORIAL DE CICLOS DEL EQUIPO (CONSULTA DIRECTA Y PURA POR MAC)
+// 14. HISTORIAL DE CICLOS DEL EQUIPO (CONSULTA DIRECTA POR MAC A SUPABASE)
 // =========================================================================
 async function cargarLogsDetalle(mac) {
   const tbody = document.getElementById("detLogsTbody");
@@ -1255,7 +1281,7 @@ function renderLogsDetalleFilas(logs, tbody) {
 }
 
 // =========================================================================
-// 14. GESTIÓN DE MANTENIMIENTOS CLÍNICOS & ALARMAS (8:00 AM)
+// 15. GESTIÓN DE MANTENIMIENTOS CLÍNICOS & ALARMAS (8:00 AM)
 // =========================================================================
 window.guardarProgramacionMantenimiento = async function() {
   if (!currentInspectedMAC) return notify("Selecciona un equipo primero", "var(--amber)");
@@ -1389,7 +1415,7 @@ function verificarAlarmasMantenimiento(items) {
 }
 
 // =========================================================================
-// 15. CENTRO DE AUDITORÍA CLÍNICA (KPIS REALES Y CERO INVALID DATE)
+// 16. CENTRO DE AUDITORÍA CLÍNICA (KPIS REALES Y CERO INVALID DATE)
 // =========================================================================
 let reportesCache = [];
 
@@ -1405,7 +1431,7 @@ async function renderizarRegistros() {
 
   let items = [];
 
-  // 1. CONSULTA DIRECTA Y PURA A SUPABASE CLOUD
+  // 1. CONSULTA DIRECTA A SUPABASE CLOUD (ÚNICA FUENTE DE VERDAD)
   if (sbClient) {
     try {
       let query = sbClient.from('reportes_autoclaves').select('*').order('created_at', { ascending: false });
@@ -1478,13 +1504,12 @@ function guardarCopiaEnIndexedDB(items) {
   } catch(e) {}
 }
 
-// Renderizado con cálculo real de ciclos conformes ejecutados
 function pintarTablaReportes(items, fType, fText, tbody) {
   reportesCache = items;
 
   document.getElementById("kpiTotalSesiones").innerText = items.length;
 
-  // CORRECCIÓN MATEMÁTICA: Contar cuántas sesiones fueron conformes (no sumar odómetros)
+  // CORRECCIÓN MATEMÁTICA: Contar cuántos ciclos conformes se hicieron (no sumar odómetros)
   const ciclosConformesReales = items.filter(x => x.diagnosticoPrincipal && x.diagnosticoPrincipal.includes("CONFORME")).length;
   document.getElementById("kpiTotalCiclos").innerText = ciclosConformesReales;
 
@@ -1564,7 +1589,7 @@ function pintarTablaReportes(items, fType, fText, tbody) {
 }
 
 // =========================================================================
-// 16. VISOR DETALLADO DEL PAQUETE CON DESGLOSE DE FASES Y FALLOS
+// 17. VISOR DETALLADO DEL PAQUETE CON DESGLOSE DE FASES Y FALLOS
 // =========================================================================
 window.verPaqueteSesion = function(sessionId) {
   const ses = reportesCache.find(x => x.sessionId === sessionId);
@@ -1657,7 +1682,7 @@ window.verPaqueteSesion = function(sessionId) {
 };
 
 // =========================================================================
-// 17. CERTIFICADO MÉDICO CLÍNICO CON DESGLOSE DE FASES
+// 18. CERTIFICADO MÉDICO CLÍNICO CON DESGLOSE DE FASES
 // =========================================================================
 window.imprimirCertificadoSesionActual = function() {
   if (!currentViewingReport) return;
@@ -1782,7 +1807,7 @@ window.confirmarVaciarDB = async function() {
 };
 
 // =========================================================================
-// 18. BACKUP Y RESTAURACIÓN INTEGRAL DE REPORTES (JSON & CSV)
+// 19. BACKUP Y RESTAURACIÓN INTEGRAL DE REPORTES (JSON & CSV)
 // =========================================================================
 window.descargarBackupJSON = function() {
   const data = reportesCache || [];
@@ -1870,7 +1895,7 @@ window.exportarRegistrosCSV = function() {
 };
 
 // =========================================================================
-// 19. FOTA HUB & GESTIÓN DE FLOTA
+// 20. FOTA HUB & GESTIÓN DE FLOTA
 // =========================================================================
 let currentFotaFilter = 'ALL';
 window.filterFotaList = function(tipo) { currentFotaFilter = tipo; renderFotaLiveList(); };
@@ -2032,7 +2057,7 @@ function actualizarSelectoresGlobales() {
 }
 
 // =========================================================================
-// 20. JERARQUÍA ESTRICTA (RBAC) & GESTIÓN DE USUARIOS
+// 21. JERARQUÍA ESTRICTA (RBAC) & GESTIÓN DE USUARIOS
 // =========================================================================
 function aplicarPermisosRol() {
   if (!usuarioActual) return;
@@ -2058,6 +2083,11 @@ function aplicarPermisosRol() {
   const btnDetDel = document.getElementById("btnDetDeleteDevice");
   if (btnDetDel) {
     btnDetDel.style.display = esAdmin ? 'inline-flex' : 'none';
+  }
+
+  const btnDetOdom = document.getElementById("btnDetResetOdometer");
+  if (btnDetOdom) {
+    btnDetOdom.style.display = esAdmin ? 'inline-flex' : 'none';
   }
 }
 
@@ -2367,7 +2397,7 @@ window.guardarNuevaContrasena = async function() {
 };
 
 // =========================================================================
-// 21. REFRESCO PERIÓDICO DEL MONITOR
+// 22. REFRESCO PERIÓDICO DEL MONITOR
 // =========================================================================
 setInterval(() => {
   if (currentActivity === 'act-telemetry') {
