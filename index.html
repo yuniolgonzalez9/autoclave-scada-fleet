@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es" data-theme="cyber">
+<html lang="es" data-theme="tactical">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
@@ -8,18 +8,18 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="theme-color" content="#020409">
+  <meta name="theme-color" content="#050811">
   
-  <!-- Icono Oficial PWA / Pantalla de Inicio Móvil (Vectorial SVG) -->
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2300f0ff' stroke-width='2'><circle cx='12' cy='12' r='9'/><path d='M12 3v6m0 6v6M3 12h6m6 0h6'/><circle cx='12' cy='12' r='3' fill='%2300f0ff'/></svg>">
-  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23020409' stroke='%2300f0ff' stroke-width='2'><rect width='24' height='24' rx='5' fill='%23020409'/><circle cx='12' cy='12' r='8'/><path d='M12 4v4m0 8v4M4 12h4m8 0h4'/><circle cx='12' cy='12' r='2.5' fill='%2300f0ff'/></svg>">
+  <!-- Iconos Oficiales PWA y Móvil -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2300e5ff' stroke-width='2'><circle cx='12' cy='12' r='9'/><path d='M12 3v6m0 6v6M3 12h6m6 0h6'/><circle cx='12' cy='12' r='3' fill='%2300e5ff'/></svg>">
+  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23050811' stroke='%2300e5ff' stroke-width='2'><rect width='24' height='24' rx='5' fill='%23050811'/><circle cx='12' cy='12' r='8'/><path d='M12 4v4m0 8v4M4 12h4m8 0h4'/><circle cx='12' cy='12' r='2.5' fill='%2300e5ff'/></svg>">
   
   <title>AUTOCLAVE SCADA // ENTERPRISE DECK</title>
   
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;800&family=Orbitron:wght@600;800;900&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="style.css?v=17">
+  <link rel="stylesheet" href="style.css?v=18">
   
   <!-- Dependencias Externas Esenciales -->
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
@@ -30,7 +30,7 @@
   <!-- AVISO TOAST FLOTANTE -->
   <div id="toastApp" class="toast-hud">Acción completada</div>
 
-  <!-- VENTANA EMERGENTE FLOTANTE CENTRALIZADA (MODAL DE CONFIRMACIÓN) -->
+  <!-- VENTANA EMERGENTE FLOTANTE CENTRALIZADA (MODAL) -->
   <div id="modalConfirmOverlay" class="modal-overlay" style="display: none;">
     <div class="modal-card">
       <div class="modal-icon" id="modalConfirmIcon">⚠️</div>
@@ -56,7 +56,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="9"/>
             <path d="M12 3v6m0 6v6M3 12h6m6 0h6"/>
-            <circle cx="12" cy="12" r="3" fill="#00f0ff"/>
+            <circle cx="12" cy="12" r="3" fill="#00e5ff"/>
           </svg>
         </div>
         <div class="brand-text-block">
@@ -78,7 +78,7 @@
       </div>
     </div>
     
-    <!-- DERECHA: USUARIO CON BADGE DE ROL Y ENGRANAJE ⚙️ -->
+    <!-- DERECHA: USUARIO CON BADGE Y ENGRANAJE ⚙️ -->
     <div class="hud-right">
       <div class="user-chip">
         <span class="user-name" id="currentUserName">ADMIN</span>
@@ -102,10 +102,10 @@
             <button class="btn-theme-opt" id="themeBtnHybrid" onclick="cambiarTema('hybrid')">
               <span>⚡</span> Híbrido
             </button>
-            <button class="btn-theme-opt active" id="themeBtnCyber" onclick="cambiarTema('cyber')">
+            <button class="btn-theme-opt" id="themeBtnCyber" onclick="cambiarTema('cyber')">
               <span>🌙</span> Cyber
             </button>
-            <button class="btn-theme-opt" id="themeBtnTactical" onclick="cambiarTema('tactical')">
+            <button class="btn-theme-opt active" id="themeBtnTactical" onclick="cambiarTema('tactical')">
               <span>🛡️</span> Pizarra
             </button>
           </div>
@@ -258,7 +258,7 @@
       </div>
     </section>
 
-    <!-- ACTIVITY 2: DETALLE DEL EQUIPO (ESQUEMA ADAPTATIVO) -->
+    <!-- ACTIVITY 2: DETALLE DEL EQUIPO -->
     <section id="act-device-detail" class="activity activity-child">
       <div class="card" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 16px;">
         <div>
@@ -387,7 +387,13 @@
 
           <!-- HISTORIAL Y ALERTAS DE MANTENIMIENTO -->
           <div class="card">
-            <div style="font-family:'Orbitron'; font-size:0.85rem; color:var(--cyan); font-weight:800; margin-bottom:12px;">ESTADO DE SALUD & SERVICIOS REALIZADOS</div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+              <div style="font-family:'Orbitron'; font-size:0.85rem; color:var(--cyan); font-weight:800;">REGISTRO DE SERVICIOS</div>
+              <div style="display:flex; gap:6px;">
+                <button class="btn btn-sm btn-secondary" onclick="exportarMantenimientosExcel()" title="Exportar historial de servicios a Excel">📊 EXCEL</button>
+                <button class="btn btn-sm btn-secondary" onclick="imprimirActaMantenimiento()" title="Imprimir certificado PDF de servicios">🖨️ PDF ACTA</button>
+              </div>
+            </div>
             
             <!-- Banner de Alerta en Caliente -->
             <div id="maintAlarmBanner" class="alarm-callout" style="display:none; margin-bottom:14px;">
@@ -419,7 +425,7 @@
         <div class="card">
           <div class="input-group">
             <label>VERSIÓN A DESPLEGAR:</label>
-            <input type="text" id="fotaVersionInput" class="input-field" value="v4.0">
+            <input type="text" id="fotaVersionInput" class="input-field" value="v4.1">
           </div>
           <div class="input-group">
             <label>URL DEL BINARIO (.BIN):</label>
@@ -511,12 +517,13 @@
           <div style="font-size: 0.65rem; color: var(--text-muted);">PAQUETES DE SESIÓN (ENCENDIDO ➔ CICLOS EXACTOS ➔ APAGADO)</div>
         </div>
         
-        <!-- HERRAMIENTAS DE GESTIÓN -->
+        <!-- HERRAMIENTAS DE GESTIÓN Y EXPORTACIÓN AVANZADA -->
         <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-          <button class="btn btn-sm btn-secondary" onclick="descargarBackupJSON()" title="Descargar copia de seguridad clínica en JSON">💾 BACKUP JSON</button>
+          <button class="btn btn-sm btn-secondary" onclick="exportarAuditoriaExcel()" title="Descargar auditoría completa en formato Microsoft Excel">📊 EXCEL AUDITORÍA</button>
+          <button class="btn btn-sm btn-secondary" onclick="imprimirReporteAuditoriaCompleta()" title="Imprimir o guardar como PDF oficial de auditoría">🖨️ PDF AUDITORÍA</button>
+          <button class="btn btn-sm btn-secondary" onclick="descargarBackupJSON()" title="Descargar copia de seguridad en JSON">💾 BACKUP JSON</button>
           <button class="btn btn-sm btn-secondary" data-rbac="SUPERADMIN" onclick="document.getElementById('inputRestoreJSON').click()" title="Restaurar copia local">📤 RESTAURAR</button>
           <input type="file" id="inputRestoreJSON" accept=".json" style="display:none;" onchange="restaurarBackupJSON(this.files)">
-          <button class="btn btn-sm btn-secondary" onclick="exportarRegistrosCSV()">📥 EXPORTAR CSV</button>
           <button class="btn btn-sm btn-warn" onclick="solicitarLimpiezaCacheLocal()" title="Elimina registros desincronizados y fuerza la lectura de la nube">🔄 FORZAR NUBE</button>
           <button class="btn btn-sm btn-warn" id="btnEliminarReportes" data-rbac="SUPERADMIN" onclick="eliminarReportesSeleccionados()">🗑️ ELIMINAR MARCADOS</button>
           <button class="btn btn-sm btn-danger" id="btnVaciarLogs" data-rbac="SUPERADMIN" onclick="confirmarVaciarDB()">🧹 VACIAR NUBE</button>
@@ -544,7 +551,7 @@
               <option value="TODOS">TODAS LAS SESIONES</option>
               <option value="CICLO_OK">CON CICLOS CONFORMES</option>
               <option value="ALARMA">CON ALARMAS / ERRORES</option>
-              <option value="MANT_WARN">PRÓXIMOS A MANTENIMIENTO</option>
+              <option value="MANT_WARN">PRÓXIMOS A MANTENIMIENTO (10%)</option>
               <option value="OFFLINE_SYNC">SINCRONIZADOS OFFLINE</option>
             </select>
           </div>
@@ -678,7 +685,7 @@
 
   </main>
 
-  <!-- BARRA DE NAVEGACIÓN INFERIOR PARA MÓVILES (ADAPTATIVA A LA JERARQUÍA) -->
+  <!-- BARRA DE NAVEGACIÓN INFERIOR PARA MÓVILES -->
   <nav class="mobile-bottom-nav" id="mobileBottomNav">
     <button class="m-tab active" data-tab="act-telemetry" onclick="openTopLevel('act-telemetry')">
       <span class="m-icon">⚡</span>
@@ -702,6 +709,6 @@
     </button>
   </nav>
 
-  <script src="app.js?v=17"></script>
+  <script src="app.js?v=18"></script>
 </body>
 </html>
