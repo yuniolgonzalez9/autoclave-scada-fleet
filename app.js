@@ -27,7 +27,7 @@ function estaAutenticado() {
   return !!usuarioActual && !!localStorage.getItem("scada_logged_user");
 }
 
-// Utilidad clínica para formatear fechas sin que jamás diga "Invalid Date"
+// Utilidad clínica para formatear fechas limpias
 function formatearFechaClinica(fechaRaw) {
   if (!fechaRaw) return new Date().toLocaleDateString();
   const d = new Date(fechaRaw);
@@ -41,7 +41,7 @@ function formatearFechaClinica(fechaRaw) {
   return d.toLocaleDateString();
 }
 
-// Cálculo matemático de duración exacta
+// Cálculo de duración exacta entre marcas de tiempo
 function calcularDuracionTexto(horaInicio, horaFin, segRegistrados = 0) {
   if (segRegistrados && segRegistrados > 0) {
     const m = Math.floor(segRegistrados / 60);
@@ -55,7 +55,7 @@ function calcularDuracionTexto(horaInicio, horaFin, segRegistrados = 0) {
     if (pI.length >= 2 && pF.length >= 2) {
       let sI = pI[0] * 3600 + pI[1] * 60 + (pI[2] || 0);
       let sF = pF[0] * 3600 + pF[1] * 60 + (pF[2] || 0);
-      if (sF < sI) sF += 86400; // Si cruzó la medianoche
+      if (sF < sI) sF += 86400; // Cruce de medianoche
       const diff = sF - sI;
       const m = Math.floor(diff / 60);
       const s = diff % 60;
@@ -69,7 +69,7 @@ function calcularDuracionTexto(horaInicio, horaFin, segRegistrados = 0) {
 // 3. DETECTOR DE CONECTIVIDAD HOSPITALARIA EN TIEMPO REAL
 // =========================================================================
 window.addEventListener('online', () => {
-  notify("🟢 Conexión restablecida. Sincronizando con la nube...", "var(--green)");
+  notify("🟢 Red restablecida. Sincronizando con Supabase...", "var(--green)");
   const dot = document.getElementById("syncDot");
   const txt = document.getElementById("syncStatusText");
   if (dot) dot.className = "beacon online";
@@ -81,7 +81,7 @@ window.addEventListener('online', () => {
 });
 
 window.addEventListener('offline', () => {
-  notify("🔴 Sin conexión de red. Operando en modo local", "var(--red)");
+  notify("🔴 Sin conexión de red. Modo local activo", "var(--red)");
   const dot = document.getElementById("syncDot");
   const txt = document.getElementById("syncStatusText");
   if (dot) dot.className = "beacon offline";
@@ -92,7 +92,7 @@ window.addEventListener('offline', () => {
 // 4. MOTOR DEL SELECTOR DE TEMAS (4 MUNDOS VISUALES)
 // =========================================================================
 window.cambiarTema = function(nombreTema) {
-  if (!['clinical', 'cyber', 'tactical', 'hybrid'].includes(nombreTema)) nombreTema = 'cyber';
+  if (!['clinical', 'cyber', 'tactical', 'hybrid'].includes(nombreTema)) nombreTema = 'tactical';
   
   document.documentElement.setAttribute('data-theme', nombreTema);
   localStorage.setItem("scada_theme", nombreTema);
@@ -100,7 +100,7 @@ window.cambiarTema = function(nombreTema) {
   document.querySelectorAll('.btn-theme-opt').forEach(btn => btn.classList.remove('active'));
   const btnId = nombreTema === 'clinical' ? 'themeBtnClinical' : 
                (nombreTema === 'hybrid' ? 'themeBtnHybrid' : 
-               (nombreTema === 'tactical' ? 'themeBtnTactical' : 'themeBtnCyber'));
+               (nombreTema === 'cyber' ? 'themeBtnCyber' : 'themeBtnTactical'));
   const btnActivo = document.getElementById(btnId);
   if (btnActivo) btnActivo.classList.add('active');
 
@@ -108,7 +108,7 @@ window.cambiarTema = function(nombreTema) {
 };
 
 function inicializarTemaGuardado() {
-  const temaGuardado = localStorage.getItem("scada_theme") || "cyber";
+  const temaGuardado = localStorage.getItem("scada_theme") || "tactical";
   cambiarTema(temaGuardado);
 }
 
@@ -435,7 +435,7 @@ const fleet = {};
 
 function initDB() {
   return new Promise((resolve) => {
-    const req = indexedDB.open("AutoclaveFastFleetDB_v32", 1);
+    const req = indexedDB.open("AutoclaveFastFleetDB_v33", 1);
     req.onupgradeneeded = (e) => {
       db = e.target.result;
       if (!db.objectStoreNames.contains("asignaciones")) db.createObjectStore("asignaciones", { keyPath: "mac" });
@@ -474,7 +474,7 @@ function iniciarSuscripcionNubeRealtime() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'reportes_autoclaves' }, (payload) => {
         const syncText = document.getElementById("syncStatusText");
         if (syncText) syncText.innerText = "NUBE CONECTADA";
-        notify(`📋 Nuevo paquete en la nube [${payload.eventType}]`, "var(--green)");
+        notify(`📋 Paquete recibido en la nube [${payload.eventType}]`, "var(--green)");
         if (currentActivity === 'act-reports') renderizarRegistros();
         if (currentActivity === 'act-device-detail' && currentInspectedMAC) {
           cargarLogsDetalle(currentInspectedMAC);
@@ -663,7 +663,6 @@ async function procesarPaqueteOfflineSync(mac, payload) {
   inicializarDispositivoSiNoExiste(mac);
   notify(`📥 Guardando paquete clínico de [${mac}]...`, "var(--purple)");
 
-  // Sincronizar el odómetro de la tarjeta con el valor real del paquete
   const ciclosReales = payload.ciclos_acumulados || payload.ciclos || 0;
   fleet[mac].meta.ciclosCompletados = ciclosReales;
   if (!fleet[mac].datos.cfg) fleet[mac].datos.cfg = {};
@@ -735,13 +734,12 @@ function procesarMetaGlobal(mac, metaData) {
   }
 }
 
-// CORRECCIÓN CLAVE: Sincronizar el odómetro real enviado en telemetría
+// Sincronización en vivo del odómetro de ciclos
 function procesarTelemetriaReal(mac, data) {
   inicializarDispositivoSiNoExiste(mac);
   fleet[mac].lastSeen = Date.now();
 
   if (data.cfg) {
-    // Sincronizar ciclos reales del ESP32 con la metadata local
     if (data.cfg.ciclos !== undefined) {
       fleet[mac].meta.ciclosCompletados = data.cfg.ciclos;
     }
@@ -799,7 +797,7 @@ function getConnectionQuality(dev) {
 }
 
 // =========================================================================
-// 12. DASHBOARD ADAPTATIVO & CÁLCULO DE ODÓMETRO REAL (SIN DESBORDES)
+// 12. DASHBOARD ADAPTATIVO & CÁLCULO DE ODÓMETRO REAL
 // =========================================================================
 window.setFleetHealthFilter = function(filterType) {
   currentHealthFilter = filterType;
@@ -864,7 +862,6 @@ function renderFleetDashboard() {
   });
 }
 
-// CORRECCIÓN: Dibuja los ciclos reales de telemetría y contenedor de fase elástico
 function actualizarCardDashboard(mac) {
   const card = document.getElementById(`card-${mac}`);
   if (!card || !fleet[mac]) return;
@@ -874,7 +871,6 @@ function actualizarCardDashboard(mac) {
   const meta = item.meta || { alias: mac, cliente: "Pendiente", modelo: "Autoclave", ciclosCompletados: 0, limiteMantenimiento: 200 };
   const health = getConnectionQuality(item);
 
-  // Leer ciclos reales de la telemetría del ESP32 prioritariamente
   const ciclos = (d.cfg && d.cfg.ciclos !== undefined) ? d.cfg.ciclos : (meta.ciclosCompletados || 0);
   const limite = (d.cfg && d.cfg.lim_mant !== undefined) ? d.cfg.lim_mant : (meta.limiteMantenimiento || 200);
   const pct = Math.min(100, Math.round((ciclos / limite) * 100));
@@ -922,7 +918,6 @@ function actualizarCardDashboard(mac) {
       <div class="health-bar"><div class="health-fill ${mantClass}" style="width: ${pct}%;"></div></div>
     </div>
 
-    <!-- CONTENEDOR ELÁSTICO ADAPTATIVO (NUNCA SE SALE EL TEXTO) -->
     <div style="background: var(--bg-surface); border: 1px solid var(--border-subtle); padding: 8px 10px; border-radius: 6px; font-size: 0.72rem; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
       <span style="color: var(--text-muted); font-weight: 800; font-size: 0.68rem;">FASE ACTUAL:</span> 
       <span style="color: ${faseColor}; font-weight: 900; letter-spacing: 0.8px; text-align: right; word-break: break-word;">${faseTexto}</span>
@@ -983,7 +978,7 @@ function switchDetailTab(tabId) {
   }
 }
 
-// Botón de reseteo físico de odómetro
+// Botón: Resetear odómetro de ciclos a cero en hardware
 window.resetearOdometroHardware = function() {
   if (!currentInspectedMAC) return notify("Selecciona un equipo primero", "var(--amber)");
   if (usuarioActual && usuarioActual.rol !== "SUPERADMIN") return notify("Permiso denegado: solo SUPERADMIN", "var(--red)");
@@ -1440,8 +1435,100 @@ function verificarAlarmasMantenimiento(items) {
   }
 }
 
+// Exportar historial de mantenimientos a Excel
+window.exportarMantenimientosExcel = function() {
+  if (!currentInspectedMAC) return notify("Selecciona un autoclave primero", "var(--amber)");
+  const item = fleet[currentInspectedMAC];
+  const meta = item?.meta || { alias: currentInspectedMAC, cliente: "Clínica", modelo: "Autoclave" };
+
+  sbClient
+    .from('mantenimientos_equipos')
+    .select('*')
+    .eq('mac', currentInspectedMAC)
+    .order('created_at', { ascending: false })
+    .then(({ data }) => {
+      const records = data || [];
+      if (!records.length) return notify("Sin registros de mantenimiento para exportar", "var(--amber)");
+
+      let csv = "\uFEFF"; // UTF-8 BOM para que Excel respete acentos y caracteres
+      csv += "HISTORIAL TÉCNICO DE MANTENIMIENTO Y SERVICIO BIOMÉDICO\n";
+      csv += `AUTOCLAVE,"${meta.alias}",MAC,"${currentInspectedMAC}",CLIENTE,"${meta.cliente}",MODELO,"${meta.modelo}"\n\n`;
+      csv += "ID,FECHA_INTERVENCION,TIPO_SERVICIO,TECNICO_RESPONSABLE,CICLOS_ODOMETRO,FECHA_PROGRAMADA,NOTAS_DETALLES\n";
+
+      records.forEach(m => {
+        let fechaProg = "--";
+        let notas = m.descripcion || "";
+        if (m.descripcion && m.descripcion.includes("OBJETIVO_FECHA:")) {
+          const parts = m.descripcion.split("OBJETIVO_FECHA:")[1].split(" |");
+          fechaProg = parts[0];
+          notas = parts.slice(1).join(" |").trim();
+        }
+        csv += `"${m.id}","${formatearFechaClinica(m.created_at)}","${m.tipo_servicio}","${m.tecnico_responsable}","${m.ciclos_al_momento || 0}","${fechaProg}","${notas}"\n`;
+      });
+
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `Mantenimientos_${meta.alias}_${Date.now()}.csv`;
+      a.click();
+      notify("📊 Archivo de mantenimiento descargado para Excel", "var(--green)");
+    });
+};
+
+// Imprimir Acta Oficial de Mantenimiento Biomédico en PDF
+window.imprimirActaMantenimiento = function() {
+  if (!currentInspectedMAC) return notify("Selecciona un autoclave primero", "var(--amber)");
+  const item = fleet[currentInspectedMAC];
+  const meta = item?.meta || { alias: currentInspectedMAC, cliente: "Clínica", modelo: "Autoclave" };
+
+  sbClient
+    .from('mantenimientos_equipos')
+    .select('*')
+    .eq('mac', currentInspectedMAC)
+    .order('created_at', { ascending: false })
+    .then(({ data }) => {
+      const records = data || [];
+      const v = window.open("", "_blank");
+      v.document.write(`
+        <html><head><title>ACTA DE SERVICIO TÉCNICO - ${meta.alias}</title>
+        <style>body{font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;padding:40px;color:#111;}table{width:100%;border-collapse:collapse;margin:20px 0;}th,td{border:1px solid #ccc;padding:10px;text-align:left;font-size:12px;}th{background:#f4f6f8;}</style>
+        </head><body>
+        <h2>ACTA TÉCNICA DE MANTENIMIENTO Y CALIBRACIÓN BIOMÉDICA</h2>
+        <p>HOSPITAL / CLÍNICA: <b>${meta.cliente.toUpperCase()}</b></p>
+        <p>EQUIPO: <b>${meta.alias}</b> (MAC: ${currentInspectedMAC}) | MODELO: ${meta.modelo}</p>
+        <p>FECHA DE EMISIÓN: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}</p>
+        <hr>
+        <h3>HISTORIAL DE INTERVENCIONES REGISTRADAS EN LA NUBE:</h3>
+        <table>
+          <thead><tr><th>ID</th><th>Fecha</th><th>Tipo de Servicio</th><th>Técnico Responsable</th><th>Ciclos Odómetro</th><th>Fecha Programada</th><th>Observaciones</th></tr></thead>
+          <tbody>
+            ${records.map(r => {
+              let fProg = "--";
+              let notas = r.descripcion || "";
+              if (r.descripcion && r.descripcion.includes("OBJETIVO_FECHA:")) {
+                const parts = r.descripcion.split("OBJETIVO_FECHA:")[1].split(" |");
+                fProg = parts[0];
+                notas = parts.slice(1).join(" |").trim();
+              }
+              return `<tr><td>#${r.id}</td><td>${formatearFechaClinica(r.created_at)}</td><td><b>${r.tipo_servicio}</b></td><td>${r.tecnico_responsable}</td><td>${r.ciclos_al_momento || 0}</td><td>${fProg}</td><td>${notas}</td></tr>`;
+            }).join("")}
+          </tbody>
+        </table>
+        <br><br><br>
+        <table style="border:none; width:100%;">
+          <tr style="border:none;">
+            <td style="border:none; text-align:center; width:50%;">___________________________________<br><b>Firma Técnico Biomédico Certificado</b></td>
+            <td style="border:none; text-align:center; width:50%;">___________________________________<br><b>Sello y Conformidad Institucional</b></td>
+          </tr>
+        </table>
+        <script>window.print();<\/script></body></html>
+      `);
+      v.document.close();
+    });
+};
+
 // =========================================================================
-// 16. CENTRO DE AUDITORÍA CLÍNICA (KPIS REALES Y CERO INVALID DATE)
+// 16. CENTRO DE AUDITORÍA CLÍNICA (SUPABASE DIRECTO)
 // =========================================================================
 let reportesCache = [];
 
@@ -1457,7 +1544,6 @@ async function renderizarRegistros() {
 
   let items = [];
 
-  // 1. CONSULTA DIRECTA Y PURA A SUPABASE CLOUD
   if (sbClient) {
     try {
       let query = sbClient.from('reportes_autoclaves').select('*').order('created_at', { ascending: false });
@@ -1507,7 +1593,6 @@ async function renderizarRegistros() {
     }
   }
 
-  // 2. Solo si no hay internet se lee el respaldo local
   if (!navigator.onLine && db) {
     const tx = db.transaction(["reportes_sesiones"], "readonly");
     tx.objectStore("reportes_sesiones").getAll().onsuccess = (e) => {
@@ -1535,11 +1620,9 @@ function pintarTablaReportes(items, fType, fText, tbody) {
 
   document.getElementById("kpiTotalSesiones").innerText = items.length;
 
-  // CORRECCIÓN MATEMÁTICA: Contar cuántas sesiones fueron conformes (no sumar odómetros)
   const ciclosConformesReales = items.filter(x => x.diagnosticoPrincipal && x.diagnosticoPrincipal.includes("CONFORME")).length;
   document.getElementById("kpiTotalCiclos").innerText = ciclosConformesReales;
 
-  // Alerta preventiva: equipos a los que les queda el 10% o menos para el límite
   const mantAlerts = items.filter(x => {
     const lim = x.limiteMantenimiento || 200;
     const acum = x.ciclosAcumulados || 0;
@@ -1708,8 +1791,92 @@ window.verPaqueteSesion = function(sessionId) {
 };
 
 // =========================================================================
-// 18. CERTIFICADO MÉDICO CLÍNICO CON DESGLOSE DE FASES
+// 18. EXPORTACIONES AVANZADAS (EXCEL & PDF DE AUDITORÍA)
 // =========================================================================
+
+// Exportar auditoría de sesiones a Excel (.csv con formato UTF-8 profesional)
+window.exportarAuditoriaExcel = function() {
+  const seleccionadosChecks = Array.from(document.querySelectorAll(".check-report-item:checked"));
+  let dataParaExportar = [];
+
+  if (seleccionadosChecks.length > 0) {
+    const ids = seleccionadosChecks.map(c => c.getAttribute("data-session"));
+    dataParaExportar = (reportesCache || []).filter(r => ids.includes(r.sessionId));
+  } else {
+    dataParaExportar = reportesCache || [];
+  }
+
+  if (!dataParaExportar.length) return notify("No hay datos de auditoría para exportar", "var(--amber)");
+
+  let csv = "\uFEFF"; // BOM UTF-8 para visualización perfecta de tildes en Excel
+  csv += "AUDITORÍA CLÍNICA DE SESIONES Y CICLOS DE ESTERILIZACIÓN\n";
+  csv += `GENERADO EL,"${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}",TOTAL_REGISTROS,"${dataParaExportar.length}"\n\n`;
+  csv += "ID_SESION,FECHA,MAC,ALIAS_EQUIPO,CLIENTE_HOSPITAL,MODELO,PROGRAMA,HORA_BOOT,INICIO_CICLO,HORA_FIN,DURACION,ODOMETRO_CICLOS,T_MAX_C,P_MAX_BAR,DIAGNOSTICO_GLOBAL,FALLO_DETECTADO,MENSAJE_FALLO\n";
+
+  dataParaExportar.forEach(d => {
+    const durTexto = calcularDuracionTexto(d.horaEncendido, d.horaApagado, d.duracionTotalSeg);
+    const huboFallo = (d.erroresAlarmas && d.erroresAlarmas.hubo_fallo) ? "SI" : "NO";
+    const msgFallo = (d.erroresAlarmas && d.erroresAlarmas.mensaje) ? d.erroresAlarmas.mensaje : "--";
+
+    csv += `"${d.sessionId}","${formatearFechaClinica(d.fecha)}","${d.mac}","${d.alias}","${d.cliente}","${d.modelo}","${d.programa}","${d.horaEncendido}","${d.inicioCiclo || d.horaEncendido}","${d.horaApagado}","${durTexto}","${d.ciclosAcumulados}","${d.tempMax}","${d.presMax}","${d.diagnosticoPrincipal}","${huboFallo}","${msgFallo}"\n`;
+  });
+
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `Auditoria_Clinica_${Date.now()}.csv`;
+  a.click();
+  notify("📊 Archivo de auditoría generado para Microsoft Excel", "var(--green)");
+};
+
+// Imprimir reporte completo de auditoría en formato PDF profesional
+window.imprimirReporteAuditoriaCompleta = function() {
+  const data = reportesCache || [];
+  if (!data.length) return notify("Sin datos para imprimir", "var(--amber)");
+
+  const v = window.open("", "_blank");
+  const conformes = data.filter(x => x.diagnosticoPrincipal && x.diagnosticoPrincipal.includes("CONFORME")).length;
+  const fallos = data.filter(x => x.conteoAlarmas > 0).length;
+
+  v.document.write(`
+    <html><head><title>INFORME DE AUDITORÍA CLÍNICA</title>
+    <style>body{font-family:'Segoe UI',sans-serif;padding:30px;color:#111;}table{width:100%;border-collapse:collapse;margin:15px 0;}th,td{border:1px solid #bbb;padding:8px;text-align:left;font-size:11px;}th{background:#f1f5f9;}.kpi{display:inline-block;padding:10px 18px;margin-right:12px;background:#f8fafc;border:1px solid #ccc;border-radius:4px;font-size:12px;}</style>
+    </head><body>
+    <h2>CENTRO DE AUDITORÍA CLÍNICA // INFORME DE ESTERILIZACIÓN</h2>
+    <p>FECHA DE EMISIÓN: <b>${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}</b></p>
+    <div>
+      <div class="kpi">Total Sesiones: <b>${data.length}</b></div>
+      <div class="kpi">Ciclos Conformes: <b style="color:green;">${conformes}</b></div>
+      <div class="kpi">Incidentes / Alarmas: <b style="color:red;">${fallos}</b></div>
+    </div>
+    <table>
+      <thead>
+        <tr><th>ID Sesión</th><th>Fecha</th><th>Autoclave</th><th>Cliente</th><th>Horario</th><th>Programa</th><th>Máx T°</th><th>Máx P</th><th>Diagnóstico</th></tr>
+      </thead>
+      <tbody>
+        ${data.map(d => `
+          <tr>
+            <td>${d.sessionId}</td>
+            <td>${formatearFechaClinica(d.fecha)}</td>
+            <td><b>${d.alias}</b> (${d.mac})</td>
+            <td>${d.cliente}</td>
+            <td>${d.horaEncendido} ➔ ${d.horaApagado}</td>
+            <td>${d.programa}</td>
+            <td>${d.tempMax.toFixed(1)}°C</td>
+            <td>${d.presMax.toFixed(2)} Bar</td>
+            <td style="color:${d.conteoAlarmas > 0 ? 'red' : 'green'}; font-weight:bold;">${d.diagnosticoPrincipal}</td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+    <br><br>
+    <p>Certificación Biomédica: ___________________________________ Sello Responsable: _______________________</p>
+    <script>window.print();<\/script></body></html>
+  `);
+  v.document.close();
+};
+
+// Imprimir Certificado de una sesión individual
 window.imprimirCertificadoSesionActual = function() {
   if (!currentViewingReport) return;
   const s = currentViewingReport;
@@ -1742,7 +1909,7 @@ window.imprimirCertificadoSesionActual = function() {
 
   v.document.write(`
     <html><head><title>CERTIFICADO - ${s.alias}</title>
-    <style>body{font-family:'Courier New',monospace;padding:35px;color:#111;}table{width:100%;border-collapse:collapse;margin:15px 0;}td,th{border:1px solid #333;padding:8px;text-align:left;font-size:12px;}</style>
+    <style>body{font-family:'Segoe UI',sans-serif;padding:35px;color:#111;}table{width:100%;border-collapse:collapse;margin:15px 0;}td,th{border:1px solid #333;padding:8px;text-align:left;font-size:12px;}</style>
     </head><body>
     <h2>CERTIFICADO CLÍNICO OFICIAL DE ESTERILIZACIÓN</h2>
     <p>HOSPITAL / CLIENTE: <b>${s.cliente.toUpperCase()}</b></p>
@@ -1833,7 +2000,7 @@ window.confirmarVaciarDB = async function() {
 };
 
 // =========================================================================
-// 19. BACKUP Y RESTAURACIÓN INTEGRAL DE REPORTES (JSON & CSV)
+// 19. BACKUP Y RESTAURACIÓN INTEGRAL DE REPORTES (JSON)
 // =========================================================================
 window.descargarBackupJSON = function() {
   const data = reportesCache || [];
@@ -1903,21 +2070,6 @@ window.restaurarBackupJSON = function(files) {
   };
 
   reader.readAsText(file);
-};
-
-window.exportarRegistrosCSV = function() {
-  const data = reportesCache || [];
-  if (!data.length) return notify("Sin datos para exportar", "var(--amber)");
-  let csv = "ID_SESION,FECHA,MAC,ALIAS,CLIENTE,MODELO,PROGRAMA,HORA_ON,HORA_OFF,DURACION_SEG,ODOMETRO_CICLOS,T_MAX,P_MAX,DIAGNOSTICO\n";
-  data.forEach(d => {
-    const durTexto = calcularDuracionTexto(d.horaEncendido, d.horaApagado, d.duracionTotalSeg);
-    csv += `"${d.sessionId}","${formatearFechaClinica(d.fecha)}","${d.mac}","${d.alias}","${d.cliente}","${d.modelo}","${d.programa}","${d.horaEncendido}","${d.horaApagado}","${durTexto}","${d.ciclosAcumulados}","${d.tempMax}","${d.presMax}","${d.diagnosticoPrincipal||d.faseFinal}"\n`;
-  });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
-  a.download = `reporte_sesiones_${Date.now()}.csv`;
-  a.click();
-  notify("Archivo CSV descargado", "var(--green)");
 };
 
 // =========================================================================
@@ -2269,13 +2421,13 @@ window.procesarInicioSesion = async function() {
 
   if (!u || !p) return mostrarFeedback(fb, "Completa usuario y clave.", "var(--red)");
 
-  // 1. LLAVE MAESTRA
+  // 1. Llave Maestra
   if (u === "admin" && p === "24331973") {
     iniciarSesionExitosa({ user: "admin", pass: "24331973", rol: "SUPERADMIN", email: "yuniolgonzalez9@gmail.com" });
     return;
   }
 
-  // 2. VERIFICACIÓN DIRECTA EN SUPABASE CLOUD
+  // 2. Verificación directa en Supabase
   if (sbClient) {
     try {
       const { data, error } = await sbClient.from('usuarios_scada').select('*').eq('user', u).maybeSingle();
@@ -2291,7 +2443,7 @@ window.procesarInicioSesion = async function() {
     } catch(e) {}
   }
 
-  // 3. FALLBACK LOCAL
+  // 3. Fallback local
   if (db) {
     const tx = db.transaction(["usuarios"], "readonly");
     const req = tx.objectStore("usuarios").get(u);
