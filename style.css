@@ -1,9 +1,9 @@
 /* =========================================================================
-   SCADA BIOMÉDICO MASTER // EDICIÓN LÁSER SPEEDTEST & ULTRA-PRECISIÓN
+   SCADA BIOMÉDICO MASTER // SISTEMA UNIFICADO PC/MÓVIL & LÁSER SPEEDTEST
    ========================================================================= */
 
 /* =========================================================================
-   1. PALETA BASE Y CONTROL DE CRISTAL
+   1. PALETA BASE Y CONTROL ULTRA-GLASS (0% A 100%)
    ========================================================================= */
 :root {
   --card-alpha: 0.85;
@@ -15,11 +15,11 @@
   --bg-gauge: rgba(10, 17, 32, var(--card-alpha));
   --bg-input: rgba(10, 15, 29, 0.92);
 
-  --border-subtle: rgba(255, 255, 255, 0.12);
+  --border-subtle: rgba(255, 255, 255, 0.14);
   --border-bright: #00e5ff;
   --cyan: #00e5ff;
   --cyan-glow: rgba(0, 229, 255, 0.4);
-  --cyan-deep: rgba(0, 229, 255, 0.12);
+  --cyan-deep: rgba(0, 229, 255, 0.15);
   --green: #00ff88;
   --green-glow: rgba(0, 255, 136, 0.4);
   --red: #ff0055;
@@ -28,40 +28,39 @@
   --amber-glow: rgba(255, 170, 0, 0.4);
   --purple: #8b5cf6;
   --purple-glow: rgba(139, 92, 246, 0.4);
-  --text-main: #ffffff;
+  
+  --text-main: #ffffff !important;
   --text-muted: #94a3b8;
   --ease: cubic-bezier(0.16, 1, 0.3, 1);
-
   --glass-blur: 16px;
 
-  /* HILO LÁSER SPEEDTEST POR DEFECTO */
-  --laser-gradient: linear-gradient(90deg, #ff007f 0%, #8b5cf6 50%, #00e5ff 100%);
-  --laser-glow: 0 0 8px rgba(0, 229, 255, 0.35);
+  /* HILO LÁSER SPEEDTEST POR DEFECTO (TACTICAL) */
+  --laser-gradient: linear-gradient(90deg, #00e5ff 0%, #3b82f6 50%, #00ff88 100%);
+  --laser-glow: 0 0 10px rgba(0, 229, 255, 0.35);
 
   --panel-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.6), 
-                  inset 0 1px 0 rgba(255, 255, 255, 0.12);
+                  inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 
 /* =========================================================================
-   2. TEMAS VISUALES CON LÍNEAS LÁSER PRECISAS
+   2. TEMAS VISUALES CON LÍNEAS Y CONTORNOS LÁSER ADAPTATIVOS
    ========================================================================= */
 
-/* TEMA 1: PIZARRA TÁCTICA (SCADA AZUL OSCURO / CIAN) */
+/* TEMA 1: PIZARRA TÁCTICA (CIAN ➔ AZUL ➔ ESMERALDA) */
 [data-theme="tactical"] {
   --cyan: #00e5ff;
   --border-bright: #00e5ff;
-  --border-subtle: rgba(0, 229, 255, 0.25);
   --laser-gradient: linear-gradient(90deg, #00e5ff 0%, #3b82f6 50%, #00ff88 100%);
-  --laser-glow: 0 0 8px rgba(0, 229, 255, 0.35);
+  --laser-glow: 0 0 10px rgba(0, 229, 255, 0.35);
 }
 
-/* TEMA 2: CYBER (LÁSER SPEEDTEST: FUCSIA ➔ MORADO ULTRAVIOLETA ➔ CIAN) */
+/* TEMA 2: CYBER (LÁSER SPEEDTEST: FUCSIA NEÓN ➔ VIOLETA ➔ CIAN) */
 [data-theme="cyber"] {
   --cyan: #00e5ff;
   --border-bright: #ff007f;
-  --border-subtle: rgba(255, 0, 127, 0.3);
+  --border-subtle: rgba(255, 0, 127, 0.35);
   --laser-gradient: linear-gradient(90deg, #ff007f 0%, #8b5cf6 50%, #00e5ff 100%);
-  --laser-glow: 0 0 10px rgba(255, 0, 127, 0.35), 0 0 12px rgba(0, 229, 255, 0.25);
+  --laser-glow: 0 0 12px rgba(255, 0, 127, 0.4), 0 0 16px rgba(0, 229, 255, 0.25);
   --cyan-deep: rgba(255, 0, 127, 0.15);
 }
 
@@ -69,13 +68,13 @@
 [data-theme="hybrid"] {
   --cyan: #00ff88;
   --border-bright: #00ff88;
-  --border-subtle: rgba(0, 255, 136, 0.3);
+  --border-subtle: rgba(0, 255, 136, 0.35);
   --laser-gradient: linear-gradient(90deg, #00e5ff 0%, #00ff88 50%, #ffaa00 100%);
-  --laser-glow: 0 0 10px rgba(0, 255, 136, 0.35), 0 0 12px rgba(0, 229, 255, 0.25);
+  --laser-glow: 0 0 12px rgba(0, 255, 136, 0.4), 0 0 16px rgba(0, 229, 255, 0.25);
   --cyan-deep: rgba(0, 255, 136, 0.15);
 }
 
-/* TEMA 4: CLÍNICO QUIRÚRGICO (IMAGEN 1: BLUEPRINT GRID LIMPIO) */
+/* TEMA 4: CLÍNICO QUIRÚRGICO (IMAGEN 1: BLUEPRINT GRID) */
 [data-theme="clinical"] {
   --bg-current: #f0f4f9 !important;
   --bg-image: linear-gradient(to right, rgba(2, 132, 199, 0.08) 1px, transparent 1px),
@@ -90,47 +89,48 @@
   --bg-input: #ffffff;
 
   --laser-gradient: linear-gradient(90deg, #0284c7 0%, #00e5ff 100%);
-  --laser-glow: 0 0 8px rgba(2, 132, 199, 0.2);
+  --laser-glow: 0 0 8px rgba(2, 132, 199, 0.25);
   --text-main: #0f172a !important;
   --text-muted: #475569 !important;
-  --border-subtle: rgba(2, 132, 199, 0.22) !important;
+  --border-subtle: rgba(2, 132, 199, 0.25) !important;
   --border-bright: #0284c7 !important;
   --cyan: #0284c7 !important;
-  --cyan-deep: rgba(2, 132, 199, 0.1) !important;
+  --cyan-deep: rgba(2, 132, 199, 0.12) !important;
   --panel-shadow: 0 10px 25px rgba(0, 0, 0, 0.06);
 }
 
-[data-theme="clinical"] .title-primary { color: #0284c7 !important; }
-[data-theme="clinical"] .title-secondary { color: #334155 !important; font-weight: 700 !important; }
-[data-theme="clinical"] .hud-topbar,
-[data-theme="clinical"] .desktop-dock-container,
-[data-theme="clinical"] .mobile-bottom-nav,
-[data-theme="clinical"] .gear-dropdown {
-  background: rgba(248, 250, 252, 0.96) !important;
-  color: #0f172a !important;
-  border-color: rgba(2, 132, 199, 0.2) !important;
+/* =========================================================================
+   ESTRUCTURA GENERAL Y NORMALIZACIÓN (PC + MÓVIL)
+   ========================================================================= */
+* { 
+  box-sizing: border-box; 
+  margin: 0; 
+  padding: 0; 
+  font-family: 'JetBrains Mono', monospace; 
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
-[data-theme="clinical"] .input-field {
-  background: #ffffff !important;
-  color: #0f172a !important;
-  border-color: #cbd5e1 !important;
-}
-[data-theme="clinical"] .subtab-slider .btn {
-  background: #ffffff !important;
-  color: #334155 !important;
-  border-color: #cbd5e1 !important;
-}
-[data-theme="clinical"] .subtab-slider .btn.active {
-  background: #0284c7 !important;
-  color: #ffffff !important;
-  border-color: #0284c7 !important;
+
+html, body {
+  background-color: var(--bg-current);
+  background-image: var(--bg-image);
+  background-size: cover !important;
+  background-position: center center !important;
+  background-attachment: fixed !important;
+  background-repeat: no-repeat !important;
+  color: var(--text-main);
+  min-height: 100vh;
+  overflow-y: auto !important;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  transition: background-image 0.25s ease, background-color 0.25s ease;
 }
 
 /* =========================================================================
-   3. RAYITAS Y BORDES LÁSER SPEEDTEST (AFILADOS, NO BORROSOS)
+   3. RAYITAS LÁSER SPEEDTEST (HEADER Y DETALLES)
    ========================================================================= */
 
-/* RAYITA SUPERIOR ULTRA-FINA EN EL HEADER */
+/* RAYITA LÁSER SUPERIOR DE EXTREMO A EXTREMO */
 .hud-topbar::before {
   content: '';
   position: absolute;
@@ -141,19 +141,7 @@
   z-index: 501;
 }
 
-/* BORDE LÁSER FINO EN TARJETAS */
-[data-theme="cyber"] .card,
-[data-theme="cyber"] .node-item,
-[data-theme="hybrid"] .card,
-[data-theme="hybrid"] .node-item {
-  border: 1px solid transparent !important;
-  background-image: linear-gradient(var(--bg-card), var(--bg-card)), var(--laser-gradient) !important;
-  background-origin: padding-box, border-box !important;
-  background-clip: padding-box, border-box !important;
-  box-shadow: var(--panel-shadow), 0 0 10px rgba(0, 229, 255, 0.15) !important;
-}
-
-/* RAYITA LÁSER SUPERIOR EN LOS GAUGES / MEDIDORES */
+/* LÍNEA LÁSER EN MEDIDORES GAUGES */
 .gauge-cell {
   position: relative;
   overflow: hidden;
@@ -178,12 +166,22 @@
 }
 
 /* =========================================================================
-   4. BOTONES REDISEÑADOS: TEXTO 100% LEGIBLE Y BORDE SPEEDTEST
+   4. SISTEMA DE BOTONES SPEEDTEST UNIFICADO (PC Y MÓVIL)
    ========================================================================= */
+
+/* TODOS LOS BOTONES TIENEN EL MARCO LÁSER ADAPTATIVO */
+button, 
 .btn {
-  background: rgba(15, 23, 42, 0.85);
-  border: 1px solid var(--border-subtle);
-  color: #ffffff !important; /* TEXTO SIEMPRE BLANCO Y LEGIBLE */
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+  
+  border: 1.5px solid transparent !important;
+  background-image: linear-gradient(rgba(15, 23, 42, 0.88), rgba(15, 23, 42, 0.88)), var(--laser-gradient) !important;
+  background-origin: padding-box, border-box !important;
+  background-clip: padding-box, border-box !important;
+
+  color: #ffffff !important; /* TEXTO SIEMPRE BLANCO Y NÍTIDO */
   padding: 8px 16px;
   border-radius: 6px;
   cursor: pointer;
@@ -197,78 +195,64 @@
   min-height: 38px;
   text-decoration: none;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.15);
-  transition: all 0.16s var(--ease);
+  transition: all 0.18s var(--ease);
   user-select: none;
   white-space: nowrap !important;
   flex-shrink: 0;
 }
 
+button:hover,
 .btn:hover {
-  border-color: var(--cyan);
+  filter: brightness(1.2);
   transform: translateY(-1px);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6), 0 0 12px var(--cyan-glow);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6), var(--laser-glow);
 }
+
+button:active,
 .btn:active {
   transform: translateY(1px);
 }
 
-/* BOTÓN PRIMARIO (ESTILO BOTÓN 'DESCARGA' DE SPEEDTEST) */
+/* BOTÓN PRIMARIO (DESTACADO CON RESPLANDOR EXTRA) */
 .btn-primary {
-  border: 1.5px solid transparent !important;
-  background-image: linear-gradient(rgba(10, 17, 32, 0.9), rgba(10, 17, 32, 0.9)), var(--laser-gradient) !important;
-  background-origin: padding-box, border-box !important;
-  background-clip: padding-box, border-box !important;
-  color: #ffffff !important;
+  background-image: linear-gradient(rgba(10, 17, 32, 0.92), rgba(10, 17, 32, 0.92)), var(--laser-gradient) !important;
   box-shadow: var(--laser-glow), 0 4px 15px rgba(0, 0, 0, 0.6) !important;
 }
-.btn-primary:hover {
-  filter: brightness(1.2);
-}
 
-/* BOTONES DE ACCIÓN SCADA */
+/* BOTONES DE ACCIÓN SCADA (NEUTROS, ELEGANTES Y ADAPTADOS) */
 .btn-success {
-  background: linear-gradient(180deg, rgba(0, 255, 136, 0.22) 0%, rgba(0, 0, 0, 0.6) 100%) !important;
-  border: 1.5px solid var(--green) !important;
+  background-image: linear-gradient(rgba(10, 25, 20, 0.88), rgba(10, 25, 20, 0.88)), linear-gradient(90deg, #00ff88, #00e5ff) !important;
   color: #ffffff !important;
-  box-shadow: 0 0 12px rgba(0, 255, 136, 0.35) !important;
+  box-shadow: 0 0 12px rgba(0, 255, 136, 0.3) !important;
 }
 .btn-success:hover {
-  background: var(--green) !important;
-  color: #050811 !important;
+  background-image: linear-gradient(rgba(0, 255, 136, 0.25), rgba(0, 255, 136, 0.25)), linear-gradient(90deg, #00ff88, #00e5ff) !important;
 }
 
 .btn-danger {
-  background: linear-gradient(180deg, rgba(255, 0, 85, 0.22) 0%, rgba(0, 0, 0, 0.6) 100%) !important;
-  border: 1.5px solid var(--red) !important;
+  background-image: linear-gradient(rgba(30, 10, 18, 0.88), rgba(30, 10, 18, 0.88)), linear-gradient(90deg, #ff0055, #ff5500) !important;
   color: #ffffff !important;
-  box-shadow: 0 0 12px rgba(255, 0, 85, 0.35) !important;
+  box-shadow: 0 0 12px rgba(255, 0, 85, 0.3) !important;
 }
 .btn-danger:hover {
-  background: var(--red) !important;
-  color: #ffffff !important;
+  background-image: linear-gradient(rgba(255, 0, 85, 0.25), rgba(255, 0, 85, 0.25)), linear-gradient(90deg, #ff0055, #ff5500) !important;
 }
 
 .btn-warn {
-  background: linear-gradient(180deg, rgba(255, 170, 0, 0.22) 0%, rgba(0, 0, 0, 0.6) 100%) !important;
-  border: 1.5px solid var(--amber) !important;
+  background-image: linear-gradient(rgba(30, 20, 10, 0.88), rgba(30, 20, 10, 0.88)), linear-gradient(90deg, #ffaa00, #facc15) !important;
   color: #ffffff !important;
-  box-shadow: 0 0 12px rgba(255, 170, 0, 0.35) !important;
+  box-shadow: 0 0 12px rgba(255, 170, 0, 0.3) !important;
 }
 .btn-warn:hover {
-  background: var(--amber) !important;
-  color: #050811 !important;
+  background-image: linear-gradient(rgba(255, 170, 0, 0.25), rgba(255, 170, 0, 0.25)), linear-gradient(90deg, #ffaa00, #facc15) !important;
 }
 
 .btn-secondary {
-  background: rgba(17, 26, 46, 0.8);
-  border: 1px solid var(--border-subtle);
+  background-image: linear-gradient(rgba(17, 26, 46, 0.85), rgba(17, 26, 46, 0.85)), var(--laser-gradient) !important;
   color: #ffffff !important;
 }
-.btn-secondary:hover {
-  border-color: var(--cyan);
-}
 
-/* SUB-PESTAÑAS DE DETALLE (LEGIBLES Y ENMARCADAS) */
+/* SUB-PESTAÑAS DE DETALLE (UNIFICADAS Y TOTALMENTE LEGIBLES) */
 .subtab-slider {
   display: flex;
   gap: 8px;
@@ -276,21 +260,31 @@
   padding-bottom: 8px;
   margin-bottom: 16px;
 }
+
 .subtab-slider .btn {
-  background: rgba(15, 23, 42, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  color: #cbd5e1 !important;
   font-size: 0.72rem;
+  padding: 6px 14px;
 }
-.subtab-slider .btn:hover {
-  color: #ffffff !important;
-  border-color: var(--cyan);
-}
+
 .subtab-slider .btn.active {
-  background: var(--cyan-deep) !important;
+  background-image: linear-gradient(rgba(0, 229, 255, 0.18), rgba(0, 229, 255, 0.18)), var(--laser-gradient) !important;
+  box-shadow: var(--laser-glow) !important;
+}
+
+/* BOTONES EN MODO CLÍNICO (ALTO CONTRASTE) */
+[data-theme="clinical"] button,
+[data-theme="clinical"] .btn {
+  background-image: linear-gradient(#ffffff, #ffffff), var(--laser-gradient) !important;
+  color: #0f172a !important;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
+}
+[data-theme="clinical"] .btn-primary {
+  background-image: linear-gradient(#0284c7, #0284c7), var(--laser-gradient) !important;
   color: #ffffff !important;
-  border-color: var(--cyan) !important;
-  box-shadow: 0 0 10px var(--cyan-glow) !important;
+}
+[data-theme="clinical"] .subtab-slider .btn.active {
+  background-image: linear-gradient(#0284c7, #0284c7), var(--laser-gradient) !important;
+  color: #ffffff !important;
 }
 
 .btn-sm { min-height: 32px; padding: 4px 11px; font-size: 0.7rem; }
@@ -299,24 +293,54 @@
 .flex-2 { flex: 2; }
 
 /* =========================================================================
-   5. PAPEL TAPIZ (WALLPAPERS) DE ALTA RESOLUCIÓN
+   5. PANELES Y TARJETAS ULTRA-GLASS (CRISTAL TRASLÚCIDO)
+   ========================================================================= */
+.card, 
+.node-item, 
+.category-box, 
+.kpi-card,
+.modal-card,
+.auth-box {
+  background: var(--bg-card);
+  backdrop-filter: blur(var(--glass-blur)) !important;
+  -webkit-backdrop-filter: blur(var(--glass-blur)) !important;
+  border: 1px solid transparent !important;
+  background-image: linear-gradient(var(--bg-card), var(--bg-card)), var(--laser-gradient) !important;
+  background-origin: padding-box, border-box !important;
+  background-clip: padding-box, border-box !important;
+  border-radius: 8px;
+  box-shadow: var(--panel-shadow);
+  transition: transform 0.2s var(--ease), box-shadow 0.2s var(--ease), background 0.15s ease;
+}
+
+.hud-topbar,
+.desktop-dock-container,
+.mobile-bottom-nav,
+.gear-dropdown {
+  background: var(--bg-surface) !important;
+  backdrop-filter: blur(var(--glass-blur)) !important;
+  -webkit-backdrop-filter: blur(var(--glass-blur)) !important;
+}
+
+/* =========================================================================
+   6. PAPEL TAPIZ (WALLPAPERS) DE ALTA RESOLUCIÓN
    ========================================================================= */
 
-/* WALLPAPER 1: LA PCB / MICROCHIP NEÓN */
+/* WALLPAPER 1: LA PCB / MICROCHIP NEÓN (FAVORITO) */
 html, [data-bg="circuit-pcb"] {
   --bg-current: #020617;
   --bg-image: linear-gradient(180deg, rgba(2, 6, 23, 0.7) 0%, rgba(2, 6, 23, 0.88) 100%),
               url('https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=2000&q=80');
 }
 
-/* WALLPAPER 2: EL PLANETA / RED NEURONAL & NODOS GLOBALES */
+/* WALLPAPER 2: EL PLANETA / RED NEURONAL & NODOS (FAVORITO) */
 [data-bg="planet-nodes"] {
   --bg-current: #030712;
   --bg-image: linear-gradient(180deg, rgba(3, 7, 18, 0.7) 0%, rgba(3, 7, 18, 0.88) 100%),
               url('https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=2000&q=80');
 }
 
-/* WALLPAPER 3: LA MATRIZ CYBERPUNK DE SERVIDORES */
+/* WALLPAPER 3: LA MATRIZ CYBERPUNK (FAVORITO) */
 [data-bg="cyber-matrix"] {
   --bg-current: #02050e;
   --bg-image: linear-gradient(180deg, rgba(2, 5, 14, 0.7) 0%, rgba(2, 5, 14, 0.9) 100%),
@@ -330,7 +354,7 @@ html, [data-bg="circuit-pcb"] {
               url('https://images.unsplash.com/photo-1555680202-c86f0e12f086?auto=format&fit=crop&w=2000&q=80');
 }
 
-/* WALLPAPER 5: CONEXIONES CUÁNTICAS & FIBRA DIGITAL */
+/* WALLPAPER 5: CONEXIONES CUÁNTICAS */
 [data-bg="quantum-connections"] {
   --bg-current: #030816;
   --bg-image: linear-gradient(180deg, rgba(3, 8, 22, 0.7) 0%, rgba(3, 8, 22, 0.9) 100%),
@@ -354,66 +378,13 @@ html, [data-bg="circuit-pcb"] {
               radial-gradient(circle at 0% 100%, rgba(0, 255, 136, 0.08) 0%, transparent 45%);
 }
 
-/* WALLPAPER 8: BLANCO QUIRÚRGICO LIMPIO (BLUEPRINT GRID DE TU IMAGEN 1) */
+/* WALLPAPER 8: BLANCO QUIRÚRGICO (BLUEPRINT GRID DE TU IMAGEN 1) */
 [data-bg="clean"] {
   --bg-current: #f0f4f9 !important;
   --bg-image: linear-gradient(to right, rgba(2, 132, 199, 0.08) 1px, transparent 1px),
               linear-gradient(to bottom, rgba(2, 132, 199, 0.08) 1px, transparent 1px),
               linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%) !important;
   background-size: 24px 24px, 24px 24px, 100% 100% !important;
-}
-
-/* =========================================================================
-   ESTRUCTURA GENERAL DEL DOCUMENTO
-   ========================================================================= */
-* { 
-  box-sizing: border-box; 
-  margin: 0; 
-  padding: 0; 
-  font-family: 'JetBrains Mono', monospace; 
-  -webkit-font-smoothing: antialiased;
-}
-
-html, body {
-  background-color: var(--bg-current);
-  background-image: var(--bg-image);
-  background-size: cover !important;
-  background-position: center center !important;
-  background-attachment: fixed !important;
-  background-repeat: no-repeat !important;
-  color: var(--text-main);
-  min-height: 100vh;
-  overflow-y: auto !important;
-  overflow-x: hidden;
-  -webkit-overflow-scrolling: touch;
-  transition: background-image 0.25s ease, background-color 0.25s ease;
-}
-
-/* =========================================================================
-   6. PANELES ULTRA-GLASS
-   ========================================================================= */
-.card, 
-.node-item, 
-.category-box, 
-.kpi-card,
-.modal-card,
-.auth-box {
-  background: var(--bg-card);
-  backdrop-filter: blur(var(--glass-blur)) !important;
-  -webkit-backdrop-filter: blur(var(--glass-blur)) !important;
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  box-shadow: var(--panel-shadow);
-  transition: transform 0.2s var(--ease), border-color 0.2s var(--ease), background 0.15s ease;
-}
-
-.hud-topbar,
-.desktop-dock-container,
-.mobile-bottom-nav,
-.gear-dropdown {
-  background: var(--bg-surface) !important;
-  backdrop-filter: blur(var(--glass-blur)) !important;
-  -webkit-backdrop-filter: blur(var(--glass-blur)) !important;
 }
 
 /* =========================================================================
@@ -432,13 +403,13 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
    8. MENÚ ENGRANAJE & SELECTORES
    ========================================================================= */
 .gear-menu-wrapper { position: relative; display: inline-block; }
+
 .btn-gear {
   min-height: 38px;
   padding: 6px 12px;
   font-size: 1.15rem;
-  background: rgba(10, 17, 32, 0.8);
-  border-color: var(--border-subtle);
 }
+
 .gear-dropdown {
   position: absolute;
   top: calc(100% + 10px);
@@ -447,13 +418,13 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   max-width: calc(100vw - 16px);
   max-height: 85vh;
   overflow-y: auto;
-  border: 1px solid var(--cyan);
   border-radius: 8px;
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.95), 0 0 25px var(--cyan-glow);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.95), var(--laser-glow);
   z-index: 99999;
   display: none;
   animation: dropdownAnim 0.2s var(--ease) forwards;
 }
+
 @keyframes dropdownAnim {
   from { opacity: 0; transform: translateY(-8px) scale(0.97); }
   to { opacity: 1; transform: translateY(0); }
@@ -488,31 +459,25 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   font-size: 0.62rem;
   font-weight: 800;
   border-radius: 4px;
-  border: 1px solid var(--border-subtle);
-  background: rgba(17, 26, 46, 0.7);
-  color: var(--text-main);
   cursor: pointer;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 4px;
-  transition: all 0.16s ease;
   white-space: nowrap;
 }
-.btn-theme-opt:hover { border-color: var(--cyan); transform: translateY(-1px); }
+
 .btn-theme-opt.active {
-  border-color: var(--cyan);
-  box-shadow: 0 0 10px var(--cyan-glow);
-  background: var(--cyan-deep);
-  color: var(--cyan);
+  box-shadow: var(--laser-glow) !important;
 }
 
 .dropdown-item {
   width: 100%;
   padding: 12px 16px;
   background: transparent;
-  border: none;
-  color: var(--text-main);
+  border: none !important;
+  box-shadow: none !important;
+  color: var(--text-main) !important;
   font-size: 0.76rem;
   font-weight: 700;
   text-align: left;
@@ -523,58 +488,13 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   transition: all 0.16s ease;
   white-space: nowrap;
 }
-.dropdown-item:hover { background: var(--cyan-deep); color: var(--cyan); padding-left: 20px; }
-.dropdown-item.item-danger { color: var(--red); }
-.dropdown-item.item-danger:hover { background: rgba(255, 0, 85, 0.2); color: #fff; }
+.dropdown-item:hover { background: var(--cyan-deep) !important; padding-left: 20px; }
+.dropdown-item.item-danger { color: var(--red) !important; }
+.dropdown-item.item-danger:hover { background: rgba(255, 0, 85, 0.2) !important; color: #fff !important; }
 .dropdown-separator { height: 1px; background: var(--border-subtle); }
 
 /* =========================================================================
-   9. BADGES Y MEDIDORES
-   ========================================================================= */
-.user-role, .cycle-badge, .status-badge {
-  white-space: nowrap !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  gap: 4px;
-  line-height: 1;
-}
-
-.cycle-badge {
-  background: rgba(0, 229, 255, 0.15);
-  border: 1px solid var(--cyan);
-  color: var(--cyan);
-  font-weight: 800;
-  padding: 4px 9px;
-  border-radius: 4px;
-  font-size: 0.68rem;
-}
-
-.user-role {
-  background: rgba(255, 0, 85, 0.18);
-  color: var(--red);
-  border: 1px solid var(--red);
-  padding: 3px 8px;
-  font-size: 0.62rem;
-  font-weight: 800;
-  border-radius: 4px;
-}
-
-.status-badge {
-  padding: 4px 10px;
-  border-radius: 4px;
-  font-size: 0.68rem;
-  font-weight: 800;
-  border: 1px solid var(--border-subtle);
-  background: rgba(10, 17, 32, 0.8);
-}
-
-.dot { width: 8px; height: 8px; border-radius: 50%; }
-.dot.online { background: var(--green); box-shadow: 0 0 8px var(--green); }
-.dot.offline { background: var(--red); box-shadow: 0 0 8px var(--red); }
-
-/* =========================================================================
-   10. HUD COMMAND BAR
+   9. HUD COMMAND BAR (BARRA SUPERIOR)
    ========================================================================= */
 .hud-topbar {
   border-bottom: 1px solid var(--border-subtle);
@@ -676,20 +596,9 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   position: relative;
 }
 .btn-dock-toggle {
-  background: var(--cyan-deep);
-  border: 1px solid var(--cyan);
-  color: var(--cyan);
-  padding: 7px 12px;
-  border-radius: 6px;
-  cursor: pointer;
   font-size: 0.74rem;
   font-weight: 800;
   letter-spacing: 1px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-  white-space: nowrap;
 }
 .desktop-nav-slider {
   display: flex;
@@ -707,24 +616,9 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   padding: 0;
   pointer-events: none;
 }
-.nav-btn {
-  background: rgba(17, 26, 46, 0.65);
-  border: 1px solid var(--border-subtle);
-  color: #cbd5e1 !important;
-  border-radius: 6px;
-  font-size: 0.74rem;
-  white-space: nowrap;
-}
-.nav-btn:hover { color: #ffffff !important; border-color: var(--cyan); background: var(--bg-card-hover); }
-.nav-btn.active {
-  background: var(--cyan-deep) !important;
-  color: #ffffff !important;
-  border-color: var(--cyan) !important;
-  box-shadow: 0 0 10px var(--cyan-glow) !important;
-}
 
 /* =========================================================================
-   11. MODAL CENTRAL
+   10. MODAL CENTRAL
    ========================================================================= */
 .modal-overlay {
   position: fixed;
@@ -742,14 +636,12 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
 @keyframes modalFadeIn { from { opacity: 0; } to { opacity: 1; } }
 
 .modal-card {
-  border: 1px solid var(--cyan) !important;
-  border-radius: 14px !important;
   padding: 28px 24px !important;
   max-width: 440px !important;
   width: 100% !important;
   margin: auto !important;
   text-align: center !important;
-  box-shadow: var(--panel-shadow), 0 0 25px var(--cyan-glow) !important;
+  box-shadow: var(--panel-shadow), var(--laser-glow) !important;
 }
 .modal-icon { font-size: 2.8rem; margin-bottom: 12px; }
 .modal-title {
@@ -769,7 +661,7 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
 .modal-actions { display: flex; gap: 12px; }
 
 /* =========================================================================
-   12. CONTENEDORES Y MEDIDORES
+   11. CONTENEDORES Y MEDIDORES
    ========================================================================= */
 .app-viewport {
   max-width: 1440px;
@@ -819,10 +711,6 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   cursor: pointer;
   position: relative;
   overflow: hidden;
-}
-.node-item:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5), 0 0 15px var(--cyan-glow);
 }
 
 .gauge-grid { 
@@ -929,16 +817,16 @@ th { background: var(--cyan-deep); color: var(--cyan); font-weight: 800; }
   padding-bottom: env(safe-area-inset-bottom);
 }
 .m-tab {
-  background: none; border: none; color: var(--text-muted);
+  background: none; border: none !important; box-shadow: none !important; color: var(--text-muted) !important;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   cursor: pointer; flex: 1; height: 100%;
 }
 .m-icon { font-size: 1.25rem; }
 .m-label { font-size: 0.64rem; font-weight: 800; }
-.m-tab.active { color: var(--cyan); transform: translateY(-2px); text-shadow: 0 0 10px var(--cyan-glow); }
+.m-tab.active { color: var(--cyan) !important; transform: translateY(-2px); text-shadow: 0 0 10px var(--cyan-glow); }
 
 /* =========================================================================
-   13. RESPONSIVIDAD MÓVIL
+   12. RESPONSIVIDAD MÓVIL ESTRICTA
    ========================================================================= */
 @media (max-width: 820px) {
   .desktop-dock-container { display: none !important; }
@@ -958,14 +846,6 @@ th { background: var(--cyan-deep); color: var(--cyan); font-weight: 800; }
 
   .btn-gear { min-height: 36px; padding: 6px 10px; font-size: 1.1rem; flex-shrink: 0; }
   .gear-dropdown { right: 4px !important; top: calc(100% + 8px); width: calc(100vw - 16px); max-height: 80vh; }
-}
-
-/* IMPRESIÓN OFICIAL (PDF) */
-@media print {
-  body { background: #ffffff !important; color: #000000 !important; }
-  .hud-topbar, .desktop-dock-container, .mobile-bottom-nav, .telemetry-filter-bar, .btn, .modal-overlay, .toast-hud { display: none !important; }
-  .app-viewport { padding: 0 !important; max-width: 100% !important; }
-  .card { border: 1px solid #333 !important; background: #fff !important; color: #000 !important; }
 }
 
 /* UTILIDADES Y FORMULARIOS */
