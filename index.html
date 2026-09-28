@@ -10,14 +10,18 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#020409">
   
+  <!-- Icono Oficial PWA / Pantalla de Inicio Móvil (Vectorial SVG) -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2300f0ff' stroke-width='2'><circle cx='12' cy='12' r='9'/><path d='M12 3v6m0 6v6M3 12h6m6 0h6'/><circle cx='12' cy='12' r='3' fill='%2300f0ff'/></svg>">
+  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23020409' stroke='%2300f0ff' stroke-width='2'><rect width='24' height='24' rx='5' fill='%23020409'/><circle cx='12' cy='12' r='8'/><path d='M12 4v4m0 8v4M4 12h4m8 0h4'/><circle cx='12' cy='12' r='2.5' fill='%2300f0ff'/></svg>">
+  
   <title>AUTOCLAVE SCADA // ENTERPRISE DECK</title>
   
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;800&family=Orbitron:wght@600;800;900&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="style.css?v=16">
+  <link rel="stylesheet" href="style.css?v=17">
   
-  <!-- Dependencias Externas (Ligero y sin Chart.js) -->
+  <!-- Dependencias Externas Esenciales -->
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -63,11 +67,11 @@
       
       <!-- INDICADORES EN VIVO -->
       <div class="network-indicators">
-        <span class="status-pill">
+        <span class="status-pill" id="pillMqttStatus">
           <span class="beacon" id="mqttDot"></span>
           <span id="mqttStatusText">HIVEMQ 8884</span>
         </span>
-        <span class="status-pill sync-pill">
+        <span class="status-pill sync-pill" id="pillSyncStatus">
           <span class="beacon online" id="syncDot"></span>
           <span id="syncStatusText">NUBE CONECTADA</span>
         </span>
@@ -264,13 +268,16 @@
           <div class="device-hero-title" id="detDeviceAlias">NOMBRE DEL EQUIPO</div>
           <div style="font-size: 0.7rem; color: var(--text-muted);" id="detDeviceSub">MAC: -- | MODELO: --</div>
         </div>
+        
+        <!-- ACCIONES RÁPIDAS DEL EQUIPO (CON BOTÓN RESET DE ODÓMETRO) -->
         <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
           <span class="status-badge" id="detOnlineBadge"><span class="dot offline"></span> OFFLINE</span>
+          <button class="btn btn-sm btn-warn" id="btnDetResetOdometer" data-rbac="SUPERADMIN" onclick="resetearOdometroHardware()" title="Reiniciar a cero el contador físico de ciclos en el autoclave">🔄 RESET ODÓMETRO</button>
           <button class="btn btn-sm btn-danger" id="btnDetDeleteDevice" data-rbac="SUPERADMIN" onclick="solicitarEliminacionActual()">🗑️ ELIMINAR</button>
         </div>
       </div>
 
-      <!-- PESTAÑAS (SIN LA GRÁFICA, CON MANTENIMIENTOS Y REGISTRO EN NUBE) -->
+      <!-- SUB-PESTAÑAS DE DETALLE -->
       <div class="subtab-slider">
         <button class="btn btn-sm nav-tab active" id="btnSubTele" onclick="switchDetailTab('tab-det-tele')">📊 SENSORES & ESTADO</button>
         <button class="btn btn-sm nav-tab" id="btnSubCfg" data-rbac="TECNICO" onclick="switchDetailTab('tab-det-cfg')">⚙️ NVS & PARÁMETROS</button>
@@ -695,6 +702,6 @@
     </button>
   </nav>
 
-  <script src="app.js?v=16"></script>
+  <script src="app.js?v=17"></script>
 </body>
 </html>
