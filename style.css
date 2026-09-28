@@ -1,49 +1,53 @@
 /* =========================================================================
-   SCADA BIOMÉDICO MASTER // FONDOS SÓLIDOS PROFUNDOS & DISEÑO 3D TÁCTICO
+   SCADA BIOMÉDICO MASTER // EDICIÓN SPEEDTEST 3D DEEP BLACK & MULTICOLOR
    ========================================================================= */
 
-/* 1. TEMA SPEEDTEST PRO (FONDO NEGRO SÓLIDO PROFUNDO + MÓDULOS GRIS 3D + NEÓN) */
+/* 1. TEMA SPEEDTEST PRO (FONDO NEGRO ABSOLUTO + MÓDULOS GRIS 3D + BORDES MULTICOLOR) */
 [data-theme="tactical"], :root {
-  --bg-void: #050711; /* Negro puro profundo sin rayas */
-  --bg-surface: #0c1220;
-  --bg-card: #111a2e;
-  --bg-card-hover: #17233d;
-  --bg-gauge: radial-gradient(circle at 50% 30%, #192542 0%, #0a0f1d 100%);
-  --bg-input: #0a0f1d;
-  --border-subtle: rgba(139, 92, 246, 0.35);
+  --bg-void: #000000; /* Negro puro absoluto OLED */
+  --bg-surface: #0a101d;
+  --bg-card: #111a2e; /* Gris pizarra de alto contraste */
+  --bg-card-hover: #16223b;
+  --bg-gauge: radial-gradient(circle at 50% 20%, #1a2744 0%, #080d18 85%);
+  --bg-input: #080d18;
+  --border-subtle: rgba(139, 92, 246, 0.4);
   --border-bright: #00e5ff;
   --cyan: #00e5ff;
-  --cyan-glow: rgba(0, 229, 255, 0.45);
-  --cyan-deep: rgba(0, 229, 255, 0.12);
+  --cyan-glow: rgba(0, 229, 255, 0.55);
+  --cyan-deep: rgba(0, 229, 255, 0.14);
   --green: #00ff88;
-  --green-glow: rgba(0, 255, 136, 0.45);
+  --green-glow: rgba(0, 255, 136, 0.55);
   --red: #ff0055;
-  --red-glow: rgba(255, 0, 85, 0.5);
-  --amber: #ff5500; /* Naranja Speedtest */
-  --amber-glow: rgba(255, 85, 0, 0.45);
+  --red-glow: rgba(255, 0, 85, 0.55);
+  --amber: #ff5500; /* Naranja Fuego Speedtest */
+  --amber-glow: rgba(255, 85, 0, 0.55);
   --purple: #8b5cf6; /* Púrpura Neón Speedtest */
-  --purple-glow: rgba(139, 92, 246, 0.45);
+  --purple-glow: rgba(139, 92, 246, 0.55);
   --text-main: #ffffff;
-  --text-muted: #8b9bb4;
+  --text-muted: #94a3b8;
   --ease: cubic-bezier(0.16, 1, 0.3, 1);
-  --panel-shadow: 0 12px 35px -5px rgba(0, 0, 0, 0.95), 0 0 20px rgba(0, 229, 255, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.18);
-  --bg-ambient: radial-gradient(circle at 50% 0%, rgba(139, 92, 246, 0.08) 0%, transparent 60%),
-                radial-gradient(circle at 100% 100%, rgba(0, 229, 255, 0.05) 0%, transparent 60%);
+  --panel-shadow: 0 16px 40px -5px rgba(0, 0, 0, 0.98), 
+                  0 0 0 1px rgba(255, 255, 255, 0.08), 
+                  inset 0 1px 0 rgba(255, 255, 255, 0.22), 
+                  inset 0 -1px 0 rgba(0, 0, 0, 0.8),
+                  0 0 25px rgba(0, 229, 255, 0.1);
+  --bg-ambient: radial-gradient(circle at 50% -5%, rgba(139, 92, 246, 0.14) 0%, transparent 55%),
+                radial-gradient(circle at 100% 100%, rgba(0, 229, 255, 0.08) 0%, transparent 50%);
 }
 
-/* 2. TEMA CYBER DECK (NEGRO ABISAL SÓLIDO + NEÓN CIAN) */
+/* 2. TEMA CYBER DECK */
 [data-theme="cyber"] {
-  --bg-void: #020409; /* Negro puro sin líneas */
+  --bg-void: #020409;
   --bg-surface: #060c18;
   --bg-card: #0b1426;
   --bg-card-hover: #101e38;
   --bg-gauge: radial-gradient(circle at 50% 30%, #101e38 0%, #030712 100%);
   --bg-input: #040814;
-  --border-subtle: rgba(0, 240, 255, 0.25);
+  --border-subtle: rgba(0, 240, 255, 0.3);
   --border-bright: #00f0ff;
   --cyan: #00f0ff;
   --cyan-glow: rgba(0, 240, 255, 0.5);
-  --cyan-deep: rgba(0, 240, 255, 0.08);
+  --cyan-deep: rgba(0, 240, 255, 0.1);
   --green: #00ff88;
   --green-glow: rgba(0, 255, 136, 0.5);
   --red: #ff0055;
@@ -54,14 +58,14 @@
   --purple-glow: rgba(157, 78, 221, 0.45);
   --text-main: #f8fafc;
   --text-muted: #7e8ea6;
-  --panel-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.85), 0 0 20px rgba(0, 240, 255, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.1);
-  --bg-ambient: radial-gradient(circle at 15% 15%, rgba(0, 240, 255, 0.07) 0%, transparent 50%),
+  --panel-shadow: 0 12px 35px -5px rgba(0, 0, 0, 0.9), 0 0 20px rgba(0, 240, 255, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  --bg-ambient: radial-gradient(circle at 15% 15%, rgba(0, 240, 255, 0.08) 0%, transparent 50%),
                 radial-gradient(circle at 85% 85%, rgba(157, 78, 221, 0.06) 0%, transparent 50%);
 }
 
-/* 3. TEMA BLANCO CLÍNICO (BLANCO QUIRÚRGICO SÓLIDO LIMPIO) */
+/* 3. TEMA BLANCO CLÍNICO */
 [data-theme="clinical"] {
-  --bg-void: #f1f5f9; /* Blanco grisáceo hospitalario sólido */
+  --bg-void: #f1f5f9;
   --bg-surface: #ffffff;
   --bg-card: #ffffff;
   --bg-card-hover: #f8fafc;
@@ -82,13 +86,13 @@
   --purple-glow: rgba(124, 58, 237, 0.2);
   --text-main: #0f172a;
   --text-muted: #64748b;
-  --panel-shadow: 0 4px 18px -2px rgba(15, 23, 42, 0.08), 0 2px 6px -1px rgba(15, 23, 42, 0.04), inset 0 1px 0 #ffffff;
-  --bg-ambient: none; /* Cero texturas ni rayas */
+  --panel-shadow: 0 6px 20px -2px rgba(15, 23, 42, 0.08), 0 2px 6px -1px rgba(15, 23, 42, 0.04), inset 0 1px 0 #ffffff;
+  --bg-ambient: none;
 }
 
-/* 4. TEMA CYBER-LIGHT (HÍBRIDO: FONDO BLANCO PURO SÓLIDO + CONSOLAS OBSIDIANA) */
+/* 4. TEMA CYBER-LIGHT (HÍBRIDO) */
 [data-theme="hybrid"] {
-  --bg-void: #f4f6fa; /* Fondo blanco sólido sin rayas */
+  --bg-void: #f4f6fa;
   --bg-surface: #070e1c;
   --bg-card: #0c162a;
   --bg-card-hover: #122240;
@@ -110,7 +114,7 @@
   --text-main: #ffffff;
   --text-muted: #94a3b8;
   --panel-shadow: 0 16px 40px -5px rgba(2, 6, 23, 0.35), 0 0 25px rgba(0, 240, 255, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.2);
-  --bg-ambient: none; /* Blanco sólido limpio */
+  --bg-ambient: none;
 }
 
 [data-theme="hybrid"] .title-primary {
@@ -156,13 +160,13 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
 }
 
 /* =========================================================================
-   SISTEMA DE BOTONES 3D TÁCTILES (CON TEXTO QUE JAMÁS SE SALE)
+   BOTONES 3D CON ENMARCADO MULTICOLOR & BISEL TÁCTIL
    ========================================================================= */
 .btn {
-  background: var(--cyan-deep);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(0, 0, 0, 0.35) 100%), var(--bg-surface);
   border: 1px solid var(--border-bright);
   color: var(--text-main);
-  padding: 8px 14px;
+  padding: 8px 16px;
   border-radius: 6px;
   cursor: pointer;
   font-size: 0.74rem;
@@ -171,10 +175,13 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 7px;
   min-height: 38px;
   text-decoration: none;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.7), 
+              inset 0 1px 0 rgba(255, 255, 255, 0.25), 
+              inset 0 -1px 0 rgba(0, 0, 0, 0.8),
+              0 0 10px rgba(0, 229, 255, 0.15);
   transition: all 0.18s var(--ease);
   position: relative;
   user-select: none;
@@ -185,69 +192,71 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
 .btn:hover {
   background: var(--cyan);
   color: #050811;
-  box-shadow: 0 0 22px var(--cyan-glow), 0 6px 18px rgba(0, 0, 0, 0.7);
+  box-shadow: 0 0 25px var(--cyan-glow), 0 6px 20px rgba(0, 0, 0, 0.8);
   transform: translateY(-2px);
 }
 .btn:active { 
   transform: translateY(1px) scale(0.98); 
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.9), inset 0 2px 4px rgba(0, 0, 0, 0.8);
 }
 
+/* Botón Primario: Aura Cian Eléctrico */
 .btn-primary {
   background: linear-gradient(180deg, var(--cyan) 0%, #0099b8 100%);
-  border-color: var(--cyan);
+  border-color: #ffffff;
   color: #050811;
   font-weight: 900;
-  box-shadow: 0 4px 16px var(--cyan-glow), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  box-shadow: 0 6px 20px var(--cyan-glow), inset 0 1px 0 rgba(255, 255, 255, 0.6), inset 0 -2px 0 rgba(0, 0, 0, 0.4);
 }
-[data-theme="clinical"] .btn-primary {
-  color: #ffffff !important;
-}
+[data-theme="clinical"] .btn-primary { color: #ffffff !important; }
 .btn-primary:hover {
   filter: brightness(1.15);
-  box-shadow: 0 0 28px var(--cyan);
+  box-shadow: 0 0 32px var(--cyan);
 }
 
+/* Botón de Éxito / Inicio: Verde Esmeralda Neón */
 .btn-success {
-  background: rgba(0, 255, 136, 0.15);
+  background: linear-gradient(180deg, rgba(0, 255, 136, 0.25) 0%, rgba(0, 0, 0, 0.4) 100%), #0c1815;
   border-color: var(--green);
   color: var(--green);
-  box-shadow: 0 4px 12px rgba(0, 255, 136, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  box-shadow: 0 4px 14px rgba(0, 255, 136, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
 .btn-success:hover {
   background: var(--green);
   color: #050811;
-  box-shadow: 0 0 22px var(--green-glow);
+  box-shadow: 0 0 26px var(--green-glow);
 }
 
+/* Botón de Paro / Peligro: Magenta Rojo Láser */
 .btn-danger {
-  background: rgba(255, 0, 85, 0.15);
+  background: linear-gradient(180deg, rgba(255, 0, 85, 0.25) 0%, rgba(0, 0, 0, 0.4) 100%), #1a080f;
   border-color: var(--red);
   color: var(--red);
-  box-shadow: 0 4px 12px rgba(255, 0, 85, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  box-shadow: 0 4px 14px rgba(255, 0, 85, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
 .btn-danger:hover {
   background: var(--red);
   color: #ffffff;
-  box-shadow: 0 0 22px var(--red-glow);
+  box-shadow: 0 0 26px var(--red-glow);
 }
 
+/* Botón Naranja Speedtest (Acción Táctica / Advertencia) */
 .btn-warn {
-  background: rgba(255, 85, 0, 0.15);
+  background: linear-gradient(180deg, rgba(255, 85, 0, 0.25) 0%, rgba(0, 0, 0, 0.4) 100%), #1c0e05;
   border-color: var(--amber);
   color: var(--amber);
-  box-shadow: 0 4px 12px rgba(255, 85, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  box-shadow: 0 4px 14px rgba(255, 85, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
 .btn-warn:hover {
   background: var(--amber);
   color: #050811;
-  box-shadow: 0 0 22px var(--amber-glow);
+  box-shadow: 0 0 26px var(--amber-glow);
 }
 
 .btn-secondary {
   background: var(--bg-surface);
   border-color: var(--border-subtle);
   color: var(--text-main);
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 .btn-secondary:hover {
   background: var(--bg-card-hover);
@@ -256,7 +265,7 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
 
 .btn-sm {
   min-height: 32px;
-  padding: 4px 10px;
+  padding: 4px 11px;
   font-size: 0.7rem;
 }
 .w-full { width: 100%; }
@@ -264,7 +273,7 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
 .flex-2 { flex: 2; }
 
 /* =========================================================================
-   INSIGNIAS Y BADGES MÉDICOS (ADAPTACIÓN PERFECTA)
+   INSIGNIAS Y BADGES MÉDICOS 3D
    ========================================================================= */
 .user-role, .cycle-badge, .status-badge {
   white-space: nowrap !important;
@@ -277,35 +286,36 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
 }
 
 .cycle-badge {
-  background: var(--cyan-deep);
+  background: linear-gradient(180deg, rgba(0, 229, 255, 0.18) 0%, rgba(139, 92, 246, 0.15) 100%);
   border: 1px solid var(--cyan);
   color: var(--cyan);
   font-weight: 800;
-  padding: 4px 8px;
+  padding: 4px 9px;
   border-radius: 4px;
   font-size: 0.68rem;
   letter-spacing: 0.5px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 .user-role {
-  background: rgba(255, 0, 85, 0.15);
+  background: rgba(255, 0, 85, 0.18);
   color: var(--red);
   border: 1px solid var(--red);
-  padding: 3px 7px;
+  padding: 3px 8px;
   font-size: 0.62rem;
   font-weight: 800;
   border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(255, 0, 85, 0.25);
 }
 
 .status-badge {
-  padding: 4px 9px;
+  padding: 4px 10px;
   border-radius: 4px;
   font-size: 0.68rem;
   font-weight: 800;
   border: 1px solid var(--border-subtle);
   background: var(--bg-surface);
-  box-shadow: inset 0 1px 3px rgba(0,0,0,0.5);
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.6), 0 2px 6px rgba(0,0,0,0.4);
 }
 
 .dot { width: 8px; height: 8px; border-radius: 50%; }
@@ -313,14 +323,14 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
 .dot.offline { background: var(--red); box-shadow: 0 0 8px var(--red); }
 
 /* =========================================================================
-   BARRA SUPERIOR (HUD COMMAND BAR)
+   BARRA SUPERIOR (HUD COMMAND BAR) CON MARCO DE LUZ 3D
    ========================================================================= */
 .hud-topbar {
   background: var(--bg-surface);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border-bottom: 1px solid var(--border-subtle);
-  box-shadow: 0 4px 25px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  box-shadow: 0 6px 30px rgba(0, 0, 0, 0.9), inset 0 1px 0 rgba(255, 255, 255, 0.1);
   padding: 10px 18px;
   display: flex;
   justify-content: space-between;
@@ -356,7 +366,7 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   width: 32px;
   height: 32px;
   color: var(--cyan);
-  filter: drop-shadow(0 0 8px var(--cyan-glow));
+  filter: drop-shadow(0 0 10px var(--cyan-glow));
   animation: spinReactor 10s linear infinite;
   flex-shrink: 0;
 }
@@ -398,7 +408,7 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   border: 1px solid var(--border-subtle);
   color: var(--text-main);
   white-space: nowrap;
-  box-shadow: inset 0 1px 3px rgba(0,0,0,0.4);
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.6);
 }
 .sync-pill { border-color: var(--green); color: var(--green); }
 
@@ -419,11 +429,11 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 5px 10px;
+  padding: 5px 12px;
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  box-shadow: 0 3px 10px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255, 255, 255, 0.15);
   font-size: 0.72rem;
   white-space: nowrap;
 }
@@ -443,21 +453,20 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   font-size: 1.15rem;
   background: var(--bg-surface);
   border-color: var(--border-subtle);
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
 }
 
 .gear-dropdown {
   position: absolute;
   top: calc(100% + 10px);
   right: 0;
-  width: 290px;
+  width: 295px;
   max-width: calc(100vw - 20px);
   background: var(--bg-card);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--cyan);
-  border-radius: 8px;
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.8), 0 0 25px var(--cyan-glow);
+  border-radius: 10px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.95), 0 0 30px var(--cyan-glow), inset 0 1px 0 rgba(255, 255, 255, 0.15);
   z-index: 99999;
   display: none;
   overflow: hidden;
@@ -480,7 +489,7 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
 }
 
 .theme-picker-header {
-  padding: 8px 16px 4px 16px;
+  padding: 10px 16px 4px 16px;
   font-size: 0.65rem;
   font-weight: 800;
   color: var(--text-muted);
@@ -496,7 +505,7 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   padding: 8px 2px;
   font-size: 0.64rem;
   font-weight: 800;
-  border-radius: 4px;
+  border-radius: 5px;
   border: 1px solid var(--border-subtle);
   background: var(--bg-surface);
   color: var(--text-main);
@@ -507,6 +516,7 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   gap: 3px;
   transition: all 0.16s ease;
   white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
 }
 .btn-theme-opt:hover {
   border-color: var(--cyan);
@@ -515,7 +525,7 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
 }
 .btn-theme-opt.active {
   border-color: var(--cyan);
-  box-shadow: 0 0 12px var(--cyan-glow);
+  box-shadow: 0 0 14px var(--cyan-glow), inset 0 1px 0 rgba(255, 255, 255, 0.25);
   background: var(--cyan-deep);
   color: var(--cyan);
 }
@@ -560,7 +570,7 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   border-bottom: 1px solid var(--border-subtle);
   width: 100%;
   position: relative;
-  box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
 }
 
 .btn-dock-toggle {
@@ -578,7 +588,7 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   gap: 6px;
   flex-shrink: 0;
   white-space: nowrap;
-  box-shadow: 0 3px 8px rgba(0,0,0,0.3);
+  box-shadow: 0 3px 10px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 .desktop-nav-slider {
@@ -606,7 +616,7 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   border-radius: 6px;
   font-size: 0.74rem;
   white-space: nowrap;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 2px 6px rgba(0, 0, 0, 0.3);
 }
 .nav-btn:hover { 
   color: var(--text-main); 
@@ -617,11 +627,11 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   background: var(--cyan-deep);
   color: var(--cyan);
   border-color: var(--cyan);
-  box-shadow: 0 0 14px var(--cyan-glow), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  box-shadow: 0 0 16px var(--cyan-glow), inset 0 1px 0 rgba(255, 255, 255, 0.25);
 }
 
 /* =========================================================================
-   MODAL FLOTANTE CENTRALIZADO
+   MODAL FLOTANTE 3D CENTRALIZADO (ENMARCADO MULTICROMÁTICO)
    ========================================================================= */
 .modal-overlay {
   position: fixed;
@@ -631,9 +641,9 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   width: 100dvw;
   height: 100vh;
   height: 100dvh;
-  background: rgba(2, 4, 10, 0.88);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
+  background: rgba(0, 0, 0, 0.92);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   display: none;
   place-items: center;
   z-index: 9999999;
@@ -648,7 +658,7 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
 }
 
 .modal-card {
-  background: var(--bg-card) !important;
+  background: linear-gradient(180deg, #141f38 0%, #0c1424 100%) !important;
   border: 1px solid var(--cyan) !important;
   border-radius: 14px !important;
   padding: 28px 24px !important;
@@ -656,7 +666,9 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   width: 100% !important;
   margin: auto !important;
   text-align: center !important;
-  box-shadow: 0 25px 70px rgba(0, 0, 0, 0.95), 0 0 35px var(--cyan-glow), inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.98), 
+              0 0 45px var(--cyan-glow), 
+              inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
   animation: modalPopUp 0.25s var(--ease) forwards;
   position: relative !important;
 }
@@ -723,30 +735,31 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
 }
 .title-secondary { font-size: 0.65rem; color: var(--text-muted); letter-spacing: 0.8px; }
 
+/* Panel / Tarjeta 3D con luz interior */
 .card {
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  padding: 18px;
-  margin-bottom: 18px;
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 20px;
   box-shadow: var(--panel-shadow);
   transition: all 0.2s var(--ease);
 }
 .card:hover { border-color: var(--cyan); }
 
 /* =========================================================================
-   GRILLA DE FLOTA & MEDIDORES 3D
+   GRILLA DE FLOTA & MEDIDORES 3D (DIAL SPEEDTEST)
    ========================================================================= */
 .fleet-deck-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
-  gap: 16px;
+  gap: 18px;
 }
 
 .node-item {
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 18px;
   cursor: pointer;
   box-shadow: var(--panel-shadow);
@@ -754,18 +767,19 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   position: relative;
   overflow: hidden;
 }
+/* Línea de luz superior en gradiente tricolor */
 .node-item::before {
   content: '';
   position: absolute;
   top: 0; left: 0; right: 0;
   height: 2px;
-  background: linear-gradient(90deg, transparent, var(--cyan), transparent);
-  opacity: 0.8;
+  background: linear-gradient(90deg, var(--cyan) 0%, var(--purple) 50%, var(--amber) 100%);
+  opacity: 0.9;
 }
 .node-item:hover {
   border-color: var(--cyan);
-  transform: translateY(-2px);
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.4), 0 0 20px var(--cyan-glow);
+  transform: translateY(-3px);
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.9), 0 0 25px var(--cyan-glow);
 }
 
 .gauge-grid { 
@@ -775,26 +789,29 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   margin: 14px 0; 
 }
 
+/* Dial 3D Speedtest con profundidad radial */
 .gauge-cell {
   background: var(--bg-gauge);
-  border: 1px solid var(--border-subtle);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-top: 2px solid var(--cyan);
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 14px 10px;
   text-align: center;
-  box-shadow: var(--panel-shadow);
+  box-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.9), 
+              inset 0 -1px 1px rgba(255, 255, 255, 0.1), 
+              0 8px 20px rgba(0, 0, 0, 0.7);
 }
 .gauge-val { 
-  font-size: 1.85rem; 
+  font-size: 1.9rem; 
   font-weight: 900; 
   color: var(--cyan); 
-  text-shadow: 0 0 14px var(--cyan-glow);
+  text-shadow: 0 0 16px var(--cyan-glow);
   line-height: 1.1;
   white-space: nowrap;
 }
 .gauge-val.p { 
   color: var(--purple); 
-  text-shadow: 0 0 14px var(--purple-glow);
+  text-shadow: 0 0 16px var(--purple-glow);
   white-space: nowrap;
 }
 .gauge-lbl { 
@@ -808,22 +825,23 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
 }
 
 .health-bar {
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.8);
   border: 1px solid var(--border-subtle);
   border-radius: 4px;
   height: 8px;
   width: 100%;
   overflow: hidden;
   margin-top: 6px;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.8);
 }
 .health-fill { 
   height: 100%; 
-  background: var(--green); 
-  box-shadow: 0 0 10px var(--green-glow);
+  background: linear-gradient(90deg, var(--green) 0%, var(--cyan) 100%); 
+  box-shadow: 0 0 12px var(--green-glow);
   transition: width 0.4s var(--ease); 
 }
-.health-fill.warn { background: var(--amber); }
-.health-fill.danger { background: var(--red); }
+.health-fill.warn { background: linear-gradient(90deg, var(--amber) 0%, #ff8800 100%); box-shadow: 0 0 12px var(--amber-glow); }
+.health-fill.danger { background: linear-gradient(90deg, var(--red) 0%, #ff007f 100%); box-shadow: 0 0 12px var(--red-glow); }
 
 /* =========================================================================
    PAQUETES DE REPORTES Y TABLAS CLÍNICAS
@@ -837,7 +855,7 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   background: var(--cyan-deep) !important;
 }
 .report-package-row:active {
-  background: rgba(0, 240, 255, 0.22) !important;
+  background: rgba(0, 229, 255, 0.22) !important;
 }
 
 .table-container {
@@ -845,7 +863,7 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   border: 1px solid var(--border-subtle);
-  border-radius: 6px;
+  border-radius: 8px;
   background: var(--bg-card);
   box-shadow: var(--panel-shadow);
   min-height: 120px;
@@ -874,12 +892,12 @@ th {
 .kpi-card {
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  padding: 14px;
+  border-radius: 8px;
+  padding: 16px;
   text-align: center;
   box-shadow: var(--panel-shadow);
 }
-.kpi-val { font-size: 1.85rem; font-weight: 900; color: var(--cyan); text-shadow: 0 0 14px var(--cyan-glow); }
+.kpi-val { font-size: 1.95rem; font-weight: 900; color: var(--cyan); text-shadow: 0 0 14px var(--cyan-glow); }
 .kpi-lbl { font-size: 0.62rem; font-weight: 800; color: var(--text-muted); margin-top: 5px; letter-spacing: 1px; white-space: nowrap; }
 
 .subtab-slider { 
@@ -904,7 +922,7 @@ th {
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border-top: 1px solid var(--border-subtle);
-  box-shadow: 0 -4px 18px rgba(0,0,0,0.4);
+  box-shadow: 0 -6px 25px rgba(0,0,0,0.8);
   display: none;
   justify-content: space-around;
   align-items: center;
@@ -931,7 +949,7 @@ th {
 .m-tab.active { 
   color: var(--cyan); 
   transform: translateY(-2px);
-  text-shadow: 0 0 10px var(--cyan-glow);
+  text-shadow: 0 0 12px var(--cyan-glow);
 }
 
 /* =========================================================================
