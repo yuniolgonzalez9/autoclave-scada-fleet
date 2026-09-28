@@ -1,34 +1,35 @@
 /* =========================================================================
-   SCADA BIOMÉDICO MASTER // EDICIÓN SPEEDTEST 3D DEEP BLACK & MULTICOLOR
+   SCADA BIOMÉDICO MASTER // DISEÑO 3D CON TRANSPARENCIA AJUSTABLE & AUTO-ESCALA
    ========================================================================= */
 
-/* 1. TEMA SPEEDTEST PRO (FONDO NEGRO ABSOLUTO + MÓDULOS GRIS 3D + BORDES MULTICOLOR) */
+/* 1. TEMA SPEEDTEST PRO (FONDO NEGRO ABSOLUTO + MÓDULOS GRIS 3D + NEÓN) */
 [data-theme="tactical"], :root {
-  --bg-void: #000000; /* Negro puro absoluto OLED */
-  --bg-surface: #0a101d;
-  --bg-card: #111a2e; /* Gris pizarra de alto contraste */
-  --bg-card-hover: #16223b;
+  --card-alpha: 0.90; /* Controlado dinámicamente por el deslizador */
+  --bg-void: #000000;
+  --bg-surface: rgba(12, 18, 32, var(--card-alpha));
+  --bg-card: rgba(17, 26, 46, var(--card-alpha));
+  --bg-card-hover: rgba(22, 34, 58, 0.95);
   --bg-gauge: radial-gradient(circle at 50% 20%, #1a2744 0%, #080d18 85%);
   --bg-input: #080d18;
-  --border-subtle: rgba(139, 92, 246, 0.4);
+  --border-subtle: rgba(139, 92, 246, 0.35);
   --border-bright: #00e5ff;
   --cyan: #00e5ff;
-  --cyan-glow: rgba(0, 229, 255, 0.55);
-  --cyan-deep: rgba(0, 229, 255, 0.14);
+  --cyan-glow: rgba(0, 229, 255, 0.45);
+  --cyan-deep: rgba(0, 229, 255, 0.12);
   --green: #00ff88;
-  --green-glow: rgba(0, 255, 136, 0.55);
+  --green-glow: rgba(0, 255, 136, 0.45);
   --red: #ff0055;
-  --red-glow: rgba(255, 0, 85, 0.55);
-  --amber: #ff5500; /* Naranja Fuego Speedtest */
-  --amber-glow: rgba(255, 85, 0, 0.55);
-  --purple: #8b5cf6; /* Púrpura Neón Speedtest */
-  --purple-glow: rgba(139, 92, 246, 0.55);
+  --red-glow: rgba(255, 0, 85, 0.5);
+  --amber: #ff5500;
+  --amber-glow: rgba(255, 85, 0, 0.45);
+  --purple: #8b5cf6;
+  --purple-glow: rgba(139, 92, 246, 0.45);
   --text-main: #ffffff;
-  --text-muted: #94a3b8;
+  --text-muted: #8b9bb4;
   --ease: cubic-bezier(0.16, 1, 0.3, 1);
-  --panel-shadow: 0 16px 40px -5px rgba(0, 0, 0, 0.98), 
+  --panel-shadow: 0 16px 40px -5px rgba(0, 0, 0, 0.95), 
                   0 0 0 1px rgba(255, 255, 255, 0.08), 
-                  inset 0 1px 0 rgba(255, 255, 255, 0.22), 
+                  inset 0 1px 0 rgba(255, 255, 255, 0.2), 
                   inset 0 -1px 0 rgba(0, 0, 0, 0.8),
                   0 0 25px rgba(0, 229, 255, 0.1);
   --bg-ambient: radial-gradient(circle at 50% -5%, rgba(139, 92, 246, 0.14) 0%, transparent 55%),
@@ -37,17 +38,18 @@
 
 /* 2. TEMA CYBER DECK */
 [data-theme="cyber"] {
+  --card-alpha: 0.88;
   --bg-void: #020409;
-  --bg-surface: #060c18;
-  --bg-card: #0b1426;
-  --bg-card-hover: #101e38;
+  --bg-surface: rgba(6, 12, 24, var(--card-alpha));
+  --bg-card: rgba(11, 20, 38, var(--card-alpha));
+  --bg-card-hover: rgba(16, 30, 58, 0.95);
   --bg-gauge: radial-gradient(circle at 50% 30%, #101e38 0%, #030712 100%);
   --bg-input: #040814;
-  --border-subtle: rgba(0, 240, 255, 0.3);
+  --border-subtle: rgba(0, 240, 255, 0.25);
   --border-bright: #00f0ff;
   --cyan: #00f0ff;
   --cyan-glow: rgba(0, 240, 255, 0.5);
-  --cyan-deep: rgba(0, 240, 255, 0.1);
+  --cyan-deep: rgba(0, 240, 255, 0.08);
   --green: #00ff88;
   --green-glow: rgba(0, 255, 136, 0.5);
   --red: #ff0055;
@@ -65,9 +67,10 @@
 
 /* 3. TEMA BLANCO CLÍNICO */
 [data-theme="clinical"] {
+  --card-alpha: 0.95;
   --bg-void: #f1f5f9;
-  --bg-surface: #ffffff;
-  --bg-card: #ffffff;
+  --bg-surface: rgba(255, 255, 255, var(--card-alpha));
+  --bg-card: rgba(255, 255, 255, var(--card-alpha));
   --bg-card-hover: #f8fafc;
   --bg-gauge: linear-gradient(145deg, #ffffff 0%, #f1f5f9 100%);
   --bg-input: #ffffff;
@@ -86,15 +89,16 @@
   --purple-glow: rgba(124, 58, 237, 0.2);
   --text-main: #0f172a;
   --text-muted: #64748b;
-  --panel-shadow: 0 6px 20px -2px rgba(15, 23, 42, 0.08), 0 2px 6px -1px rgba(15, 23, 42, 0.04), inset 0 1px 0 #ffffff;
+  --panel-shadow: 0 4px 18px -2px rgba(15, 23, 42, 0.08), 0 2px 6px -1px rgba(15, 23, 42, 0.04), inset 0 1px 0 #ffffff;
   --bg-ambient: none;
 }
 
 /* 4. TEMA CYBER-LIGHT (HÍBRIDO) */
 [data-theme="hybrid"] {
+  --card-alpha: 0.92;
   --bg-void: #f4f6fa;
-  --bg-surface: #070e1c;
-  --bg-card: #0c162a;
+  --bg-surface: rgba(7, 14, 28, var(--card-alpha));
+  --bg-card: rgba(12, 22, 42, var(--card-alpha));
   --bg-card-hover: #122240;
   --bg-gauge: radial-gradient(circle at 50% 30%, #101e38 0%, #050a14 100%);
   --bg-input: #080f1d;
@@ -160,7 +164,35 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
 }
 
 /* =========================================================================
-   BOTONES 3D CON ENMARCADO MULTICOLOR & BISEL TÁCTIL
+   CONTROL DESLIZANTE DE TRANSPARENCIA 3D (SLIDER)
+   ========================================================================= */
+.transparency-slider-box {
+  padding: 10px 16px;
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+}
+.transparency-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: var(--cyan);
+  margin-bottom: 8px;
+}
+.transparency-range {
+  width: 100%;
+  accent-color: var(--cyan);
+  cursor: pointer;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.15);
+  outline: none;
+}
+
+/* =========================================================================
+   BOTONES 3D TÁCTILES CON RELIEVE Y BISEL
    ========================================================================= */
 .btn {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(0, 0, 0, 0.35) 100%), var(--bg-surface);
@@ -200,7 +232,6 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.9), inset 0 2px 4px rgba(0, 0, 0, 0.8);
 }
 
-/* Botón Primario: Aura Cian Eléctrico */
 .btn-primary {
   background: linear-gradient(180deg, var(--cyan) 0%, #0099b8 100%);
   border-color: #ffffff;
@@ -214,7 +245,6 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   box-shadow: 0 0 32px var(--cyan);
 }
 
-/* Botón de Éxito / Inicio: Verde Esmeralda Neón */
 .btn-success {
   background: linear-gradient(180deg, rgba(0, 255, 136, 0.25) 0%, rgba(0, 0, 0, 0.4) 100%), #0c1815;
   border-color: var(--green);
@@ -227,7 +257,6 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   box-shadow: 0 0 26px var(--green-glow);
 }
 
-/* Botón de Paro / Peligro: Magenta Rojo Láser */
 .btn-danger {
   background: linear-gradient(180deg, rgba(255, 0, 85, 0.25) 0%, rgba(0, 0, 0, 0.4) 100%), #1a080f;
   border-color: var(--red);
@@ -240,7 +269,6 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   box-shadow: 0 0 26px var(--red-glow);
 }
 
-/* Botón Naranja Speedtest (Acción Táctica / Advertencia) */
 .btn-warn {
   background: linear-gradient(180deg, rgba(255, 85, 0, 0.25) 0%, rgba(0, 0, 0, 0.4) 100%), #1c0e05;
   border-color: var(--amber);
@@ -323,7 +351,7 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
 .dot.offline { background: var(--red); box-shadow: 0 0 8px var(--red); }
 
 /* =========================================================================
-   BARRA SUPERIOR (HUD COMMAND BAR) CON MARCO DE LUZ 3D
+   BARRA SUPERIOR (HUD COMMAND BAR)
    ========================================================================= */
 .hud-topbar {
   background: var(--bg-surface);
@@ -631,7 +659,7 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
 }
 
 /* =========================================================================
-   MODAL FLOTANTE 3D CENTRALIZADO (ENMARCADO MULTICROMÁTICO)
+   MODAL FLOTANTE 3D CENTRALIZADO
    ========================================================================= */
 .modal-overlay {
   position: fixed;
@@ -735,7 +763,6 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
 }
 .title-secondary { font-size: 0.65rem; color: var(--text-muted); letter-spacing: 0.8px; }
 
-/* Panel / Tarjeta 3D con luz interior */
 .card {
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
@@ -748,7 +775,7 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
 .card:hover { border-color: var(--cyan); }
 
 /* =========================================================================
-   GRILLA DE FLOTA & MEDIDORES 3D (DIAL SPEEDTEST)
+   GRILLA DE FLOTA & MEDIDORES 3D (CON AUTO-DIMENSIONAMIENTO ELÁSTICO)
    ========================================================================= */
 .fleet-deck-grid {
   display: grid;
@@ -767,7 +794,6 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   position: relative;
   overflow: hidden;
 }
-/* Línea de luz superior en gradiente tricolor */
 .node-item::before {
   content: '';
   position: absolute;
@@ -784,42 +810,63 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
 
 .gauge-grid { 
   display: grid; 
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); 
-  gap: 12px; 
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 125px), 1fr)); 
+  gap: 10px; 
   margin: 14px 0; 
 }
 
-/* Dial 3D Speedtest con profundidad radial */
+/* Celda con protección total de desborde */
 .gauge-cell {
   background: var(--bg-gauge);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-top: 2px solid var(--cyan);
   border-radius: 8px;
-  padding: 14px 10px;
+  padding: 12px 8px;
   text-align: center;
   box-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.9), 
               inset 0 -1px 1px rgba(255, 255, 255, 0.1), 
               0 8px 20px rgba(0, 0, 0, 0.7);
+  min-width: 0; /* Evita que los hijos fuercen la expansión de la celda */
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-height: 85px;
 }
+
+/* Valor numérico normal */
 .gauge-val { 
-  font-size: 1.9rem; 
+  font-size: 1.85rem; 
   font-weight: 900; 
   color: var(--cyan); 
-  text-shadow: 0 0 16px var(--cyan-glow);
+  text-shadow: 0 0 14px var(--cyan-glow);
   line-height: 1.1;
   white-space: nowrap;
 }
 .gauge-val.p { 
   color: var(--purple); 
-  text-shadow: 0 0 16px var(--purple-glow);
-  white-space: nowrap;
+  text-shadow: 0 0 14px var(--purple-glow);
 }
+
+/* AUTO-DIMENSIONAMIENTO ELÁSTICO PARA TEXTOS LARGOS COMO "FINALIZADO CON EXITO" */
+.gauge-val.is-text {
+  font-size: clamp(0.72rem, 1.1vw, 1.0rem) !important;
+  line-height: 1.25 !important;
+  white-space: normal !important;
+  word-break: break-word !important;
+  text-align: center;
+  padding: 0 2px;
+  letter-spacing: 0.5px;
+  max-width: 100%;
+}
+
 .gauge-lbl { 
-  font-size: 0.62rem; 
+  font-size: 0.6rem; 
   color: var(--text-muted); 
   font-weight: 800; 
   margin-top: 6px; 
-  letter-spacing: 1.2px; 
+  letter-spacing: 1px; 
   text-transform: uppercase;
   white-space: nowrap;
 }
