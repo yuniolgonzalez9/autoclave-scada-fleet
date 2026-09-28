@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es" data-theme="tactical" data-bg="circuit-board">
+<html lang="es" data-theme="tactical" data-bg="circuit-pcb">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
@@ -19,7 +19,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;800&family=Orbitron:wght@600;800;900&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="style.css?v=22">
+  <link rel="stylesheet" href="style.css?v=23">
   
   <!-- Dependencias Externas -->
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
@@ -90,11 +90,12 @@
           ⚙️
         </button>
 
-        <div class="gear-dropdown" id="gearDropdownMenu">
+        <!-- AISLADO CON stopPropagation() PARA QUE NO SE CIERRE AL INTERACTUAR -->
+        <div class="gear-dropdown" id="gearDropdownMenu" onclick="event.stopPropagation()">
           <div class="dropdown-header">PANEL DE CONTROL TÉCNICO</div>
           
           <!-- 1. TUS 4 TEMAS VISUALES ORIGINALES (INTACTOS) -->
-          <div class="theme-picker-header" style="font-size:0.65rem; font-weight:800; color:var(--cyan); padding:8px 14px 4px 14px;">🎨 TEMA VISUAL:</div>
+          <div class="theme-picker-header" style="font-size:0.65rem; font-weight:800; color:var(--cyan); padding:10px 14px 4px 14px;">🎨 TEMA VISUAL:</div>
           <div class="theme-picker-grid">
             <button class="btn-theme-opt" id="themeBtnClinical" onclick="cambiarTema('clinical')">
               <span>🏥</span> Clínico
@@ -110,28 +111,30 @@
             </button>
           </div>
 
-          <!-- 2. SELECTOR DE PAPEL TAPIZ / WALLPAPER DE CIRCUITOS REALES -->
+          <!-- 2. SELECTOR DE PAPEL TAPIZ / WALLPAPER (3 FAVORITAS + NUEVAS + BLANCO) -->
           <div class="wallpaper-picker-box">
             <label style="font-size:0.65rem; font-weight:800; color:var(--cyan); display:block; margin-bottom:6px;">
               🖼️ PAPEL TAPIZ (CIRCUITOS & HD):
             </label>
             <select id="selectFondoWallpaper" class="input-field" style="margin-bottom:0; font-size:0.75rem; padding:8px;" onchange="cambiarFondo(this.value)">
-              <option value="circuit-board">⚡ Microchip & Pistas PCB Neón</option>
-              <option value="neural-network">🌐 Red Neuronal & Conexiones de Datos</option>
-              <option value="cyber-matrix">🏙️ Matriz Cyberpunk & Servidores</option>
-              <option value="digital-core">💻 Terminal Binaria & Núcleo SCADA</option>
+              <option value="circuit-pcb">⚡ Microchip & Pistas PCB Neón (Favorito)</option>
+              <option value="planet-nodes">🌐 Red Global de Nodos & Planeta (Favorito)</option>
+              <option value="cyber-matrix">🏙️ Matriz Cyberpunk de Servidores (Favorito)</option>
+              <option value="motherboard-gold">🔌 Placa Base & Hardware Eléctrico</option>
+              <option value="quantum-connections">💠 Conexiones Cuánticas & Fibra Óptica</option>
               <option value="carbon">🏁 Fibra de Carbono 3D</option>
               <option value="oled">⚫ Negro OLED Cósmico</option>
+              <option value="clean">⚪ Blanco Quirúrgico Limpio</option>
             </select>
           </div>
 
-          <!-- 3. DESLIZADOR DE TRANSPARENCIA 3D (0% A 100%) -->
+          <!-- 3. DESLIZADOR ULTRA-GLASS (0% ULTRA TRASLÚCIDO A 100% SÓLIDO) -->
           <div class="wallpaper-picker-box" style="border-top:none;">
             <div style="display:flex; justify-content:space-between; font-size:0.65rem; font-weight:800; color:var(--cyan); margin-bottom:6px;">
-              <span>🎛️ TRANSPARENCIA DE PANELES:</span>
-              <span id="transparencyValTxt">85%</span>
+              <span>🎛️ TRANSPARENCIA ULTRA-GLASS:</span>
+              <span id="transparencyValTxt">82%</span>
             </div>
-            <input type="range" class="input-field" style="height:20px; padding:0; margin:0;" id="rangeTransparency" min="10" max="100" value="85" oninput="ajustarTransparencia(this.value)">
+            <input type="range" class="input-field" style="height:22px; padding:0; margin:0; cursor:pointer;" id="rangeTransparency" min="0" max="100" value="82" oninput="ajustarTransparencia(this.value)">
           </div>
 
           <div class="dropdown-separator"></div>
@@ -733,6 +736,6 @@
     </button>
   </nav>
 
-  <script src="app.js?v=22"></script>
+  <script src="app.js?v=23"></script>
 </body>
 </html>
