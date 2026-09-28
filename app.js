@@ -1,5 +1,5 @@
 // =========================================================================
-// 1. CONEXIÓN CLOUD SUPABASE & REALTIME (NUBE CENTRAL 24/7)
+// 1. CONEXIÓN CLOUD SUPABASE & REALTIME (NUBE CENTRAL 24/7 EN VERCEL)
 // =========================================================================
 const SUPABASE_URL = "https://gjtqyodpgwfvfvkhlhik.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdqdHF5b2RwZ3dmdmZ2a2hsaGlrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAwNDAzNTYsImV4cCI6MjEwNTYxNjM1Nn0.g8t_PbEityaneKkOUHttQ_cZv50aczLU4Z9la8R4d_g";
@@ -27,6 +27,44 @@ function estaAutenticado() {
   return !!usuarioActual && !!localStorage.getItem("scada_logged_user");
 }
 
+// Utilidad clínica para formatear fechas sin que jamás diga "Invalid Date"
+function formatearFechaClinica(fechaRaw) {
+  if (!fechaRaw) return new Date().toLocaleDateString();
+  const d = new Date(fechaRaw);
+  if (isNaN(d.getTime())) {
+    if (typeof fechaRaw === 'string' && fechaRaw.includes('-')) {
+      const parts = fechaRaw.split('T')[0].split('-');
+      if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    return String(fechaRaw);
+  }
+  return d.toLocaleDateString();
+}
+
+// Cálculo matemático de duración entre dos marcas de tiempo HH:MM:SS
+function calcularDuracionTexto(horaInicio, horaFin, segRegistrados = 0) {
+  if (segRegistrados && segRegistrados > 0) {
+    const m = Math.floor(segRegistrados / 60);
+    const s = segRegistrados % 60;
+    return `${m}m ${s}s`;
+  }
+  if (!horaInicio || !horaFin || horaInicio === '--' || horaFin === '--') return '--';
+  try {
+    const pI = horaInicio.split(':').map(Number);
+    const pF = horaFin.split(':').map(Number);
+    if (pI.length >= 2 && pF.length >= 2) {
+      let sI = pI[0] * 3600 + pI[1] * 60 + (pI[2] || 0);
+      let sF = pF[0] * 3600 + pF[1] * 60 + (pF[2] || 0);
+      if (sF < sI) sF += 86400; // Cambio de día
+      const diff = sF - sI;
+      const m = Math.floor(diff / 60);
+      const s = diff % 60;
+      return `${m}m ${s}s`;
+    }
+  } catch(e) {}
+  return '--';
+}
+
 // =========================================================================
 // 3. MOTOR DEL SELECTOR DE TEMAS (4 MUNDOS VISUALES)
 // =========================================================================
@@ -43,7 +81,7 @@ window.cambiarTema = function(nombreTema) {
   const btnActivo = document.getElementById(btnId);
   if (btnActivo) btnActivo.classList.add('active');
 
-  notify(`🎨 Tema: ${nombreTema.toUpperCase()}`, "var(--cyan)");
+  notify(`🎨 Tema activado: ${nombreTema.toUpperCase()}`, "var(--cyan)");
 };
 
 function inicializarTemaGuardado() {
@@ -76,7 +114,7 @@ function sonarAlarmaSonora() {
 }
 
 // =========================================================================
-// 5. VENTANA EMERGENTE FLOTANTE CENTRALIZADA (MODAL DE CONFIRMACIÓN)
+// 5. VENTANA EMERGENTE FLOTANTE CENTRALIZADA (MODAL)
 // =========================================================================
 function mostrarModalConfirmacion({ icon = '⚠️', title = 'CONFIRMAR ACCIÓN', msg = '¿Deseas continuar?', okText = 'EJECUTAR', okClass = 'btn-danger', onConfirm = null }) {
   modalConfirmCallback = onConfirm;
@@ -343,7 +381,7 @@ window.cerrarSesionManual = function() {
 };
 
 // =========================================================================
-// 8. PURGA Y RESET DE CACHÉ LOCAL
+// 8. PURGA Y RESET DE CACHÉ LOCAL (FORZAR NUBE)
 // =========================================================================
 window.solicitarLimpiezaCacheLocal = function() {
   mostrarModalConfirmacion({
@@ -367,14 +405,14 @@ window.solicitarLimpiezaCacheLocal = function() {
 };
 
 // =========================================================================
-// 9. BASE DE DATOS LOCAL Y TIEMPO REAL NUBE
+// 9. BASE DE DATOS LOCAL Y TIEMPO REAL NUBE (SUPABASE REALTIME)
 // =========================================================================
 let db = null;
 const fleet = {};
 
 function initDB() {
   return new Promise((resolve) => {
-    const req = indexedDB.open("AutoclaveFastFleetDB_v29", 1);
+    const req = indexedDB.open("AutoclaveFastFleetDB_v30", 1);
     req.onupgradeneeded = (e) => {
       db = e.target.result;
       if (!db.objectStoreNames.contains("asignaciones")) db.createObjectStore("asignaciones", { keyPath: "mac" });
@@ -413,7 +451,7 @@ function iniciarSuscripcionNubeRealtime() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'reportes_autoclaves' }, (payload) => {
         const syncText = document.getElementById("syncStatusText");
         if (syncText) syncText.innerText = "NUBE CONECTADA";
-        notify(`📋 Nuevo paquete en la nube [${payload.eventType}]`, "var(--green)");
+        notify(`📋 Paquete recibido en la nube [${payload.eventType}]`, "var(--green)");
         if (currentActivity === 'act-reports') renderizarRegistros();
         if (currentActivity === 'act-device-detail' && currentInspectedMAC) {
           cargarLogsDetalle(currentInspectedMAC);
@@ -573,7 +611,6 @@ function inicializarDispositivoSiNoExiste(mac) {
       lastSeen: Date.now(),
       datos: { cfg: {} },
       esquema: null,
-      historyPoints: [],
       _pendingLock: {},
       meta: {
         alias: `AUTOCLAVE [${mac.substring(Math.max(0, mac.length - 4))}]`,
@@ -601,7 +638,7 @@ function procesarAlertaCriticaInmediata(mac, payload) {
 // Sincronización de Paquetes Integrales de Ciclo (Autoclave -> Supabase Cloud)
 async function procesarPaqueteOfflineSync(mac, payload) {
   inicializarDispositivoSiNoExiste(mac);
-  notify(`📥 Procesando paquete de [${mac}]...`, "var(--purple)");
+  notify(`📥 Guardando paquete clínico de [${mac}]...`, "var(--purple)");
 
   const sesId = payload.session_id || `SES-${Date.now()}`;
   const reportObj = {
@@ -632,6 +669,7 @@ async function procesarPaqueteOfflineSync(mac, payload) {
         guardadoEnNube = true;
       } else {
         console.error("Error al guardar en Supabase:", error);
+        notify("Aviso Supabase: " + (error.message || "Error al insertar"), "var(--red)");
       }
     } catch(err) {
       console.error("Excepción Supabase:", err);
@@ -717,7 +755,7 @@ function getConnectionQuality(dev) {
 }
 
 // =========================================================================
-// 11. DASHBOARD ADAPTATIVO
+// 11. DASHBOARD ADAPTATIVO & CÁLCULO DE MANTENIMIENTO PREVENTIVO
 // =========================================================================
 window.setFleetHealthFilter = function(filterType) {
   currentHealthFilter = filterType;
@@ -794,7 +832,12 @@ function actualizarCardDashboard(mac) {
   const ciclos = meta.ciclosCompletados || 0;
   const limite = meta.limiteMantenimiento || 200;
   const pct = Math.min(100, Math.round((ciclos / limite) * 100));
-  const mantClass = pct >= 100 ? 'danger' : pct >= 80 ? 'warn' : '';
+
+  // Alerta preventiva a partir del 90% (margen del 10% restante)
+  const esVencido = ciclos >= limite;
+  const esAlertaProximo = (limite - ciclos) <= (limite * 0.10); // Menos del 10% restante
+  const mantClass = esVencido ? 'danger' : (esAlertaProximo ? 'warn' : '');
+  const estadoTexto = esVencido ? 'MANT. VENCIDO' : (esAlertaProximo ? 'MANT. PRÓXIMO (10%)' : 'SALUD ÓPTIMA');
 
   card.innerHTML = `
     <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
@@ -821,9 +864,9 @@ function actualizarCardDashboard(mac) {
 
     <div style="margin: 8px 0;">
       <div style="display:flex; justify-content:space-between; font-size:0.65rem; color:var(--text-muted); font-weight:700;">
-        <span>CICLOS: ${ciclos} / ${limite}</span>
-        <span style="color:${pct >= 100 ? 'var(--red)' : pct >= 80 ? 'var(--amber)' : 'var(--green)'};">
-          ${pct >= 100 ? 'MANT. VENCIDO' : pct >= 80 ? 'MANT. PRÓXIMO' : 'SALUD OK'}
+        <span>ODÓMETRO: ${ciclos} / ${limite} ciclos</span>
+        <span style="color:${esVencido ? 'var(--red)' : (esAlertaProximo ? 'var(--amber)' : 'var(--green)')}; font-weight:800;">
+          ${estadoTexto}
         </span>
       </div>
       <div class="health-bar"><div class="health-fill ${mantClass}" style="width: ${pct}%;"></div></div>
@@ -841,7 +884,7 @@ function actualizarCardDashboard(mac) {
 }
 
 // =========================================================================
-// 12. DETALLE DEL EQUIPO Y SUB-PESTAÑAS
+// 12. DETALLE DEL EQUIPO Y COMANDOS TÁCTICOS
 // =========================================================================
 window.abrirDetalleEquipo = function(mac) {
   currentInspectedMAC = mac;
@@ -888,6 +931,26 @@ function switchDetailTab(tabId) {
     if (currentInspectedMAC) cargarMantenimientosEquipo(currentInspectedMAC);
   }
 }
+
+// Resetear el odómetro físico del hardware a 0 mediante MQTT
+window.resetearOdometroHardware = function() {
+  if (!currentInspectedMAC) return;
+  if (usuarioActual && usuarioActual.rol !== "SUPERADMIN") return notify("Permiso denegado: solo SUPERADMIN", "var(--red)");
+
+  mostrarModalConfirmacion({
+    icon: '🔄',
+    title: 'RESETEAR ODÓMETRO DE CICLOS',
+    msg: `¿Deseas reiniciar a 0 el odómetro de ciclos del autoclave ${fleet[currentInspectedMAC]?.meta?.alias || currentInspectedMAC}?`,
+    okText: 'RESETEAR A CERO',
+    okClass: 'btn-danger',
+    onConfirm: () => {
+      mqttClient.publish(`autoclave_med_2026/${currentInspectedMAC}/config`, JSON.stringify({ cmd: "RESET_ODOMETRO" }));
+      if (fleet[currentInspectedMAC]?.meta) fleet[currentInspectedMAC].meta.ciclosCompletados = 0;
+      actualizarCardDashboard(currentInspectedMAC);
+      notify("Odómetro reiniciado a 0 en la memoria del hardware", "var(--green)");
+    }
+  });
+};
 
 function generarUIEsquemaDinamico(mac) {
   const item = fleet[mac];
@@ -1103,7 +1166,7 @@ window.eliminarEquipoTotal = async function(mac) {
 
   if (sbClient) {
     try { 
-      await sbClient.from('asignaciones_equipos').delete().or(`mac.eq.${mac},Mac.eq.${mac}`); 
+      await sbClient.from('asignaciones_equipos').delete().eq('mac', mac); 
     } catch(e) {}
   }
 
@@ -1130,7 +1193,7 @@ window.eliminarEquipoTotal = async function(mac) {
 };
 
 // =========================================================================
-// 13. HISTORIAL DE CICLOS DEL EQUIPO (FILTRADO ESTRICTO POR MAC EN NUBE)
+// 13. HISTORIAL DE CICLOS DEL EQUIPO (CONSULTA DIRECTA Y PURA POR MAC)
 // =========================================================================
 async function cargarLogsDetalle(mac) {
   const tbody = document.getElementById("detLogsTbody");
@@ -1145,7 +1208,7 @@ async function cargarLogsDetalle(mac) {
       const { data, error } = await sbClient
         .from('reportes_autoclaves')
         .select('*')
-        .or(`mac.eq.${mac},Mac.eq.${mac}`)
+        .eq('mac', mac)
         .order('created_at', { ascending: false })
         .limit(30);
 
@@ -1160,7 +1223,7 @@ async function cargarLogsDetalle(mac) {
   if (db) {
     const tx = db.transaction(["reportes_sesiones"], "readonly");
     tx.objectStore("reportes_sesiones").getAll().onsuccess = (e) => {
-      const localLogs = (e.target.result || []).filter(x => (x.mac === mac || x.Mac === mac)).reverse();
+      const localLogs = (e.target.result || []).filter(x => x.mac === mac).reverse();
       renderLogsDetalleFilas(localLogs, tbody);
     };
     return;
@@ -1176,12 +1239,14 @@ function renderLogsDetalleFilas(logs, tbody) {
   }
   tbody.innerHTML = logs.map(s => {
     const countCiclos = (s.ciclos_detalle && s.ciclos_detalle.length) ? s.ciclos_detalle.length : (s.ciclos_acumulados || 1);
+    const fechaTexto = formatearFechaClinica(s.created_at || s.fecha);
+
     return `
       <tr class="report-package-row" onclick="verPaqueteSesion('${s.session_id || s.sessionId}')">
-        <td style="color:var(--cyan); font-weight:700;">${new Date(s.created_at || s.fecha || Date.now()).toLocaleDateString()} ${s.hora_encendido || s.horaEncendido || '--'}</td>
+        <td style="color:var(--cyan); font-weight:700;">${fechaTexto} ${s.hora_encendido || s.horaEncendido || '--'}</td>
         <td><span class="user-role">${s.diagnostico_principal || s.diagnosticoPrincipal || s.fase_final || '--'}</span></td>
         <td><span class="cycle-badge">⚡ ${countCiclos} Ciclos</span></td>
-        <td><span style="color:${(s.ciclos_acumulados || 0) >= (s.limite_mantenimiento || 200) ? 'var(--red)' : 'var(--green)'}; font-weight:700;">${(s.ciclos_acumulados || 0) >= (s.limite_mantenimiento || 200) ? 'VENCIDO' : 'OK'}</span></td>
+        <td><span style="color:${(s.ciclos_acumulados || 0) >= (s.limite_mantenimiento || 200) ? 'var(--red)' : 'var(--green)'}; font-weight:700;">Odómetro: ${s.ciclos_acumulados || 0}</span></td>
         <td>T:${parseFloat(s.temp_max || s.tempMax || 0).toFixed(1)}°C | P:${parseFloat(s.pres_max || s.presMax || 0).toFixed(2)}b</td>
         <td><button class="btn btn-sm" onclick="event.stopPropagation(); verPaqueteSesion('${s.session_id || s.sessionId}')">👁️</button></td>
       </tr>
@@ -1279,7 +1344,7 @@ function renderizarTablaMantenimientos(items, tbody) {
     }
     return `
       <tr>
-        <td style="color:var(--cyan); font-weight:700;">${new Date(m.created_at).toLocaleDateString()}</td>
+        <td style="color:var(--cyan); font-weight:700;">${formatearFechaClinica(m.created_at)}</td>
         <td><span class="user-role">${m.tipo_servicio}</span></td>
         <td>${m.tecnico_responsable}</td>
         <td>${m.ciclos_al_momento || 0}</td>
@@ -1324,7 +1389,7 @@ function verificarAlarmasMantenimiento(items) {
 }
 
 // =========================================================================
-// 15. CENTRO DE AUDITORÍA CLÍNICA (SUPABASE DIRECTO)
+// 15. CENTRO DE AUDITORÍA CLÍNICA (KPIS REALES Y CERO INVALID DATE)
 // =========================================================================
 let reportesCache = [];
 
@@ -1340,19 +1405,20 @@ async function renderizarRegistros() {
 
   let items = [];
 
+  // 1. CONSULTA DIRECTA Y PURA A SUPABASE CLOUD
   if (sbClient) {
     try {
       let query = sbClient.from('reportes_autoclaves').select('*').order('created_at', { ascending: false });
 
       if (fLimit !== 'ALL') query = query.limit(parseInt(fLimit));
-      if (devFilter !== "TODOS") query = query.or(`mac.eq.${devFilter},Mac.eq.${devFilter}`);
+      if (devFilter !== "TODOS") query = query.eq('mac', devFilter);
       if (fDesde && fDesde.trim() !== "") query = query.gte('created_at', fDesde);
       if (fHasta && fHasta.trim() !== "") query = query.lte('created_at', fHasta + 'T23:59:59');
 
       const { data, error } = await query;
       if (!error && data) {
         items = data.map(r => {
-          const deviceMac = r.mac || r.Mac || '';
+          const deviceMac = r.mac || '';
           const metaLocal = fleet[deviceMac]?.meta || {};
           return {
             id: r.id,
@@ -1389,6 +1455,7 @@ async function renderizarRegistros() {
     }
   }
 
+  // 2. Solo si no hay internet se lee el respaldo local
   if (!navigator.onLine && db) {
     const tx = db.transaction(["reportes_sesiones"], "readonly");
     tx.objectStore("reportes_sesiones").getAll().onsuccess = (e) => {
@@ -1411,20 +1478,33 @@ function guardarCopiaEnIndexedDB(items) {
   } catch(e) {}
 }
 
+// Renderizado con cálculo real de ciclos conformes ejecutados
 function pintarTablaReportes(items, fType, fText, tbody) {
   reportesCache = items;
 
   document.getElementById("kpiTotalSesiones").innerText = items.length;
-  const totalCiclos = items.reduce((acc, cur) => acc + (cur.ciclosAcumulados || 0), 0);
-  document.getElementById("kpiTotalCiclos").innerText = totalCiclos;
-  const mantAlerts = items.filter(x => (x.ciclosAcumulados || 0) >= (x.limiteMantenimiento || 200) * 0.8).length;
+
+  // CORRECCIÓN MATEMÁTICA: Contar cuántas sesiones fueron conformes (no sumar odómetros)
+  const ciclosConformesReales = items.filter(x => x.diagnosticoPrincipal && x.diagnosticoPrincipal.includes("CONFORME")).length;
+  document.getElementById("kpiTotalCiclos").innerText = ciclosConformesReales;
+
+  // Alerta preventiva: equipos a los que les queda el 10% o menos para el límite
+  const mantAlerts = items.filter(x => {
+    const lim = x.limiteMantenimiento || 200;
+    const acum = x.ciclosAcumulados || 0;
+    return (lim - acum) <= (lim * 0.10);
+  }).length;
   document.getElementById("kpiMantenimientoAlerta").innerText = mantAlerts;
+
   const totalAlarmas = items.filter(x => x.conteoAlarmas > 0).length;
   document.getElementById("kpiTotalAlarmas").innerText = totalAlarmas;
 
   if (fType === "CICLO_OK") items = items.filter(x => x.diagnosticoPrincipal && x.diagnosticoPrincipal.includes("CONFORME"));
   if (fType === "ALARMA") items = items.filter(x => x.conteoAlarmas > 0);
-  if (fType === "MANT_WARN") items = items.filter(x => (x.ciclosAcumulados || 0) >= (x.limiteMantenimiento || 200) * 0.8);
+  if (fType === "MANT_WARN") items = items.filter(x => {
+    const lim = x.limiteMantenimiento || 200;
+    return (lim - (x.ciclosAcumulados || 0)) <= (lim * 0.10);
+  });
   if (fType === "OFFLINE_SYNC") items = items.filter(x => x.esOffline === true);
 
   if (fText && fText.trim() !== "") {
@@ -1443,10 +1523,8 @@ function pintarTablaReportes(items, fType, fText, tbody) {
   }
 
   tbody.innerHTML = items.map(s => {
-    const ciclos = s.ciclosAcumulados || 0;
-    const durM = Math.floor(s.duracionTotalSeg / 60);
-    const durS = s.duracionTotalSeg % 60;
-    const durTexto = s.duracionTotalSeg > 0 ? `${durM}m ${durS}s` : '--';
+    const fechaTexto = formatearFechaClinica(s.fecha);
+    const durTexto = calcularDuracionTexto(s.horaEncendido, s.horaApagado, s.duracionTotalSeg);
 
     return `
       <tr class="report-package-row" onclick="verPaqueteSesion('${s.sessionId}')">
@@ -1454,7 +1532,7 @@ function pintarTablaReportes(items, fType, fText, tbody) {
           <input type="checkbox" class="check-report-item" value="${s.id}" data-session="${s.sessionId}" onclick="event.stopPropagation()" style="width:18px; height:18px; accent-color:var(--cyan);">
         </td>
         <td>
-          <div style="color:var(--cyan); font-weight:800;">${new Date(s.fecha).toLocaleDateString()}</div>
+          <div style="color:var(--cyan); font-weight:800;">${fechaTexto}</div>
           <div style="font-size:0.62rem; color:var(--text-muted);">${s.sessionId || s.id}</div>
         </td>
         <td>
@@ -1466,7 +1544,7 @@ function pintarTablaReportes(items, fType, fText, tbody) {
           <div style="color:var(--text-muted); font-size:0.65rem;">Duración: ${durTexto}</div>
         </td>
         <td>
-          <span class="cycle-badge">⚡ ${s.programa || 'CICLO #' + ciclos}</span>
+          <span class="cycle-badge">⚡ ${s.programa}</span>
         </td>
         <td>T:${(s.tempMax||0).toFixed(1)}°C<br>P:${(s.presMax||0).toFixed(2)}b</td>
         <td>
@@ -1496,21 +1574,21 @@ window.verPaqueteSesion = function(sessionId) {
   document.getElementById("repPkgTitle").innerText = `PAQUETE: ${ses.alias.toUpperCase()}`;
   document.getElementById("repPkgSub").innerText = `ID: ${ses.sessionId} | MAC: ${ses.mac} | CLIENTE: ${ses.cliente} | MODELO: ${ses.modelo}`;
   
-  document.getElementById("repEncendidoVal").innerText = `${new Date(ses.fecha).toLocaleDateString()} ${ses.horaEncendido}`;
+  document.getElementById("repEncendidoVal").innerText = `${formatearFechaClinica(ses.fecha)} ${ses.horaEncendido}`;
   document.getElementById("repApagadoVal").innerText = ses.horaApagado;
-  
-  const durM = Math.floor(ses.duracionTotalSeg / 60);
-  const durS = ses.duracionTotalSeg % 60;
-  document.getElementById("repUptimeVal").innerText = ses.duracionTotalSeg > 0 ? `${durM} min ${durS} seg` : `${ses.eventos.length} eventos`;
+  document.getElementById("repUptimeVal").innerText = calcularDuracionTexto(ses.horaEncendido, ses.horaApagado, ses.duracionTotalSeg);
   
   const ciclos = ses.ciclosAcumulados || 0;
   const limite = ses.limiteMantenimiento || 200;
   const pct = Math.min(100, Math.round((ciclos / limite) * 100));
-  document.getElementById("repCiclosVal").innerText = `${ciclos} de ${limite} (${limite - ciclos} restantes)`;
-  document.getElementById("repMantText").innerText = pct >= 100 ? 'MANTENIMIENTO VENCIDO' : pct >= 80 ? 'MANTENIMIENTO PRÓXIMO' : 'SALUD ÓPTIMA';
-  document.getElementById("repMantText").style.color = pct >= 100 ? 'var(--red)' : pct >= 80 ? 'var(--amber)' : 'var(--green)';
+  const esVencido = ciclos >= limite;
+  const esAlertaProximo = (limite - ciclos) <= (limite * 0.10);
+
+  document.getElementById("repCiclosVal").innerText = `Odómetro: ${ciclos} / ${limite} (${limite - ciclos} restantes)`;
+  document.getElementById("repMantText").innerText = esVencido ? 'MANTENIMIENTO VENCIDO' : (esAlertaProximo ? 'PRÓXIMO A MANTENIMIENTO (10%)' : 'SALUD ÓPTIMA');
+  document.getElementById("repMantText").style.color = esVencido ? 'var(--red)' : (esAlertaProximo ? 'var(--amber)' : 'var(--green)');
   document.getElementById("repMantBar").style.width = `${pct}%`;
-  document.getElementById("repMantBar").className = `health-fill ${pct>=100?'danger':pct>=80?'warn':''}`;
+  document.getElementById("repMantBar").className = `health-fill ${esVencido ? 'danger' : (esAlertaProximo ? 'warn' : '')}`;
 
   const cyclesContainer = document.getElementById("repCyclesListContainer");
   if (cyclesContainer) {
@@ -1619,13 +1697,13 @@ window.imprimirCertificadoSesionActual = function() {
     <p>HOSPITAL / CLIENTE: <b>${s.cliente.toUpperCase()}</b></p>
     <p>AUTOCLAVE: <b>${s.alias}</b> (MAC: ${s.mac}) | MODELO: ${s.modelo}</p>
     <p>PROGRAMA: <b>${s.programa}</b> | SESIÓN ID: ${s.sessionId}</p>
-    <p>FECHA: ${new Date(s.fecha).toLocaleDateString()} | Encendido: ${s.horaEncendido} ➔ Cierre: ${s.horaApagado}</p>
+    <p>FECHA: ${formatearFechaClinica(s.fecha)} | Encendido: ${s.horaEncendido} ➔ Cierre: ${s.horaApagado}</p>
     
     <table>
       <tr style="background:#eee;"><th>PARÁMETRO CLÍNICO</th><th>VALOR AUDITADO</th></tr>
       <tr><td>Temperatura Máxima Registrada</td><td>${s.tempMax.toFixed(1)} °C</td></tr>
       <tr><td>Presión Máxima Alcanzada</td><td>${s.presMax.toFixed(2)} Bar</td></tr>
-      <tr><td>Ciclos Acumulados del Equipo</td><td>${s.ciclosAcumulados} / ${s.limiteMantenimiento}</td></tr>
+      <tr><td>Ciclos Acumulados (Odómetro)</td><td>${s.ciclosAcumulados} / ${s.limiteMantenimiento}</td></tr>
       <tr><td>Diagnóstico de Validación</td><td><b>${s.diagnosticoPrincipal || s.faseFinal}</b></td></tr>
     </table>
 
@@ -1743,7 +1821,7 @@ window.restaurarBackupJSON = function(files) {
         for (const item of list) {
           const insertObj = {
             session_id: item.sessionId || item.session_id || `REST-${Math.random().toString(36).substring(7)}`,
-            mac: item.mac || item.Mac,
+            mac: item.mac,
             alias: item.alias,
             cliente: item.cliente,
             modelo: item.modelo,
@@ -1779,9 +1857,10 @@ window.restaurarBackupJSON = function(files) {
 window.exportarRegistrosCSV = function() {
   const data = reportesCache || [];
   if (!data.length) return notify("Sin datos para exportar", "var(--amber)");
-  let csv = "ID_SESION,FECHA,MAC,ALIAS,CLIENTE,MODELO,PROGRAMA,HORA_ON,HORA_OFF,DURACION_SEG,TOTAL_CICLOS,T_MAX,P_MAX,DIAGNOSTICO\n";
+  let csv = "ID_SESION,FECHA,MAC,ALIAS,CLIENTE,MODELO,PROGRAMA,HORA_ON,HORA_OFF,DURACION_SEG,ODOMETRO_CICLOS,T_MAX,P_MAX,DIAGNOSTICO\n";
   data.forEach(d => {
-    csv += `"${d.sessionId}","${d.fecha}","${d.mac}","${d.alias}","${d.cliente}","${d.modelo}","${d.programa}","${d.horaEncendido}","${d.horaApagado}","${d.duracionTotalSeg}","${d.ciclosAcumulados}","${d.tempMax}","${d.presMax}","${d.diagnosticoPrincipal||d.faseFinal}"\n`;
+    const durTexto = calcularDuracionTexto(d.horaEncendido, d.horaApagado, d.duracionTotalSeg);
+    csv += `"${d.sessionId}","${formatearFechaClinica(d.fecha)}","${d.mac}","${d.alias}","${d.cliente}","${d.modelo}","${d.programa}","${d.horaEncendido}","${d.horaApagado}","${durTexto}","${d.ciclosAcumulados}","${d.tempMax}","${d.presMax}","${d.diagnosticoPrincipal||d.faseFinal}"\n`;
   });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
@@ -1791,7 +1870,7 @@ window.exportarRegistrosCSV = function() {
 };
 
 // =========================================================================
-// 19. FOTA HUB & GESTIÓN DE FLOTA (TÉCNICO Y SUPERADMIN)
+// 19. FOTA HUB & GESTIÓN DE FLOTA
 // =========================================================================
 let currentFotaFilter = 'ALL';
 window.filterFotaList = function(tipo) { currentFotaFilter = tipo; renderFotaLiveList(); };
@@ -2024,7 +2103,7 @@ function renderizarFilasUsuarios(users, tbody) {
       <td style="font-weight:800; color:var(--cyan);">${u.user}</td>
       <td><span class="user-role">${u.rol}</span></td>
       <td style="font-size:0.7rem; color:var(--text-muted);">${u.email || '--'}</td>
-      <td>${new Date(u.created_at || u.fecha || Date.now()).toLocaleDateString()}</td>
+      <td>${formatearFechaClinica(u.created_at || u.fecha)}</td>
       <td>${u.user !== 'admin' ? `<button class="btn btn-sm btn-danger" onclick="eliminarUsuario('${u.user}')">X</button>` : '--'}</td>
     </tr>
   `).join("");
@@ -2134,13 +2213,13 @@ window.procesarInicioSesion = async function() {
 
   if (!u || !p) return mostrarFeedback(fb, "Completa usuario y clave.", "var(--red)");
 
-  // 1. LLAVE MAESTRA DE FÁBRICA
+  // 1. LLAVE MAESTRA
   if (u === "admin" && p === "24331973") {
     iniciarSesionExitosa({ user: "admin", pass: "24331973", rol: "SUPERADMIN", email: "yuniolgonzalez9@gmail.com" });
     return;
   }
 
-  // 2. VERIFICACIÓN DIRECTA EN SUPABASE CLOUD (RESPETA EL ROL ASIGNADO)
+  // 2. VERIFICACIÓN DIRECTA EN SUPABASE CLOUD
   if (sbClient) {
     try {
       const { data, error } = await sbClient.from('usuarios_scada').select('*').eq('user', u).maybeSingle();
@@ -2156,7 +2235,7 @@ window.procesarInicioSesion = async function() {
     } catch(e) {}
   }
 
-  // 3. VERIFICACIÓN EN BASE DE DATOS LOCAL SI NO HAY INTERNET
+  // 3. FALLBACK LOCAL
   if (db) {
     const tx = db.transaction(["usuarios"], "readonly");
     const req = tx.objectStore("usuarios").get(u);
@@ -2217,7 +2296,7 @@ window.solicitarCodigoRecuperacion = async function() {
   if (!u) return mostrarFeedback(fb, "Ingresa tu usuario.", "var(--red)");
 
   btn.disabled = true;
-  btn.innerText = "⏳ LOCALIZANDO Y TRANSMITIENDO...";
+  btn.innerText = "⏳ TRANSMITIENDO...";
 
   let targetEmail = "yuniolgonzalez9@gmail.com";
 
