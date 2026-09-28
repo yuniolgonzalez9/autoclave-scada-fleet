@@ -19,7 +19,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;800&family=Orbitron:wght@600;800;900&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="style.css?v=24">
+  <!-- Estilos con Cache-Busting sincronizado a la versión 25 -->
+  <link rel="stylesheet" href="style.css?v=25">
   
   <!-- Dependencias Externas -->
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
@@ -736,6 +737,18 @@
     </button>
   </nav>
 
-  <script src="app.js?v=24"></script>
+  <!-- REGISTRO DEL SERVICE WORKER (PWA) -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch((err) => {
+          console.warn('[SW] No registrado:', err);
+        });
+      });
+    }
+  </script>
+
+  <!-- Script Principal con Cache-Busting sincronizado a versión 25 -->
+  <script src="app.js?v=25"></script>
 </body>
 </html>
