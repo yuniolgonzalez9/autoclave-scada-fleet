@@ -1,3 +1,4 @@
+
 // =========================================================================
 // 1. CONEXIÓN CLOUD SUPABASE & REALTIME (NUBE CENTRAL 24/7 EN VERCEL)
 // =========================================================================
@@ -66,13 +67,17 @@ function calcularDuracionTexto(horaInicio, horaFin, segRegistrados = 0) {
 }
 
 // =========================================================================
-// 3. CONTROLADOR DEL DESLIZADOR DE TRANSPARENCIA TOTAL (0% A 100%)
+// 3. CONTROLADOR DEL DESLIZADOR DE TRANSPARENCIA TOTAL (VIDRIO / GLASS)
 // =========================================================================
 window.ajustarTransparencia = function(valor) {
   const numVal = parseInt(valor, 10);
-  // Permite llegar a 0.0 absoluto sin frenos
-  const alpha = Math.max(0.0, Math.min(1.0, numVal / 100));
+  const alpha = Math.max(0.1, Math.min(1.0, numVal / 100));
+
+  // Aplica transparencia fluida para que los circuitos se vean a través de las tarjetas
   document.documentElement.style.setProperty('--card-alpha', alpha.toFixed(2));
+  document.documentElement.style.setProperty('--bg-card', `rgba(17, 26, 46, ${alpha.toFixed(2)})`);
+  document.documentElement.style.setProperty('--bg-surface', `rgba(10, 17, 32, ${Math.min(1.0, alpha + 0.05).toFixed(2)})`);
+
   localStorage.setItem("scada_transparency", numVal);
 
   const txt = document.getElementById("transparencyValTxt");
@@ -110,27 +115,39 @@ window.addEventListener('offline', () => {
 });
 
 // =========================================================================
-// 5. MOTOR DEL SELECTOR DE TEMAS (4 MUNDOS VISUALES)
+// 5. MOTOR DEL SELECTOR DE FONDOS DE PANTALLA & CIRCUITOS
 // =========================================================================
-window.cambiarTema = function(nombreTema) {
-  if (!['clinical', 'cyber', 'tactical', 'hybrid'].includes(nombreTema)) nombreTema = 'tactical';
-  
-  document.documentElement.setAttribute('data-theme', nombreTema);
-  localStorage.setItem("scada_theme", nombreTema);
-
-  document.querySelectorAll('.btn-theme-opt').forEach(btn => btn.classList.remove('active'));
-  const btnId = nombreTema === 'clinical' ? 'themeBtnClinical' : 
-               (nombreTema === 'hybrid' ? 'themeBtnHybrid' : 
-               (nombreTema === 'cyber' ? 'themeBtnCyber' : 'themeBtnTactical'));
-  const btnActivo = document.getElementById(btnId);
-  if (btnActivo) btnActivo.classList.add('active');
-
-  notify(`🎨 Tema activado: ${nombreTema.toUpperCase()}`, "var(--cyan)");
+const MAPA_FONDOS = {
+  'circuits-cyan': 'bgOptCircuitsCyan',
+  'neural-nodes': 'bgOptNeuralNodes',
+  'bio-circuit': 'bgOptBioCircuit',
+  'nanotech-hex': 'bgOptNanotechHex',
+  'oled': 'bgOptOled',
+  'carbon': 'bgOptCarbon',
+  'aurora': 'bgOptAurora',
+  'matrix': 'bgOptMatrix',
+  'clean': 'bgOptClean'
 };
 
-function inicializarTemaGuardado() {
-  const temaGuardado = localStorage.getItem("scada_theme") || "tactical";
-  cambiarTema(temaGuardado);
+window.cambiarFondo = function(nombreFondo) {
+  if (!MAPA_FONDOS[nombreFondo]) nombreFondo = 'circuits-cyan';
+  
+  document.documentElement.setAttribute('data-bg', nombreFondo);
+  localStorage.setItem("scada_bg", nombreFondo);
+
+  document.querySelectorAll('.btn-wallpaper-opt').forEach(btn => btn.classList.remove('active'));
+  const btnId = MAPA_FONDOS[nombreFondo];
+  if (btnId) {
+    const btnActivo = document.getElementById(btnId);
+    if (btnActivo) btnActivo.classList.add('active');
+  }
+
+  notify(`⚡ Fondo activado: ${nombreFondo.toUpperCase()}`, "var(--cyan)");
+};
+
+function inicializarFondoGuardado() {
+  const fondoGuardado = localStorage.getItem("scada_bg") || "circuits-cyan";
+  cambiarFondo(fondoGuardado);
 }
 
 // =========================================================================
@@ -2617,7 +2634,7 @@ setInterval(() => {
 }, 2000);
 
 window.addEventListener("load", () => {
-  inicializarTemaGuardado();
+  inicializarFondoGuardado();
   inicializarTransparenciaGuardada();
   initDB();
   initMQTT();
