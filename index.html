@@ -8,20 +8,20 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="theme-color" content="#050811">
+  <meta name="theme-color" content="#000000">
   
   <!-- Iconos Oficiales PWA y Móvil -->
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2300e5ff' stroke-width='2'><circle cx='12' cy='12' r='9'/><path d='M12 3v6m0 6v6M3 12h6m6 0h6'/><circle cx='12' cy='12' r='3' fill='%2300e5ff'/></svg>">
-  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23050811' stroke='%2300e5ff' stroke-width='2'><rect width='24' height='24' rx='5' fill='%23050811'/><circle cx='12' cy='12' r='8'/><path d='M12 4v4m0 8v4M4 12h4m8 0h4'/><circle cx='12' cy='12' r='2.5' fill='%2300e5ff'/></svg>">
+  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23000000' stroke='%2300e5ff' stroke-width='2'><rect width='24' height='24' rx='5' fill='%23000000'/><circle cx='12' cy='12' r='8'/><path d='M12 4v4m0 8v4M4 12h4m8 0h4'/><circle cx='12' cy='12' r='2.5' fill='%2300e5ff'/></svg>">
   
   <title>AUTOCLAVE SCADA // ENTERPRISE DECK</title>
   
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;800&family=Orbitron:wght@600;800;900&display=swap" rel="stylesheet">
   
-  <link rel="stylesheet" href="style.css?v=18">
+  <link rel="stylesheet" href="style.css?v=19">
   
-  <!-- Dependencias Externas Esenciales -->
+  <!-- Dependencias Externas -->
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -108,6 +108,15 @@
             <button class="btn-theme-opt active" id="themeBtnTactical" onclick="cambiarTema('tactical')">
               <span>🛡️</span> Pizarra
             </button>
+          </div>
+
+          <!-- DESLIZADOR DE TRANSPARENCIA 3D EN VIVO -->
+          <div class="transparency-slider-box">
+            <div class="transparency-label-row">
+              <span>🎛️ TRANSPARENCIA 3D:</span>
+              <span id="transparencyValTxt">90%</span>
+            </div>
+            <input type="range" class="transparency-range" id="rangeTransparency" min="30" max="100" value="90" oninput="ajustarTransparencia(this.value)">
           </div>
 
           <div class="dropdown-separator"></div>
@@ -269,7 +278,7 @@
           <div style="font-size: 0.7rem; color: var(--text-muted);" id="detDeviceSub">MAC: -- | MODELO: --</div>
         </div>
         
-        <!-- ACCIONES RÁPIDAS DEL EQUIPO (CON BOTÓN RESET DE ODÓMETRO) -->
+        <!-- ACCIONES RÁPIDAS DEL EQUIPO CON RESET DE ODÓMETRO -->
         <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
           <span class="status-badge" id="detOnlineBadge"><span class="dot offline"></span> OFFLINE</span>
           <button class="btn btn-sm btn-warn" id="btnDetResetOdometer" data-rbac="SUPERADMIN" onclick="resetearOdometroHardware()" title="Reiniciar a cero el contador físico de ciclos en el autoclave">🔄 RESET ODÓMETRO</button>
@@ -286,7 +295,7 @@
         <button class="btn btn-sm nav-tab" id="btnSubMaint" data-rbac="TECNICO" onclick="switchDetailTab('tab-det-maint')">🛠️ MANTENIMIENTOS & ALERTAS</button>
       </div>
 
-      <!-- SUBTAB 1: SENSORES DINÁMICOS -->
+      <!-- SUBTAB 1: SENSORES DINÁMICOS CON AUTO-DIMENSIONAMIENTO -->
       <div id="tab-det-tele" class="detail-subview">
         <div class="card">
           <div class="gauge-grid" id="containerDynamicGauges"></div>
@@ -429,7 +438,7 @@
           </div>
           <div class="input-group">
             <label>URL DEL BINARIO (.BIN):</label>
-            <input type="text" id="fotaUrlInput" class="input-field" value="https://raw.githubusercontent.com/yuniolgonzalez9/Autoclave-Scada-Fleet/Principal/firmwares/firmware.bin">
+            <input type="text" id="fotaUrlInput" class="input-field" value="https://raw.githubusercontent.com/yuniolgonzalez9/autoclave-scada-fleet/main/firmwares/firmware.bin">
           </div>
           <div class="input-group">
             <label>CARGAR BINARIO LOCAL:</label>
@@ -709,6 +718,6 @@
     </button>
   </nav>
 
-  <script src="app.js?v=18"></script>
+  <script src="app.js?v=19"></script>
 </body>
 </html>
