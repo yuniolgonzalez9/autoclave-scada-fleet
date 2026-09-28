@@ -1,15 +1,15 @@
 /* =========================================================================
-   SCADA BIOMÉDICO MASTER // EDICIÓN SPEEDTEST PRO & ALTO CONTRASTE 3D
+   SCADA BIOMÉDICO MASTER // FONDOS SÓLIDOS PROFUNDOS & DISEÑO 3D TÁCTICO
    ========================================================================= */
 
-/* 1. TEMA SPEEDTEST PRO (INSPIRADO EN OOKLA: FONDO NEGRO + MÓDULOS GRIS 3D + NEÓN CIAN/PÚRPURA/NARANJA) */
+/* 1. TEMA SPEEDTEST PRO (FONDO NEGRO SÓLIDO PROFUNDO + MÓDULOS GRIS 3D + NEÓN) */
 [data-theme="tactical"], :root {
-  --bg-void: #050811;
+  --bg-void: #050711; /* Negro puro profundo sin rayas */
   --bg-surface: #0c1220;
-  --bg-card: #121a2d;
-  --bg-card-hover: #18223a;
-  --bg-gauge: radial-gradient(circle at 50% 30%, #1a2540 0%, #0c1220 100%);
-  --bg-input: #0c1220;
+  --bg-card: #111a2e;
+  --bg-card-hover: #17233d;
+  --bg-gauge: radial-gradient(circle at 50% 30%, #192542 0%, #0a0f1d 100%);
+  --bg-input: #0a0f1d;
   --border-subtle: rgba(139, 92, 246, 0.35);
   --border-bright: #00e5ff;
   --cyan: #00e5ff;
@@ -19,7 +19,7 @@
   --green-glow: rgba(0, 255, 136, 0.45);
   --red: #ff0055;
   --red-glow: rgba(255, 0, 85, 0.5);
-  --amber: #ff5500; /* Naranja Speedtest Mastercard */
+  --amber: #ff5500; /* Naranja Speedtest */
   --amber-glow: rgba(255, 85, 0, 0.45);
   --purple: #8b5cf6; /* Púrpura Neón Speedtest */
   --purple-glow: rgba(139, 92, 246, 0.45);
@@ -27,27 +27,25 @@
   --text-muted: #8b9bb4;
   --ease: cubic-bezier(0.16, 1, 0.3, 1);
   --panel-shadow: 0 12px 35px -5px rgba(0, 0, 0, 0.95), 0 0 20px rgba(0, 229, 255, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.18);
-  --bg-gradient: radial-gradient(circle at 10% 10%, rgba(139, 92, 246, 0.08) 0%, transparent 45%),
-                 radial-gradient(circle at 90% 90%, rgba(0, 229, 255, 0.06) 0%, transparent 45%),
-                 linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
-                 linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+  --bg-ambient: radial-gradient(circle at 50% 0%, rgba(139, 92, 246, 0.08) 0%, transparent 60%),
+                radial-gradient(circle at 100% 100%, rgba(0, 229, 255, 0.05) 0%, transparent 60%);
 }
 
-/* 2. TEMA CYBER DECK (OSCURO NEÓN CLÁSICO) */
+/* 2. TEMA CYBER DECK (NEGRO ABISAL SÓLIDO + NEÓN CIAN) */
 [data-theme="cyber"] {
-  --bg-void: #020409;
-  --bg-surface: rgba(6, 12, 24, 0.92);
-  --bg-card: rgba(11, 20, 38, 0.88);
-  --bg-card-hover: rgba(16, 30, 58, 0.95);
-  --bg-gauge: radial-gradient(circle at 50% 30%, rgba(15, 25, 48, 0.8) 0%, rgba(3, 7, 16, 0.95) 100%);
-  --bg-input: rgba(3, 7, 16, 0.85);
-  --border-subtle: rgba(0, 240, 255, 0.22);
+  --bg-void: #020409; /* Negro puro sin líneas */
+  --bg-surface: #060c18;
+  --bg-card: #0b1426;
+  --bg-card-hover: #101e38;
+  --bg-gauge: radial-gradient(circle at 50% 30%, #101e38 0%, #030712 100%);
+  --bg-input: #040814;
+  --border-subtle: rgba(0, 240, 255, 0.25);
   --border-bright: #00f0ff;
   --cyan: #00f0ff;
-  --cyan-glow: rgba(0, 240, 255, 0.45);
+  --cyan-glow: rgba(0, 240, 255, 0.5);
   --cyan-deep: rgba(0, 240, 255, 0.08);
   --green: #00ff88;
-  --green-glow: rgba(0, 255, 136, 0.45);
+  --green-glow: rgba(0, 255, 136, 0.5);
   --red: #ff0055;
   --red-glow: rgba(255, 0, 85, 0.5);
   --amber: #ffb703;
@@ -57,15 +55,13 @@
   --text-main: #f8fafc;
   --text-muted: #7e8ea6;
   --panel-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.85), 0 0 20px rgba(0, 240, 255, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.1);
-  --bg-gradient: radial-gradient(circle at 15% 15%, rgba(0, 240, 255, 0.08) 0%, transparent 45%),
-                 radial-gradient(circle at 85% 85%, rgba(157, 78, 221, 0.07) 0%, transparent 45%),
-                 linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-                 linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  --bg-ambient: radial-gradient(circle at 15% 15%, rgba(0, 240, 255, 0.07) 0%, transparent 50%),
+                radial-gradient(circle at 85% 85%, rgba(157, 78, 221, 0.06) 0%, transparent 50%);
 }
 
-/* 3. TEMA BLANCO CLÍNICO (HOSPITALARIO SUAVE) */
+/* 3. TEMA BLANCO CLÍNICO (BLANCO QUIRÚRGICO SÓLIDO LIMPIO) */
 [data-theme="clinical"] {
-  --bg-void: #f1f5f9;
+  --bg-void: #f1f5f9; /* Blanco grisáceo hospitalario sólido */
   --bg-surface: #ffffff;
   --bg-card: #ffffff;
   --bg-card-hover: #f8fafc;
@@ -87,15 +83,12 @@
   --text-main: #0f172a;
   --text-muted: #64748b;
   --panel-shadow: 0 4px 18px -2px rgba(15, 23, 42, 0.08), 0 2px 6px -1px rgba(15, 23, 42, 0.04), inset 0 1px 0 #ffffff;
-  --bg-gradient: radial-gradient(circle at 10% 10%, rgba(2, 132, 199, 0.04) 0%, transparent 40%),
-                 radial-gradient(circle at 90% 90%, rgba(124, 58, 237, 0.03) 0%, transparent 40%),
-                 linear-gradient(rgba(15, 23, 42, 0.02) 1px, transparent 1px),
-                 linear-gradient(90deg, rgba(15, 23, 42, 0.02) 1px, transparent 1px);
+  --bg-ambient: none; /* Cero texturas ni rayas */
 }
 
-/* 4. TEMA CYBER-LIGHT (HÍBRIDO: ENTORNO BLANCO + CONSOLAS OBSIDIANA) */
+/* 4. TEMA CYBER-LIGHT (HÍBRIDO: FONDO BLANCO PURO SÓLIDO + CONSOLAS OBSIDIANA) */
 [data-theme="hybrid"] {
-  --bg-void: #f3f6fa;
+  --bg-void: #f4f6fa; /* Fondo blanco sólido sin rayas */
   --bg-surface: #070e1c;
   --bg-card: #0c162a;
   --bg-card-hover: #122240;
@@ -117,10 +110,7 @@
   --text-main: #ffffff;
   --text-muted: #94a3b8;
   --panel-shadow: 0 16px 40px -5px rgba(2, 6, 23, 0.35), 0 0 25px rgba(0, 240, 255, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.2);
-  --bg-gradient: radial-gradient(circle at 10% 10%, rgba(0, 240, 255, 0.12) 0%, transparent 45%),
-                 radial-gradient(circle at 90% 90%, rgba(217, 70, 239, 0.08) 0%, transparent 45%),
-                 linear-gradient(rgba(0, 180, 216, 0.08) 1px, transparent 1px),
-                 linear-gradient(90deg, rgba(0, 180, 216, 0.08) 1px, transparent 1px);
+  --bg-ambient: none; /* Blanco sólido limpio */
 }
 
 [data-theme="hybrid"] .title-primary {
@@ -142,8 +132,8 @@
 
 html, body {
   background-color: var(--bg-void);
-  background-image: var(--bg-gradient);
-  background-size: 100% 100%, 100% 100%, 32px 32px, 32px 32px;
+  background-image: var(--bg-ambient);
+  background-size: 100% 100%;
   background-attachment: fixed;
   color: var(--text-main);
   min-height: 100vh;
@@ -631,7 +621,7 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
 }
 
 /* =========================================================================
-   MODAL FLOTANTE CENTRALIZADO (PANTALLA COMPLETA 3D)
+   MODAL FLOTANTE CENTRALIZADO
    ========================================================================= */
 .modal-overlay {
   position: fixed;
