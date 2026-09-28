@@ -41,7 +41,7 @@ function formatearFechaClinica(fechaRaw) {
   return d.toLocaleDateString();
 }
 
-// Cálculo matemático de duración entre dos marcas de tiempo HH:MM:SS
+// Cálculo matemático de duración exacta
 function calcularDuracionTexto(horaInicio, horaFin, segRegistrados = 0) {
   if (segRegistrados && segRegistrados > 0) {
     const m = Math.floor(segRegistrados / 60);
@@ -435,7 +435,7 @@ const fleet = {};
 
 function initDB() {
   return new Promise((resolve) => {
-    const req = indexedDB.open("AutoclaveFastFleetDB_v31", 1);
+    const req = indexedDB.open("AutoclaveFastFleetDB_v32", 1);
     req.onupgradeneeded = (e) => {
       db = e.target.result;
       if (!db.objectStoreNames.contains("asignaciones")) db.createObjectStore("asignaciones", { keyPath: "mac" });
@@ -474,7 +474,7 @@ function iniciarSuscripcionNubeRealtime() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'reportes_autoclaves' }, (payload) => {
         const syncText = document.getElementById("syncStatusText");
         if (syncText) syncText.innerText = "NUBE CONECTADA";
-        notify(`📋 Paquete recibido en la nube [${payload.eventType}]`, "var(--green)");
+        notify(`📋 Nuevo paquete en la nube [${payload.eventType}]`, "var(--green)");
         if (currentActivity === 'act-reports') renderizarRegistros();
         if (currentActivity === 'act-device-detail' && currentInspectedMAC) {
           cargarLogsDetalle(currentInspectedMAC);
@@ -663,6 +663,12 @@ async function procesarPaqueteOfflineSync(mac, payload) {
   inicializarDispositivoSiNoExiste(mac);
   notify(`📥 Guardando paquete clínico de [${mac}]...`, "var(--purple)");
 
+  // Sincronizar el odómetro de la tarjeta con el valor real del paquete
+  const ciclosReales = payload.ciclos_acumulados || payload.ciclos || 0;
+  fleet[mac].meta.ciclosCompletados = ciclosReales;
+  if (!fleet[mac].datos.cfg) fleet[mac].datos.cfg = {};
+  fleet[mac].datos.cfg.ciclos = ciclosReales;
+
   const sesId = payload.session_id || `SES-${Date.now()}`;
   const reportObj = {
     session_id: sesId,
@@ -675,7 +681,7 @@ async function procesarPaqueteOfflineSync(mac, payload) {
     inicio_ciclo: payload.inicio_ciclo || payload.hora_encendido || "00:00",
     hora_apagado: payload.hora_apagado || "00:00",
     duracion_total_seg: payload.duracion_total_seg || 0,
-    ciclos_acumulados: payload.ciclos_acumulados || payload.ciclos || fleet[mac].meta.ciclosCompletados || 0,
+    ciclos_acumulados: ciclosReales,
     limite_mantenimiento: payload.limite_mantenimiento || payload.limite || 200,
     temp_max: parseFloat(payload.temp_max) || 0,
     pres_max: parseFloat(payload.pres_max) || 0,
@@ -709,6 +715,7 @@ async function procesarPaqueteOfflineSync(mac, payload) {
     } catch(e) {}
   }
 
+  actualizarCardDashboard(mac);
   if (currentActivity === 'act-reports') renderizarRegistros();
   if (currentActivity === 'act-device-detail' && currentInspectedMAC === mac) {
     cargarLogsDetalle(mac);
@@ -728,15 +735,26 @@ function procesarMetaGlobal(mac, metaData) {
   }
 }
 
+// CORRECCIÓN CLAVE: Sincronizar el odómetro real enviado en telemetría
 function procesarTelemetriaReal(mac, data) {
   inicializarDispositivoSiNoExiste(mac);
   fleet[mac].lastSeen = Date.now();
 
-  if (data.cfg && fleet[mac]._pendingLock && fleet[mac].datos.cfg) {
-    const ahora = Date.now();
-    Object.keys(fleet[mac]._pendingLock).forEach(k => {
-      if (ahora < fleet[mac]._pendingLock[k]) data.cfg[k] = fleet[mac].datos.cfg[k];
-    });
+  if (data.cfg) {
+    // Sincronizar ciclos reales del ESP32 con la metadata local
+    if (data.cfg.ciclos !== undefined) {
+      fleet[mac].meta.ciclosCompletados = data.cfg.ciclos;
+    }
+    if (data.cfg.lim_mant !== undefined) {
+      fleet[mac].meta.limiteMantenimiento = data.cfg.lim_mant;
+    }
+
+    if (fleet[mac]._pendingLock && fleet[mac].datos.cfg) {
+      const ahora = Date.now();
+      Object.keys(fleet[mac]._pendingLock).forEach(k => {
+        if (ahora < fleet[mac]._pendingLock[k]) data.cfg[k] = fleet[mac].datos.cfg[k];
+      });
+    }
   }
 
   if (data.alarma_cod && data.alarma_cod > 0) {
@@ -781,7 +799,7 @@ function getConnectionQuality(dev) {
 }
 
 // =========================================================================
-// 12. DASHBOARD ADAPTATIVO & CÁLCULO DE MANTENIMIENTO PREVENTIVO (10%)
+// 12. DASHBOARD ADAPTATIVO & CÁLCULO DE ODÓMETRO REAL (SIN DESBORDES)
 // =========================================================================
 window.setFleetHealthFilter = function(filterType) {
   currentHealthFilter = filterType;
@@ -846,6 +864,7 @@ function renderFleetDashboard() {
   });
 }
 
+// CORRECCIÓN: Dibuja los ciclos reales de telemetría y contenedor de fase elástico
 function actualizarCardDashboard(mac) {
   const card = document.getElementById(`card-${mac}`);
   if (!card || !fleet[mac]) return;
@@ -855,18 +874,23 @@ function actualizarCardDashboard(mac) {
   const meta = item.meta || { alias: mac, cliente: "Pendiente", modelo: "Autoclave", ciclosCompletados: 0, limiteMantenimiento: 200 };
   const health = getConnectionQuality(item);
 
-  const ciclos = meta.ciclosCompletados || 0;
-  const limite = meta.limiteMantenimiento || 200;
+  // Leer ciclos reales de la telemetría del ESP32 prioritariamente
+  const ciclos = (d.cfg && d.cfg.ciclos !== undefined) ? d.cfg.ciclos : (meta.ciclosCompletados || 0);
+  const limite = (d.cfg && d.cfg.lim_mant !== undefined) ? d.cfg.lim_mant : (meta.limiteMantenimiento || 200);
   const pct = Math.min(100, Math.round((ciclos / limite) * 100));
 
-  // Alerta preventiva estricta al 10% restante o vencido
   const esVencido = ciclos >= limite;
   const esAlertaProximo = (limite - ciclos) <= (limite * 0.10);
   const mantClass = esVencido ? 'danger' : (esAlertaProximo ? 'warn' : '');
   const estadoTexto = esVencido ? 'MANT. VENCIDO' : (esAlertaProximo ? 'MANT. PRÓXIMO (10%)' : 'SALUD ÓPTIMA');
 
+  const faseTexto = d.fase || 'ESPERA';
+  const faseColor = (faseTexto === 'FINALIZADO CON EXITO') ? 'var(--green)' : 
+                    (faseTexto === 'ESPERA' ? 'var(--cyan)' : 
+                    (faseTexto.includes('ALARMA') ? 'var(--red)' : 'var(--amber)'));
+
   card.innerHTML = `
-    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; flex-wrap: wrap; gap: 6px;">
       <div>
         <div style="font-size: 0.95rem; font-weight: 800; color: var(--cyan);">${meta.alias}</div>
         <div style="font-size: 0.68rem; color: var(--text-muted);">${meta.cliente} | ${meta.modelo}</div>
@@ -889,7 +913,7 @@ function actualizarCardDashboard(mac) {
     </div>
 
     <div style="margin: 8px 0;">
-      <div style="display:flex; justify-content:space-between; font-size:0.65rem; color:var(--text-muted); font-weight:700;">
+      <div style="display:flex; justify-content:space-between; font-size:0.65rem; color:var(--text-muted); font-weight:700; flex-wrap: wrap; gap: 4px;">
         <span>ODÓMETRO: ${ciclos} / ${limite} ciclos</span>
         <span style="color:${esVencido ? 'var(--red)' : (esAlertaProximo ? 'var(--amber)' : 'var(--green)')}; font-weight:800;">
           ${estadoTexto}
@@ -898,12 +922,13 @@ function actualizarCardDashboard(mac) {
       <div class="health-bar"><div class="health-fill ${mantClass}" style="width: ${pct}%;"></div></div>
     </div>
 
-    <div style="background: var(--bg-surface); padding: 7px 10px; border-radius: 4px; font-size: 0.72rem; margin-bottom: 8px; display:flex; justify-content:space-between; align-items:center;">
-      <span style="color: var(--text-muted); font-weight:700;">FASE ACTUAL:</span> 
-      <span style="color: var(--green); font-weight: 800; letter-spacing:1px;">${d.fase || 'ESPERA'}</span>
+    <!-- CONTENEDOR ELÁSTICO ADAPTATIVO (NUNCA SE SALE EL TEXTO) -->
+    <div style="background: var(--bg-surface); border: 1px solid var(--border-subtle); padding: 8px 10px; border-radius: 6px; font-size: 0.72rem; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px;">
+      <span style="color: var(--text-muted); font-weight: 800; font-size: 0.68rem;">FASE ACTUAL:</span> 
+      <span style="color: ${faseColor}; font-weight: 900; letter-spacing: 0.8px; text-align: right; word-break: break-word;">${faseTexto}</span>
     </div>
 
-    <div style="text-align: center; font-size: 0.68rem; color: var(--cyan); padding: 5px; background: var(--cyan-deep); border-radius: 4px; font-weight:800;">
+    <div style="text-align: center; font-size: 0.68rem; color: var(--cyan); padding: 6px; background: var(--cyan-deep); border: 1px solid var(--border-subtle); border-radius: 4px; font-weight: 800;">
       👉 ENTRAR A CONTROL TOTAL (1 CLICK)
     </div>
   `;
@@ -958,7 +983,7 @@ function switchDetailTab(tabId) {
   }
 }
 
-// Botón: Resetear el odómetro físico en el microcontrolador a 0
+// Botón de reseteo físico de odómetro
 window.resetearOdometroHardware = function() {
   if (!currentInspectedMAC) return notify("Selecciona un equipo primero", "var(--amber)");
   if (usuarioActual && usuarioActual.rol !== "SUPERADMIN") return notify("Permiso denegado: solo SUPERADMIN", "var(--red)");
@@ -972,6 +997,7 @@ window.resetearOdometroHardware = function() {
     onConfirm: () => {
       mqttClient.publish(`autoclave_med_2026/${currentInspectedMAC}/config`, JSON.stringify({ cmd: "RESET_ODOMETRO" }));
       if (fleet[currentInspectedMAC]?.meta) fleet[currentInspectedMAC].meta.ciclosCompletados = 0;
+      if (fleet[currentInspectedMAC]?.datos?.cfg) fleet[currentInspectedMAC].datos.cfg.ciclos = 0;
       actualizarCardDashboard(currentInspectedMAC);
       notify("Odómetro reiniciado a 0 en la memoria física del equipo", "var(--green)");
     }
@@ -1249,7 +1275,7 @@ async function cargarLogsDetalle(mac) {
   if (db) {
     const tx = db.transaction(["reportes_sesiones"], "readonly");
     tx.objectStore("reportes_sesiones").getAll().onsuccess = (e) => {
-      const localLogs = (e.target.result || []).filter(x => x.mac === mac).reverse();
+      const localLogs = (e.target.result || []).filter(x => (x.mac === mac)).reverse();
       renderLogsDetalleFilas(localLogs, tbody);
     };
     return;
@@ -1431,7 +1457,7 @@ async function renderizarRegistros() {
 
   let items = [];
 
-  // 1. CONSULTA DIRECTA A SUPABASE CLOUD (ÚNICA FUENTE DE VERDAD)
+  // 1. CONSULTA DIRECTA Y PURA A SUPABASE CLOUD
   if (sbClient) {
     try {
       let query = sbClient.from('reportes_autoclaves').select('*').order('created_at', { ascending: false });
@@ -1509,7 +1535,7 @@ function pintarTablaReportes(items, fType, fText, tbody) {
 
   document.getElementById("kpiTotalSesiones").innerText = items.length;
 
-  // CORRECCIÓN MATEMÁTICA: Contar cuántos ciclos conformes se hicieron (no sumar odómetros)
+  // CORRECCIÓN MATEMÁTICA: Contar cuántas sesiones fueron conformes (no sumar odómetros)
   const ciclosConformesReales = items.filter(x => x.diagnosticoPrincipal && x.diagnosticoPrincipal.includes("CONFORME")).length;
   document.getElementById("kpiTotalCiclos").innerText = ciclosConformesReales;
 
@@ -1636,7 +1662,7 @@ window.verPaqueteSesion = function(sessionId) {
         const esFallo = f.estado && f.estado.includes("FALLO");
         return `
           <div class="cycle-card-item" style="border-left-color: ${esFallo ? 'var(--red)' : 'var(--green)'};">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; flex-wrap: wrap; gap: 4px;">
               <span class="cycle-badge" style="border-color:${esFallo ? 'var(--red)' : 'var(--cyan)'}; color:${esFallo ? 'var(--red)' : 'var(--cyan)'};">
                 FASE ${idx + 1}: ${f.fase || 'ETAPA'}
               </span>
