@@ -14,7 +14,7 @@
   --bg-gauge: radial-gradient(circle at 50% 25%, rgba(25, 37, 66, var(--card-alpha)) 0%, rgba(10, 15, 29, var(--card-alpha)) 100%);
   --bg-input: rgba(10, 15, 29, 0.92);
   
-  --border-subtle: rgba(0, 229, 255, 0.3);
+  --border-subtle: rgba(0, 229, 255, 0.28);
   --border-bright: #00e5ff;
   --cyan: #00e5ff;
   --cyan-glow: rgba(0, 229, 255, 0.45);
@@ -32,54 +32,56 @@
   --ease: cubic-bezier(0.16, 1, 0.3, 1);
   
   --glass-blur: 16px;
-  --laser-gradient: linear-gradient(135deg, #00e5ff 0%, #8b5cf6 100%);
-  --laser-glow: 0 0 16px rgba(0, 229, 255, 0.35);
+  
+  /* LÍNEA LÁSER POR DEFECTO */
+  --laser-gradient: linear-gradient(90deg, #00e5ff 0%, #3b82f6 50%, #00ff88 100%);
+  --laser-glow: 0 0 14px rgba(0, 229, 255, 0.35);
   
   --panel-shadow: 0 16px 40px -5px rgba(0, 0, 0, 0.8), 
-                  0 0 0 1px rgba(255, 255, 255, 0.1), 
-                  inset 0 1px 0 rgba(255, 255, 255, 0.2), 
+                  inset 0 1px 0 rgba(255, 255, 255, 0.15), 
                   0 0 25px rgba(0, 229, 255, 0.08);
 }
 
 /* =========================================================================
-   2. TEMAS VISUALES CON BORDES LÁSER MULTICOLOR & CLÍNICO
+   2. TEMAS VISUALES CON LÍNEAS Y BORDES LÁSER MULTICOLOR
    ========================================================================= */
 
 /* TEMA 1: PIZARRA TÁCTICA (CABINA SCADA OSCURA) */
 [data-theme="tactical"] {
   --cyan: #00e5ff;
   --border-bright: #00e5ff;
-  --laser-gradient: linear-gradient(135deg, #00e5ff 0%, #3b82f6 50%, #00ff88 100%);
-  --laser-glow: 0 0 14px rgba(0, 229, 255, 0.3);
+  --laser-gradient: linear-gradient(90deg, #00e5ff 0%, #3b82f6 50%, #00ff88 100%);
+  --laser-glow: 0 0 12px rgba(0, 229, 255, 0.3);
 }
 
-/* TEMA 2: CYBER (LÁSER MULTICOLOR ESTILO SPEEDTEST: FUCSIA ➔ MORADO ➔ CIAN) */
+/* TEMA 2: CYBER (LÁSER SPEEDTEST: FUCSIA ➔ MORADO ULTRAVIOLETA ➔ CIAN LÁSER) */
 [data-theme="cyber"] {
   --cyan: #00e5ff;
   --border-bright: #ff007f;
-  --border-subtle: rgba(255, 0, 127, 0.4);
+  --border-subtle: rgba(255, 0, 127, 0.35);
   --laser-gradient: linear-gradient(90deg, #ff007f 0%, #8b5cf6 50%, #00e5ff 100%);
-  --laser-glow: 0 0 20px rgba(255, 0, 127, 0.4), 0 0 25px rgba(0, 229, 255, 0.3);
-  --cyan-deep: rgba(255, 0, 127, 0.15);
+  --laser-glow: 0 0 16px rgba(255, 0, 127, 0.45), 0 0 22px rgba(0, 229, 255, 0.35);
+  --cyan-deep: rgba(255, 0, 127, 0.14);
 }
 
-/* TEMA 3: HÍBRIDO (FLUJO CUÁNTICO: CIAN ➔ ESMERALDA ➔ LIMA NEÓN) */
+/* TEMA 3: HÍBRIDO (FLUJO BIO-ELÉCTRICO: CIAN ➔ VERDE ESMERALDA ➔ ÁMBAR NEÓN) */
 [data-theme="hybrid"] {
   --cyan: #00ff88;
   --border-bright: #00ff88;
-  --border-subtle: rgba(0, 255, 136, 0.4);
-  --laser-gradient: linear-gradient(90deg, #00e5ff 0%, #00ff88 50%, #facc15 100%);
-  --laser-glow: 0 0 20px rgba(0, 255, 136, 0.45), 0 0 25px rgba(0, 229, 255, 0.3);
-  --cyan-deep: rgba(0, 255, 136, 0.15);
+  --border-subtle: rgba(0, 255, 136, 0.35);
+  --laser-gradient: linear-gradient(90deg, #00e5ff 0%, #00ff88 50%, #ffaa00 100%);
+  --laser-glow: 0 0 16px rgba(0, 255, 136, 0.45), 0 0 22px rgba(0, 229, 255, 0.3);
+  --cyan-deep: rgba(0, 255, 136, 0.14);
 }
 
-/* TEMA 4: CLÍNICO QUIRÚRGICO (RESTAURADO SEGÚN TU CAPTURA #1: BLUEPRINT GRID) */
+/* TEMA 4: CLÍNICO QUIRÚRGICO (RESTAURADO SEGÚN TU IMAGEN 1: BLUEPRINT GRID) */
 [data-theme="clinical"] {
   --bg-current: #f0f4f9;
   --bg-image: linear-gradient(to right, rgba(2, 132, 199, 0.08) 1px, transparent 1px),
               linear-gradient(to bottom, rgba(2, 132, 199, 0.08) 1px, transparent 1px),
               linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
-  --laser-gradient: linear-gradient(135deg, #0284c7 0%, #00e5ff 100%);
+  background-size: 24px 24px, 24px 24px, 100% 100% !important;
+  --laser-gradient: linear-gradient(90deg, #0284c7 0%, #00e5ff 100%);
   --laser-glow: 0 0 12px rgba(2, 132, 199, 0.25);
   --text-main: #0f172a !important;
   --text-muted: #475569 !important;
@@ -118,14 +120,43 @@
 }
 
 /* =========================================================================
-   3. APLICACIÓN DE BORDES LÁSER MULTICOLOR SPEEDTEST
+   3. APLICACIÓN DE LÍNEAS Y BORDES LÁSER MULTICOLOR SPEEDTEST
    ========================================================================= */
+
+/* 1. LA RAYITA LÁSER SUPERIOR DE EXTREMO A EXTREMO (IDÉNTICA A SPEEDTEST) */
+.hud-topbar::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2.5px;
+  background: var(--laser-gradient);
+  box-shadow: var(--laser-glow);
+  z-index: 501;
+}
+
+/* 2. BORDES LÁSER MULTICOLOR EN BOTONES PRINCIPALES (BOTÓN 'DESCARGA') */
+[data-theme="cyber"] .btn-primary,
+[data-theme="hybrid"] .btn-primary {
+  border: 1.5px solid transparent !important;
+  background-image: linear-gradient(rgba(10, 17, 32, 0.88), rgba(10, 17, 32, 0.88)), var(--laser-gradient) !important;
+  background-origin: padding-box, border-box !important;
+  background-clip: padding-box, border-box !important;
+  color: var(--text-main) !important;
+  box-shadow: var(--laser-glow), 0 4px 14px rgba(0, 0, 0, 0.6) !important;
+}
+[data-theme="cyber"] .btn-primary:hover,
+[data-theme="hybrid"] .btn-primary:hover {
+  filter: brightness(1.2);
+  transform: translateY(-2px);
+}
+
+/* 3. BORDES LÁSER EN TARJETAS Y CONTENEDORES (SOLO EN EL CONTORNO) */
 [data-theme="cyber"] .card,
 [data-theme="cyber"] .node-item,
-[data-theme="cyber"] .btn-primary,
 [data-theme="hybrid"] .card,
-[data-theme="hybrid"] .node-item,
-[data-theme="hybrid"] .btn-primary {
+[data-theme="hybrid"] .node-item {
   border: 1px solid transparent !important;
   background-image: linear-gradient(var(--bg-card), var(--bg-card)), var(--laser-gradient) !important;
   background-origin: padding-box, border-box !important;
@@ -133,12 +164,30 @@
   box-shadow: var(--laser-glow), var(--panel-shadow) !important;
 }
 
-[data-theme="cyber"] .hud-topbar,
-[data-theme="hybrid"] .hud-topbar {
-  border-bottom: 2px solid transparent !important;
-  background-image: linear-gradient(var(--bg-surface), var(--bg-surface)), var(--laser-gradient) !important;
-  background-origin: padding-box, border-box !important;
-  background-clip: padding-box, border-box !important;
+/* 4. RAYITA LÁSER SUPERIOR EN LOS GAUGES / MEDIDORES */
+.gauge-cell {
+  position: relative;
+  overflow: hidden;
+}
+.gauge-cell::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--laser-gradient);
+  box-shadow: var(--laser-glow);
+}
+
+/* 5. LÍNEA DE TIEMPO LÁSER */
+.timeline-item {
+  border-left: 2px solid transparent !important;
+  border-image: var(--laser-gradient) 1 !important;
+}
+.timeline-item::before {
+  background: var(--cyan) !important;
+  box-shadow: var(--laser-glow) !important;
 }
 
 /* =========================================================================
@@ -197,7 +246,7 @@ html, [data-bg="circuit-pcb"] {
               radial-gradient(circle at 0% 100%, rgba(0, 255, 136, 0.08) 0%, transparent 45%);
 }
 
-/* WALLPAPER 8: BLANCO QUIRÚRGICO LIMPIO (BLUEPRINT GRID DE TU CAPTURA #1) */
+/* WALLPAPER 8: BLANCO QUIRÚRGICO LIMPIO (BLUEPRINT GRID DE TU IMAGEN 1) */
 [data-bg="clean"] {
   --bg-current: #f0f4f9;
   --bg-image: linear-gradient(to right, rgba(2, 132, 199, 0.08) 1px, transparent 1px),
@@ -796,13 +845,13 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   position: absolute;
   top: 0; left: 0; right: 0;
   height: 2px;
-  background: linear-gradient(90deg, transparent, var(--cyan), transparent);
-  opacity: 0.8;
+  background: var(--laser-gradient);
+  box-shadow: var(--laser-glow);
+  opacity: 0.9;
 }
 .node-item:hover {
-  border-color: var(--cyan);
   transform: translateY(-2px);
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.4), 0 0 20px var(--cyan-glow);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.4), var(--laser-glow);
 }
 
 .gauge-grid { 
@@ -816,7 +865,6 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   border: 1px solid var(--border-subtle);
-  border-top: 2px solid var(--cyan);
   border-radius: 6px;
   padding: 14px 10px;
   text-align: center;
