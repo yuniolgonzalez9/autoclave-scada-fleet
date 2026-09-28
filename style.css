@@ -1,9 +1,40 @@
 /* =========================================================================
-   SCADA BIOMÉDICO MASTER // SISTEMA ADAPTATIVO MULTI-TEMA & EXPORTACIÓN PRO
+   SCADA BIOMÉDICO MASTER // EDICIÓN SPEEDTEST PRO & ALTO CONTRASTE 3D
    ========================================================================= */
 
-/* 1. TEMA CYBER DECK (OSCURO NEÓN) */
-:root, [data-theme="cyber"] {
+/* 1. TEMA SPEEDTEST PRO (INSPIRADO EN OOKLA: FONDO NEGRO + MÓDULOS GRIS 3D + NEÓN CIAN/PÚRPURA/NARANJA) */
+[data-theme="tactical"], :root {
+  --bg-void: #050811;
+  --bg-surface: #0c1220;
+  --bg-card: #121a2d;
+  --bg-card-hover: #18223a;
+  --bg-gauge: radial-gradient(circle at 50% 30%, #1a2540 0%, #0c1220 100%);
+  --bg-input: #0c1220;
+  --border-subtle: rgba(139, 92, 246, 0.35);
+  --border-bright: #00e5ff;
+  --cyan: #00e5ff;
+  --cyan-glow: rgba(0, 229, 255, 0.45);
+  --cyan-deep: rgba(0, 229, 255, 0.12);
+  --green: #00ff88;
+  --green-glow: rgba(0, 255, 136, 0.45);
+  --red: #ff0055;
+  --red-glow: rgba(255, 0, 85, 0.5);
+  --amber: #ff5500; /* Naranja Speedtest Mastercard */
+  --amber-glow: rgba(255, 85, 0, 0.45);
+  --purple: #8b5cf6; /* Púrpura Neón Speedtest */
+  --purple-glow: rgba(139, 92, 246, 0.45);
+  --text-main: #ffffff;
+  --text-muted: #8b9bb4;
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --panel-shadow: 0 12px 35px -5px rgba(0, 0, 0, 0.95), 0 0 20px rgba(0, 229, 255, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  --bg-gradient: radial-gradient(circle at 10% 10%, rgba(139, 92, 246, 0.08) 0%, transparent 45%),
+                 radial-gradient(circle at 90% 90%, rgba(0, 229, 255, 0.06) 0%, transparent 45%),
+                 linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+                 linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+}
+
+/* 2. TEMA CYBER DECK (OSCURO NEÓN CLÁSICO) */
+[data-theme="cyber"] {
   --bg-void: #020409;
   --bg-surface: rgba(6, 12, 24, 0.92);
   --bg-card: rgba(11, 20, 38, 0.88);
@@ -25,7 +56,6 @@
   --purple-glow: rgba(157, 78, 221, 0.45);
   --text-main: #f8fafc;
   --text-muted: #7e8ea6;
-  --ease: cubic-bezier(0.16, 1, 0.3, 1);
   --panel-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.85), 0 0 20px rgba(0, 240, 255, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.1);
   --bg-gradient: radial-gradient(circle at 15% 15%, rgba(0, 240, 255, 0.08) 0%, transparent 45%),
                  radial-gradient(circle at 85% 85%, rgba(157, 78, 221, 0.07) 0%, transparent 45%),
@@ -33,7 +63,7 @@
                  linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
 }
 
-/* 2. TEMA BLANCO CLÍNICO (HOSPITALARIO SUAVE) */
+/* 3. TEMA BLANCO CLÍNICO (HOSPITALARIO SUAVE) */
 [data-theme="clinical"] {
   --bg-void: #f1f5f9;
   --bg-surface: #ffffff;
@@ -63,37 +93,7 @@
                  linear-gradient(90deg, rgba(15, 23, 42, 0.02) 1px, transparent 1px);
 }
 
-/* 3. TEMA PIZARRA TÁCTICO (CARBON DARK PRO) */
-[data-theme="tactical"] {
-  --bg-void: #0b0f19;
-  --bg-surface: #111827;
-  --bg-card: #1f2937;
-  --bg-card-hover: #283548;
-  --bg-gauge: linear-gradient(145deg, #1f2937 0%, #111827 100%);
-  --bg-input: #111827;
-  --border-subtle: #374151;
-  --border-bright: #38bdf8;
-  --cyan: #38bdf8;
-  --cyan-glow: rgba(56, 189, 248, 0.35);
-  --cyan-deep: rgba(56, 189, 248, 0.08);
-  --green: #10b981;
-  --green-glow: rgba(16, 185, 129, 0.35);
-  --red: #f43f5e;
-  --red-glow: rgba(244, 63, 94, 0.35);
-  --amber: #f59e0b;
-  --amber-glow: rgba(245, 158, 11, 0.35);
-  --purple: #a855f7;
-  --purple-glow: rgba(168, 85, 247, 0.35);
-  --text-main: #f9fafb;
-  --text-muted: #9ca3af;
-  --panel-shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  --bg-gradient: radial-gradient(circle at 10% 10%, rgba(56, 189, 248, 0.05) 0%, transparent 40%),
-                 radial-gradient(circle at 90% 90%, rgba(168, 85, 247, 0.05) 0%, transparent 40%),
-                 linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
-                 linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
-}
-
-/* 4. TEMA CYBER-LIGHT (HÍBRIDO QUIRÚRGICO DE ALTO CONTRASTE) */
+/* 4. TEMA CYBER-LIGHT (HÍBRIDO: ENTORNO BLANCO + CONSOLAS OBSIDIANA) */
 [data-theme="hybrid"] {
   --bg-void: #f3f6fa;
   --bg-surface: #070e1c;
@@ -154,7 +154,7 @@ html, body {
 }
 
 /* =========================================================================
-   BLINDAJE DE SEGURIDAD ABSOLUTO (ANTI-BYPASS)
+   BLINDAJE DE SEGURIDAD ABSOLUTO
    ========================================================================= */
 body.unauthenticated .hud-topbar,
 body.unauthenticated .desktop-dock-container,
@@ -166,7 +166,7 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
 }
 
 /* =========================================================================
-   SISTEMA DE BOTONES (BLINDADO CONTRA DESBORDES EN MÓVILES)
+   SISTEMA DE BOTONES 3D TÁCTILES (CON TEXTO QUE JAMÁS SE SALE)
    ========================================================================= */
 .btn {
   background: var(--cyan-deep);
@@ -184,76 +184,80 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   gap: 6px;
   min-height: 38px;
   text-decoration: none;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.18);
   transition: all 0.18s var(--ease);
   position: relative;
   user-select: none;
-  white-space: nowrap !important; /* PREVIENE QUE EL TEXTO SALGA O SE DESALINEE */
+  white-space: nowrap !important;
   flex-shrink: 0;
 }
 
 .btn:hover {
   background: var(--cyan);
-  color: #ffffff;
-  box-shadow: 0 0 20px var(--cyan-glow);
-  transform: translateY(-1px);
+  color: #050811;
+  box-shadow: 0 0 22px var(--cyan-glow), 0 6px 18px rgba(0, 0, 0, 0.7);
+  transform: translateY(-2px);
 }
 .btn:active { 
   transform: translateY(1px) scale(0.98); 
 }
 
 .btn-primary {
-  background: var(--cyan);
+  background: linear-gradient(180deg, var(--cyan) 0%, #0099b8 100%);
   border-color: var(--cyan);
-  color: #020409;
+  color: #050811;
   font-weight: 900;
-  box-shadow: 0 4px 14px var(--cyan-glow);
+  box-shadow: 0 4px 16px var(--cyan-glow), inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
 [data-theme="clinical"] .btn-primary {
   color: #ffffff !important;
 }
 .btn-primary:hover {
-  filter: brightness(1.1);
-  box-shadow: 0 0 25px var(--cyan);
+  filter: brightness(1.15);
+  box-shadow: 0 0 28px var(--cyan);
 }
 
 .btn-success {
-  background: rgba(5, 150, 105, 0.18);
+  background: rgba(0, 255, 136, 0.15);
   border-color: var(--green);
   color: var(--green);
+  box-shadow: 0 4px 12px rgba(0, 255, 136, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 .btn-success:hover {
   background: var(--green);
-  color: #020409;
-  box-shadow: 0 0 20px var(--green-glow);
+  color: #050811;
+  box-shadow: 0 0 22px var(--green-glow);
 }
 
 .btn-danger {
-  background: rgba(220, 38, 38, 0.18);
+  background: rgba(255, 0, 85, 0.15);
   border-color: var(--red);
   color: var(--red);
+  box-shadow: 0 4px 12px rgba(255, 0, 85, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 .btn-danger:hover {
   background: var(--red);
   color: #ffffff;
-  box-shadow: 0 0 20px var(--red-glow);
+  box-shadow: 0 0 22px var(--red-glow);
 }
 
 .btn-warn {
-  background: rgba(217, 119, 6, 0.18);
+  background: rgba(255, 85, 0, 0.15);
   border-color: var(--amber);
   color: var(--amber);
+  box-shadow: 0 4px 12px rgba(255, 85, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 .btn-warn:hover {
   background: var(--amber);
-  color: #020409;
-  box-shadow: 0 0 20px var(--amber-glow);
+  color: #050811;
+  box-shadow: 0 0 22px var(--amber-glow);
 }
 
 .btn-secondary {
   background: var(--bg-surface);
   border-color: var(--border-subtle);
   color: var(--text-main);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 .btn-secondary:hover {
   background: var(--bg-card-hover);
@@ -270,10 +274,10 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
 .flex-2 { flex: 2; }
 
 /* =========================================================================
-   INSIGNIAS Y BADGES MÉDICOS (100% RESPONSIVOS)
+   INSIGNIAS Y BADGES MÉDICOS (ADAPTACIÓN PERFECTA)
    ========================================================================= */
 .user-role, .cycle-badge, .status-badge {
-  white-space: nowrap !important; /* NUNCA SE PARTE EN 2 LÍNEAS */
+  white-space: nowrap !important;
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
@@ -291,10 +295,11 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   border-radius: 4px;
   font-size: 0.68rem;
   letter-spacing: 0.5px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .user-role {
-  background: rgba(220, 38, 38, 0.15);
+  background: rgba(255, 0, 85, 0.15);
   color: var(--red);
   border: 1px solid var(--red);
   padding: 3px 7px;
@@ -310,6 +315,7 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   font-weight: 800;
   border: 1px solid var(--border-subtle);
   background: var(--bg-surface);
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.5);
 }
 
 .dot { width: 8px; height: 8px; border-radius: 50%; }
@@ -324,7 +330,7 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   border-bottom: 1px solid var(--border-subtle);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 25px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.08);
   padding: 10px 18px;
   display: flex;
   justify-content: space-between;
@@ -402,6 +408,7 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   border: 1px solid var(--border-subtle);
   color: var(--text-main);
   white-space: nowrap;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.4);
 }
 .sync-pill { border-color: var(--green); color: var(--green); }
 
@@ -426,7 +433,7 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
   border-radius: 6px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255, 255, 255, 0.12);
   font-size: 0.72rem;
   white-space: nowrap;
 }
@@ -446,6 +453,7 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   font-size: 1.15rem;
   background: var(--bg-surface);
   border-color: var(--border-subtle);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.4);
 }
 
 .gear-dropdown {
@@ -459,7 +467,7 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid var(--cyan);
   border-radius: 8px;
-  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.8), 0 0 25px var(--cyan-glow);
   z-index: 99999;
   display: none;
   overflow: hidden;
@@ -545,8 +553,8 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
 }
 .dropdown-item.item-danger { color: var(--red); }
 .dropdown-item.item-danger:hover { 
-  background: rgba(220, 38, 38, 0.15); 
-  color: var(--red); 
+  background: rgba(255, 0, 85, 0.15); 
+  color: #fff; 
 }
 .dropdown-separator { height: 1px; background: var(--border-subtle); }
 
@@ -562,6 +570,7 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   border-bottom: 1px solid var(--border-subtle);
   width: 100%;
   position: relative;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.3);
 }
 
 .btn-dock-toggle {
@@ -579,6 +588,7 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   gap: 6px;
   flex-shrink: 0;
   white-space: nowrap;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.3);
 }
 
 .desktop-nav-slider {
@@ -606,6 +616,7 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   border-radius: 6px;
   font-size: 0.74rem;
   white-space: nowrap;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 .nav-btn:hover { 
   color: var(--text-main); 
@@ -616,11 +627,11 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   background: var(--cyan-deep);
   color: var(--cyan);
   border-color: var(--cyan);
-  box-shadow: 0 0 12px var(--cyan-glow);
+  box-shadow: 0 0 14px var(--cyan-glow), inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 /* =========================================================================
-   MODAL FLOTANTE CENTRALIZADO
+   MODAL FLOTANTE CENTRALIZADO (PANTALLA COMPLETA 3D)
    ========================================================================= */
 .modal-overlay {
   position: fixed;
@@ -630,7 +641,7 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   width: 100dvw;
   height: 100vh;
   height: 100dvh;
-  background: rgba(2, 4, 10, 0.85);
+  background: rgba(2, 4, 10, 0.88);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
   display: none;
@@ -655,7 +666,7 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
   width: 100% !important;
   margin: auto !important;
   text-align: center !important;
-  box-shadow: var(--panel-shadow), 0 0 35px var(--cyan-glow) !important;
+  box-shadow: 0 25px 70px rgba(0, 0, 0, 0.95), 0 0 35px var(--cyan-glow), inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
   animation: modalPopUp 0.25s var(--ease) forwards;
   position: relative !important;
 }
@@ -734,7 +745,7 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
 .card:hover { border-color: var(--cyan); }
 
 /* =========================================================================
-   GRILLA DE FLOTA & MEDIDORES
+   GRILLA DE FLOTA & MEDIDORES 3D
    ========================================================================= */
 .fleet-deck-grid {
   display: grid;
@@ -764,7 +775,7 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
 .node-item:hover {
   border-color: var(--cyan);
   transform: translateY(-2px);
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.35), 0 0 20px var(--cyan-glow);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.4), 0 0 20px var(--cyan-glow);
 }
 
 .gauge-grid { 
@@ -825,7 +836,7 @@ body.unauthenticated .app-viewport > section:not(#act-login):not(#act-recovery) 
 .health-fill.danger { background: var(--red); }
 
 /* =========================================================================
-   PAQUETES DE REPORTES Y TABLAS CLÍNICAS (CON CONTROL ANTI-DESBORDE)
+   PAQUETES DE REPORTES Y TABLAS CLÍNICAS
    ========================================================================= */
 .report-package-row {
   cursor: pointer;
@@ -881,7 +892,6 @@ th {
 .kpi-val { font-size: 1.85rem; font-weight: 900; color: var(--cyan); text-shadow: 0 0 14px var(--cyan-glow); }
 .kpi-lbl { font-size: 0.62rem; font-weight: 800; color: var(--text-muted); margin-top: 5px; letter-spacing: 1px; white-space: nowrap; }
 
-/* Subtab Slider */
 .subtab-slider { 
   display: flex; 
   gap: 8px; 
@@ -904,7 +914,7 @@ th {
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border-top: 1px solid var(--border-subtle);
-  box-shadow: 0 -4px 18px rgba(0,0,0,0.2);
+  box-shadow: 0 -4px 18px rgba(0,0,0,0.4);
   display: none;
   justify-content: space-around;
   align-items: center;
