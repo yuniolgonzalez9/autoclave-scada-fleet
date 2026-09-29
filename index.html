@@ -19,7 +19,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;800&family=Orbitron:wght@600;800;900&display=swap" rel="stylesheet">
   
-  <!-- MOTOR ANTI-PARPADEO DEFINITIVO (BLOQUEA EL LOGIN ANTES DEL PRIMER PINTADO) -->
+  <!-- MOTOR ANTI-PARPADEO (DETECTA SESIÓN ANTES DEL PRIMER PINTADO) -->
   <script>
     (function() {
       try {
@@ -35,7 +35,7 @@
     })();
   </script>
 
-  <!-- REGLA CSS INLINE PARA EVITAR EL PARPADEO ANTES DE QUE CARGUE STYLE.CSS -->
+  <!-- REGLAS DE VISIBILIDAD DE ARRANQUE -->
   <style>
     html.is-auth #act-login,
     html.is-auth #act-recovery {
@@ -49,13 +49,13 @@
     }
   </style>
 
-  <link rel="stylesheet" href="style.css?v=27">
+  <link rel="stylesheet" href="style.css?v=28">
   
   <!-- Dependencias Externas -->
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
-<body>
+<body class="unauthenticated">
 
   <!-- AVISO TOAST FLOTANTE -->
   <div id="toastApp" class="toast-hud">Acción completada</div>
@@ -198,7 +198,7 @@
     </div>
   </header>
 
-  <!-- CONTENEDOR DESPLEGABLE HORIZONTAL (DOCK) -->
+  <!-- CONTENEDOR DOCK -->
   <div class="desktop-dock-container" id="desktopDockContainer">
     <button class="btn-dock-toggle" onclick="toggleHorizontalDock()">
       <span class="dock-arrow" id="dockArrow">◀</span> 🗂️ SECCIONES
@@ -214,7 +214,7 @@
 
   <main class="app-viewport" id="appViewport">
 
-    <!-- ACTIVITY 0: LOGIN (SIN CLASE 'ACTIVE' POR DEFECTO PARA EVITAR EL PARPADEO) -->
+    <!-- ACTIVITY 0: LOGIN (SIN CLASE 'ACTIVE' POR DEFECTO PARA EVITAR PARPADEO) -->
     <section id="act-login" class="activity">
       <div class="card auth-box">
         <div class="auth-header">
@@ -246,9 +246,10 @@
           </button>
         </form>
 
+        <!-- BOTÓN DE RECUPERACIÓN CORTO Y DIRECTO -->
         <div style="text-align: center; margin-top: 18px;">
-          <button class="btn btn-secondary w-full" style="font-size: 0.72rem;" onclick="abrirRecuperacion()">
-            ❓ ¿Olvidaste tu contraseña? (Recuperar por Correo)
+          <button class="btn btn-secondary w-full" style="font-size: 0.74rem;" onclick="abrirRecuperacion()">
+            🔑 ¿Olvidaste tu contraseña?
           </button>
         </div>
 
@@ -261,14 +262,14 @@
       <div class="card auth-box">
         <div style="font-family: 'Orbitron'; font-size: 1.1rem; color: var(--cyan); text-align: center; margin-bottom: 8px;">RECUPERACIÓN DE ACCESO</div>
         <p style="font-size: 0.72rem; color: var(--text-muted); text-align: center; margin-bottom: 18px;">
-          Ingresa tu usuario registrado. Se transmitirá una clave temporal cifrada a tu correo oficial configurado en el sistema.
+          Ingresa tu usuario registrado para generar y transmitir una clave temporal cifrada.
         </p>
         <form onsubmit="event.preventDefault(); solicitarCodigoRecuperacion();">
           <div class="input-group">
             <label>USUARIO A RECUPERAR:</label>
             <input type="text" id="recovUser" class="input-field" placeholder="Ej: operador_central" autocapitalize="none" required>
           </div>
-          <button type="submit" class="btn btn-primary w-full" id="btnSendRecovery">ENVIAR CLAVE TEMPORAL AL CORREO [ENTER]</button>
+          <button type="submit" class="btn btn-primary w-full" id="btnSendRecovery">ENVIAR CLAVE TEMPORAL [ENTER]</button>
         </form>
         <button class="btn btn-secondary w-full" style="margin-top: 10px;" onclick="openTopLevel('act-login')">← VOLVER AL LOGIN</button>
         <div id="recovFeedback" class="feedback-toast"></div>
@@ -821,7 +822,7 @@
     }
   </script>
 
-  <!-- Script Principal con Cache-Busting v27 -->
-  <script src="app.js?v=27"></script>
+  <!-- Script Principal sincronizado a v28 -->
+  <script src="app.js?v=28"></script>
 </body>
 </html>
