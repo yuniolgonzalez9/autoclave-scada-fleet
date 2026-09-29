@@ -2,7 +2,7 @@
 // SCADA AUTOCLAVE // VERCEL SERVERLESS WEBHOOK (TELEGRAM BOT ACK)
 // =========================================================================
 
-const TELEGRAM_BOT_TOKEN = "8902369071:AAFuFn3R1b6k9_y_2w3XKPc92npVRUKee0s";
+const TELEGRAM_BOT_TOKEN = "8902369071:AAFuFn3R1b6k9_y_2w3XKPc92npVRUkee0s";
 const SUPABASE_URL = "https://gjtqyodpgwfvfvkhlhik.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdqdHF5b2RwZ3dmdmZ2a2hsaGlrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAwNDAzNTYsImV4cCI6MjEwNTYxNjM1Nn0.g8t_PbEityaneKkOUHttQ_cZv50aczLU4Z9la8R4d_g";
 
