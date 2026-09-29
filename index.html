@@ -19,37 +19,48 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;800&family=Orbitron:wght@600;800;900&display=swap" rel="stylesheet">
   
-  <!-- BLINDAJE SÍNCRONO ANTI-PARPADEO (ZERO-FLICKER BOOT) -->
+  <!-- MOTOR ANTI-PARPADEO DEFINITIVO (BLOQUEA EL LOGIN ANTES DEL PRIMER PINTADO) -->
   <script>
     (function() {
       try {
         var u = localStorage.getItem("scada_logged_user");
-        if (u) {
-          window.__HAS_AUTH__ = true;
-          document.documentElement.classList.add("authenticated");
+        if (u && JSON.parse(u)) {
+          document.documentElement.className = "is-auth authenticated";
+        } else {
+          document.documentElement.className = "is-guest unauthenticated";
         }
-      } catch(e) {}
+      } catch(e) {
+        document.documentElement.className = "is-guest unauthenticated";
+      }
     })();
   </script>
 
-  <link rel="stylesheet" href="style.css?v=26">
+  <!-- REGLA CSS INLINE PARA EVITAR EL PARPADEO ANTES DE QUE CARGUE STYLE.CSS -->
+  <style>
+    html.is-auth #act-login,
+    html.is-auth #act-recovery {
+      display: none !important;
+    }
+    html.is-guest .hud-topbar,
+    html.is-guest .desktop-dock-container,
+    html.is-guest .mobile-bottom-nav,
+    html.is-guest .app-viewport > section:not(#act-login):not(#act-recovery) {
+      display: none !important;
+    }
+  </style>
+
+  <link rel="stylesheet" href="style.css?v=27">
   
   <!-- Dependencias Externas -->
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
-<body class="unauthenticated">
-  <!-- APLICACIÓN INMEDIATA DE CLASE AUTH (CERO MILISEGUNDOS DE PARPADEO) -->
-  <script>
-    if (window.__HAS_AUTH__) {
-      document.body.className = "authenticated";
-    }
-  </script>
+<body>
 
   <!-- AVISO TOAST FLOTANTE -->
   <div id="toastApp" class="toast-hud">Acción completada</div>
 
-  <!-- MODAL DE CONFIRMACIÓN DE OPERACIONES -->
+  <!-- MODAL DE CONFIRMACIÓN -->
   <div id="modalConfirmOverlay" class="modal-overlay" style="display: none;">
     <div class="modal-card">
       <div class="modal-icon" id="modalConfirmIcon">⚠️</div>
@@ -62,7 +73,7 @@
     </div>
   </div>
 
-  <!-- MODAL DE ADVERTENCIA DE INACTIVIDAD (SEGURIDAD BIOMÉDICA) -->
+  <!-- MODAL DE INACTIVIDAD -->
   <div id="modalTimeoutOverlay" class="modal-overlay" style="display: none;">
     <div class="modal-card" style="border-color: var(--amber) !important; box-shadow: 0 0 35px var(--amber-glow) !important;">
       <div class="modal-icon" style="color: var(--amber);">⏳</div>
@@ -84,7 +95,6 @@
         ◀ VOLVER
       </button>
       
-      <!-- LOGO CON REACTOR GIRATORIO -->
       <div class="hud-brand">
         <div class="reactor-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -99,7 +109,6 @@
         </div>
       </div>
       
-      <!-- INDICADORES EN VIVO -->
       <div class="network-indicators">
         <span class="status-pill" id="pillMqttStatus">
           <span class="beacon" id="mqttDot"></span>
@@ -112,7 +121,6 @@
       </div>
     </div>
     
-    <!-- DERECHA: USUARIO CON BADGE Y ENGRANAJE ⚙️ -->
     <div class="hud-right">
       <div class="user-chip">
         <span class="user-name" id="currentUserName">ADMIN</span>
@@ -127,7 +135,6 @@
         <div class="gear-dropdown" id="gearDropdownMenu" onclick="event.stopPropagation()">
           <div class="dropdown-header">PANEL DE CONTROL TÉCNICO</div>
           
-          <!-- 1. TUS 4 TEMAS VISUALES ORIGINALES -->
           <div class="theme-picker-header" style="font-size:0.65rem; font-weight:800; color:var(--cyan); padding:10px 14px 4px 14px;">🎨 TEMA VISUAL:</div>
           <div class="theme-picker-grid">
             <button class="btn-theme-opt" id="themeBtnClinical" onclick="cambiarTema('clinical')">
@@ -144,7 +151,6 @@
             </button>
           </div>
 
-          <!-- 2. SELECTOR DE PAPEL TAPIZ (CIRCUITOS EN HD + BLANCO CLÍNICO) -->
           <div class="wallpaper-picker-box">
             <label style="font-size:0.65rem; font-weight:800; color:var(--cyan); display:block; margin-bottom:6px;">
               🖼️ PAPEL TAPIZ (CIRCUITOS & HD):
@@ -161,7 +167,6 @@
             </select>
           </div>
 
-          <!-- 3. DESLIZADOR ULTRA-GLASS (0% CRISTAL PURO A 100% SÓLIDO) -->
           <div class="wallpaper-picker-box" style="border-top:none;">
             <div style="display:flex; justify-content:space-between; font-size:0.65rem; font-weight:800; color:var(--cyan); margin-bottom:6px;">
               <span>🎛️ TRANSPARENCIA ULTRA-GLASS:</span>
@@ -193,7 +198,7 @@
     </div>
   </header>
 
-  <!-- CONTENEDOR DESPLEGABLE HORIZONTAL (DOCK PLEGABLE) -->
+  <!-- CONTENEDOR DESPLEGABLE HORIZONTAL (DOCK) -->
   <div class="desktop-dock-container" id="desktopDockContainer">
     <button class="btn-dock-toggle" onclick="toggleHorizontalDock()">
       <span class="dock-arrow" id="dockArrow">◀</span> 🗂️ SECCIONES
@@ -209,8 +214,8 @@
 
   <main class="app-viewport" id="appViewport">
 
-    <!-- ACTIVITY 0: LOGIN -->
-    <section id="act-login" class="activity active">
+    <!-- ACTIVITY 0: LOGIN (SIN CLASE 'ACTIVE' POR DEFECTO PARA EVITAR EL PARPADEO) -->
+    <section id="act-login" class="activity">
       <div class="card auth-box">
         <div class="auth-header">
           <div class="auth-badge">BIO-MEDICAL COMMAND DECK</div>
@@ -251,7 +256,7 @@
       </div>
     </section>
 
-    <!-- ACTIVITY: RECUPERACIÓN DE CONTRASEÑA POR CORREO -->
+    <!-- ACTIVITY: RECUPERACIÓN DE CONTRASEÑA -->
     <section id="act-recovery" class="activity">
       <div class="card auth-box">
         <div style="font-family: 'Orbitron'; font-size: 1.1rem; color: var(--cyan); text-align: center; margin-bottom: 8px;">RECUPERACIÓN DE ACCESO</div>
@@ -289,7 +294,7 @@
       </div>
     </section>
 
-    <!-- ACTIVITY 1: TELEMETRÍA DE FLOTA (ADAPTATIVA) -->
+    <!-- ACTIVITY 1: TELEMETRÍA DE FLOTA -->
     <section id="act-telemetry" class="activity">
       <div class="section-title-bar">
         <div>
@@ -331,7 +336,7 @@
         
         <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
           <span class="status-badge" id="detOnlineBadge"><span class="dot offline"></span> OFFLINE</span>
-          <button class="btn btn-sm btn-warn" id="btnDetResetOdometer" data-rbac="SUPERADMIN" onclick="resetearOdometroHardware()" title="Reiniciar a cero el contador físico de ciclos en el autoclave">🔄 RESET ODÓMETRO</button>
+          <button class="btn btn-sm btn-warn" id="btnDetResetOdometer" data-rbac="SUPERADMIN" onclick="resetearOdometroHardware()" title="Reiniciar a cero el contador físico de ciclos">🔄 RESET ODÓMETRO</button>
           <button class="btn btn-sm btn-danger" id="btnDetDeleteDevice" data-rbac="SUPERADMIN" onclick="solicitarEliminacionActual()">🗑️ ELIMINAR</button>
         </div>
       </div>
@@ -700,7 +705,6 @@
       </div>
 
       <div class="grid-split" style="margin-bottom: 18px;">
-        <!-- FORMULARIO CREAR USUARIO -->
         <div class="card">
           <div style="font-family:'Orbitron'; font-size:0.85rem; color:var(--cyan); font-weight:800; margin-bottom:12px;">+ REGISTRAR NUEVA CUENTA TÉCNICA / CLÍNICA</div>
           <form onsubmit="event.preventDefault(); crearUsuario();">
@@ -728,7 +732,6 @@
           </form>
         </div>
 
-        <!-- TABLA DE USUARIOS Y GESTIÓN DE ESTADO (SUSPENDER / ROL) -->
         <div class="card">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
             <div style="font-family:'Orbitron'; font-size:0.85rem; color:var(--cyan); font-weight:800;">CUENTAS REGISTRADAS & AUTORIZACIÓN</div>
@@ -752,7 +755,7 @@
         </div>
       </div>
 
-      <!-- NUEVA TABLA: AUDITORÍA FORENSE DE CONEXIONES Y LOGS -->
+      <!-- BITÁCORA FORENSE DE CONEXIONES -->
       <div class="card">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
           <div>
@@ -818,7 +821,7 @@
     }
   </script>
 
-  <!-- Script Principal con Cache-Busting sincronizado a versión 26 -->
-  <script src="app.js?v=26"></script>
+  <!-- Script Principal con Cache-Busting v27 -->
+  <script src="app.js?v=27"></script>
 </body>
 </html>
