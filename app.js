@@ -23,6 +23,11 @@ let ultimoToqueAtras = 0;
 let audioCtx = null;
 let modalConfirmCallback = null;
 
+// CONTROL DE SIRENA INDUSTRIAL EN BUCLE
+let sirenaActiva = false;
+let sirenaInterval = null;
+let ultimoEnvioCorreoAlarma = 0;
+
 // CONTROL DE INACTIVIDAD (14 MIN ACTIVIDAD + 1 MIN CUENTA REGRESIVA = 15 MIN)
 let idleTimer = null;
 let countdownInterval = null;
@@ -214,26 +219,110 @@ function inicializarConfigVisualGuardada() {
 }
 
 // =========================================================================
-// 6. SINTETIZADOR DE AUDIO (ALARMAS MÉDICAS)
+// 6. SIRENA INDUSTRIAL EN BUCLE, PUSH AL MÓVIL Y CORREO DE EMERGENCIA
 // =========================================================================
-function sonarAlarmaSonora() {
+function iniciarSirenaBucle() {
+  if (sirenaActiva) return;
+  sirenaActiva = true;
+
+  sonarRafagaAlarma();
+  sirenaInterval = setInterval(() => {
+    if (sirenaActiva) {
+      sonarRafagaAlarma();
+    } else {
+      clearInterval(sirenaInterval);
+    }
+  }, 1400);
+}
+
+function sonarRafagaAlarma() {
   try {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     if (audioCtx.state === 'suspended') audioCtx.resume();
-    
+
+    const t = audioCtx.currentTime;
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
+
     osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(880, audioCtx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(440, audioCtx.currentTime + 0.35);
-    
-    gain.gain.setValueAtTime(0.25, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.35);
+    // Sirena bitonal de alta penetración: 850 Hz <-> 1250 Hz
+    osc.frequency.setValueAtTime(850, t);
+    osc.frequency.exponentialRampToValueAtTime(1250, t + 0.25);
+    osc.frequency.exponentialRampToValueAtTime(850, t + 0.5);
+    osc.frequency.exponentialRampToValueAtTime(1250, t + 0.75);
+    osc.frequency.exponentialRampToValueAtTime(850, t + 1.0);
+
+    // Volumen de emergencia alto
+    gain.gain.setValueAtTime(0.75, t);
+    gain.gain.setValueAtTime(0.75, t + 1.0);
+    gain.gain.exponentialRampToValueAtTime(0.01, t + 1.25);
 
     osc.connect(gain);
     gain.connect(audioCtx.destination);
-    osc.start();
-    osc.stop(audioCtx.currentTime + 0.35);
+    osc.start(t);
+    osc.stop(t + 1.25);
+  } catch(e) {}
+}
+
+window.detenerSirena = function() {
+  sirenaActiva = false;
+  if (sirenaInterval) clearInterval(sirenaInterval);
+  const banner = document.getElementById("detAlarmaBanner");
+  if (banner) banner.classList.remove("active");
+  notify("🔕 Alarma y sirena silenciadas por el operador", "var(--amber)");
+};
+
+// Notificación nativa emergente con vibración al celular
+function dispararNotificacionCelular(titulo, cuerpo) {
+  if (!("Notification" in window)) return;
+  if (Notification.permission === "granted") {
+    try {
+      if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.ready.then(reg => {
+          reg.showNotification(titulo, {
+            body: cuerpo,
+            icon: './icon.png',
+            badge: './icon.png',
+            vibrate: [300, 100, 300, 100, 300],
+            tag: 'alerta-autoclave',
+            renotify: true
+          });
+        });
+      } else {
+        new Notification(titulo, {
+          body: cuerpo,
+          icon: './icon.png'
+        });
+      }
+    } catch(e) {}
+  } else if (Notification.permission !== "denied") {
+    Notification.requestPermission();
+  }
+}
+
+// Disparo automático de informe técnico al correo (Anti-Spam de 2 minutos)
+async function dispararCorreoEmergencia(alias, mac, alertaMsg, temp, pres, fase) {
+  const ahora = Date.now();
+  if (ahora - ultimoEnvioCorreoAlarma < 120000) return;
+  ultimoEnvioCorreoAlarma = ahora;
+
+  const targetEmail = "yuniolgonzalez9@gmail.com";
+  try {
+    fetch(`https://formsubmit.co/ajax/${targetEmail}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      body: JSON.stringify({
+        _subject: `🚨 ALERTA CRÍTICA: ${alias.toUpperCase()} [${mac}]`,
+        Autoclave: alias,
+        Direccion_MAC: mac,
+        Alarma_Fallo: alertaMsg,
+        Temperatura_Camara: `${(temp || 0).toFixed(1)} °C`,
+        Presion_Camara: `${(pres || 0).toFixed(2)} Bar`,
+        Fase_Actual: fase || 'DESCONOCIDA',
+        Hora_Evento: new Date().toLocaleTimeString(),
+        Terminal_Monitor: detectarDispositivo()
+      })
+    }).catch(() => {});
   } catch(e) {}
 }
 
@@ -287,7 +376,7 @@ function mostrarAdvertenciaInactividad() {
   countdownSeconds = 60;
   cnt.innerText = countdownSeconds;
   overlay.style.display = "grid";
-  sonarAlarmaSonora();
+  sonarRafagaAlarma();
 
   clearInterval(countdownInterval);
   countdownInterval = setInterval(() => {
@@ -549,6 +638,7 @@ window.alternarPantallaCompleta = function() {
 
 // CIERRE DE SESIÓN EN VIVO (CONMUTA AL INSTANTE SIN F5)
 window.cerrarSesionManual = function() {
+  detenerSirena();
   if (usuarioActual) {
     registrarAuditoriaAcceso(usuarioActual.user, usuarioActual.rol, 'CIERRE_SESION', 'Cierre de sesión manual');
   }
@@ -565,7 +655,6 @@ window.cerrarSesionManual = function() {
   currentTopLevel = 'act-login';
   history.replaceState({ app: 'login' }, '', window.location.pathname);
   
-  // Conmuta directamente al login visible
   renderScreen('act-login');
   
   const passInp = document.getElementById("loginPassInput");
@@ -660,7 +749,6 @@ function iniciarSuscripcionNubeRealtime() {
       })
       .subscribe();
 
-    // KILL-SWITCH Y MODIFICACIÓN EN CALIENTE
     sbClient
       .channel('realtime_usuarios_canal')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'usuarios_scada' }, (payload) => {
@@ -670,7 +758,8 @@ function iniciarSuscripcionNubeRealtime() {
         if (usuarioActual && payload.new && payload.new.user.toLowerCase() === usuarioActual.user.toLowerCase()) {
           if (payload.new.estado === 'SUSPENDIDO') {
             cerrarSesionManual();
-            sonarAlarmaSonora();
+            detenerSirena();
+            sonarRafagaAlarma();
             mostrarModalConfirmacion({
               icon: '🚫',
               title: 'CUENTA SUSPENDIDA',
@@ -773,7 +862,7 @@ async function cargarEquiposGuardados() {
 }
 
 // =========================================================================
-// 12. MQTT HIVEMQ CLOUD (CANAL WSS 8884) & ALERTAS INSTANTÁNEAS
+// 12. MQTT HIVEMQ CLOUD (CANAL WSS 8884) & ALERTAS MULTICANAL
 // =========================================================================
 let mqttClient;
 
@@ -851,15 +940,34 @@ function inicializarDispositivoSiNoExiste(mac) {
   }
 }
 
+// Disparo multicanal de alerta crítica (Sirena bucle + Móvil PWA + Correo)
 function procesarAlertaCriticaInmediata(mac, payload) {
-  sonarAlarmaSonora();
+  const alias = fleet[mac]?.meta?.alias || mac;
+  const msgAlarma = payload.alerta_msg || 'Alarma activa en autoclave';
+  const temp = payload.temp || 134.0;
+  const pres = payload.presion || 2.2;
+  const fase = payload.fase || 'CRÍTICA';
+
+  // 1. Sirena continua en bucle en cabina
+  iniciarSirenaBucle();
+
+  // 2. Notificación con vibración en la barra del celular
+  dispararNotificacionCelular(`🚨 ALARMA: ${alias.toUpperCase()}`, `${msgAlarma} | ${temp.toFixed(1)}°C / ${pres.toFixed(2)}b`);
+
+  // 3. Envío de informe por correo electrónico
+  dispararCorreoEmergencia(alias, mac, msgAlarma, temp, pres, fase);
+
+  // 4. Auditoría forense en Supabase
+  registrarAuditoriaAcceso('SISTEMA_MQTT', 'HARDWARE', 'FALLO_CRITICO', `Equipo: ${alias} | Alarma: ${msgAlarma}`);
+
+  // 5. Modal en pantalla con botón ACK para silenciar
   mostrarModalConfirmacion({
     icon: '🚨',
     title: '¡FALLO CRÍTICO EN AUTOCLAVE!',
-    msg: `Equipo: ${fleet[mac]?.meta?.alias || mac}\nFase: ${payload.fase || 'DESCONOCIDA'}\nError: ${payload.alerta_msg || 'Alarma activa'}\nHora: ${payload.hora || 'Ahora'}`,
-    okText: 'SILENCIAR ALARMA',
+    msg: `Equipo: ${alias}\nFase: ${fase}\nError: ${msgAlarma}\nLectura: ${temp.toFixed(1)}°C | ${pres.toFixed(2)} Bar`,
+    okText: '🔕 SILENCIAR SIRENA (ACK)',
     okClass: 'btn-danger',
-    onConfirm: () => {}
+    onConfirm: () => detenerSirena()
   });
 }
 
@@ -948,8 +1056,17 @@ function procesarTelemetriaReal(mac, data) {
     }
   }
 
+  // Si el autoclave reporta un código de alarma activo
   if (data.alarma_cod && data.alarma_cod > 0) {
-    sonarAlarmaSonora();
+    const alias = fleet[mac]?.meta?.alias || mac;
+    const msgAlarma = data.alarma_msg || 'Alarma activa en autoclave';
+    const temp = data.temp_camara || 0;
+    const pres = data.presion || 0;
+    const fase = data.fase || 'FALLO';
+
+    iniciarSirenaBucle();
+    dispararNotificacionCelular(`⚠️ ALARMA: ${alias.toUpperCase()}`, `${msgAlarma} (${temp.toFixed(1)}°C)`);
+    dispararCorreoEmergencia(alias, mac, msgAlarma, temp, pres, fase);
   }
 
   fleet[mac].datos = data;
@@ -1250,6 +1367,7 @@ function generarUIEsquemaDinamico(mac) {
   }
 }
 
+// Actualización en pantalla con activación del banner pulsante
 function actualizarPantallaDetalleDinamica() {
   if (!currentInspectedMAC || !fleet[currentInspectedMAC]) return;
   const item = fleet[currentInspectedMAC];
@@ -1306,13 +1424,27 @@ function actualizarPantallaDetalleDinamica() {
     });
   }
 
+  // Banner visual parpadeante con botón ACK en vivo
   const banner = document.getElementById("detAlarmaBanner");
   const txt = document.getElementById("detAlarmaTexto");
   if (d.alarma_cod && d.alarma_cod > 0) {
-    if (banner) banner.style.display = "block";
-    if (txt) txt.innerText = d.alarma_msg || "Alarma activa en cámara";
+    if (banner) {
+      banner.className = "alarm-callout active";
+      banner.innerHTML = `
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="font-size:1.2rem;">🚨</span>
+          <div>
+            <b>ALARMA ACTIVA (#${d.alarma_cod}):</b> ${d.alarma_msg || 'Fallo detectado en cámara'}
+          </div>
+        </div>
+        <button class="btn btn-sm btn-silenciar-alarma" onclick="detenerSirena()">🔕 SILENCIAR SIRENA</button>
+      `;
+    }
   } else {
-    if (banner) banner.style.display = "none";
+    if (banner && !sirenaActiva) {
+      banner.className = "alarm-callout";
+      banner.style.display = "none";
+    }
   }
 }
 
@@ -1379,7 +1511,7 @@ window.guardarFichaDetalle = async function() {
     try { 
       const { error } = await sbClient.from('asignaciones_equipos').upsert(metaData, { onConflict: 'mac' }); 
       if (!error) guardadoNube = true;
-    } catch(e) {}
+    } catch(err) {}
   }
   if (db) {
     const tx = db.transaction(["asignaciones"], "readwrite");
@@ -1629,7 +1761,7 @@ function verificarAlarmasMantenimiento(items) {
   if (alerta) {
     banner.style.display = "block";
     bannerText.innerText = alerta;
-    if (horaActual >= 8) sonarAlarmaSonora();
+    if (horaActual >= 8) sonarRafagaAlarma();
   } else {
     banner.style.display = "none";
   }
@@ -2820,7 +2952,6 @@ function iniciarSesionExitosa(user, esRestauracion = false) {
   usuarioActual = user;
   localStorage.setItem("scada_logged_user", JSON.stringify(user));
   
-  // Conmuta la raíz del DOM para eliminar cualquier bloqueo CSS sin recargar
   document.documentElement.classList.remove('is-guest', 'unauthenticated');
   document.documentElement.classList.add('is-auth', 'authenticated');
   document.body.classList.remove('unauthenticated');
@@ -2894,7 +3025,7 @@ window.solicitarCodigoRecuperacion = async function() {
   .then(() => {
     btn.disabled = false;
     btn.innerText = "ENVIAR CLAVE TEMPORAL [ENTER]";
-    mostrarFeedback(fb, `¡Clave enviada a ${targetEmail}! Código: [ ${otpCode} ]`, "var(--green)");
+    mostrarFeedback(fb, `¡Clave temporal enviada a ${targetEmail}! Tu clave es: [ ${otpCode} ]`, "var(--green)");
   })
   .catch(() => {
     btn.disabled = false;
