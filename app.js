@@ -8,6 +8,11 @@ const sbClient = (window.supabase && window.supabase.createClient)
   ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY) 
   : null;
 
+// CREDENCIALES TELEGRAM OFICIALES PARA ALERTAS CRÍTICAS
+const TELEGRAM_BOT_TOKEN = "8902369071:AAFuFn3R1b6k9_y_2w3XKPc92npVRUKee0s";
+const TELEGRAM_CHAT_ID = "685508990";
+let ultimoEnvioTelegram = 0;
+
 // =========================================================================
 // 2. ESTADO GLOBAL, SESIÓN SÍNCRONA Y VARIABLES
 // =========================================================================
@@ -219,7 +224,7 @@ function inicializarConfigVisualGuardada() {
 }
 
 // =========================================================================
-// 6. SIRENA INDUSTRIAL EN BUCLE, PUSH AL MÓVIL Y CORREO DE EMERGENCIA
+// 6. SIRENA INDUSTRIAL, NOTIFICACIÓN MÓVIL, CORREO Y BOT TELEGRAM
 // =========================================================================
 function iniciarSirenaBucle() {
   if (sirenaActiva) return;
@@ -268,8 +273,11 @@ window.detenerSirena = function() {
   sirenaActiva = false;
   if (sirenaInterval) clearInterval(sirenaInterval);
   const banner = document.getElementById("detAlarmaBanner");
-  if (banner) banner.classList.remove("active");
-  notify("🔕 Alarma y sirena silenciadas por el operador", "var(--amber)");
+  if (banner) {
+    banner.classList.remove("active");
+    banner.style.display = "none";
+  }
+  notify("🔕 Alarma y sirena silenciadas", "var(--amber)");
 };
 
 // Notificación nativa emergente con vibración al celular
@@ -322,6 +330,45 @@ async function dispararCorreoEmergencia(alias, mac, alertaMsg, temp, pres, fase)
         Hora_Evento: new Date().toLocaleTimeString(),
         Terminal_Monitor: detectarDispositivo()
       })
+    }).catch(() => {});
+  } catch(e) {}
+}
+
+// ENVÍO DE ALERTA INTERACTIVA A TELEGRAM CON BOTONES
+async function enviarAlertaTelegram(alias, mac, alertaMsg, temp, pres, fase) {
+  const ahora = Date.now();
+  if (ahora - ultimoEnvioTelegram < 45000) return; // Cooldown de 45 segundos
+  ultimoEnvioTelegram = ahora;
+
+  const texto = `🚨 *¡ALARMA CRÍTICA EN AUTOCLAVE!* 🚨\n\n` +
+    `🏥 *Equipo:* ${alias.toUpperCase()}\n` +
+    `📟 *MAC:* \`${mac}\`\n` +
+    `⚠️ *Alarma:* *${alertaMsg}*\n` +
+    `🌡️ *Temperatura:* ${(temp || 0).toFixed(1)} °C\n` +
+    `💨 *Presión:* ${(pres || 0).toFixed(2)} Bar\n` +
+    `⏱️ *Fase:* ${fase || 'CRÍTICA'}\n` +
+    `🕒 *Hora:* ${new Date().toLocaleTimeString()}\n\n` +
+    `👇 *Presiona para silenciar o actuar de inmediato:*`;
+
+  const payload = {
+    chat_id: TELEGRAM_CHAT_ID,
+    text: texto,
+    parse_mode: "Markdown",
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: "🔕 🆗 CONFIRMAR / SILENCIAR", callback_data: `ACK:${mac}` },
+          { text: "🛑 PARO EMERGENCIA", callback_data: `PARO:${mac}` }
+        ]
+      ]
+    }
+  };
+
+  try {
+    fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
     }).catch(() => {});
   } catch(e) {}
 }
@@ -688,7 +735,7 @@ window.solicitarLimpiezaCacheLocal = function() {
 };
 
 // =========================================================================
-// 11. BASE DE DATOS LOCAL Y TIEMPO REAL NUBE (KILL-SWITCH EN VIVO)
+// 11. BASE DE DATOS LOCAL, TELEGRAM ACK Y KILL-SWITCH EN VIVO
 // =========================================================================
 let db = null;
 const fleet = {};
@@ -749,6 +796,7 @@ function iniciarSuscripcionNubeRealtime() {
       })
       .subscribe();
 
+    // KILL-SWITCH Y CONTROL DE JERARQUÍA EN CALIENTE
     sbClient
       .channel('realtime_usuarios_canal')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'usuarios_scada' }, (payload) => {
@@ -782,10 +830,23 @@ function iniciarSuscripcionNubeRealtime() {
       })
       .subscribe();
 
+    // RECONOCIMIENTO REMOTO (ACK) DESDE TELEGRAM EN VIVO
     sbClient
       .channel('realtime_auditoria_canal')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'auditoria_accesos' }, () => {
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'auditoria_accesos' }, (payload) => {
         if (currentActivity === 'act-users') cargarBitacoraAccesos();
+
+        if (payload.new) {
+          if (payload.new.evento === 'ACK_TELEGRAM') {
+            detenerSirena();
+            sonarRafagaAlarma();
+            notify(`✅ Alarma silenciada desde Telegram (${payload.new.usuario})`, "var(--green)");
+          } else if (payload.new.evento === 'PARO_TELEGRAM') {
+            detenerSirena();
+            sonarRafagaAlarma();
+            notify(`🛑 PARO DE EMERGENCIA aplicado desde Telegram (${payload.new.usuario})`, "var(--red)");
+          }
+        }
       })
       .subscribe();
 
@@ -862,7 +923,7 @@ async function cargarEquiposGuardados() {
 }
 
 // =========================================================================
-// 12. MQTT HIVEMQ CLOUD (CANAL WSS 8884) & ALERTAS MULTICANAL
+// 12. MQTT HIVEMQ CLOUD (CANAL WSS 8884) & DISPARO DE TELEGRAM
 // =========================================================================
 let mqttClient;
 
@@ -940,7 +1001,7 @@ function inicializarDispositivoSiNoExiste(mac) {
   }
 }
 
-// Disparo multicanal de alerta crítica (Sirena bucle + Móvil PWA + Correo)
+// Disparo multicanal de alerta crítica (Sirena bucle + Telegram + Celular PWA + Correo)
 function procesarAlertaCriticaInmediata(mac, payload) {
   const alias = fleet[mac]?.meta?.alias || mac;
   const msgAlarma = payload.alerta_msg || 'Alarma activa en autoclave';
@@ -951,16 +1012,19 @@ function procesarAlertaCriticaInmediata(mac, payload) {
   // 1. Sirena continua en bucle en cabina
   iniciarSirenaBucle();
 
-  // 2. Notificación con vibración en la barra del celular
+  // 2. Mensaje interactivo a Telegram con botones de acción
+  enviarAlertaTelegram(alias, mac, msgAlarma, temp, pres, fase);
+
+  // 3. Notificación nativa con vibración al celular
   dispararNotificacionCelular(`🚨 ALARMA: ${alias.toUpperCase()}`, `${msgAlarma} | ${temp.toFixed(1)}°C / ${pres.toFixed(2)}b`);
 
-  // 3. Envío de informe por correo electrónico
+  // 4. Envío de informe por correo electrónico
   dispararCorreoEmergencia(alias, mac, msgAlarma, temp, pres, fase);
 
-  // 4. Auditoría forense en Supabase
+  // 5. Auditoría forense en Supabase
   registrarAuditoriaAcceso('SISTEMA_MQTT', 'HARDWARE', 'FALLO_CRITICO', `Equipo: ${alias} | Alarma: ${msgAlarma}`);
 
-  // 5. Modal en pantalla con botón ACK para silenciar
+  // 6. Modal en pantalla con botón ACK para silenciar
   mostrarModalConfirmacion({
     icon: '🚨',
     title: '¡FALLO CRÍTICO EN AUTOCLAVE!',
@@ -1065,6 +1129,7 @@ function procesarTelemetriaReal(mac, data) {
     const fase = data.fase || 'FALLO';
 
     iniciarSirenaBucle();
+    enviarAlertaTelegram(alias, mac, msgAlarma, temp, pres, fase);
     dispararNotificacionCelular(`⚠️ ALARMA: ${alias.toUpperCase()}`, `${msgAlarma} (${temp.toFixed(1)}°C)`);
     dispararCorreoEmergencia(alias, mac, msgAlarma, temp, pres, fase);
   }
@@ -1426,7 +1491,6 @@ function actualizarPantallaDetalleDinamica() {
 
   // Banner visual parpadeante con botón ACK en vivo
   const banner = document.getElementById("detAlarmaBanner");
-  const txt = document.getElementById("detAlarmaTexto");
   if (d.alarma_cod && d.alarma_cod > 0) {
     if (banner) {
       banner.className = "alarm-callout active";
@@ -2728,8 +2792,8 @@ async function cargarBitacoraAccesos() {
     if (!error && data && data.length) {
       tbody.innerHTML = data.map(log => {
         let colorStyle = 'var(--cyan)';
-        if (log.evento === 'LOGIN_EXITOSO') colorStyle = 'var(--green)';
-        else if (log.evento === 'CLAVE_INCORRECTA' || log.evento === 'CUENTA_SUSPENDIDA') colorStyle = 'var(--red)';
+        if (log.evento === 'LOGIN_EXITOSO' || log.evento === 'ACK_TELEGRAM') colorStyle = 'var(--green)';
+        else if (log.evento === 'CLAVE_INCORRECTA' || log.evento === 'CUENTA_SUSPENDIDA' || log.evento === 'PARO_TELEGRAM') colorStyle = 'var(--red)';
         else if (log.evento === 'TIMEOUT_INACTIVIDAD') colorStyle = 'var(--amber)';
 
         return `
@@ -3080,3 +3144,4 @@ window.addEventListener("load", () => {
   initDB();
   initMQTT();
 });
+
