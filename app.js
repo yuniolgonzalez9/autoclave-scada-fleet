@@ -9,7 +9,7 @@ const sbClient = (window.supabase && window.supabase.createClient)
   : null;
 
 // CREDENCIALES TELEGRAM OFICIALES PARA ALERTAS CRÍTICAS
-const TELEGRAM_BOT_TOKEN = "8902369071:AAFuFn3R1b6k9_y_2w3XKPc92npVRUKee0s";
+const TELEGRAM_BOT_TOKEN = "8902369071:AAFuFn3R1b6k9_y_2w3XKPc92npVRUkee0s";
 const TELEGRAM_CHAT_ID = "685508990";
 let ultimoEnvioTelegram = 0;
 
