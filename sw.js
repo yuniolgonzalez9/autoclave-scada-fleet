@@ -1,13 +1,15 @@
 // =========================================================================
 // SCADA AUTOCLAVE // SERVICE WORKER (NETWORK-FIRST & AUTO-PURGA DE CACHÉ)
 // =========================================================================
-const CACHE_VERSION = 'scada-cache-v25-laser';
+const CACHE_VERSION = 'scada-cache-v26-enterprise';
 
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
   './style.css',
+  './style.css?v=26',
   './app.js',
+  './app.js?v=26',
   './manifest.json',
   './icon.png'
 ];
@@ -24,7 +26,7 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// 2. Activación: Purga obligatoria de cachés viejas (elimina v18 y anteriores)
+// 2. Activación: Purga obligatoria de cachés viejas (elimina v25 y anteriores)
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
@@ -42,7 +44,7 @@ self.addEventListener('activate', (event) => {
 
 // 3. Estrategia Network-First: Siempre consulta la red en caliente primero
 self.addEventListener('fetch', (event) => {
-  // Ignorar peticiones a Supabase, HiveMQ o APIs externas
+  // Ignorar peticiones a Supabase, HiveMQ o APIs externas en tiempo real
   if (
     event.request.url.includes('supabase.co') ||
     event.request.url.includes('hivemq.cloud') ||
@@ -64,7 +66,7 @@ self.addEventListener('fetch', (event) => {
         return networkResponse;
       })
       .catch(() => {
-        // Si no hay red en absoluto, servir desde caché
+        // Si no hay red en absoluto, servir desde caché local
         return caches.match(event.request);
       })
   );
