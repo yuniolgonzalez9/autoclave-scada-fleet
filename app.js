@@ -1,4 +1,3 @@
-
 // =========================================================================
 // 1. CONEXIÓN CLOUD SUPABASE & REALTIME (NUBE CENTRAL 24/7 EN VERCEL)
 // =========================================================================
@@ -24,7 +23,7 @@ let ultimoToqueAtras = 0;
 let audioCtx = null;
 let modalConfirmCallback = null;
 
-// CONTROL DE INACTIVIDAD INTELIGENTE (14 MIN ACTIVIDAD + 1 MIN CUENTA REGRESIVA = 15 MIN)
+// CONTROL DE INACTIVIDAD (14 MIN ACTIVIDAD + 1 MIN CUENTA REGRESIVA = 15 MIN)
 let idleTimer = null;
 let countdownInterval = null;
 const IDLE_LIMIT_MS = 14 * 60 * 1000;
@@ -82,7 +81,7 @@ async function registrarAuditoriaAcceso(usuario, rol, evento, detalles = '') {
   }
 }
 
-// Utilidad clínica para formatear fechas limpias
+// Formateo de fechas
 function formatearFechaClinica(fechaRaw) {
   if (!fechaRaw) return new Date().toLocaleDateString();
   const d = new Date(fechaRaw);
@@ -421,6 +420,7 @@ window.addEventListener('popstate', () => {
   }
 });
 
+// CONMUTACIÓN DE ESTADOS INSTANTÁNEA (SIN PANTALLAS EN BLANCO Y SIN F5)
 function renderScreen(screenId) {
   if (!estaAutenticado() && screenId !== 'act-login' && screenId !== 'act-recovery') {
     screenId = 'act-login';
@@ -430,9 +430,13 @@ function renderScreen(screenId) {
   const esPublico = (screenId === 'act-login' || screenId === 'act-recovery');
 
   if (esPublico) {
+    document.documentElement.classList.remove('is-auth', 'authenticated');
+    document.documentElement.classList.add('is-guest', 'unauthenticated');
     document.body.classList.remove('authenticated');
     document.body.classList.add('unauthenticated');
   } else {
+    document.documentElement.classList.remove('is-guest', 'unauthenticated');
+    document.documentElement.classList.add('is-auth', 'authenticated');
     document.body.classList.remove('unauthenticated');
     document.body.classList.add('authenticated');
   }
@@ -543,6 +547,7 @@ window.alternarPantallaCompleta = function() {
   }
 };
 
+// CIERRE DE SESIÓN EN VIVO (CONMUTA AL INSTANTE SIN F5)
 window.cerrarSesionManual = function() {
   if (usuarioActual) {
     registrarAuditoriaAcceso(usuarioActual.user, usuarioActual.rol, 'CIERRE_SESION', 'Cierre de sesión manual');
@@ -556,20 +561,15 @@ window.cerrarSesionManual = function() {
   localStorage.removeItem("scada_logged_user");
   localStorage.removeItem("scada_nav_route_v5");
 
-  document.body.classList.remove('authenticated');
-  document.body.classList.add('unauthenticated');
-
-  const topBar = document.getElementById("topAppBar");
-  const dock = document.getElementById("desktopDockContainer");
-  const passInp = document.getElementById("loginPassInput");
-  if (topBar) topBar.style.display = "none";
-  if (dock) dock.style.display = "none";
-  if (passInp) passInp.value = "";
-
   activityStack = ['act-login'];
   currentTopLevel = 'act-login';
   history.replaceState({ app: 'login' }, '', window.location.pathname);
+  
+  // Conmuta directamente al login visible
   renderScreen('act-login');
+  
+  const passInp = document.getElementById("loginPassInput");
+  if (passInp) passInp.value = "";
   cargarListaUsuariosLogin();
   notify("🔒 Sesión finalizada con seguridad", "var(--red)");
 };
@@ -660,7 +660,7 @@ function iniciarSuscripcionNubeRealtime() {
       })
       .subscribe();
 
-    // KILL-SWITCH Y MODIFICACIÓN EN CALIENTE DE ROLES / ESTADO
+    // KILL-SWITCH Y MODIFICACIÓN EN CALIENTE
     sbClient
       .channel('realtime_usuarios_canal')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'usuarios_scada' }, (payload) => {
@@ -668,7 +668,6 @@ function iniciarSuscripcionNubeRealtime() {
         cargarListaUsuariosLogin();
 
         if (usuarioActual && payload.new && payload.new.user.toLowerCase() === usuarioActual.user.toLowerCase()) {
-          // Si el admin suspende la cuenta en tiempo real
           if (payload.new.estado === 'SUSPENDIDO') {
             cerrarSesionManual();
             sonarAlarmaSonora();
@@ -682,7 +681,6 @@ function iniciarSuscripcionNubeRealtime() {
             });
             return;
           }
-          // Si cambian su jerarquía/rol en caliente
           if (payload.new.rol !== usuarioActual.rol) {
             usuarioActual.rol = payload.new.rol;
             localStorage.setItem("scada_logged_user", JSON.stringify(usuarioActual));
@@ -1381,7 +1379,7 @@ window.guardarFichaDetalle = async function() {
     try { 
       const { error } = await sbClient.from('asignaciones_equipos').upsert(metaData, { onConflict: 'mac' }); 
       if (!error) guardadoNube = true;
-    } catch(err) {}
+    } catch(e) {}
   }
   if (db) {
     const tx = db.transaction(["asignaciones"], "readwrite");
@@ -1637,7 +1635,7 @@ function verificarAlarmasMantenimiento(items) {
   }
 }
 
-// Exportar mantenimientos a Excel
+// Exportar a Excel
 window.exportarMantenimientosExcel = function() {
   if (!currentInspectedMAC) return notify("Selecciona un autoclave primero", "var(--amber)");
   const item = fleet[currentInspectedMAC];
@@ -2583,7 +2581,7 @@ window.cambiarRolUsuario = async function(user, rolActual) {
   });
 };
 
-// Cargar la bitácora forense de accesos
+// Cargar bitácora forense de accesos
 async function cargarBitacoraAccesos() {
   const tbody = document.getElementById("tablaBitacoraAccesosBody");
   if (!tbody || !sbClient) return;
@@ -2738,7 +2736,7 @@ window.seleccionarUsuarioRegistrado = function(val) {
   }
 };
 
-// AUTENTICACIÓN DIRECTA, VALIDACIÓN DE ESTADO Y REGISTRO FORENSE
+// AUTENTICACIÓN DIRECTA, VALIDACIÓN DE ESTADO Y ENTRADA SIN F5
 window.procesarInicioSesion = async function() {
   const u = document.getElementById("loginUserInput").value.trim().toLowerCase();
   const p = document.getElementById("loginPassInput").value.trim();
@@ -2761,15 +2759,12 @@ window.procesarInicioSesion = async function() {
       const { data, error } = await sbClient.from('usuarios_scada').select('*').eq('user', u).maybeSingle();
       
       if (!error && data) {
-        // Validación de Estado (Cuenta Suspendida)
         if (data.estado === 'SUSPENDIDO') {
           await registrarAuditoriaAcceso(u, data.rol || 'OPERADOR', 'CUENTA_SUSPENDIDA', 'Intento de acceso bloqueado');
           return mostrarFeedback(fb, "⛔ Cuenta suspendida por la administración.", "var(--red)");
         }
 
-        // Validación de Contraseña
         if (data.pass === p) {
-          // Actualización de último acceso y terminal
           await sbClient.from('usuarios_scada').update({
             ultimo_acceso: new Date().toISOString(),
             dispositivo_reciente: dispositivoActual
@@ -2820,10 +2815,17 @@ window.procesarInicioSesion = async function() {
   mostrarFeedback(fb, "Contraseña incorrecta.", "var(--red)");
 };
 
+// ENTRADA INMEDIATA: CONMUTA EL HTML Y EL BODY AL INSTANTE
 function iniciarSesionExitosa(user, esRestauracion = false) {
   usuarioActual = user;
   localStorage.setItem("scada_logged_user", JSON.stringify(user));
   
+  // Conmuta la raíz del DOM para eliminar cualquier bloqueo CSS sin recargar
+  document.documentElement.classList.remove('is-guest', 'unauthenticated');
+  document.documentElement.classList.add('is-auth', 'authenticated');
+  document.body.classList.remove('unauthenticated');
+  document.body.classList.add('authenticated');
+
   const un = document.getElementById("currentUserName");
   if (un) un.innerText = user.user.toUpperCase();
   const b = document.getElementById("currentUserRoleBadge");
@@ -2892,7 +2894,7 @@ window.solicitarCodigoRecuperacion = async function() {
   .then(() => {
     btn.disabled = false;
     btn.innerText = "ENVIAR CLAVE TEMPORAL [ENTER]";
-    mostrarFeedback(fb, `¡Clave temporal enviada a ${targetEmail}! Tu clave es: [ ${otpCode} ]`, "var(--green)");
+    mostrarFeedback(fb, `¡Clave enviada a ${targetEmail}! Código: [ ${otpCode} ]`, "var(--green)");
   })
   .catch(() => {
     btn.disabled = false;
@@ -2947,4 +2949,3 @@ window.addEventListener("load", () => {
   initDB();
   initMQTT();
 });
-
