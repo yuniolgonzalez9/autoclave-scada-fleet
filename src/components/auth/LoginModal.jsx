@@ -10,16 +10,19 @@ import {
   UserPlus, 
   CheckCircle2,
   Clock,
-  Ban
+  Ban,
+  Mail,
+  HelpCircle,
+  ArrowLeft
 } from 'lucide-react';
 
 export default function LoginModal() {
-  const { loginWithCredentials, requestUserAccess } = useAuth();
+  const { loginWithCredentials, requestUserAccess, requestPasswordRecovery } = useAuth();
   
-  // Vista: 'login' o 'solicitud'
+  // Vista activa: 'login' | 'solicitud' | 'recovery'
   const [mode, setMode] = useState('login');
 
-  // Estados de inicio de sesión
+  // Estados de login
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   
@@ -30,16 +33,24 @@ export default function LoginModal() {
   const [reqDepto, setReqDepto] = useState('Central de Esterilización (CEYE/RUMED)');
   const [reqPassword, setReqPassword] = useState('');
 
+  // Estados para recuperación
+  const [recoveryEmail, setRecoveryEmail] = useState('');
+
   const [errorMsg, setErrorMsg] = useState('');
   const [statusType, setStatusType] = useState(null);
   const [successMsg, setSuccessMsg] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
+  const resetMessages = () => {
+    setErrorMsg('');
+    setSuccessMsg('');
+    setStatusType(null);
+  };
+
   // Iniciar Sesión Real
   const handleLogin = async (e) => {
     e.preventDefault();
-    setErrorMsg('');
-    setStatusType(null);
+    resetMessages();
     setSubmitting(true);
 
     try {
@@ -61,11 +72,10 @@ export default function LoginModal() {
     }
   };
 
-  // Enviar Solicitud a la Administración
+  // Solicitar Nuevo Acceso
   const handleRegisterRequest = async (e) => {
     e.preventDefault();
-    setErrorMsg('');
-    setSuccessMsg('');
+    resetMessages();
     setSubmitting(true);
 
     try {
@@ -76,13 +86,30 @@ export default function LoginModal() {
         departamento: reqDepto,
         password: reqPassword
       });
-      setSuccessMsg('¡Solicitud enviada con éxito! Su cuenta está en revisión. El Administrador la autorizará pronto.');
+      setSuccessMsg('¡Solicitud enviada con éxito! Su cuenta está en revisión. La Dirección Biomédica ha sido notificada.');
       setReqNombre('');
       setReqUsuario('');
       setReqEmail('');
       setReqPassword('');
     } catch (err) {
       setErrorMsg(err.message || 'Error al procesar la solicitud.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Recuperar Contraseña / Datos
+  const handleRecovery = async (e) => {
+    e.preventDefault();
+    resetMessages();
+    setSubmitting(true);
+
+    try {
+      const result = await requestPasswordRecovery(recoveryEmail);
+      setSuccessMsg(result.message);
+      setRecoveryEmail('');
+    } catch (err) {
+      setErrorMsg(err.message || 'Error al procesar la solicitud de recuperación.');
     } finally {
       setSubmitting(false);
     }
@@ -132,13 +159,13 @@ export default function LoginModal() {
           </div>
         )}
 
-        {/* MODO 1: INICIAR SESIÓN REAL */}
-        {mode === 'login' ? (
+        {/* VISTA 1: INICIO DE SESIÓN */}
+        {mode === 'login' && (
           <div>
             <form onSubmit={handleLogin} className="space-y-4">
               <div>
                 <label className="block text-xs font-mono text-slate-300 mb-1.5 flex justify-between">
-                  <span>Usuario o Correo Institucional</span>
+                  <span>Usuario o Correo Registrado</span>
                   <span className="text-[10px] text-cyan-400 font-semibold">Acceso Autorizado</span>
                 </label>
                 <div className="relative">
@@ -155,10 +182,16 @@ export default function LoginModal() {
               </div>
 
               <div>
-                <label className="block text-xs font-mono text-slate-300 mb-1.5 flex justify-between">
-                  <span>Contraseña de Acceso</span>
-                  <span className="text-[10px] text-cyan-400 font-semibold">Seguridad Cifrada</span>
-                </label>
+                <div className="flex justify-between items-center mb-1.5">
+                  <label className="text-xs font-mono text-slate-300">Contraseña de Seguridad</label>
+                  <button
+                    type="button"
+                    onClick={() => { setMode('recovery'); resetMessages(); }}
+                    className="text-[11px] text-cyan-400 hover:text-cyan-300 font-mono transition-colors"
+                  >
+                    ¿Olvidaste tu contraseña?
+                  </button>
+                </div>
                 <div className="relative">
                   <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
                   <input
@@ -194,16 +227,73 @@ export default function LoginModal() {
             <div className="mt-5 pt-4 border-t border-slate-800 text-center">
               <button
                 type="button"
-                onClick={() => { setMode('solicitud'); setErrorMsg(''); setSuccessMsg(''); }}
+                onClick={() => { setMode('solicitud'); resetMessages(); }}
                 className="text-xs text-cyan-400 hover:text-cyan-300 font-medium flex items-center justify-center gap-1.5 mx-auto transition-colors"
               >
                 <UserPlus className="w-3.5 h-3.5" />
-                <span>¿Eres nuevo operador? Solicitar acceso al sistema</span>
+                <span>¿Eres nuevo operador? Solicitar nuevo acceso</span>
               </button>
             </div>
           </div>
-        ) : (
-          /* MODO 2: SOLICITAR ACCESO */
+        )}
+
+        {/* VISTA 2: RECUPERACIÓN DE CREDENCIALES */}
+        {mode === 'recovery' && (
+          <div>
+            <div className="mb-4">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2 mb-1">
+                <HelpCircle className="w-4 h-4 text-cyan-400" />
+                Recuperación Oficial de Acceso
+              </h3>
+              <p className="text-xs text-slate-300 leading-relaxed">
+                Ingresa tu correo electrónico registrado. Por protocolo hospitalario, se enviará una alerta de seguridad inmediata al Administrador para validar tu identidad.
+              </p>
+            </div>
+
+            <form onSubmit={handleRecovery} className="space-y-4">
+              <div>
+                <label className="block text-xs font-mono text-slate-300 mb-1.5">Correo Electrónico del Usuario</label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                  <input
+                    type="email"
+                    required
+                    value={recoveryEmail}
+                    onChange={(e) => setRecoveryEmail(e.target.value)}
+                    placeholder="usuario@hospital.com"
+                    className="w-full pl-9 pr-3 py-2 bg-slate-900/80 border border-slate-700/80 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400 transition-colors"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={submitting}
+                className="w-full py-2.5 px-4 bg-gradient-to-r from-amber-500 to-orange-600 hover:opacity-90 text-white font-semibold rounded-lg text-sm shadow-lg shadow-orange-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {submitting ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <span>Solicitar Asistencia de Recuperación</span>
+                )}
+              </button>
+            </form>
+
+            <div className="mt-4 pt-3 border-t border-slate-800 text-center">
+              <button
+                type="button"
+                onClick={() => { setMode('login'); resetMessages(); }}
+                className="text-xs text-slate-400 hover:text-white flex items-center justify-center gap-1 mx-auto transition-colors"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Volver al Inicio de Sesión</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* VISTA 3: SOLICITAR NUEVO ACCESO */}
+        {mode === 'solicitud' && (
           <div>
             <form onSubmit={handleRegisterRequest} className="space-y-3">
               <div>
@@ -258,7 +348,7 @@ export default function LoginModal() {
               </div>
 
               <div>
-                <label className="block text-[11px] font-mono text-slate-300 mb-1">Contraseña de Acceso Propuesta</label>
+                <label className="block text-[11px] font-mono text-slate-300 mb-1">Contraseña Propuesta</label>
                 <input
                   type="password"
                   required
@@ -288,7 +378,7 @@ export default function LoginModal() {
             <div className="mt-4 pt-3 border-t border-slate-800 text-center">
               <button
                 type="button"
-                onClick={() => { setMode('login'); setErrorMsg(''); setSuccessMsg(''); }}
+                onClick={() => { setMode('login'); resetMessages(); }}
                 className="text-xs text-slate-400 hover:text-white transition-colors"
               >
                 ← Volver al Inicio de Sesión
