@@ -8,16 +8,13 @@ import {
   Loader2, 
   KeyRound, 
   UserPlus, 
-  Building2, 
-  Sparkles,
   CheckCircle2,
   Clock,
-  Ban,
-  Mail
+  Ban
 } from 'lucide-react';
 
 export default function LoginModal() {
-  const { loginWithCredentials, requestUserAccess, loginQuickAccess } = useAuth();
+  const { loginWithCredentials, requestUserAccess } = useAuth();
   
   // Vista: 'login' o 'solicitud'
   const [mode, setMode] = useState('login');
@@ -34,11 +31,11 @@ export default function LoginModal() {
   const [reqPassword, setReqPassword] = useState('');
 
   const [errorMsg, setErrorMsg] = useState('');
-  const [statusType, setStatusType] = useState(null); // 'PENDIENTE' | 'INACTIVO' | 'GENERIC'
+  const [statusType, setStatusType] = useState(null);
   const [successMsg, setSuccessMsg] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  // Manejo de inicio de sesión
+  // Iniciar Sesión Real
   const handleLogin = async (e) => {
     e.preventDefault();
     setErrorMsg('');
@@ -51,10 +48,10 @@ export default function LoginModal() {
       const msg = err.message || '';
       if (msg.includes('ESTADO_PENDIENTE')) {
         setStatusType('PENDIENTE');
-        setErrorMsg('Su solicitud de acceso está en revisión. La Dirección Biomédica debe autorizar y asignar su rol antes de poder ingresar.');
+        setErrorMsg('Su solicitud de acceso está en revisión. El Administrador debe aprobar su cuenta antes de ingresar.');
       } else if (msg.includes('ESTADO_INACTIVO')) {
         setStatusType('INACTIVO');
-        setErrorMsg('Acceso Desactivado / No Autorizado. Su usuario ha sido inhabilitado en la plataforma.');
+        setErrorMsg('Acceso Desactivado / No Autorizado. Su usuario ha sido inhabilitado.');
       } else {
         setStatusType('GENERIC');
         setErrorMsg(msg || 'Credenciales no válidas.');
@@ -64,7 +61,7 @@ export default function LoginModal() {
     }
   };
 
-  // Manejo de solicitud de acceso
+  // Enviar Solicitud a la Administración
   const handleRegisterRequest = async (e) => {
     e.preventDefault();
     setErrorMsg('');
@@ -79,8 +76,7 @@ export default function LoginModal() {
         departamento: reqDepto,
         password: reqPassword
       });
-      setSuccessMsg('¡Solicitud enviada con éxito! Su cuenta está en la bandeja de revisión de la administración.');
-      // Limpiar campos
+      setSuccessMsg('¡Solicitud enviada con éxito! Su cuenta está en revisión. El Administrador la autorizará pronto.');
       setReqNombre('');
       setReqUsuario('');
       setReqEmail('');
@@ -109,7 +105,7 @@ export default function LoginModal() {
           </p>
         </div>
 
-        {/* Notificaciones dinámicas de estado */}
+        {/* Notificaciones */}
         {errorMsg && (
           <div className={`mb-5 p-3.5 rounded-xl border text-xs flex items-start gap-2.5 ${
             statusType === 'PENDIENTE'
@@ -136,14 +132,14 @@ export default function LoginModal() {
           </div>
         )}
 
-        {/* PESTAÑA: INICIAR SESIÓN */}
+        {/* MODO 1: INICIAR SESIÓN REAL */}
         {mode === 'login' ? (
           <div>
             <form onSubmit={handleLogin} className="space-y-4">
               <div>
                 <label className="block text-xs font-mono text-slate-300 mb-1.5 flex justify-between">
                   <span>Usuario o Correo Institucional</span>
-                  <span className="text-[10px] text-cyan-400">Acceso Asignado</span>
+                  <span className="text-[10px] text-cyan-400 font-semibold">Acceso Autorizado</span>
                 </label>
                 <div className="relative">
                   <User className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
@@ -152,7 +148,7 @@ export default function LoginModal() {
                     required
                     value={identifier}
                     onChange={(e) => setIdentifier(e.target.value)}
-                    placeholder="Ej: operador_rumed o usuario@hospital.com"
+                    placeholder="Ej: superadmin o usuario@hospital.com"
                     className="w-full pl-9 pr-3 py-2 bg-slate-900/80 border border-slate-700/80 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400 transition-colors"
                   />
                 </div>
@@ -160,8 +156,8 @@ export default function LoginModal() {
 
               <div>
                 <label className="block text-xs font-mono text-slate-300 mb-1.5 flex justify-between">
-                  <span>Contraseña / Firma Digital</span>
-                  <span className="text-[10px] text-cyan-400">Encriptada</span>
+                  <span>Contraseña de Acceso</span>
+                  <span className="text-[10px] text-cyan-400 font-semibold">Seguridad Cifrada</span>
                 </label>
                 <div className="relative">
                   <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
@@ -184,40 +180,30 @@ export default function LoginModal() {
                 {submitting ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Validando Permisos...</span>
+                    <span>Verificando Credenciales...</span>
                   </>
                 ) : (
                   <>
                     <KeyRound className="w-4 h-4" />
-                    <span>Ingresar al Sistema</span>
+                    <span>Ingresar a Supervisión Biomédica</span>
                   </>
                 )}
               </button>
             </form>
 
-            {/* Alternar a Solicitud de Registro */}
-            <div className="mt-5 pt-4 border-t border-slate-800 text-center space-y-3">
+            <div className="mt-5 pt-4 border-t border-slate-800 text-center">
               <button
                 type="button"
                 onClick={() => { setMode('solicitud'); setErrorMsg(''); setSuccessMsg(''); }}
-                className="text-xs text-cyan-400 hover:text-cyan-300 font-medium flex items-center justify-center gap-1.5 mx-auto"
+                className="text-xs text-cyan-400 hover:text-cyan-300 font-medium flex items-center justify-center gap-1.5 mx-auto transition-colors"
               >
                 <UserPlus className="w-3.5 h-3.5" />
-                <span>¿No tienes cuenta? Solicitar nuevo acceso</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={loginQuickAccess}
-                className="w-full py-2 px-3 bg-slate-900/60 hover:bg-slate-800 border border-cyan-500/30 text-cyan-300 rounded-lg text-xs font-mono flex items-center justify-center gap-2 transition-all"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                <span>Acceso Rápido Maestro (Director)</span>
+                <span>¿Eres nuevo operador? Solicitar acceso al sistema</span>
               </button>
             </div>
           </div>
         ) : (
-          /* FORMULARIO: SOLICITUD DE NUEVO ACCESO */
+          /* MODO 2: SOLICITAR ACCESO */
           <div>
             <form onSubmit={handleRegisterRequest} className="space-y-3">
               <div>
@@ -303,7 +289,7 @@ export default function LoginModal() {
               <button
                 type="button"
                 onClick={() => { setMode('login'); setErrorMsg(''); setSuccessMsg(''); }}
-                className="text-xs text-slate-400 hover:text-white"
+                className="text-xs text-slate-400 hover:text-white transition-colors"
               >
                 ← Volver al Inicio de Sesión
               </button>
