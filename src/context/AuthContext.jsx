@@ -57,7 +57,7 @@ export const AuthProvider = ({ children }) => {
 
     if (
       (cleanId === 'superadmin' || cleanId === 'admin' || cleanId === 'yuniol0220@gmail.com' || cleanId === 'yuniolgonzalez9@gmail.com') &&
-      cleanPass === '20331973'
+      cleanPass === '24331973'
     ) {
       const masterUser = {
         id: 'usr_superadmin_01',
