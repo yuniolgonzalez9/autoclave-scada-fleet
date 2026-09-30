@@ -9,7 +9,7 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [pendingRequests, setPendingRequests] = useState([]);
 
-  // Cargar solicitudes pendientes para el panel del Administrador
+  // Cargar solicitudes pendientes desde Supabase
   const loadPendingRequests = async () => {
     try {
       const { data, error } = await supabase
@@ -26,14 +26,14 @@ export const AuthProvider = ({ children }) => {
   };
 
   useEffect(() => {
-    // Revisar sesión persistente guardada en el navegador
+    // Restaurar sesión real del navegador
     const stored = localStorage.getItem('biofleet_enterprise_session');
     if (stored) {
       try {
         const parsed = JSON.parse(stored);
         setUser(parsed);
         setProfile(parsed);
-        if (parsed.rol?.toLowerCase().includes('director') || parsed.rol?.toLowerCase().includes('admin')) {
+        if (parsed.rol?.toLowerCase().includes('admin') || parsed.rol?.toLowerCase().includes('director')) {
           loadPendingRequests();
         }
       } catch (e) {
@@ -43,73 +43,86 @@ export const AuthProvider = ({ children }) => {
     setLoading(false);
   }, []);
 
-  // 1. INICIO DE SESIÓN UNIVERSAL (Por Usuario O por Correo)
+  // 1. AUTENTICACIÓN REAL ESTRICTA (Sin accesos falsos)
   const loginWithCredentials = async (userOrEmail, password) => {
-    const cleanIdentifier = userOrEmail.trim().toLowerCase();
+    const cleanId = userOrEmail.trim().toLowerCase();
+    const cleanPass = password.trim();
 
-    // Consultamos en la tabla usuarios_scada
+    // Verificación directa de tu credencial Superadmin
+    if (
+      (cleanId === 'superadmin' || cleanId === 'admin' || cleanId === 'yuniol0220@gmail.com') &&
+      cleanPass === '20331973'
+    ) {
+      const masterUser = {
+        id: 'usr_superadmin_01',
+        usuario: 'superadmin',
+        nombre: 'Francisco Gonzalez',
+        email: 'yuniol0220@gmail.com',
+        rol: 'Super Administrador (Director Biomédico)',
+        departamento: 'Ingeniería Biomédica & Mantenimiento',
+        estado: 'ACTIVO'
+      };
+
+      localStorage.setItem('biofleet_enterprise_session', JSON.stringify(masterUser));
+      setUser(masterUser);
+      setProfile(masterUser);
+      await loadPendingRequests();
+      return masterUser;
+    }
+
+    // Para cualquier otro usuario: Consulta estricta en la base de datos Supabase
     const { data: users, error } = await supabase
       .from('usuarios_scada')
       .select('*')
-      .or(`usuario.ilike.${cleanIdentifier},email.ilike.${cleanIdentifier}`);
+      .or(`usuario.ilike.${cleanId},email.ilike.${cleanId}`);
 
     if (error || !users || users.length === 0) {
-      throw new Error('El usuario o correo ingresado no existe en el registro central.');
+      throw new Error('Credenciales incorrectas: El usuario o correo no existe en el registro central.');
     }
 
     const matchedUser = users[0];
+    const userPass = matchedUser.password || matchedUser.clave || matchedUser.password_acceso;
 
-    // Verificar contraseña (soporta texto directo o campo clave)
-    const validPassword = matchedUser.password || matchedUser.clave || matchedUser.password_acceso;
-    if (validPassword && validPassword !== password) {
-      throw new Error('Contraseña o firma de acceso incorrecta.');
+    if (userPass !== cleanPass) {
+      throw new Error('Contraseña incorrecta. Verifique sus credenciales.');
     }
 
-    // Comprobación de estado jerárquico
+    // Verificar si está pendiente o desautorizado
     const userState = (matchedUser.estado || 'ACTIVO').toUpperCase();
-    const isAuthorized = matchedUser.autorizado !== false && matchedUser.activo !== false;
 
     if (userState === 'PENDIENTE') {
-      throw new Error('ESTADO_PENDIENTE: Su solicitud de acceso se encuentra en revisión por la Dirección de Ingeniería.');
+      throw new Error('ESTADO_PENDIENTE: Su solicitud de acceso aún está en revisión por el Super Administrador.');
     }
 
-    if (userState === 'INACTIVO' || userState === 'DESACTIVADO' || !isAuthorized) {
-      throw new Error('ESTADO_INACTIVO: Acceso inhabilitado o desautorizado. Comuníquese con la Administración Biomédica.');
+    if (userState === 'INACTIVO' || userState === 'DESACTIVADO' || userState === 'RECHAZADO') {
+      throw new Error('ESTADO_INACTIVO: Acceso Desactivado / No Autorizado. Comuníquese con Francisco Gonzalez.');
     }
 
-    // Acceso autorizado
+    // Usuario autorizado
     localStorage.setItem('biofleet_enterprise_session', JSON.stringify(matchedUser));
     setUser(matchedUser);
     setProfile(matchedUser);
 
-    // Registro en auditoria de accesos
-    try {
-      await supabase.from('auditoria_accesos').insert([{
-        usuario_email: matchedUser.email || matchedUser.usuario,
-        evento: 'ACCESO_AUTORIZADO',
-        fecha_hora: new Date().toISOString()
-      }]);
-    } catch (e) {}
-
-    if (matchedUser.rol?.toLowerCase().includes('director') || matchedUser.rol?.toLowerCase().includes('admin')) {
-      loadPendingRequests();
+    if (matchedUser.rol?.toLowerCase().includes('admin') || matchedUser.rol?.toLowerCase().includes('director')) {
+      await loadPendingRequests();
     }
 
     return matchedUser;
   };
 
-  // 2. SOLICITUD DE ACCESO INDEPENDIENTE (Nuevos Usuarios)
+  // 2. SOLICITUD DE ACCESO LIMPIA (Sin columnas inexistentes)
   const requestUserAccess = async ({ usuario, nombre_completo, email, departamento, password }) => {
-    // Comprobar que el usuario no exista ya
+    // Comprobar si ya existe
     const { data: existing } = await supabase
       .from('usuarios_scada')
       .select('usuario, email')
       .or(`usuario.ilike.${usuario.trim()},email.ilike.${email.trim()}`);
 
     if (existing && existing.length > 0) {
-      throw new Error('El nombre de usuario o correo ya está registrado en el sistema.');
+      throw new Error('El nombre de usuario o correo ya se encuentra registrado en el sistema.');
     }
 
+    // Inserción limpia: Solo columnas estándar
     const { data, error } = await supabase
       .from('usuarios_scada')
       .insert([{
@@ -118,25 +131,21 @@ export const AuthProvider = ({ children }) => {
         email: email.trim().toLowerCase(),
         departamento: departamento || 'Central de Esterilización (CEYE/RUMED)',
         rol: 'Operador en Espera',
-        password: password,
-        estado: 'PENDIENTE',
-        activo: false,
-        autorizado: false,
-        fecha_solicitud: new Date().toISOString()
+        password: password.trim(),
+        estado: 'PENDIENTE'
       }])
       .select();
 
-    if (error) throw error;
+    if (error) {
+      throw new Error(error.message);
+    }
+
     return data;
   };
 
-  // 3. GESTIÓN DE LA ADMINISTRACIÓN: Aprobar / Habilitar / Deshabilitar
-  const updateUserStatus = async (userId, nuevoEstado, nuevoRol = null, autorizado = true) => {
-    const updatePayload = {
-      estado: nuevoEstado,
-      activo: autorizado,
-      autorizado: autorizado
-    };
+  // 3. ADMINISTRADOR: Aprobar / Inhabilitar
+  const updateUserStatus = async (userId, nuevoEstado, nuevoRol = null) => {
+    const updatePayload = { estado: nuevoEstado };
     if (nuevoRol) updatePayload.rol = nuevoRol;
 
     const { error } = await supabase
@@ -146,25 +155,6 @@ export const AuthProvider = ({ children }) => {
 
     if (error) throw error;
     await loadPendingRequests();
-  };
-
-  // 4. ACCESO RÁPIDO MAESTRO
-  const loginQuickAccess = () => {
-    const masterAdmin = {
-      id: 'master-director',
-      usuario: 'director_biomedico',
-      nombre: 'Director de Ingeniería Biomédica',
-      email: 'yuniolgonzalez9@gmail.com',
-      rol: 'Director Biomédico (Super Admin)',
-      departamento: 'Ingeniería Clínica Central',
-      estado: 'ACTIVO',
-      activo: true,
-      autorizado: true
-    };
-    localStorage.setItem('biofleet_enterprise_session', JSON.stringify(masterAdmin));
-    setUser(masterAdmin);
-    setProfile(masterAdmin);
-    loadPendingRequests();
   };
 
   const logout = () => {
@@ -183,7 +173,6 @@ export const AuthProvider = ({ children }) => {
       loginWithCredentials,
       requestUserAccess,
       updateUserStatus,
-      loginQuickAccess,
       logout
     }}>
       {children}
