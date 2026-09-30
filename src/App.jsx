@@ -2,33 +2,26 @@ import React, { useState } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import LoginModal from './components/auth/LoginModal';
 import UserManagementModal from './components/admin/UserManagementModal';
-import SterilizationChart from './components/graphics/SterilizationChart';
+import DeviceDetailView from './components/dashboard/DeviceDetailView';
+import ClinicalAuditView from './components/reports/ClinicalAuditView';
 import { useMqttFleet } from './hooks/useMqttFleet';
 import { 
   Activity, 
   ShieldCheck, 
   LogOut, 
   User, 
-  Waves, 
   Flame, 
   Thermometer, 
   Server, 
   QrCode, 
-  BellRing, 
   Image as ImageIcon,
   Users,
   Bell,
   Play,
-  Square,
   RotateCcw,
-  Zap,
   Gauge,
-  Sliders,
-  CheckCircle2,
-  AlertTriangle,
-  Radio,
   FileText,
-  Smartphone
+  ChevronRight
 } from 'lucide-react';
 
 const WALLPAPERS = [
@@ -43,41 +36,27 @@ function ScadaAppContent() {
   const { user, profile, loading, pendingRequests, logout } = useAuth();
   const { fleet, mqttConnected, sendDeviceCommand } = useMqttFleet();
 
-  const [opacity, setOpacity] = useState(82);
   const [currentBgIndex, setCurrentBgIndex] = useState(0);
   const [showAdminModal, setShowAdminModal] = useState(false);
-  const [activeTabMobile, setActiveTabMobile] = useState('telemetria'); // 'telemetria' | 'reportes' | 'admin'
+  const [activeSection, setActiveSection] = useState('flota'); // 'flota' | 'auditoria' | 'detalle'
+  const [selectedMac, setSelectedMac] = useState(null);
 
   const toggleWallpaper = () => setCurrentBgIndex((prev) => (prev + 1) % WALLPAPERS.length);
   const isAdmin = profile?.rol?.toLowerCase().includes('admin') || profile?.rol?.toLowerCase().includes('director');
 
-  // Seleccionar el primer dispositivo real que esté transmitiendo, o un dispositivo base
-  const deviceList = Object.keys(fleet);
-  const activeMac = deviceList.length > 0 ? deviceList[0] : 'ESP32_DEMO_CEYE';
-  const activeDevice = fleet[activeMac] || {
-    mac: activeMac,
+  const macKeys = Object.keys(fleet);
+  // Si no hay equipos transmitiendo en este segundo, mostramos un equipo base preparado
+  const defaultDevice = {
+    mac: 'ESP32_CEYE_01',
     lastSeen: Date.now(),
-    datos: {
-      temp_camara: 25.0,
-      presion: 0.0,
-      fase: 'ESPERA',
-      seg_restantes: 120,
-      motor: false,
-      calentador: false,
-      vacio: false,
-      alarma_cod: 0,
-      alarma_msg: 'SISTEMA NORMAL',
-      cfg: { ciclos: 0, lim_mant: 200, sp_temp: 121.0, t_ciclo: 2 }
-    },
+    meta: { alias: 'Autoclave Quirófano Matriz', cliente: 'Hospital Central', modelo: 'DevKit Clase B' },
+    datos: { temp_camara: 25.0, presion: 0.0, fase: 'ESPERA', seg_restantes: 120, cfg: { ciclos: 14, lim_mant: 200 } },
     f0Score: 0.0,
-    history: [{ time: '00:00', temperature: 25.0, pressure: 0.0 }]
+    history: []
   };
 
-  const d = activeDevice.datos;
-  const isOnline = Date.now() - (activeDevice.lastSeen || 0) < 15000;
-  const ciclos = d?.cfg?.ciclos || 0;
-  const limite = d?.cfg?.lim_mant || 200;
-  const odometroPct = Math.min(100, Math.round((ciclos / limite) * 100));
+  const devicesToRender = macKeys.length > 0 ? macKeys.map(k => fleet[k]) : [defaultDevice];
+  const inspectingDevice = selectedMac ? (fleet[selectedMac] || defaultDevice) : defaultDevice;
 
   if (loading) {
     return (
@@ -116,7 +95,7 @@ function ScadaAppContent() {
           </div>
         </div>
 
-        {/* Indicador MQTT & Acciones */}
+        {/* Acciones de Cabecera */}
         <div className="flex items-center gap-2 md:gap-3">
           <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-mono font-bold border ${
             mqttConnected 
@@ -131,6 +110,7 @@ function ScadaAppContent() {
             <button
               onClick={() => setShowAdminModal(true)}
               className="relative p-2 rounded-lg bg-slate-900 border border-amber-500/40 text-amber-300"
+              title="Aprobaciones y Personal"
             >
               <Bell className="w-4 h-4" />
               {pendingRequests.length > 0 && (
@@ -143,13 +123,13 @@ function ScadaAppContent() {
 
           <button
             onClick={toggleWallpaper}
-            className="p-2 rounded-lg bg-slate-900 border border-cyan-500/30 text-cyan-300 text-xs font-mono"
+            className="p-2 rounded-lg bg-slate-900 border border-cyan-500/30 text-cyan-300"
             title="Cambiar fondo"
           >
             <ImageIcon className="w-4 h-4" />
           </button>
 
-          {user ? (
+          {user && (
             <button
               onClick={logout}
               className="p-2 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400"
@@ -157,268 +137,149 @@ function ScadaAppContent() {
             >
               <LogOut className="w-4 h-4" />
             </button>
-          ) : null}
+          )}
         </div>
       </header>
 
-      {/* Si no está autenticado, Login */}
+      {/* Dock Superior en PC para alternar Flota / Auditoría */}
+      {user && (
+        <div className="hidden md:flex items-center gap-2 px-6 py-2 bg-slate-950/60 border-b border-cyan-500/10">
+          <button
+            onClick={() => { setActiveSection('flota'); setSelectedMac(null); }}
+            className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
+              activeSection === 'flota' ? 'bg-cyan-500 text-slate-950' : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            ⚡ Flota de Autoclaves
+          </button>
+          <button
+            onClick={() => { setActiveSection('auditoria'); setSelectedMac(null); }}
+            className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
+              activeSection === 'auditoria' ? 'bg-cyan-500 text-slate-950' : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            📋 Auditoría & Paquetes Supabase
+          </button>
+        </div>
+      )}
+
+      {/* Contenido Dinámico */}
       {!user ? (
         <main className="flex-1 flex items-center justify-center p-4">
           <LoginModal />
         </main>
       ) : (
-        /* CONSOLA SCADA: TELEMETRÍA DINÁMICA DEL ESP32 FÍSICO */
-        <main className="flex-1 p-3 md:p-6 max-w-7xl mx-auto w-full flex flex-col gap-4 relative z-10">
+        <main className="flex-1 p-3 md:p-6 max-w-7xl mx-auto w-full flex flex-col gap-4">
           
-          {/* Tarjeta del Equipo Activo (Detección de Hardware) */}
-          <div 
-            className="ultra-glass p-4 md:p-6 rounded-2xl border border-cyan-500/30 shadow-2xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4"
-            style={{ '--glass-opacity': `${opacity / 100}` }}
-          >
-            <div className="flex items-center gap-3">
-              <div className="p-3 rounded-xl bg-cyan-500/20 border border-cyan-400/40 text-cyan-300">
-                <Flame className="w-6 h-6 md:w-7 md:h-7" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-base md:text-lg font-bold text-white tracking-wide">
-                    AUTOCLAVE [{activeMac}]
-                  </h2>
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-mono border flex items-center gap-1 ${
-                    isOnline 
-                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' 
-                      : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
-                  }`}>
-                    <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-400 animate-ping' : 'bg-rose-400'}`}></span>
-                    {isOnline ? 'TRANSMITIENDO EN VIVO' : 'SIN TRANSMISIÓN'}
-                  </span>
-                </div>
-                <p className="text-xs text-slate-300 font-mono mt-0.5">
-                  Firmware: {activeDevice.esquema?.fw || 'v3.5'} • Modelo: {activeDevice.esquema?.modelo || 'ESP32 Quirúrgico'}
-                </p>
-              </div>
-            </div>
-
-            {/* Botones de Control Remoto que envían comandos MQTT al ESP32 */}
-            <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-              <button
-                onClick={() => sendDeviceCommand(activeMac, { cmd: 'INICIAR_CICLO' })}
-                className="flex-1 md:flex-none px-4 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:opacity-90 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg"
-              >
-                <Play className="w-4 h-4 fill-white" />
-                <span>Iniciar Ciclo</span>
-              </button>
-
-              <button
-                onClick={() => sendDeviceCommand(activeMac, { cmd: 'ABORTAR_CICLO' })}
-                className="flex-1 md:flex-none px-4 py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg"
-              >
-                <Square className="w-4 h-4 fill-white" />
-                <span>Paro Emergencia</span>
-              </button>
-
-              <button
-                onClick={() => sendDeviceCommand(activeMac, { cmd: 'RESET_ALARMA' })}
-                className="p-2.5 bg-slate-900 border border-slate-700 text-slate-300 rounded-xl text-xs"
-                title="Reset Alarma"
-              >
-                <RotateCcw className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-
-          {/* Tarjetas de Sensores en Vivo (Lectura real del ESP32) */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-            
-            {/* Temperatura de Cámara */}
-            <div className="ultra-glass p-3 md:p-4 rounded-xl border border-cyan-500/30">
-              <div className="flex justify-between items-center text-[10px] md:text-xs font-mono text-cyan-400 mb-1">
-                <span>TEMPERATURA</span>
-                <Thermometer className="w-4 h-4" />
-              </div>
-              <div className="text-2xl md:text-3xl font-extrabold font-mono text-white">
-                {(d?.temp_camara || 25.0).toFixed(1)} <span className="text-sm font-normal text-cyan-300">°C</span>
-              </div>
-              <p className="text-[10px] text-slate-400 font-mono mt-1">Setpoint: {d?.cfg?.sp_temp || 121.0}°C</p>
-            </div>
-
-            {/* Presión de Vapor */}
-            <div className="ultra-glass p-3 md:p-4 rounded-xl border border-pink-500/30">
-              <div className="flex justify-between items-center text-[10px] md:text-xs font-mono text-pink-400 mb-1">
-                <span>PRESIÓN</span>
-                <Gauge className="w-4 h-4" />
-              </div>
-              <div className="text-2xl md:text-3xl font-extrabold font-mono text-white">
-                {(d?.presion || 0.0).toFixed(2)} <span className="text-sm font-normal text-pink-300">bar</span>
-              </div>
-              <p className="text-[10px] text-slate-400 font-mono mt-1">{((d?.presion || 0) * 14.504).toFixed(1)} PSI</p>
-            </div>
-
-            {/* Letalidad F0 Integrada */}
-            <div className="ultra-glass p-3 md:p-4 rounded-xl border border-emerald-500/30">
-              <div className="flex justify-between items-center text-[10px] md:text-xs font-mono text-emerald-400 mb-1">
-                <span>LETALIDAD (F0)</span>
-                <Zap className="w-4 h-4" />
-              </div>
-              <div className="text-2xl md:text-3xl font-extrabold font-mono text-emerald-300">
-                {(activeDevice.f0Score || 0.0).toFixed(1)} <span className="text-sm font-normal text-emerald-400">min</span>
-              </div>
-              <p className="text-[10px] text-emerald-400/80 font-mono mt-1">
-                {(activeDevice.f0Score || 0) >= 15.0 ? '✓ ESTÉRIL VÁLIDO' : 'Meta: ≥ 15 min'}
-              </p>
-            </div>
-
-            {/* Fase y Odómetro */}
-            <div className="ultra-glass p-3 md:p-4 rounded-xl border border-amber-500/30">
-              <div className="flex justify-between items-center text-[10px] md:text-xs font-mono text-amber-400 mb-1">
-                <span>FASE DE CICLO</span>
-                <Activity className="w-4 h-4" />
-              </div>
-              <div className="text-lg md:text-xl font-bold font-mono text-white truncate">
-                {d?.fase || 'ESPERA'}
-              </div>
-              <p className="text-[10px] text-slate-300 font-mono mt-1">
-                Tiempo rest: {Math.floor((d?.seg_restantes || 0) / 60)}:{(d?.seg_restantes || 0) % 60}
-              </p>
-            </div>
-
-          </div>
-
-          {/* Gráfica en Tiempo Real + Relés y Actuadores Hardware (GPIOs 2, 4 y 5) */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            
-            {/* Curva Gráfica Chart.js */}
-            <div className="lg:col-span-2 ultra-glass p-4 md:p-5 rounded-2xl border border-cyan-500/30 flex flex-col justify-between">
-              <div className="flex justify-between items-center mb-3">
-                <h3 className="text-xs md:text-sm font-bold text-white flex items-center gap-2">
-                  <Activity className="w-4 h-4 text-cyan-400" />
-                  Curva Térmica en Vivo de la Cámara (ESP32)
-                </h3>
-                <span className="text-[10px] font-mono text-cyan-300 bg-cyan-950/60 px-2 py-0.5 rounded border border-cyan-500/30">
-                  T° vs P
-                </span>
-              </div>
-              <SterilizationChart telemetryData={activeDevice.history || []} />
-            </div>
-
-            {/* Estado de Actuadores y Relés Hardware del ESP32 */}
-            <div className="ultra-glass p-4 md:p-5 rounded-2xl border border-cyan-500/30 flex flex-col justify-between gap-4">
-              <div>
-                <h3 className="text-xs md:text-sm font-bold text-white flex items-center gap-2 mb-1">
-                  <Server className="w-4 h-4 text-cyan-400" />
-                  Actuadores y Relés Físicos
-                </h3>
-                <p className="text-[11px] text-slate-400 font-mono">
-                  Salidas digitales activas en placa ESP32
-                </p>
+          {/* SECCIÓN 1: VISTA DE FLOTA COMPLETA */}
+          {activeSection === 'flota' && (
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <h2 className="text-base md:text-lg font-bold text-white font-mono flex items-center gap-2">
+                  <Flame className="w-5 h-5 text-cyan-400" />
+                  Flota de Autoclaves Conectados ({devicesToRender.length})
+                </h2>
               </div>
 
-              <div className="space-y-2">
-                {/* Motor / LED 1 (GPIO 2) */}
-                <div className="p-2.5 rounded-xl bg-slate-900/70 border border-slate-800 flex items-center justify-between">
-                  <div>
-                    <p className="text-xs font-mono text-white">Motor Agitador (GPIO 2)</p>
-                    <p className="text-[10px] text-slate-400">LED 1</p>
-                  </div>
-                  <button
-                    onClick={() => sendDeviceCommand(activeMac, { mot_ok: !d?.motor })}
-                    className={`px-3 py-1 text-xs font-mono font-bold rounded-lg border transition-all ${
-                      d?.motor 
-                        ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' 
-                        : 'bg-slate-800 text-slate-400 border-slate-700'
-                    }`}
-                  >
-                    {d?.motor ? 'ENCENDIDO' : 'APAGADO'}
-                  </button>
-                </div>
+              {/* Grid de Tarjetas de Equipos */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {devicesToRender.map((dev) => {
+                  const dDev = dev.datos || {};
+                  const isDevOnline = Date.now() - (dev.lastSeen || 0) < 18000;
+                  const cCount = dDev?.cfg?.ciclos || dev?.meta?.ciclosCompletados || 0;
+                  const cLim = dDev?.cfg?.lim_mant || dev?.meta?.limiteMantenimiento || 200;
 
-                {/* Calentador (GPIO 4) */}
-                <div className="p-2.5 rounded-xl bg-slate-900/70 border border-slate-800 flex items-center justify-between">
-                  <div>
-                    <p className="text-xs font-mono text-white">Calentador / Resistencias (GPIO 4)</p>
-                    <p className="text-[10px] text-slate-400">LED 2</p>
-                  </div>
-                  <span className={`px-2.5 py-1 text-xs font-mono font-bold rounded-lg border ${
-                    d?.calentador 
-                      ? 'bg-amber-500/20 text-amber-400 border-amber-500/40' 
-                      : 'bg-slate-800 text-slate-400 border-slate-700'
-                  }`}>
-                    {d?.calentador ? 'CALENTANDO' : 'APAGADO'}
-                  </span>
-                </div>
-
-                {/* Bomba Vacío (GPIO 5) */}
-                <div className="p-2.5 rounded-xl bg-slate-900/70 border border-slate-800 flex items-center justify-between">
-                  <div>
-                    <p className="text-xs font-mono text-white">Bomba de Vacío (GPIO 5)</p>
-                    <p className="text-[10px] text-slate-400">LED 3</p>
-                  </div>
-                  <button
-                    onClick={() => sendDeviceCommand(activeMac, { vacio_ok: !d?.vacio })}
-                    className={`px-3 py-1 text-xs font-mono font-bold rounded-lg border transition-all ${
-                      d?.vacio 
-                        ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/40' 
-                        : 'bg-slate-800 text-slate-400 border-slate-700'
-                    }`}
-                  >
-                    {d?.vacio ? 'ACTIVA' : 'APAGADA'}
-                  </button>
-                </div>
-              </div>
-
-              {/* Odómetro de Vida Útil de Mantenimiento */}
-              <div className="bg-slate-900/80 p-3 rounded-xl border border-white/5 space-y-1.5">
-                <div className="flex justify-between text-[11px] font-mono text-slate-300">
-                  <span>Odómetro de Ciclos:</span>
-                  <span className="font-bold text-cyan-300">{ciclos} / {limite}</span>
-                </div>
-                <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden border border-slate-700">
-                  <div 
-                    className={`h-full transition-all ${odometroPct > 90 ? 'bg-rose-500' : odometroPct > 75 ? 'bg-amber-500' : 'bg-emerald-400'}`}
-                    style={{ width: `${odometroPct}%` }}
-                  ></div>
-                </div>
-                <div className="flex justify-between items-center text-[10px] text-slate-400 font-mono pt-1">
-                  <span>Vida Restante: {limite - ciclos} ciclos</span>
-                  {isAdmin && (
-                    <button
-                      onClick={() => sendDeviceCommand(activeMac, { cmd: 'RESET_ODOMETRO' })}
-                      className="text-amber-400 hover:underline"
+                  return (
+                    <div
+                      key={dev.mac}
+                      onClick={() => { setSelectedMac(dev.mac); setActiveSection('detalle'); }}
+                      className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 hover:border-cyan-400 cursor-pointer transition-all duration-200 hover:-translate-y-1 shadow-xl flex flex-col justify-between"
                     >
-                      Reset Odómetro
-                    </button>
-                  )}
-                </div>
+                      <div>
+                        <div className="flex justify-between items-start mb-3">
+                          <div>
+                            <h3 className="font-bold text-sm text-white">{dev.meta?.alias || `AUTOCLAVE [${dev.mac.slice(-4)}]`}</h3>
+                            <p className="text-[11px] text-slate-400 font-mono">{dev.meta?.cliente || 'Hospital Central'} • {dev.mac}</p>
+                          </div>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-mono border ${
+                            isDevOnline ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                          }`}>
+                            {isDevOnline ? 'ONLINE' : 'OFFLINE'}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 my-3">
+                          <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800 text-center">
+                            <span className="text-[10px] font-mono text-cyan-400 block">TEMPERATURA</span>
+                            <span className="text-xl font-bold font-mono text-white">{(dDev.temp_camara || 25).toFixed(1)}°C</span>
+                          </div>
+                          <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800 text-center">
+                            <span className="text-[10px] font-mono text-pink-400 block">PRESIÓN</span>
+                            <span className="text-xl font-bold font-mono text-white">{(dDev.presion || 0).toFixed(2)}b</span>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1 mb-3">
+                          <div className="flex justify-between text-[10px] font-mono text-slate-400">
+                            <span>Odómetro: {cCount}/{cLim} ciclos</span>
+                            <span>{Math.round((cCount / cLim) * 100)}%</span>
+                          </div>
+                          <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                            <div className="bg-emerald-400 h-full" style={{ width: `${Math.min(100, (cCount / cLim) * 100)}%` }}></div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs font-mono text-cyan-400 font-bold">
+                        <span>ENTRAR A CONTROL TOTAL</span>
+                        <ChevronRight className="w-4 h-4" />
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-
             </div>
+          )}
 
-          </div>
+          {/* SECCIÓN 2: CONTROL TOTAL DEL EQUIPO SELECCIONADO */}
+          {activeSection === 'detalle' && (
+            <DeviceDetailView
+              device={inspectingDevice}
+              onBack={() => { setActiveSection('flota'); setSelectedMac(null); }}
+              sendCommand={sendDeviceCommand}
+              operatorName={profile?.nombre || user?.email}
+            />
+          )}
+
+          {/* SECCIÓN 3: AUDITORÍA CLÍNICA DE SUPABASE */}
+          {activeSection === 'auditoria' && (
+            <ClinicalAuditView />
+          )}
 
         </main>
       )}
 
-      {/* BARRA DE NAVEGACIÓN INFERIOR PARA TELÉFONOS MÓVILES (Estilo App Nativa) */}
+      {/* BARRA INFERIOR PARA TELÉFONOS CELULARES (Mobile Bottom Bar) */}
       {user && (
         <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-slate-950/95 border-t border-cyan-500/30 backdrop-blur-xl flex items-center justify-around z-50 px-2">
           <button
-            onClick={() => setActiveTabMobile('telemetria')}
+            onClick={() => { setActiveSection('flota'); setSelectedMac(null); }}
             className={`flex flex-col items-center gap-1 py-1 px-3 rounded-lg text-xs font-mono ${
-              activeTabMobile === 'telemetria' ? 'text-cyan-400 font-bold' : 'text-slate-400'
+              activeSection === 'flota' || activeSection === 'detalle' ? 'text-cyan-400 font-bold' : 'text-slate-400'
             }`}
           >
             <Activity className="w-5 h-5" />
-            <span>Telemetría</span>
+            <span>Flota</span>
           </button>
 
           <button
-            onClick={() => setActiveTabMobile('reportes')}
+            onClick={() => { setActiveSection('auditoria'); setSelectedMac(null); }}
             className={`flex flex-col items-center gap-1 py-1 px-3 rounded-lg text-xs font-mono ${
-              activeTabMobile === 'reportes' ? 'text-cyan-400 font-bold' : 'text-slate-400'
+              activeSection === 'auditoria' ? 'text-cyan-400 font-bold' : 'text-slate-400'
             }`}
           >
             <FileText className="w-5 h-5" />
-            <span>Reportes</span>
+            <span>Auditoría</span>
           </button>
 
           {isAdmin && (
@@ -436,7 +297,7 @@ function ScadaAppContent() {
             className="flex flex-col items-center gap-1 py-1 px-3 rounded-lg text-xs font-mono text-slate-400"
           >
             <ImageIcon className="w-5 h-5" />
-            <span>Fondos</span>
+            <span>Fondo</span>
           </button>
         </nav>
       )}
