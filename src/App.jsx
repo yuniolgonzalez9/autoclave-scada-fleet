@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import LoginModal from './components/auth/LoginModal';
+import UserManagementModal from './components/admin/UserManagementModal';
 import { 
   Activity, 
   ShieldCheck, 
@@ -9,13 +10,14 @@ import {
   Waves, 
   Flame, 
   Thermometer, 
-  Server,
-  QrCode,
-  BellRing,
-  Image as ImageIcon
+  Server, 
+  QrCode, 
+  BellRing, 
+  Image as ImageIcon,
+  Users,
+  Bell
 } from 'lucide-react';
 
-// Fondos fotográficos de alta resolución inspirados en tus imágenes de PCB y Nodos
 const WALLPAPERS = [
   {
     id: 'pcb-blue',
@@ -35,13 +37,16 @@ const WALLPAPERS = [
 ];
 
 function ScadaAppContent() {
-  const { user, profile, loading, logout } = useAuth();
+  const { user, profile, loading, pendingRequests, logout } = useAuth();
   const [opacity, setOpacity] = useState(82);
   const [currentBgIndex, setCurrentBgIndex] = useState(0);
+  const [showAdminModal, setShowAdminModal] = useState(false);
 
   const toggleWallpaper = () => {
     setCurrentBgIndex((prev) => (prev + 1) % WALLPAPERS.length);
   };
+
+  const isAdmin = profile?.rol?.toLowerCase().includes('director') || profile?.rol?.toLowerCase().includes('admin');
 
   if (loading) {
     return (
@@ -64,7 +69,7 @@ function ScadaAppContent() {
       }}
     >
       {/* Header Institucional con rayita láser Speedtest */}
-      <header className="speedtest-laser-header border-b border-cyan-500/20 bg-slate-950/75 backdrop-blur-md px-6 py-3.5 flex items-center justify-between sticky top-0 z-50">
+      <header className="speedtest-laser-header border-b border-cyan-500/20 bg-slate-950/75 backdrop-blur-md px-6 py-3.5 flex items-center justify-between sticky top-0 z-40">
         <div className="flex items-center gap-3.5">
           <div className="p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 shadow-[0_0_12px_rgba(0,243,255,0.2)]">
             <Activity className="w-6 h-6 animate-pulse" />
@@ -86,10 +91,27 @@ function ScadaAppContent() {
 
         {/* Acciones y estado del usuario */}
         <div className="flex items-center gap-3">
-          {/* Botón para cambiar wallpaper de circuitos */}
+          
+          {/* Campanita de Notificaciones / Solicitudes Pendientes para Admin */}
+          {user && isAdmin && (
+            <button
+              onClick={() => setShowAdminModal(true)}
+              className="relative p-2 rounded-lg bg-slate-900/80 hover:bg-slate-800 border border-amber-500/40 text-amber-300 transition-all flex items-center gap-1.5"
+              title="Solicitudes y Aprobaciones Pendientes"
+            >
+              <Bell className="w-4 h-4 animate-bounce" />
+              {pendingRequests.length > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full bg-amber-500 text-slate-950 text-[10px] font-bold">
+                  {pendingRequests.length}
+                </span>
+              )}
+            </button>
+          )}
+
+          {/* Botón de Fondos */}
           <button
             onClick={toggleWallpaper}
-            title="Cambiar fondo de circuitos"
+            title="Cambiar fondo"
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900/80 hover:bg-slate-800 border border-cyan-500/30 text-cyan-300 text-xs font-mono transition-all"
           >
             <ImageIcon className="w-3.5 h-3.5" />
@@ -101,9 +123,9 @@ function ScadaAppContent() {
               <div className="flex items-center gap-2.5 bg-slate-900/85 px-3 py-1.5 rounded-lg border border-slate-700/80">
                 <User className="w-4 h-4 text-cyan-400" />
                 <div className="text-left">
-                  <p className="text-xs font-semibold text-white leading-tight">{profile?.nombre || user.email}</p>
+                  <p className="text-xs font-semibold text-white leading-tight">{profile?.nombre || profile?.usuario}</p>
                   <p className="text-[10px] text-emerald-400 font-mono leading-none">
-                    {profile?.rol || 'Director Biomédico'}
+                    {profile?.rol || 'Personal Autorizado'}
                   </p>
                 </div>
               </div>
@@ -124,13 +146,13 @@ function ScadaAppContent() {
         </div>
       </header>
 
-      {/* Si no está autenticado, muestra el Login sobre el fondo de circuitos */}
+      {/* Si no está autenticado, muestra el Login / Solicitud */}
       {!user ? (
         <main className="flex-1 flex items-center justify-center p-6 relative z-10">
           <LoginModal />
         </main>
       ) : (
-        /* Panel del Sistema cuando ya inició sesión */
+        /* Panel principal */
         <main className="flex-1 p-6 max-w-6xl mx-auto w-full flex flex-col gap-6 relative z-10">
           
           <div 
@@ -144,27 +166,23 @@ function ScadaAppContent() {
                   Consola de Supervisión & Telemetría Multidispositivo
                 </h2>
                 <p className="text-xs text-slate-300 font-mono mt-1">
-                  Bienvenido, <strong className="text-cyan-400">{profile?.nombre || user.email}</strong>. Todos los servicios de validación térmica y control de procesos están listos.
+                  Bienvenido, <strong className="text-cyan-400">{profile?.nombre || profile?.usuario}</strong> ({profile?.rol}).
                 </p>
               </div>
 
-              {/* Slider de Opacidad Ultra-Glass */}
-              <div className="bg-slate-900/85 px-4 py-2.5 rounded-xl border border-white/10 flex items-center gap-3">
-                <span className="text-xs font-mono text-cyan-300 flex items-center gap-1.5 whitespace-nowrap">
-                  <Waves className="w-3.5 h-3.5" /> Ultra-Glass: <strong>{opacity}%</strong>
-                </span>
-                <input 
-                  type="range" 
-                  min="0" 
-                  max="100" 
-                  value={opacity} 
-                  onChange={(e) => setOpacity(e.target.value)} 
-                  className="w-24 h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-cyan-400"
-                />
-              </div>
+              {/* Botón de Aprobaciones para el Administrador */}
+              {isAdmin && (
+                <button
+                  onClick={() => setShowAdminModal(true)}
+                  className="px-3.5 py-2 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 text-xs font-semibold flex items-center gap-2 shadow-lg"
+                >
+                  <Users className="w-4 h-4" />
+                  <span>Gestionar Personal & Solicitudes ({pendingRequests.length})</span>
+                </button>
+              )}
             </div>
 
-            {/* Clasificación de familias de dispositivos preparados */}
+            {/* Clasificación de familias de dispositivos */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="p-4 rounded-xl bg-cyan-950/40 border border-cyan-500/40 backdrop-blur-md">
                 <div className="flex items-center justify-between mb-2">
@@ -206,6 +224,12 @@ function ScadaAppContent() {
 
         </main>
       )}
+
+      {/* Modal de Gestión de Usuarios y Aprobaciones */}
+      <UserManagementModal 
+        isOpen={showAdminModal} 
+        onClose={() => setShowAdminModal(false)} 
+      />
     </div>
   );
 }
