@@ -1,0 +1,57 @@
+// =========================================================================
+// MOTOR DE SIRENA INDUSTRIAL BIOMÉDICA (WEB AUDIO API - 850 Hz <-> 1250 Hz)
+// =========================================================================
+let audioCtx = null;
+let sirenaInterval = null;
+let sirenaActiva = false;
+
+function sonarRafagaAlarma() {
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+
+    const t = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+
+    osc.type = 'sawtooth';
+    // Sirena bitonal de alta penetración clínica
+    osc.frequency.setValueAtTime(850, t);
+    osc.frequency.exponentialRampToValueAtTime(1250, t + 0.25);
+    osc.frequency.exponentialRampToValueAtTime(850, t + 0.5);
+    osc.frequency.exponentialRampToValueAtTime(1250, t + 0.75);
+    osc.frequency.exponentialRampToValueAtTime(850, t + 1.0);
+
+    // Volumen potente con decaimiento suave
+    gain.gain.setValueAtTime(0.75, t);
+    gain.gain.setValueAtTime(0.75, t + 1.0);
+    gain.gain.exponentialRampToValueAtTime(0.01, t + 1.25);
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start(t);
+    osc.stop(t + 1.25);
+  } catch (e) {
+    console.warn('[AUDIO] Restricción de reproducción:', e);
+  }
+}
+
+export const startIndustrialSiren = () => {
+  if (sirenaActiva) return;
+  sirenaActiva = true;
+  sonarRafagaAlarma();
+  sirenaInterval = setInterval(() => {
+    if (sirenaActiva) {
+      sonarRafagaAlarma();
+    } else {
+      clearInterval(sirenaInterval);
+    }
+  }, 1400);
+};
+
+export const stopIndustrialSiren = () => {
+  sirenaActiva = false;
+  if (sirenaInterval) clearInterval(sirenaInterval);
+};
+
+export const isSirenPlaying = () => sirenaActiva;
