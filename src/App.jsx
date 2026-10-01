@@ -1,51 +1,73 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import LoginModal from './components/auth/LoginModal';
 import UserManagementModal from './components/admin/UserManagementModal';
 import DeviceDetailView from './components/dashboard/DeviceDetailView';
 import ClinicalAuditView from './components/reports/ClinicalAuditView';
+import FotaHubView from './components/fota/FotaHubView';
+import GearMenu, { WALLPAPERS_LIST } from './components/common/GearMenu';
 import { useMqttFleet } from './hooks/useMqttFleet';
+import { startIndustrialSiren, stopIndustrialSiren, isSirenPlaying } from './services/audioAlarm';
 import { 
   Activity, 
   ShieldCheck, 
-  LogOut, 
-  User, 
   Flame, 
-  Thermometer, 
-  Server, 
-  QrCode, 
-  Image as ImageIcon,
-  Users,
+  FileText, 
+  Rocket, 
+  ChevronRight, 
+  Volume2, 
+  VolumeX,
   Bell,
-  Play,
-  RotateCcw,
-  Gauge,
-  FileText,
-  ChevronRight
+  Users
 } from 'lucide-react';
-
-const WALLPAPERS = [
-  { id: 'pcb-blue', name: '1. PCB Neón Azul', url: 'https://images.unsplash.com/photo-1518770660439-4636190af475?q=80&w=2070&auto=format&fit=crop' },
-  { id: 'server-datacenter', name: '2. Datacenter Hospitalario', url: 'https://images.unsplash.com/photo-1558494949-ef010cbdcc31?q=80&w=2068&auto=format&fit=crop' },
-  { id: 'fiber-matrix', name: '3. Red Nodos & Fibra', url: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?q=80&w=2072&auto=format&fit=crop' },
-  { id: 'blueprint-grid', name: '4. Blueprint Clínico', url: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?q=80&w=2070&auto=format&fit=crop' },
-  { id: 'cyber-hardware', name: '5. Hardware & Silicio', url: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?q=80&w=2070&auto=format&fit=crop' }
-];
 
 function ScadaAppContent() {
   const { user, profile, loading, pendingRequests, logout } = useAuth();
   const { fleet, mqttConnected, sendDeviceCommand } = useMqttFleet();
 
-  const [currentBgIndex, setCurrentBgIndex] = useState(0);
-  const [showAdminModal, setShowAdminModal] = useState(false);
-  const [activeSection, setActiveSection] = useState('flota'); // 'flota' | 'auditoria' | 'detalle'
-  const [selectedMac, setSelectedMac] = useState(null);
+  // Estados visuales del Menú Engranaje
+  const [currentTheme, setCurrentTheme] = useState('tactical');
+  const [currentBg, setCurrentBg] = useState('circuit-pcb');
+  const [opacity, setOpacity] = useState(82);
 
-  const toggleWallpaper = () => setCurrentBgIndex((prev) => (prev + 1) % WALLPAPERS.length);
+  // Navegación
+  const [activeSection, setActiveSection] = useState('flota'); // 'flota' | 'fota' | 'auditoria' | 'detalle'
+  const [selectedMac, setSelectedMac] = useState(null);
+  const [showAdminModal, setShowAdminModal] = useState(false);
+  const [sirenActive, setSirenActive] = useState(false);
+
   const isAdmin = profile?.rol?.toLowerCase().includes('admin') || profile?.rol?.toLowerCase().includes('director');
 
+  // Actualizar tema en el HTML raíz
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', currentTheme);
+  }, [currentTheme]);
+
+  // Vigilante de Alarmas Críticas en Tiempo Real
+  useEffect(() => {
+    let hasCriticalAlarm = false;
+    Object.keys(fleet).forEach((mac) => {
+      const dev = fleet[mac];
+      if (dev?.datos?.alarma_cod && dev?.datos?.alarma_cod > 0) {
+        hasCriticalAlarm = true;
+      }
+    });
+
+    if (hasCriticalAlarm && !sirenActive) {
+      startIndustrialSiren();
+      setSirenActive(true);
+    }
+  }, [fleet, sirenActive]);
+
+  const handleSilenceSiren = () => {
+    stopIndustrialSiren();
+    setSirenActive(false);
+  };
+
+  // Obtener URL del fondo actual
+  const bgObj = WALLPAPERS_LIST.find((b) => b.id === currentBg) || WALLPAPERS_LIST[0];
+
   const macKeys = Object.keys(fleet);
-  // Si no hay equipos transmitiendo en este segundo, mostramos un equipo base preparado
   const defaultDevice = {
     mac: 'ESP32_CEYE_01',
     lastSeen: Date.now(),
@@ -55,14 +77,14 @@ function ScadaAppContent() {
     history: []
   };
 
-  const devicesToRender = macKeys.length > 0 ? macKeys.map(k => fleet[k]) : [defaultDevice];
+  const devicesToRender = macKeys.length > 0 ? macKeys.map((k) => fleet[k]) : [defaultDevice];
   const inspectingDevice = selectedMac ? (fleet[selectedMac] || defaultDevice) : defaultDevice;
 
   if (loading) {
     return (
       <div className="min-h-screen bg-[#070913] flex flex-col items-center justify-center">
         <Activity className="w-8 h-8 text-cyan-400 animate-spin mb-3" />
-        <p className="text-xs font-mono text-cyan-400">SINCRONIZANDO SESIÓN BIOMÉDICA CENTRAL...</p>
+        <p className="text-xs font-mono text-cyan-400 tracking-wider">SINCRONIZANDO SESIÓN BIOMÉDICA CENTRAL...</p>
       </div>
     );
   }
@@ -71,9 +93,28 @@ function ScadaAppContent() {
     <div 
       className="min-h-screen text-slate-100 flex flex-col relative transition-all duration-700 bg-cover bg-center bg-fixed pb-20 md:pb-6"
       style={{
-        backgroundImage: `linear-gradient(to bottom, rgba(7, 9, 19, 0.82), rgba(7, 9, 19, 0.94)), url('${WALLPAPERS[currentBgIndex].url}')`
+        backgroundImage: bgObj.url 
+          ? `linear-gradient(to bottom, rgba(7, 9, 19, 0.82), rgba(7, 9, 19, 0.94)), url('${bgObj.url}')`
+          : 'linear-gradient(to bottom, #030712, #0a1120)'
       }}
     >
+      {/* Banner de Emergencia / Silenciar Sirena */}
+      {sirenActive && (
+        <div className="bg-rose-600 px-4 py-2.5 flex items-center justify-between text-white font-bold text-xs shadow-2xl animate-pulse sticky top-0 z-50">
+          <div className="flex items-center gap-2">
+            <Volume2 className="w-4 h-4 animate-bounce" />
+            <span>🚨 ALARMA CRÍTICA ACTIVA EN AUTOCLAVE // SIRENA INDUSTRIAL EN BUCLE</span>
+          </div>
+          <button
+            onClick={handleSilenceSiren}
+            className="px-3 py-1 bg-white text-rose-700 hover:bg-slate-100 rounded-lg text-xs font-black flex items-center gap-1"
+          >
+            <VolumeX className="w-3.5 h-3.5" />
+            <span>SILENCIAR SIRENA (ACK)</span>
+          </button>
+        </div>
+      )}
+
       {/* Header Institucional con rayita láser Speedtest */}
       <header className="speedtest-laser-header border-b border-cyan-500/20 bg-slate-950/85 backdrop-blur-md px-4 md:px-6 py-3 flex items-center justify-between sticky top-0 z-40">
         <div className="flex items-center gap-3">
@@ -121,41 +162,44 @@ function ScadaAppContent() {
             </button>
           )}
 
-          <button
-            onClick={toggleWallpaper}
-            className="p-2 rounded-lg bg-slate-900 border border-cyan-500/30 text-cyan-300"
-            title="Cambiar fondo"
-          >
-            <ImageIcon className="w-4 h-4" />
-          </button>
-
+          {/* Menú Engranaje con 4 Temas, 8 Wallpapers y Ultra-Glass */}
           {user && (
-            <button
-              onClick={logout}
-              className="p-2 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400"
-              title="Cerrar sesión"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
+            <GearMenu
+              currentTheme={currentTheme}
+              setTheme={setCurrentTheme}
+              currentBg={currentBg}
+              setBg={setCurrentBg}
+              opacity={opacity}
+              setOpacity={setOpacity}
+              onLogout={logout}
+            />
           )}
         </div>
       </header>
 
-      {/* Dock Superior en PC para alternar Flota / Auditoría */}
+      {/* Dock Superior en PC para alternar Secciones */}
       {user && (
         <div className="hidden md:flex items-center gap-2 px-6 py-2 bg-slate-950/60 border-b border-cyan-500/10">
           <button
             onClick={() => { setActiveSection('flota'); setSelectedMac(null); }}
             className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
-              activeSection === 'flota' ? 'bg-cyan-500 text-slate-950' : 'text-slate-400 hover:text-white'
+              activeSection === 'flota' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
             }`}
           >
             ⚡ Flota de Autoclaves
           </button>
           <button
+            onClick={() => { setActiveSection('fota'); setSelectedMac(null); }}
+            className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
+              activeSection === 'fota' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            🚀 FOTA Cloud Hub
+          </button>
+          <button
             onClick={() => { setActiveSection('auditoria'); setSelectedMac(null); }}
             className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
-              activeSection === 'auditoria' ? 'bg-cyan-500 text-slate-950' : 'text-slate-400 hover:text-white'
+              activeSection === 'auditoria' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
             }`}
           >
             📋 Auditoría & Paquetes Supabase
@@ -171,7 +215,7 @@ function ScadaAppContent() {
       ) : (
         <main className="flex-1 p-3 md:p-6 max-w-7xl mx-auto w-full flex flex-col gap-4">
           
-          {/* SECCIÓN 1: VISTA DE FLOTA COMPLETA */}
+          {/* SECCIÓN 1: FLOTA COMPLETA */}
           {activeSection === 'flota' && (
             <div className="space-y-4">
               <div className="flex justify-between items-center">
@@ -181,7 +225,6 @@ function ScadaAppContent() {
                 </h2>
               </div>
 
-              {/* Grid de Tarjetas de Equipos */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {devicesToRender.map((dev) => {
                   const dDev = dev.datos || {};
@@ -194,6 +237,7 @@ function ScadaAppContent() {
                       key={dev.mac}
                       onClick={() => { setSelectedMac(dev.mac); setActiveSection('detalle'); }}
                       className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 hover:border-cyan-400 cursor-pointer transition-all duration-200 hover:-translate-y-1 shadow-xl flex flex-col justify-between"
+                      style={{ '--glass-opacity': `${opacity / 100}` }}
                     >
                       <div>
                         <div className="flex justify-between items-start mb-3">
@@ -241,7 +285,7 @@ function ScadaAppContent() {
             </div>
           )}
 
-          {/* SECCIÓN 2: CONTROL TOTAL DEL EQUIPO SELECCIONADO */}
+          {/* SECCIÓN 2: CONTROL TOTAL DEL EQUIPO */}
           {activeSection === 'detalle' && (
             <DeviceDetailView
               device={inspectingDevice}
@@ -251,7 +295,12 @@ function ScadaAppContent() {
             />
           )}
 
-          {/* SECCIÓN 3: AUDITORÍA CLÍNICA DE SUPABASE */}
+          {/* SECCIÓN 3: FOTA CLOUD HUB */}
+          {activeSection === 'fota' && (
+            <FotaHubView fleet={fleet} sendCommand={sendDeviceCommand} />
+          )}
+
+          {/* SECCIÓN 4: AUDITORÍA CLÍNICA DE SUPABASE */}
           {activeSection === 'auditoria' && (
             <ClinicalAuditView />
           )}
@@ -273,6 +322,16 @@ function ScadaAppContent() {
           </button>
 
           <button
+            onClick={() => { setActiveSection('fota'); setSelectedMac(null); }}
+            className={`flex flex-col items-center gap-1 py-1 px-3 rounded-lg text-xs font-mono ${
+              activeSection === 'fota' ? 'text-cyan-400 font-bold' : 'text-slate-400'
+            }`}
+          >
+            <Rocket className="w-5 h-5" />
+            <span>FOTA</span>
+          </button>
+
+          <button
             onClick={() => { setActiveSection('auditoria'); setSelectedMac(null); }}
             className={`flex flex-col items-center gap-1 py-1 px-3 rounded-lg text-xs font-mono ${
               activeSection === 'auditoria' ? 'text-cyan-400 font-bold' : 'text-slate-400'
@@ -291,14 +350,6 @@ function ScadaAppContent() {
               <span>Personal</span>
             </button>
           )}
-
-          <button
-            onClick={toggleWallpaper}
-            className="flex flex-col items-center gap-1 py-1 px-3 rounded-lg text-xs font-mono text-slate-400"
-          >
-            <ImageIcon className="w-5 h-5" />
-            <span>Fondo</span>
-          </button>
         </nav>
       )}
 
