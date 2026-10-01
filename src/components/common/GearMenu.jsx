@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Settings, 
   Maximize, 
@@ -58,17 +59,17 @@ export default function GearMenu({
         <Settings className="w-5 h-5 animate-[spin_14s_linear_infinite]" />
       </button>
 
-      {/* Menú Desplegable Flotante (Garantizado sin cortes) */}
-      {isOpen && (
+      {/* Renderizado mediante Portal en el cuerpo directo de la página (Sin cortes ni bloqueos) */}
+      {isOpen && typeof document !== 'undefined' && createPortal(
         <>
-          {/* Fondo semi-transparente para cerrar al hacer clic afuera */}
+          {/* Fondo semi-transparente que cubre TODA la pantalla */}
           <div 
-            className="fixed inset-0 z-[9999] bg-black/40 backdrop-blur-[2px]"
+            className="fixed inset-0 z-[99998] bg-black/60 backdrop-blur-sm"
             onClick={() => setIsOpen(false)}
           />
 
-          {/* Tarjeta del Menú en posición fija */}
-          <div className="fixed right-3 md:right-6 top-16 w-80 md:w-92 ultra-glass p-5 rounded-2xl shadow-2xl border border-cyan-500/50 z-[10000] backdrop-blur-2xl space-y-4 max-h-[85vh] overflow-y-auto">
+          {/* Tarjeta del Menú en pantalla completa absoluta */}
+          <div className="fixed right-3 md:right-6 top-16 w-[calc(100vw-24px)] max-w-sm ultra-glass p-5 rounded-2xl shadow-2xl border border-cyan-500/60 z-[99999] backdrop-blur-2xl space-y-4 max-h-[85vh] overflow-y-auto">
             
             <div className="flex justify-between items-center border-b border-cyan-500/20 pb-3">
               <span className="text-xs font-bold text-white font-mono uppercase tracking-wider flex items-center gap-2">
@@ -78,7 +79,7 @@ export default function GearMenu({
               <button 
                 type="button"
                 onClick={() => setIsOpen(false)} 
-                className="text-slate-400 hover:text-white p-1"
+                className="text-slate-400 hover:text-white p-1 rounded-lg"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -179,7 +180,8 @@ export default function GearMenu({
               </button>
             </div>
           </div>
-        </>
+        </>,
+        document.body
       )}
     </div>
   );
