@@ -2,17 +2,121 @@
 @tailwind components;
 @tailwind utilities;
 
+/* =========================================================================
+   1. PALETA BASE Y VARIABLES GLOBALES
+   ========================================================================= */
 :root {
-  --glass-opacity: 0.85;
+  --glass-opacity: 0.82;
   --glass-blur: 16px;
+  --glass-bg: 15 23 42; /* Azul pizarra oscuro */
+  --text-primary: #ffffff;
+  --text-secondary: #94a3b8;
+  --accent-cyan: #00f3ff;
+  --laser-gradient: linear-gradient(90deg, #00f3ff 0%, #3b82f6 50%, #00ff88 100%);
+  --laser-glow: 0 0 12px rgba(0, 243, 255, 0.4);
 }
 
 body {
-  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+  color: var(--text-primary);
+  background-color: #030712;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 code, .font-mono {
   font-family: 'JetBrains Mono', monospace;
+}
+
+/* =========================================================================
+   2. REGLAS MAESTRAS DE LOS 4 TEMAS APROBADOS
+   ========================================================================= */
+
+/* TEMA 1: PIZARRA TÁCTICA (TACTICAL) */
+[data-theme="tactical"] {
+  --glass-bg: 15 23 42;
+  --text-primary: #ffffff;
+  --text-secondary: #94a3b8;
+  --accent-cyan: #00f3ff;
+  --laser-gradient: linear-gradient(90deg, #00f3ff 0%, #3b82f6 50%, #00ff88 100%);
+  --laser-glow: 0 0 12px rgba(0, 243, 255, 0.4);
+}
+
+/* TEMA 2: CYBER SPEEDTEST (FUCSIA ➔ VIOLETA ➔ CIAN) */
+[data-theme="cyber"] {
+  --glass-bg: 22 14 40; /* Violeta cyber profundo */
+  --text-primary: #ffffff;
+  --text-secondary: #c084fc;
+  --accent-cyan: #ff007f;
+  --laser-gradient: linear-gradient(90deg, #ff007f 0%, #8b5cf6 50%, #00f3ff 100%);
+  --laser-glow: 0 0 16px rgba(255, 0, 127, 0.5), 0 0 20px rgba(0, 243, 255, 0.3);
+}
+
+/* TEMA 3: HÍBRIDO CUÁNTICO (ESMERALDA ➔ CIAN ➔ ÁMBAR NEÓN) */
+[data-theme="hybrid"] {
+  --glass-bg: 10 32 24; /* Verde esmeralda profundo */
+  --text-primary: #ffffff;
+  --text-secondary: #86efac;
+  --accent-cyan: #00ff88;
+  --laser-gradient: linear-gradient(90deg, #00f3ff 0%, #00ff88 50%, #ffaa00 100%);
+  --laser-glow: 0 0 16px rgba(0, 255, 136, 0.5), 0 0 14px rgba(255, 170, 0, 0.3);
+}
+
+/* TEMA 4: CLÍNICO QUIRÚRGICO (BLUEPRINT BLANCO CON TEXTO AZUL OSCURO DE ALTO CONTRASTE) */
+[data-theme="clinical"] {
+  --glass-bg: 255 255 255; /* Vidrio blanco puro */
+  --text-primary: #0f294a !important; /* Azul marino hospitalario legible */
+  --text-secondary: #334155 !important;
+  --accent-cyan: #0284c7;
+  --laser-gradient: linear-gradient(90deg, #0284c7 0%, #00f3ff 100%);
+  --laser-glow: 0 0 10px rgba(2, 132, 199, 0.3);
+}
+
+[data-theme="clinical"] body {
+  color: #0f294a !important;
+}
+
+[data-theme="clinical"] .ultra-glass {
+  border: 1px solid rgba(2, 132, 199, 0.3) !important;
+  box-shadow: 0 8px 30px rgba(2, 132, 199, 0.08) !important;
+}
+
+[data-theme="clinical"] .ultra-glass p,
+[data-theme="clinical"] .ultra-glass span:not([class*="text-"]),
+[data-theme="clinical"] .ultra-glass div:not([class*="text-"]),
+[data-theme="clinical"] .ultra-glass h1,
+[data-theme="clinical"] .ultra-glass h2,
+[data-theme="clinical"] .ultra-glass h3 {
+  color: #0f294a !important;
+}
+
+/* =========================================================================
+   3. EFECTO ULTRA-GLASS REAL Y REACTIVO (0% A 100%)
+   ========================================================================= */
+.ultra-glass {
+  background-color: rgb(var(--glass-bg) / var(--glass-opacity)) !important;
+  backdrop-filter: blur(var(--glass-blur)) !important;
+  -webkit-backdrop-filter: blur(var(--glass-blur)) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  transition: background-color 0.25s ease, border-color 0.25s ease, opacity 0.25s ease;
+}
+
+/* =========================================================================
+   4. RAYITA LÁSER SPEEDTEST ANIMADA EN EL HEADER
+   ========================================================================= */
+.speedtest-laser-header {
+  position: relative;
+}
+.speedtest-laser-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: var(--laser-gradient);
+  box-shadow: var(--laser-glow);
+  z-index: 50;
+  transition: background 0.4s ease;
 }
 
 /* Scrollbar industrial de perfil delgado */
@@ -24,42 +128,9 @@ code, .font-mono {
   background: rgba(10, 10, 20, 0.6);
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(0, 243, 255, 0.3);
+  background: rgba(0, 243, 255, 0.35);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 243, 255, 0.6);
-}
-
-/* Efecto Ultra-Glass real sin manchas */
-.ultra-glass {
-  background-color: rgba(15, 23, 42, var(--glass-opacity));
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-/* Borde láser Speedtest con rayita luminosa continua en el header */
-.speedtest-laser-header {
-  position: relative;
-  overflow: hidden;
-}
-.speedtest-laser-header::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 50%;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, #00f3ff, #ff007f, transparent);
-  animation: laserSlide 2.5s infinite linear;
-}
-
-@keyframes laserSlide {
-  0% {
-    transform: translateX(-100%);
-  }
-  100% {
-    transform: translateX(200%);
-  }
+  background: rgba(0, 243, 255, 0.7);
 }
