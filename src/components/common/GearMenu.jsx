@@ -18,8 +18,7 @@ export const WALLPAPERS_LIST = [
   { id: 'motherboard-gold', name: '🔌 Placa Base & Hardware Eléctrico', url: 'https://images.unsplash.com/photo-1555680202-c86f0e12f086?auto=format&fit=crop&w=2000&q=80' },
   { id: 'quantum-connections', name: '💠 Conexiones Cuánticas & Fibra', url: 'https://images.unsplash.com/photo-1504639725590-34d0984388bd?auto=format&fit=crop&w=2000&q=80' },
   { id: 'server-datacenter', name: '🏢 Datacenter Hospitalario', url: 'https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=2068&q=80' },
-  { id: 'oled', name: '⚫ Negro OLED Cósmico', url: '' },
-  { id: 'clean', name: '⚪ Blanco Quirúrgico Blueprint', url: '' }
+  { id: 'oled', name: '⚫ Negro OLED Cósmico', url: '' }
 ];
 
 export default function GearMenu({ 
@@ -33,7 +32,6 @@ export default function GearMenu({
 }) {
   const [isOpen, setIsOpen] = useState(false);
 
-  // Alternar Pantalla Completa
   const toggleFullScreen = () => {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen().catch(() => {});
@@ -42,14 +40,12 @@ export default function GearMenu({
     }
   };
 
-  // Forzar Sincronización
   const handleForceSync = () => {
     window.location.reload();
   };
 
   return (
     <div>
-      {/* Botón del Engranaje con giro suave */}
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
@@ -59,17 +55,14 @@ export default function GearMenu({
         <Settings className="w-5 h-5 animate-[spin_14s_linear_infinite]" />
       </button>
 
-      {/* Renderizado mediante Portal en el cuerpo directo de la página (Sin cortes ni bloqueos) */}
       {isOpen && typeof document !== 'undefined' && createPortal(
         <>
-          {/* Fondo semi-transparente que cubre TODA la pantalla */}
           <div 
             className="fixed inset-0 z-[99998] bg-black/60 backdrop-blur-sm"
             onClick={() => setIsOpen(false)}
           />
 
-          {/* Tarjeta del Menú en pantalla completa absoluta */}
-          <div className="fixed right-3 md:right-6 top-16 w-[calc(100vw-24px)] max-w-sm ultra-glass p-5 rounded-2xl shadow-2xl border border-cyan-500/60 z-[99999] backdrop-blur-2xl space-y-4 max-h-[85vh] overflow-y-auto">
+          <div className="fixed right-3 md:right-6 top-16 w-[calc(100vw-24px)] max-w-sm ultra-glass p-5 rounded-2xl shadow-2xl z-[99999] backdrop-blur-2xl space-y-4 max-h-[85vh] overflow-y-auto">
             
             <div className="flex justify-between items-center border-b border-cyan-500/20 pb-3">
               <span className="text-xs font-bold text-white font-mono uppercase tracking-wider flex items-center gap-2">
@@ -85,37 +78,36 @@ export default function GearMenu({
               </button>
             </div>
 
-            {/* 1. SELECTOR DE TEMAS */}
+            {/* 1. SELECTOR DE LOS 3 TEMAS OSCUROS */}
             <div>
               <label className="text-[11px] font-mono text-cyan-400 font-bold block mb-2 flex items-center gap-1.5">
                 <Palette className="w-3.5 h-3.5" />
                 TEMA VISUAL OFICIAL:
               </label>
-              <div className="grid grid-cols-2 gap-1.5">
+              <div className="grid grid-cols-3 gap-2">
                 {[
-                  { id: 'tactical', label: '🛡️ Pizarra', desc: 'Slate' },
-                  { id: 'cyber', label: '🌙 Cyber', desc: 'Fucsia/Cian' },
-                  { id: 'hybrid', label: '⚡ Híbrido', desc: 'Esmeralda' },
-                  { id: 'clinical', label: '🏥 Clínico', desc: 'Blueprint' }
+                  { id: 'tactical', label: '🛡️ Pizarra', desc: 'Slate / Cian' },
+                  { id: 'cyber', label: '🌙 Cyber', desc: 'Fucsia / Neón' },
+                  { id: 'hybrid', label: '⚡ Híbrido', desc: 'Esmeralda' }
                 ].map((t) => (
                   <button
                     key={t.id}
                     type="button"
                     onClick={() => setTheme(t.id)}
-                    className={`py-2 px-2.5 rounded-lg text-xs font-mono text-left border transition-all ${
+                    className={`py-2 px-2 rounded-xl text-xs font-mono text-center border transition-all ${
                       currentTheme === t.id
-                        ? 'bg-cyan-500/20 border-cyan-400 text-white font-bold shadow-[0_0_10px_rgba(0,243,255,0.3)]'
+                        ? 'bg-cyan-500/20 border-cyan-400 text-white font-bold shadow-[0_0_12px_rgba(0,243,255,0.35)]'
                         : 'bg-slate-900/60 border-slate-700/60 text-slate-300 hover:border-slate-500'
                     }`}
                   >
-                    <div>{t.label}</div>
-                    <span className="text-[9px] text-slate-400">{t.desc}</span>
+                    <div className="font-bold">{t.label}</div>
+                    <span className="text-[9px] text-slate-400 block mt-0.5">{t.desc}</span>
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* 2. SELECTOR DE FONDOS (8 WALLPAPERS) */}
+            {/* 2. SELECTOR DE FONDOS */}
             <div>
               <label className="text-[11px] font-mono text-cyan-400 font-bold block mb-1.5 flex items-center gap-1.5">
                 <ImageIcon className="w-3.5 h-3.5" />
@@ -124,7 +116,7 @@ export default function GearMenu({
               <select
                 value={currentBg}
                 onChange={(e) => setBg(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 text-xs text-white rounded-lg p-2 font-mono focus:outline-none focus:border-cyan-400"
+                className="w-full bg-slate-900 border border-slate-700 text-xs text-white rounded-lg p-2.5 font-mono focus:outline-none focus:border-cyan-400"
               >
                 {WALLPAPERS_LIST.map((bg) => (
                   <option key={bg.id} value={bg.id}>
@@ -134,8 +126,8 @@ export default function GearMenu({
               </select>
             </div>
 
-            {/* 3. TRANSPARENCIA ULTRA-GLASS */}
-            <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800 space-y-1.5">
+            {/* 3. TRANSPARENCIA ULTRA-GLASS (0% A 100%) */}
+            <div className="bg-slate-950/60 p-3.5 rounded-xl border border-slate-800 space-y-1.5">
               <div className="flex justify-between text-xs font-mono text-cyan-300">
                 <span className="flex items-center gap-1"><Waves className="w-3.5 h-3.5" /> Transparencia Ultra-Glass:</span>
                 <span className="font-bold">{opacity}%</span>
@@ -150,7 +142,7 @@ export default function GearMenu({
               />
             </div>
 
-            {/* 4. ACCIONES DEL SISTEMA */}
+            {/* 4. ACCIONES */}
             <div className="pt-2 border-t border-slate-800 space-y-1.5">
               <button
                 type="button"
