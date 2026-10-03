@@ -20,7 +20,9 @@ import {
   VolumeX,
   Bell,
   Clock,
-  Users
+  Users,
+  Wifi,
+  WifiOff
 } from 'lucide-react';
 
 function ScadaAppContent() {
@@ -35,9 +37,19 @@ function ScadaAppContent() {
   // Navegación: 'flota' | 'gestion' | 'fota' | 'auditoria' | 'detalle'
   const [activeSection, setActiveSection] = useState('flota');
   const [selectedMac, setSelectedMac] = useState(null);
-  const [healthFilter, setHealthFilter] = useState('ALL'); // 'ONLINE' | 'LATENCY' | 'OFFLINE' | 'ALL'
+  const [healthFilter, setHealthFilter] = useState('ALL');
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [sirenActive, setSirenActive] = useState(false);
+
+  // RELOJ DE LATIDO EN TIEMPO REAL (HEARTBEAT CADA 1 SEGUNDO)
+  const [currentTime, setCurrentTime] = useState(Date.now());
+
+  useEffect(() => {
+    const heartbeatTimer = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 1000);
+    return () => clearInterval(heartbeatTimer);
+  }, []);
 
   // Temporizador de Inactividad (14 min + 1 min de advertencia = 15 min)
   const [showTimeoutModal, setShowTimeoutModal] = useState(false);
@@ -72,7 +84,7 @@ function ScadaAppContent() {
       idleTimerRef.current = setTimeout(() => {
         setShowTimeoutModal(true);
         setCountdown(60);
-      }, 14 * 60 * 1000); // 14 minutos
+      }, 14 * 60 * 1000);
     }
   };
 
@@ -98,6 +110,7 @@ function ScadaAppContent() {
   useEffect(() => {
     const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'];
     const handleActivity = () => resetIdleTimer();
+    events.forEach((evt) => window.removeEventListener(evt, handleActivity));
     events.forEach((evt) => window.addEventListener(evt, handleActivity, { passive: true }));
     resetIdleTimer();
     return () => {
@@ -129,33 +142,60 @@ function ScadaAppContent() {
 
   const bgObj = WALLPAPERS_LIST.find((b) => b.id === currentBg) || WALLPAPERS_LIST[0];
 
-  // Cálculo de Estados de Conexión de Flota
+  // =========================================================================
+  // MOTOR DE CÁLCULO PRECISO DE SALUD BASADO EN EL TIEMPO REAL (HEARTBEAT)
+  // =========================================================================
+  const getDeviceHealthData = (dev) => {
+    if (!dev || !dev.lastSeen) {
+      return { status: 'OFFLINE', text: 'OFFLINE', timeAgo: 'Sin señal', colorClass: 'bg-rose-500/15 text-rose-400 border-rose-500/30' };
+    }
+
+    const diffSegundos = Math.floor((currentTime - dev.lastSeen) / 1000);
+
+    if (diffSegundos <= 5) {
+      return { 
+        status: 'ONLINE', 
+        text: '100% ONLINE', 
+        timeAgo: diffSegundos === 0 ? 'En vivo' : `Hace ${diffSegundos}s`, 
+        colorClass: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' 
+      };
+    } else if (diffSegundos <= 15) {
+      return { 
+        status: 'LATENCY', 
+        text: 'LATENCIA', 
+        timeAgo: `Hace ${diffSegundos}s`, 
+        colorClass: 'bg-amber-500/15 text-amber-300 border-amber-500/30' 
+      };
+    } else {
+      const mins = Math.floor(diffSegundos / 60);
+      const timeStr = mins > 0 ? `Hace ${mins}m` : `Hace ${diffSegundos}s`;
+      return { 
+        status: 'OFFLINE', 
+        text: 'DESCONECTADO', 
+        timeAgo: timeStr, 
+        colorClass: 'bg-rose-500/15 text-rose-400 border-rose-500/30' 
+      };
+    }
+  };
+
   const macKeys = Object.keys(fleet);
   let countOn = 0, countLat = 0, countOff = 0;
 
   macKeys.forEach((mac) => {
-    const diff = Date.now() - (fleet[mac]?.lastSeen || 0);
-    if (diff < 6000) countOn++;
-    else if (diff < 18000) countLat++;
+    const health = getDeviceHealthData(fleet[mac]);
+    if (health.status === 'ONLINE') countOn++;
+    else if (health.status === 'LATENCY') countLat++;
     else countOff++;
   });
 
-  const getDeviceHealth = (dev) => {
-    if (!dev?.lastSeen) return 'OFFLINE';
-    const diff = Date.now() - dev.lastSeen;
-    if (diff < 6000) return 'ONLINE';
-    if (diff < 18000) return 'LATENCY';
-    return 'OFFLINE';
-  };
-
-  // Filtrado de equipos
+  // Filtrar los autoclaves en base a su estado calculado al milisegundo
   const filteredDevices = macKeys
     .map((k) => fleet[k])
     .filter((dev) => {
-      const status = getDeviceHealth(dev);
-      if (healthFilter === 'ONLINE') return status === 'ONLINE';
-      if (healthFilter === 'LATENCY') return status === 'LATENCY';
-      if (healthFilter === 'OFFLINE') return status === 'OFFLINE';
+      const health = getDeviceHealthData(dev);
+      if (healthFilter === 'ONLINE') return health.status === 'ONLINE';
+      if (healthFilter === 'LATENCY') return health.status === 'LATENCY';
+      if (healthFilter === 'OFFLINE') return health.status === 'OFFLINE';
       return true;
     });
 
@@ -303,7 +343,7 @@ function ScadaAppContent() {
       ) : (
         <main className="flex-1 p-3 md:p-6 max-w-7xl mx-auto w-full flex flex-col gap-4">
           
-          {/* SECCIÓN 1: FLOTA CON FILTROS DE SALUD */}
+          {/* SECCIÓN 1: FLOTA CON FILTROS DINÁMICOS DE SALUD */}
           {activeSection === 'flota' && (
             <div className="space-y-4">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
@@ -312,7 +352,7 @@ function ScadaAppContent() {
                   Monitor de Flota Activa
                 </h2>
 
-                {/* Filtros de Salud Clínicos */}
+                {/* Filtros de Salud con contadores en caliente */}
                 <div className="flex gap-2 overflow-x-auto w-full sm:w-auto pb-1">
                   <button
                     onClick={() => setHealthFilter('ONLINE')}
@@ -349,16 +389,16 @@ function ScadaAppContent() {
                 </div>
               </div>
 
-              {/* Grid de Tarjetas */}
+              {/* Grid de Tarjetas de Autoclaves */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filteredDevices.length === 0 ? (
                   <div className="col-span-full ultra-glass p-8 rounded-2xl text-center text-slate-400 font-mono text-xs">
-                    No hay autoclaves transmitiendo en el filtro [{healthFilter}].
+                    No hay autoclaves en el estado [{healthFilter}].
                   </div>
                 ) : (
                   filteredDevices.map((dev) => {
                     const dDev = dev.datos || {};
-                    const health = getDeviceHealth(dev);
+                    const health = getDeviceHealthData(dev);
                     const cCount = dDev?.cfg?.ciclos || dev?.meta?.ciclosCompletados || 0;
                     const cLim = dDev?.cfg?.lim_mant || dev?.meta?.limiteMantenimiento || 200;
 
@@ -371,26 +411,34 @@ function ScadaAppContent() {
                         <div>
                           <div className="flex justify-between items-start mb-3">
                             <div>
-                              <h3 className="font-bold text-sm">{dev.meta?.alias || `AUTOCLAVE [${dev.mac.slice(-4)}]`}</h3>
+                              <h3 className="font-bold text-sm text-white">{dev.meta?.alias || `AUTOCLAVE [${dev.mac.slice(-4)}]`}</h3>
                               <p className="text-[11px] text-slate-400 font-mono">{dev.meta?.cliente || 'Hospital Central'} • {dev.mac}</p>
                             </div>
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-mono border ${
-                              health === 'ONLINE' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' :
-                              health === 'LATENCY' ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' :
-                              'bg-rose-500/20 text-rose-400 border-rose-500/40'
-                            }`}>
-                              {health}
-                            </span>
+                            
+                            {/* Insignia Dinámica de Salud con tiempo exacto */}
+                            <div className="text-right">
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono border font-bold ${health.colorClass}`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${
+                                  health.status === 'ONLINE' ? 'bg-emerald-400 animate-ping' : 
+                                  health.status === 'LATENCY' ? 'bg-amber-400 animate-pulse' : 
+                                  'bg-rose-400'
+                                }`}></span>
+                                {health.text}
+                              </span>
+                              <span className="block text-[9px] text-slate-400 font-mono mt-0.5">
+                                {health.timeAgo}
+                              </span>
+                            </div>
                           </div>
 
                           <div className="grid grid-cols-2 gap-2 my-3">
                             <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800 text-center">
                               <span className="text-[10px] font-mono text-cyan-400 block">TEMPERATURA</span>
-                              <span className="text-xl font-bold font-mono">{(dDev.temp_camara || 25).toFixed(1)}°C</span>
+                              <span className="text-xl font-bold font-mono text-white">{(dDev.temp_camara || 25).toFixed(1)}°C</span>
                             </div>
                             <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800 text-center">
                               <span className="text-[10px] font-mono text-pink-400 block">PRESIÓN</span>
-                              <span className="text-xl font-bold font-mono">{(dDev.presion || 0).toFixed(2)}b</span>
+                              <span className="text-xl font-bold font-mono text-white">{(dDev.presion || 0).toFixed(2)}b</span>
                             </div>
                           </div>
 
