@@ -7,10 +7,9 @@ import ClinicalAuditView from './components/reports/ClinicalAuditView';
 import FotaHubView from './components/fota/FotaHubView';
 import GearMenu, { WALLPAPERS_LIST } from './components/common/GearMenu';
 import { useMqttFleet } from './hooks/useMqttFleet';
-import { startIndustrialSiren, stopIndustrialSiren, isSirenPlaying } from './services/audioAlarm';
+import { startIndustrialSiren, stopIndustrialSiren } from './services/audioAlarm';
 import { 
   Activity, 
-  ShieldCheck, 
   Flame, 
   FileText, 
   Rocket, 
@@ -25,10 +24,10 @@ function ScadaAppContent() {
   const { user, profile, loading, pendingRequests, logout } = useAuth();
   const { fleet, mqttConnected, sendDeviceCommand } = useMqttFleet();
 
-  // Estados visuales del Menú Engranaje
-  const [currentTheme, setCurrentTheme] = useState('tactical');
-  const [currentBg, setCurrentBg] = useState('circuit-pcb');
-  const [opacity, setOpacity] = useState(82);
+  // Estados visuales del Menú Engranaje con persistencia en memoria
+  const [currentTheme, setCurrentTheme] = useState(() => localStorage.getItem('scada_theme') || 'tactical');
+  const [currentBg, setCurrentBg] = useState(() => localStorage.getItem('scada_bg') || 'circuit-pcb');
+  const [opacity, setOpacity] = useState(() => Number(localStorage.getItem('scada_transparency')) || 82);
 
   // Navegación
   const [activeSection, setActiveSection] = useState('flota'); // 'flota' | 'fota' | 'auditoria' | 'detalle'
@@ -38,12 +37,25 @@ function ScadaAppContent() {
 
   const isAdmin = profile?.rol?.toLowerCase().includes('admin') || profile?.rol?.toLowerCase().includes('director');
 
-  // Actualizar tema en el HTML raíz
+  // 1. INYECCIÓN ACTIVA DEL TEMA EN TIEMPO REAL
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', currentTheme);
+    localStorage.setItem('scada_theme', currentTheme);
   }, [currentTheme]);
 
-  // Vigilante de Alarmas Críticas en Tiempo Real
+  // 2. INYECCIÓN ACTIVA DE LA TRANSPARENCIA ULTRA-GLASS EN TIEMPO REAL (0% A 100%)
+  useEffect(() => {
+    const alpha = (opacity / 100).toFixed(2);
+    document.documentElement.style.setProperty('--glass-opacity', alpha);
+    localStorage.setItem('scada_transparency', opacity);
+  }, [opacity]);
+
+  // 3. PERSISTENCIA DEL FONDO SELECCIONADO
+  useEffect(() => {
+    localStorage.setItem('scada_bg', currentBg);
+  }, [currentBg]);
+
+  // 4. VIGILANTE DE ALARMAS CRÍTICAS (SIRENA INDUSTRIAL)
   useEffect(() => {
     let hasCriticalAlarm = false;
     Object.keys(fleet).forEach((mac) => {
@@ -64,8 +76,30 @@ function ScadaAppContent() {
     setSirenActive(false);
   };
 
-  // Obtener URL del fondo actual
+  // Obtener Fondo Fotográfico o Estilo Especial
   const bgObj = WALLPAPERS_LIST.find((b) => b.id === currentBg) || WALLPAPERS_LIST[0];
+  
+  const getBackgroundStyle = () => {
+    if (currentTheme === 'clinical' && currentBg === 'clean') {
+      return {
+        backgroundColor: '#f0f4f9',
+        backgroundImage: 'linear-gradient(to right, rgba(2, 132, 199, 0.08) 1px, transparent 1px), linear-gradient(to bottom, rgba(2, 132, 199, 0.08) 1px, transparent 1px)',
+        backgroundSize: '24px 24px'
+      };
+    }
+    if (currentBg === 'oled') {
+      return {
+        backgroundColor: '#000000',
+        backgroundImage: 'radial-gradient(circle at 50% -5%, rgba(139, 92, 246, 0.22) 0%, transparent 55%), radial-gradient(circle at 100% 100%, rgba(0, 243, 255, 0.15) 0%, transparent 50%)'
+      };
+    }
+    if (bgObj.url) {
+      return {
+        backgroundImage: `linear-gradient(to bottom, rgba(7, 9, 19, 0.80), rgba(7, 9, 19, 0.94)), url('${bgObj.url}')`
+      };
+    }
+    return { backgroundColor: '#030712' };
+  };
 
   const macKeys = Object.keys(fleet);
   const defaultDevice = {
@@ -91,14 +125,10 @@ function ScadaAppContent() {
 
   return (
     <div 
-      className="min-h-screen text-slate-100 flex flex-col relative transition-all duration-700 bg-cover bg-center bg-fixed pb-20 md:pb-6"
-      style={{
-        backgroundImage: bgObj.url 
-          ? `linear-gradient(to bottom, rgba(7, 9, 19, 0.82), rgba(7, 9, 19, 0.94)), url('${bgObj.url}')`
-          : 'linear-gradient(to bottom, #030712, #0a1120)'
-      }}
+      className="min-h-screen flex flex-col relative transition-all duration-700 bg-cover bg-center bg-fixed pb-20 md:pb-6"
+      style={getBackgroundStyle()}
     >
-      {/* Banner de Emergencia / Silenciar Sirena */}
+      {/* Banner de Emergencia con Botón para Silenciar Sirena */}
       {sirenActive && (
         <div className="bg-rose-600 px-4 py-2.5 flex items-center justify-between text-white font-bold text-xs shadow-2xl animate-pulse sticky top-0 z-50">
           <div className="flex items-center gap-2">
@@ -107,7 +137,7 @@ function ScadaAppContent() {
           </div>
           <button
             onClick={handleSilenceSiren}
-            className="px-3 py-1 bg-white text-rose-700 hover:bg-slate-100 rounded-lg text-xs font-black flex items-center gap-1"
+            className="px-3 py-1 bg-white text-rose-700 hover:bg-slate-100 rounded-lg text-xs font-black flex items-center gap-1 shadow-lg"
           >
             <VolumeX className="w-3.5 h-3.5" />
             <span>SILENCIAR SIRENA (ACK)</span>
@@ -162,7 +192,7 @@ function ScadaAppContent() {
             </button>
           )}
 
-          {/* Menú Engranaje con 4 Temas, 8 Wallpapers y Ultra-Glass */}
+          {/* Menú Engranaje */}
           {user && (
             <GearMenu
               currentTheme={currentTheme}
@@ -186,7 +216,7 @@ function ScadaAppContent() {
               activeSection === 'flota' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
             }`}
           >
-            ⚡ Flota de Autoclaves
+            ⚡ Flota de Autoclaves ({devicesToRender.length})
           </button>
           <button
             onClick={() => { setActiveSection('fota'); setSelectedMac(null); }}
@@ -219,7 +249,7 @@ function ScadaAppContent() {
           {activeSection === 'flota' && (
             <div className="space-y-4">
               <div className="flex justify-between items-center">
-                <h2 className="text-base md:text-lg font-bold text-white font-mono flex items-center gap-2">
+                <h2 className="text-base md:text-lg font-bold font-mono flex items-center gap-2">
                   <Flame className="w-5 h-5 text-cyan-400" />
                   Flota de Autoclaves Conectados ({devicesToRender.length})
                 </h2>
@@ -236,17 +266,16 @@ function ScadaAppContent() {
                     <div
                       key={dev.mac}
                       onClick={() => { setSelectedMac(dev.mac); setActiveSection('detalle'); }}
-                      className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 hover:border-cyan-400 cursor-pointer transition-all duration-200 hover:-translate-y-1 shadow-xl flex flex-col justify-between"
-                      style={{ '--glass-opacity': `${opacity / 100}` }}
+                      className="ultra-glass p-5 rounded-2xl cursor-pointer transition-all duration-200 hover:-translate-y-1 shadow-xl flex flex-col justify-between"
                     >
                       <div>
                         <div className="flex justify-between items-start mb-3">
                           <div>
-                            <h3 className="font-bold text-sm text-white">{dev.meta?.alias || `AUTOCLAVE [${dev.mac.slice(-4)}]`}</h3>
+                            <h3 className="font-bold text-sm">{dev.meta?.alias || `AUTOCLAVE [${dev.mac.slice(-4)}]`}</h3>
                             <p className="text-[11px] text-slate-400 font-mono">{dev.meta?.cliente || 'Hospital Central'} • {dev.mac}</p>
                           </div>
                           <span className={`px-2 py-0.5 rounded text-[10px] font-mono border ${
-                            isDevOnline ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                            isDevOnline ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' : 'bg-rose-500/20 text-rose-400 border-rose-500/40'
                           }`}>
                             {isDevOnline ? 'ONLINE' : 'OFFLINE'}
                           </span>
@@ -255,11 +284,11 @@ function ScadaAppContent() {
                         <div className="grid grid-cols-2 gap-2 my-3">
                           <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800 text-center">
                             <span className="text-[10px] font-mono text-cyan-400 block">TEMPERATURA</span>
-                            <span className="text-xl font-bold font-mono text-white">{(dDev.temp_camara || 25).toFixed(1)}°C</span>
+                            <span className="text-xl font-bold font-mono">{(dDev.temp_camara || 25).toFixed(1)}°C</span>
                           </div>
                           <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800 text-center">
                             <span className="text-[10px] font-mono text-pink-400 block">PRESIÓN</span>
-                            <span className="text-xl font-bold font-mono text-white">{(dDev.presion || 0).toFixed(2)}b</span>
+                            <span className="text-xl font-bold font-mono">{(dDev.presion || 0).toFixed(2)}b</span>
                           </div>
                         </div>
 
