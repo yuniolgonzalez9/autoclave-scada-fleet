@@ -8,19 +8,19 @@
 :root {
   --glass-opacity: 0.82;
   --glass-blur: 16px;
-  --glass-bg: 15 23 42; /* Azul pizarra oscuro */
-  --text-primary: #ffffff;
-  --text-secondary: #94a3b8;
-  --accent-cyan: #00f3ff;
-  --laser-gradient: linear-gradient(90deg, #00f3ff 0%, #3b82f6 50%, #00ff88 100%);
-  --laser-glow: 0 0 12px rgba(0, 243, 255, 0.4);
+  --glass-bg: 15 23 42;
+  --accent-color: #00f3ff;
+  --card-border: rgba(0, 243, 255, 0.28);
+  --laser-gradient: linear-gradient(90deg, transparent, #00f3ff, #3b82f6, #00f3ff, transparent);
+  --laser-glow: 0 0 16px rgba(0, 243, 255, 0.6);
 }
 
 body {
   font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
-  color: var(--text-primary);
+  color: #ffffff;
   background-color: #030712;
   transition: background-color 0.3s ease, color 0.3s ease;
+  overflow-x: hidden;
 }
 
 code, .font-mono {
@@ -28,80 +28,54 @@ code, .font-mono {
 }
 
 /* =========================================================================
-   2. REGLAS MAESTRAS DE LOS 4 TEMAS APROBADOS
+   2. LOS 3 TEMAS OSCUROS DE ÉLITE REPOTENCIADOS
    ========================================================================= */
 
-/* TEMA 1: PIZARRA TÁCTICA (TACTICAL) */
+/* TEMA 1: PIZARRA TÁCTICA (TACTICAL SLATE) */
 [data-theme="tactical"] {
-  --glass-bg: 15 23 42;
-  --text-primary: #ffffff;
-  --text-secondary: #94a3b8;
-  --accent-cyan: #00f3ff;
-  --laser-gradient: linear-gradient(90deg, #00f3ff 0%, #3b82f6 50%, #00ff88 100%);
-  --laser-glow: 0 0 12px rgba(0, 243, 255, 0.4);
+  --glass-bg: 10 16 30;
+  --accent-color: #00f3ff;
+  --card-border: rgba(0, 243, 255, 0.3);
+  --laser-gradient: linear-gradient(90deg, transparent, #00f3ff, #2563eb, #00ff88, transparent);
+  --laser-glow: 0 0 18px rgba(0, 243, 255, 0.5);
 }
 
-/* TEMA 2: CYBER SPEEDTEST (FUCSIA ➔ VIOLETA ➔ CIAN) */
+/* TEMA 2: CYBER SPEEDTEST (FUCSIA NEÓN ➔ VIOLETA ➔ CIAN) */
 [data-theme="cyber"] {
-  --glass-bg: 22 14 40; /* Violeta cyber profundo */
-  --text-primary: #ffffff;
-  --text-secondary: #c084fc;
-  --accent-cyan: #ff007f;
-  --laser-gradient: linear-gradient(90deg, #ff007f 0%, #8b5cf6 50%, #00f3ff 100%);
-  --laser-glow: 0 0 16px rgba(255, 0, 127, 0.5), 0 0 20px rgba(0, 243, 255, 0.3);
+  --glass-bg: 22 10 38;
+  --accent-color: #ff007f;
+  --card-border: rgba(255, 0, 127, 0.38);
+  --laser-gradient: linear-gradient(90deg, transparent, #ff007f, #8b5cf6, #00f3ff, #ff007f, transparent);
+  --laser-glow: 0 0 22px rgba(255, 0, 127, 0.65), 0 0 14px rgba(0, 243, 255, 0.4);
 }
 
-/* TEMA 3: HÍBRIDO CUÁNTICO (ESMERALDA ➔ CIAN ➔ ÁMBAR NEÓN) */
+/* TEMA 3: BIO-CUÁNTICO (ESMERALDA ELÉCTRICO ➔ CIAN ➔ ÁMBAR) */
 [data-theme="hybrid"] {
-  --glass-bg: 10 32 24; /* Verde esmeralda profundo */
-  --text-primary: #ffffff;
-  --text-secondary: #86efac;
-  --accent-cyan: #00ff88;
-  --laser-gradient: linear-gradient(90deg, #00f3ff 0%, #00ff88 50%, #ffaa00 100%);
-  --laser-glow: 0 0 16px rgba(0, 255, 136, 0.5), 0 0 14px rgba(255, 170, 0, 0.3);
-}
-
-/* TEMA 4: CLÍNICO QUIRÚRGICO (BLUEPRINT BLANCO CON TEXTO AZUL OSCURO DE ALTO CONTRASTE) */
-[data-theme="clinical"] {
-  --glass-bg: 255 255 255; /* Vidrio blanco puro */
-  --text-primary: #0f294a !important; /* Azul marino hospitalario legible */
-  --text-secondary: #334155 !important;
-  --accent-cyan: #0284c7;
-  --laser-gradient: linear-gradient(90deg, #0284c7 0%, #00f3ff 100%);
-  --laser-glow: 0 0 10px rgba(2, 132, 199, 0.3);
-}
-
-[data-theme="clinical"] body {
-  color: #0f294a !important;
-}
-
-[data-theme="clinical"] .ultra-glass {
-  border: 1px solid rgba(2, 132, 199, 0.3) !important;
-  box-shadow: 0 8px 30px rgba(2, 132, 199, 0.08) !important;
-}
-
-[data-theme="clinical"] .ultra-glass p,
-[data-theme="clinical"] .ultra-glass span:not([class*="text-"]),
-[data-theme="clinical"] .ultra-glass div:not([class*="text-"]),
-[data-theme="clinical"] .ultra-glass h1,
-[data-theme="clinical"] .ultra-glass h2,
-[data-theme="clinical"] .ultra-glass h3 {
-  color: #0f294a !important;
+  --glass-bg: 6 24 18;
+  --accent-color: #00ff88;
+  --card-border: rgba(0, 255, 136, 0.35);
+  --laser-gradient: linear-gradient(90deg, transparent, #00ff88, #00f3ff, #f59e0b, #00ff88, transparent);
+  --laser-glow: 0 0 20px rgba(0, 255, 136, 0.6), 0 0 12px rgba(245, 158, 11, 0.35);
 }
 
 /* =========================================================================
-   3. EFECTO ULTRA-GLASS REAL Y REACTIVO (0% A 100%)
+   3. ULTRA-GLASS CRISTAL TRASLÚCIDO REAL (0% A 100%)
    ========================================================================= */
 .ultra-glass {
   background-color: rgb(var(--glass-bg) / var(--glass-opacity)) !important;
   backdrop-filter: blur(var(--glass-blur)) !important;
   -webkit-backdrop-filter: blur(var(--glass-blur)) !important;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  transition: background-color 0.25s ease, border-color 0.25s ease, opacity 0.25s ease;
+  border: 1.5px solid var(--card-border) !important;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.ultra-glass:hover {
+  border-color: var(--accent-color) !important;
 }
 
 /* =========================================================================
-   4. RAYITA LÁSER SPEEDTEST ANIMADA EN EL HEADER
+   4. RAYITA LÁSER SPEEDTEST CONTINUA EN EL HEADER
    ========================================================================= */
 .speedtest-laser-header {
   position: relative;
@@ -111,12 +85,21 @@ code, .font-mono {
   position: absolute;
   top: 0;
   left: 0;
-  width: 100%;
-  height: 2px;
+  width: 60%;
+  height: 2.5px;
   background: var(--laser-gradient);
   box-shadow: var(--laser-glow);
   z-index: 50;
-  transition: background 0.4s ease;
+  animation: laserBeam 3s linear infinite;
+}
+
+@keyframes laserBeam {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(220%);
+  }
 }
 
 /* Scrollbar industrial de perfil delgado */
@@ -125,7 +108,7 @@ code, .font-mono {
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: rgba(10, 10, 20, 0.6);
+  background: rgba(10, 10, 20, 0.7);
 }
 ::-webkit-scrollbar-thumb {
   background: rgba(0, 243, 255, 0.35);
