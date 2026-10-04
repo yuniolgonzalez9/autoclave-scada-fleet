@@ -9,7 +9,7 @@ import FleetManagementView from './components/fleet/FleetManagementView';
 import GearMenu, { WALLPAPERS_LIST } from './components/common/GearMenu';
 import ClinicalTooltip from './components/common/ClinicalTooltip';
 import { useMqttFleet } from './hooks/useMqttFleet';
-import { startIndustrialSiren, stopIndustrialSiren } from './services/audioAlarm';
+import { startIndustrialSiren, stopIndustrialSiren, initAudioUnlock } from './services/audioAlarm';
 import { sendCriticalAlarmWithButtons } from './services/telegram';
 import { supabase } from './services/supabase';
 import { 
@@ -35,8 +35,13 @@ function ScadaAppContent() {
   const [currentBg, setCurrentBg] = useState(() => localStorage.getItem('scada_bg') || 'circuit-pcb');
   const [opacity, setOpacity] = useState(() => Number(localStorage.getItem('scada_transparency')) || 82);
 
+  // Inicializar desbloqueo de audio en el primer clic
+  useEffect(() => {
+    initAudioUnlock();
+  }, []);
+
   // =========================================================================
-  // MODO TERMINAL DEDICADA (KIOSK MODE) & PERSISTENCIA TOTAL
+  // MODO TERMINAL DEDICADA (KIOSK MODE) REACTIVO EN VIVO
   // =========================================================================
   const [kioskMac, setKioskMac] = useState(() => localStorage.getItem('scada_kiosk_mac') || null);
   const [activeSection, setActiveSection] = useState(() => {
@@ -70,23 +75,24 @@ function ScadaAppContent() {
     localStorage.setItem('scada_health_filter', healthFilter);
   }, [healthFilter]);
 
-  // Alternar el anclaje de un equipo específico
+  // Alternar el anclaje de terminal sin F5
   const toggleKioskMode = () => {
     if (kioskMac) {
       localStorage.removeItem('scada_kiosk_mac');
       setKioskMac(null);
-      alert('Terminal desanclada. Volviendo al modo de supervisión de flota.');
+      setActiveSection('flota');
+      setSelectedMac(null);
     } else if (selectedMac) {
       localStorage.setItem('scada_kiosk_mac', selectedMac);
       setKioskMac(selectedMac);
-      alert(`Terminal anclada a [${selectedMac}]. Esta pantalla mostrará únicamente este autoclave.`);
+      setActiveSection('detalle');
     }
   };
 
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [sirenActive, setSirenActive] = useState(false);
 
-  // Heartbeat cada 500ms
+  // Reloj de latido rápido cada 500ms
   const [currentTime, setCurrentTime] = useState(Date.now());
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(Date.now()), 500);
@@ -159,7 +165,7 @@ function ScadaAppContent() {
     };
   }, [user]);
 
-  // Sirena & Telegram
+  // Vigilante de Sirena Industrial
   useEffect(() => {
     let hasCriticalAlarm = false;
     Object.keys(fleet).forEach((mac) => {
@@ -220,6 +226,7 @@ function ScadaAppContent() {
     return { backgroundColor: '#030712' };
   };
 
+  // Motor de Salud de Autoclaves sin ciclos falsos
   const getDeviceHealthData = (dev) => {
     if (!dev || !dev.lastSeen || dev.lastSeen === 0) {
       return { status: 'OFFLINE', text: 'DESCONECTADO', timeAgo: 'Sin señal en vivo', colorClass: 'bg-rose-500/15 text-rose-400 border-rose-500/30' };
@@ -273,7 +280,7 @@ function ScadaAppContent() {
       className="min-h-screen flex flex-col relative transition-all duration-700 bg-cover bg-center bg-fixed pb-20 md:pb-6"
       style={getBackgroundStyle()}
     >
-      {/* Banner de Emergencia / Sirena Industrial */}
+      {/* Banner de Emergencia */}
       {sirenActive && (
         <div className="bg-rose-600 px-4 py-2.5 flex items-center justify-between text-white font-bold text-xs shadow-2xl animate-pulse sticky top-0 z-50">
           <div className="flex items-center gap-2">
@@ -366,7 +373,7 @@ function ScadaAppContent() {
         </div>
       </header>
 
-      {/* Dock Superior en PC (Oculto si la terminal está anclada a un solo equipo) */}
+      {/* Dock Superior en PC (Oculto en modo terminal anclada) */}
       {user && !kioskMac && !isOperator && (
         <div className="hidden md:flex items-center gap-2 px-6 py-2 bg-slate-950/60 border-b border-cyan-500/10">
           <button
@@ -412,7 +419,6 @@ function ScadaAppContent() {
       ) : (
         <main className="flex-1 p-3 md:p-6 max-w-7xl mx-auto w-full flex flex-col gap-4 android-view-transition">
           
-          {/* Si está en modo terminal anclada O seleccionó detalle */}
           {(kioskMac || activeSection === 'detalle') && inspectingDevice ? (
             <DeviceDetailView
               device={inspectingDevice}
@@ -582,13 +588,13 @@ function ScadaAppContent() {
         </main>
       )}
 
-      {/* BARRA INFERIOR PARA TELÉFONOS (Oculta si la terminal está anclada a un solo equipo) */}
+      {/* BARRA INFERIOR PARA TELÉFONOS (Oculta en modo terminal anclada) */}
       {user && !kioskMac && !isOperator && (
         <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-slate-950/90 border-t border-cyan-500/30 backdrop-blur-xl flex items-center justify-around z-50 px-2">
           <button
             onClick={() => { setActiveSection('flota'); setSelectedMac(null); }}
             className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-lg text-xs font-mono ${
-              activeSection === 'flota' ? 'text-cyan-400 font-bold' : 'text-slate-400'
+              activeSection === 'flota' || activeSection === 'detalle' ? 'text-cyan-400 font-bold' : 'text-slate-400'
             }`}
           >
             <Activity className="w-5 h-5" />
