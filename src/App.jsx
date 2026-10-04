@@ -7,6 +7,7 @@ import ClinicalAuditView from './components/reports/ClinicalAuditView';
 import FotaHubView from './components/fota/FotaHubView';
 import FleetManagementView from './components/fleet/FleetManagementView';
 import GearMenu, { WALLPAPERS_LIST } from './components/common/GearMenu';
+import ClinicalTooltip from './components/common/ClinicalTooltip';
 import { useMqttFleet } from './hooks/useMqttFleet';
 import { startIndustrialSiren, stopIndustrialSiren } from './services/audioAlarm';
 import { sendCriticalAlarmWithButtons } from './services/telegram';
@@ -22,33 +23,33 @@ import {
   VolumeX,
   Bell,
   Clock,
-  Users
+  Users,
+  Radio,
+  Zap
 } from 'lucide-react';
 
 function ScadaAppContent() {
   const { user, profile, loading, pendingRequests, logout } = useAuth();
   const { fleet, mqttConnected, sendDeviceCommand } = useMqttFleet();
 
-  // Estados visuales del Menú Engranaje con persistencia en memoria local
   const [currentTheme, setCurrentTheme] = useState(() => localStorage.getItem('scada_theme') || 'tactical');
   const [currentBg, setCurrentBg] = useState(() => localStorage.getItem('scada_bg') || 'circuit-pcb');
   const [opacity, setOpacity] = useState(() => Number(localStorage.getItem('scada_transparency')) || 82);
 
-  // Navegación: 'flota' | 'gestion' | 'fota' | 'auditoria' | 'detalle'
   const [activeSection, setActiveSection] = useState('flota');
   const [selectedMac, setSelectedMac] = useState(null);
   const [healthFilter, setHealthFilter] = useState('ALL');
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [sirenActive, setSirenActive] = useState(false);
 
-  // Reloj de Latido en Tiempo Real (Heartbeat cada 1 segundo exacto)
+  // RELOJ DE LATIDO ULTRARRÁPIDO (CADA 500ms PARA MÁXIMA PRECISIÓN)
   const [currentTime, setCurrentTime] = useState(Date.now());
   useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
+    const timer = setInterval(() => setCurrentTime(Date.now()), 500);
     return () => clearInterval(timer);
   }, []);
 
-  // Temporizador de Inactividad Hospitalaria (14 min + 1 min advertencia = 15 min)
+  // Temporizador de Inactividad (14 min + 1 min advertencia = 15 min)
   const [showTimeoutModal, setShowTimeoutModal] = useState(false);
   const [countdown, setCountdown] = useState(60);
   const idleTimerRef = useRef(null);
@@ -56,13 +57,11 @@ function ScadaAppContent() {
 
   const isAdmin = profile?.rol?.toLowerCase().includes('admin') || profile?.rol?.toLowerCase().includes('director');
 
-  // Inyección de Tema en HTML raíz
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', currentTheme);
     localStorage.setItem('scada_theme', currentTheme);
   }, [currentTheme]);
 
-  // Inyección de Transparencia Ultra-Glass en :root
   useEffect(() => {
     const alpha = (opacity / 100).toFixed(2);
     document.documentElement.style.setProperty('--glass-opacity', alpha);
@@ -73,7 +72,6 @@ function ScadaAppContent() {
     localStorage.setItem('scada_bg', currentBg);
   }, [currentBg]);
 
-  // Manejador de Inactividad de Usuario
   const resetIdleTimer = () => {
     if (!user) return;
     clearTimeout(idleTimerRef.current);
@@ -115,7 +113,7 @@ function ScadaAppContent() {
     };
   }, [user]);
 
-  // Vigilante de Sirena Industrial & Despacho a Telegram con Botones Interactivos
+  // Vigilante de Sirena Industrial & Telegram
   useEffect(() => {
     let hasCriticalAlarm = false;
     Object.keys(fleet).forEach((mac) => {
@@ -144,7 +142,6 @@ function ScadaAppContent() {
     setSirenActive(false);
   };
 
-  // Reconocimiento Bidireccional desde Telegram (Supabase Realtime)
   useEffect(() => {
     const channel = supabase
       .channel('realtime_telegram_ack')
@@ -160,7 +157,6 @@ function ScadaAppContent() {
     };
   }, []);
 
-  // Fondo Fotográfico con velo translúcido nítido para resaltar los circuitos
   const bgObj = WALLPAPERS_LIST.find((b) => b.id === currentBg) || WALLPAPERS_LIST[0];
 
   const getBackgroundStyle = () => {
@@ -178,7 +174,7 @@ function ScadaAppContent() {
     return { backgroundColor: '#030712' };
   };
 
-  // Motor de Salud de Autoclaves
+  // Motor de Salud de Autoclaves en Tiempo Real
   const getDeviceHealthData = (dev) => {
     if (!dev || !dev.lastSeen) {
       return { status: 'OFFLINE', text: 'OFFLINE', timeAgo: 'Sin señal', colorClass: 'bg-rose-500/15 text-rose-400 border-rose-500/30' };
@@ -284,30 +280,45 @@ function ScadaAppContent() {
           </div>
         </div>
 
-        {/* Acciones de Cabecera */}
+        {/* Acciones de Cabecera con Tooltips Clínicos */}
         <div className="flex items-center gap-2 md:gap-3">
-          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-mono font-bold border ${
-            mqttConnected 
-              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' 
-              : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+          <ClinicalTooltip
+            title="Conexión WebSocket Broker"
+            description="Estado del canal WSS seguro en puerto 8884 hacia HiveMQ Cloud para recepción de tramas en caliente."
+            badge="PUERTO 8884"
+            shortcut="AUTOMÁTICO"
+            position="bottom"
+          >
+            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-mono font-bold border cursor-help ${
+              mqttConnected 
+                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' 
+                : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
           }`}>
-            <span className={`w-2 h-2 rounded-full ${mqttConnected ? 'bg-emerald-400 animate-ping' : 'bg-rose-400'}`}></span>
-            {mqttConnected ? 'HIVEMQ 8884' : 'OFFLINE'}
-          </span>
+              <span className={`w-2 h-2 rounded-full ${mqttConnected ? 'bg-emerald-400 animate-ping' : 'bg-rose-400'}`}></span>
+              {mqttConnected ? 'HIVEMQ 8884' : 'OFFLINE'}
+            </span>
+          </ClinicalTooltip>
 
           {user && isAdmin && (
-            <button
-              onClick={() => setShowAdminModal(true)}
-              className="relative p-2 rounded-lg bg-slate-900 border border-amber-500/40 text-amber-300"
-              title="Aprobaciones y Personal"
+            <ClinicalTooltip
+              title="Aprobaciones & Personal"
+              description="Bandeja de personal clínico en espera, gestión de firmas digitales y asignación de rangos RBAC."
+              badge="RBAC NIVEL 1"
+              shortcut="CLICK O PULSACIÓN"
+              position="bottom"
             >
-              <Bell className="w-4 h-4" />
-              {pendingRequests.length > 0 && (
-                <span className="absolute -top-1 -right-1 px-1.5 py-0.2 rounded-full bg-amber-500 text-slate-950 text-[9px] font-bold">
-                  {pendingRequests.length}
-                </span>
-              )}
-            </button>
+              <button
+                onClick={() => setShowAdminModal(true)}
+                className="relative p-2 rounded-lg bg-slate-900 border border-amber-500/40 text-amber-300"
+              >
+                <Bell className="w-4 h-4" />
+                {pendingRequests.length > 0 && (
+                  <span className="absolute -top-1 -right-1 px-1.5 py-0.2 rounded-full bg-amber-500 text-slate-950 text-[9px] font-bold">
+                    {pendingRequests.length}
+                  </span>
+                )}
+              </button>
+            </ClinicalTooltip>
           )}
 
           {user && (
@@ -362,13 +373,13 @@ function ScadaAppContent() {
         </div>
       )}
 
-      {/* Contenido Principal */}
+      {/* Contenido Principal con Transición Fluida tipo Android */}
       {!user ? (
-        <main className="flex-1 flex items-center justify-center p-4">
+        <main className="flex-1 flex items-center justify-center p-4 android-view-transition">
           <LoginModal />
         </main>
       ) : (
-        <main className="flex-1 p-3 md:p-6 max-w-7xl mx-auto w-full flex flex-col gap-4">
+        <main className="flex-1 p-3 md:p-6 max-w-7xl mx-auto w-full flex flex-col gap-4 android-view-transition">
           
           {/* SECCIÓN 1: FLOTA */}
           {activeSection === 'flota' && (
@@ -380,30 +391,39 @@ function ScadaAppContent() {
                 </h2>
 
                 <div className="flex gap-2 overflow-x-auto w-full sm:w-auto pb-1">
-                  <button
-                    onClick={() => setHealthFilter('ONLINE')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
-                      healthFilter === 'ONLINE' ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-md' : 'bg-slate-900/80 border-slate-700 text-emerald-400'
-                    }`}
-                  >
-                    🟢 ONLINE ({countOn})
-                  </button>
-                  <button
-                    onClick={() => setHealthFilter('LATENCY')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
-                      healthFilter === 'LATENCY' ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md' : 'bg-slate-900/80 border-slate-700 text-amber-300'
-                    }`}
-                  >
-                    🟡 LATENCIA ({countLat})
-                  </button>
-                  <button
-                    onClick={() => setHealthFilter('OFFLINE')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
-                      healthFilter === 'OFFLINE' ? 'bg-rose-500 text-white border-rose-400 shadow-md' : 'bg-slate-900/80 border-slate-700 text-rose-400'
-                    }`}
-                  >
-                    🔴 OFFLINE ({countOff})
-                  </button>
+                  <ClinicalTooltip title="Filtro En Línea" description="Autoclaves transmitiendo paquetes en los últimos 5 segundos sin latencia." badge="0-5s">
+                    <button
+                      onClick={() => setHealthFilter('ONLINE')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
+                        healthFilter === 'ONLINE' ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-md' : 'bg-slate-900/80 border-slate-700 text-emerald-400'
+                      }`}
+                    >
+                      🟢 ONLINE ({countOn})
+                    </button>
+                  </ClinicalTooltip>
+
+                  <ClinicalTooltip title="Filtro Latencia" description="Autoclaves con paquetes demorados entre 6 y 15 segundos (posible congestión WiFi en hospital)." badge="6-15s">
+                    <button
+                      onClick={() => setHealthFilter('LATENCY')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
+                        healthFilter === 'LATENCY' ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md' : 'bg-slate-900/80 border-slate-700 text-amber-300'
+                      }`}
+                    >
+                      🟡 LATENCIA ({countLat})
+                    </button>
+                  </ClinicalTooltip>
+
+                  <ClinicalTooltip title="Filtro Desconectados" description="Autoclaves sin contacto por más de 15 segundos o apagados de la red eléctrica." badge=">15s">
+                    <button
+                      onClick={() => setHealthFilter('OFFLINE')}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
+                        healthFilter === 'OFFLINE' ? 'bg-rose-500 text-white border-rose-400 shadow-md' : 'bg-slate-900/80 border-slate-700 text-rose-400'
+                      }`}
+                    >
+                      🔴 OFFLINE ({countOff})
+                    </button>
+                  </ClinicalTooltip>
+
                   <button
                     onClick={() => setHealthFilter('ALL')}
                     className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
@@ -457,14 +477,19 @@ function ScadaAppContent() {
                           </div>
 
                           <div className="grid grid-cols-2 gap-2 my-3">
-                            <div className="p-2.5 rounded-xl glass-cell text-center">
-                              <span className="text-[10px] font-mono text-cyan-400 block">TEMPERATURA</span>
-                              <span className="text-xl font-bold font-mono text-white">{(dDev.temp_camara || 25).toFixed(1)}°C</span>
-                            </div>
-                            <div className="p-2.5 rounded-xl glass-cell text-center">
-                              <span className="text-[10px] font-mono text-pink-400 block">PRESIÓN</span>
-                              <span className="text-xl font-bold font-mono text-white">{(dDev.presion || 0).toFixed(2)}b</span>
-                            </div>
+                            <ClinicalTooltip title="Temperatura Cámara" description="Sensor PT100 o termopar digital que mide la temperatura interna de la cámara quirúrgica." badge="°C">
+                              <div className="p-2.5 rounded-xl glass-cell text-center w-full">
+                                <span className="text-[10px] font-mono text-cyan-400 block">TEMPERATURA</span>
+                                <span className="text-xl font-bold font-mono text-white">{(dDev.temp_camara || 25).toFixed(1)}°C</span>
+                              </div>
+                            </ClinicalTooltip>
+
+                            <ClinicalTooltip title="Presión de Vapor" description="Transductor piezorresistivo que audita la presión de vapor saturado en bar y PSI." badge="BAR">
+                              <div className="p-2.5 rounded-xl glass-cell text-center w-full">
+                                <span className="text-[10px] font-mono text-pink-400 block">PRESIÓN</span>
+                                <span className="text-xl font-bold font-mono text-white">{(dDev.presion || 0).toFixed(2)}b</span>
+                              </div>
+                            </ClinicalTooltip>
                           </div>
 
                           <div className="space-y-1 mb-3">
@@ -522,7 +547,7 @@ function ScadaAppContent() {
         </main>
       )}
 
-      {/* BARRA INFERIOR PARA TELÉFONOS CELULARES */}
+      {/* BARRA INFERIOR PARA TELÉFONOS CELULARES (Mobile Bottom Bar) */}
       {user && (
         <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-slate-950/90 border-t border-cyan-500/30 backdrop-blur-xl flex items-center justify-around z-50 px-2">
           <button
