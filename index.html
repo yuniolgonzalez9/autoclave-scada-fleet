@@ -1,17 +1,41 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" data-theme="tactical">
   <head>
     <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover" />
+    
+    <title>BIOFLEET OS™ // Enterprise SCADA Biomédico</title>
+    
+    <!-- Configuración PWA / Instalable como App Nativa en Celular -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="theme-color" content="#030712" />
+    <meta name="description" content="Plataforma Centralizada de Telemetría Biomédica, Trazabilidad y Supervisión de Autoclaves" />
+
+    <!-- Iconos Oficiales -->
     <link rel="icon" type="image/png" href="/icon.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SCADA Biomédico Autoclave Fleet Enterprise</title>
-    <!-- Fuente Inter para visualización hospitalaria nítida -->
+    <link rel="apple-touch-icon" href="/icon.png" />
+
+    <!-- Fuentes Profesionales de Ingeniería Clínica -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
   </head>
-  <body class="bg-[#0a0a14] text-slate-100 min-h-screen antialiased overflow-x-hidden">
+  <body class="bg-[#030712] text-slate-100 min-h-screen antialiased overflow-x-hidden selection:bg-cyan-500/30 selection:text-cyan-300">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+
+    <!-- Registro automático de PWA en el celular -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').catch((err) => {
+            console.warn('[PWA] Service Worker offline mode:', err);
+          });
+        });
+      }
+    </script>
   </body>
 </html>
