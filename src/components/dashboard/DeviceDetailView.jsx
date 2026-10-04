@@ -27,7 +27,7 @@ import {
   Send,
   Sparkles,
   Lock,
-  HelpCircle
+  Radio
 } from 'lucide-react';
 
 export default function DeviceDetailView({ 
@@ -48,14 +48,20 @@ export default function DeviceDetailView({
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [inspectedSession, setInspectedSession] = useState(null);
 
-  // Permisos: Solo Técnicos o Superadmin pueden alterar configuraciones
   const canEditHardware = userRole && !userRole.toLowerCase().includes('operador') && !userRole.toLowerCase().includes('cliente');
-
-  // ADAPTABILIDAD DINÁMICA: Si el equipo indica que no genera reportes, se oculta la pestaña de historial
   const tieneReportes = device?.esquema?.tiene_reportes !== false && device?.datos?.tipo !== 'sin_reportes';
 
   const d = device?.datos || {};
   const cfg = d?.cfg || {};
+
+  // =========================================================================
+  // ENLACE DIRECTO AL HARDWARE REAL EN TIEMPO REAL (SIN LAG NI F5)
+  // =========================================================================
+  // Si el hardware reporta datos.motor, se toma la verdad física del pin GPIO 2
+  const isMotorActive = (d.motor !== undefined) ? Boolean(d.motor) : Boolean(cfg.mot_ok);
+  const isVacioActive = (d.vacio !== undefined) ? Boolean(d.vacio) : Boolean(cfg.vacio_ok);
+  const isCalentadorActive = (d.calentador !== undefined) ? Boolean(d.calentador) : false;
+  const isHabActive = cfg.hab !== false;
 
   useEffect(() => {
     localStorage.setItem('scada_detail_tab', activeTab);
@@ -86,12 +92,9 @@ export default function DeviceDetailView({
     }
   }, [activeTab, device?.mac]);
 
-  // Parámetros NVS
+  // Parámetros numéricos configurables
   const [spTemp, setSpTemp] = useState(cfg.sp_temp ?? 121.0);
   const [tCiclo, setTCiclo] = useState(cfg.t_ciclo ?? 2);
-  const [hab, setHab] = useState(cfg.hab ?? true);
-  const [motOk, setMotOk] = useState(cfg.mot_ok ?? false);
-  const [vacioOk, setVacioOk] = useState(cfg.vacio_ok ?? true);
   const [purgaOk, setPurgaOk] = useState(cfg.purga_ok ?? true);
   const [pMax, setPMax] = useState(cfg.p_max ?? 2.60);
   const [limMant, setLimMant] = useState(cfg.lim_mant ?? 200);
@@ -100,21 +103,18 @@ export default function DeviceDetailView({
   useEffect(() => {
     if (cfg.sp_temp !== undefined) setSpTemp(cfg.sp_temp);
     if (cfg.t_ciclo !== undefined) setTCiclo(cfg.t_ciclo);
-    if (cfg.hab !== undefined) setHab(cfg.hab);
-    if (cfg.mot_ok !== undefined) setMotOk(cfg.mot_ok);
-    if (cfg.vacio_ok !== undefined) setVacioOk(cfg.vacio_ok);
     if (cfg.purga_ok !== undefined) setPurgaOk(cfg.purga_ok);
     if (cfg.p_max !== undefined) setPMax(cfg.p_max);
     if (cfg.lim_mant !== undefined) setLimMant(cfg.lim_mant);
     if (cfg.snd_ok !== undefined) setSndOk(cfg.snd_ok);
-  }, [cfg.sp_temp, cfg.t_ciclo, cfg.hab, cfg.mot_ok, cfg.vacio_ok, cfg.purga_ok, cfg.p_max, cfg.lim_mant, cfg.snd_ok]);
+  }, [cfg.sp_temp, cfg.t_ciclo, cfg.purga_ok, cfg.p_max, cfg.lim_mant, cfg.snd_ok]);
 
   const applyPreset134 = () => {
     setSpTemp(134.0);
     setTCiclo(4);
     setPMax(2.65);
     setPurgaOk(true);
-    setHab(true);
+    sendCommand(device.mac, { sp_temp: 134.0, t_ciclo: 4, p_max: 2.65, purga_ok: true, hab: true });
   };
 
   const applyPreset121 = () => {
@@ -122,7 +122,7 @@ export default function DeviceDetailView({
     setTCiclo(15);
     setPMax(2.40);
     setPurgaOk(true);
-    setHab(true);
+    sendCommand(device.mac, { sp_temp: 121.0, t_ciclo: 15, p_max: 2.40, purga_ok: true, hab: true });
   };
 
   const handleTransmitNVS = (e) => {
@@ -131,9 +131,9 @@ export default function DeviceDetailView({
     const payload = {
       sp_temp: Number(spTemp),
       t_ciclo: Number(tCiclo),
-      hab: Boolean(hab),
-      mot_ok: Boolean(motOk),
-      vacio_ok: Boolean(vacioOk),
+      hab: isHabActive,
+      mot_ok: isMotorActive,
+      vacio_ok: isVacioActive,
       purga_ok: Boolean(purgaOk),
       p_max: Number(pMax),
       lim_mant: Number(limMant),
@@ -141,14 +141,16 @@ export default function DeviceDetailView({
     };
 
     sendCommand(device.mac, payload);
-    setNvsMsg(`⚡ Parámetros transmitidos a ${device.mac}. Guardando en memoria Flash NVS...`);
+    setNvsMsg(`⚡ Parámetros enviados a ${device.mac} y almacenados en la nube para el hardware.`);
     setTimeout(() => setNvsMsg(''), 4000);
   };
 
-  const handleToggleSwitch = (key, currentVal, setter) => {
-    const nextVal = !currentVal;
-    setter(nextVal);
-    sendCommand(device.mac, { [key]: nextVal });
+  // Alternar interruptor de hardware con sincronización a la nube
+  const handleToggleHardware = (key, currentState) => {
+    if (!canEditHardware) return alert('Permiso denegado: rol de operador no autorizado.');
+    const nextState = !currentState;
+    // Envía la orden con retain: true a HiveMQ y Supabase
+    sendCommand(device.mac, { [key]: nextState });
   };
 
   const [alias, setAlias] = useState(device?.meta?.alias || `AUTOCLAVE [${device.mac.slice(-4)}]`);
@@ -206,7 +208,7 @@ export default function DeviceDetailView({
 
   return (
     <div className="flex flex-col gap-4 w-full">
-      {/* Cabecera con Tooltips de Terminal y Etiquetas */}
+      {/* Cabecera */}
       <div className="ultra-glass p-4 rounded-2xl border border-cyan-500/30 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
         <div className="flex items-center gap-3">
           {!isKioskMode && (
@@ -233,7 +235,6 @@ export default function DeviceDetailView({
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Tooltip Anclar Terminal */}
           <ClinicalTooltip
             title={CLINICAL_HELP.btn_anclar_terminal.title}
             description={CLINICAL_HELP.btn_anclar_terminal.desc}
@@ -254,7 +255,6 @@ export default function DeviceDetailView({
             </button>
           </ClinicalTooltip>
 
-          {/* Tooltip Generador QR */}
           <ClinicalTooltip
             title={CLINICAL_HELP.btn_etiqueta_qr.title}
             description={CLINICAL_HELP.btn_etiqueta_qr.desc}
@@ -273,7 +273,7 @@ export default function DeviceDetailView({
         </div>
       </div>
 
-      {/* Pestañas de Navegación del Equipo (Adaptativas según rol y tipo de equipo) */}
+      {/* Pestañas de Navegación del Equipo */}
       <div className="flex gap-2 overflow-x-auto pb-1 border-b border-slate-800">
         <button
           onClick={() => setActiveTab('sensores')}
@@ -285,7 +285,6 @@ export default function DeviceDetailView({
           <span>Sensores & Gráfica</span>
         </button>
 
-        {/* Solo Técnicos o Superadmin ven NVS */}
         {canEditHardware ? (
           <button
             onClick={() => setActiveTab('nvs')}
@@ -298,7 +297,6 @@ export default function DeviceDetailView({
           </button>
         ) : null}
 
-        {/* Pestaña de Historial: Solo se muestra si el equipo genera reportes */}
         {tieneReportes && (
           <button
             onClick={() => setActiveTab('historial')}
@@ -336,18 +334,11 @@ export default function DeviceDetailView({
         )}
       </div>
 
-      {/* PESTAÑA 1: SENSORES, F0, CONTROLES CON TOOLTIPS CLÍNICOS */}
+      {/* PESTAÑA 1: SENSORES, F0 Y ESTADO DE ACTUADORES */}
       {activeTab === 'sensores' && (
         <div className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            
-            {/* Medidor Temperatura */}
-            <ClinicalTooltip
-              title={CLINICAL_HELP.temp_camara.title}
-              description={CLINICAL_HELP.temp_camara.desc}
-              badge={CLINICAL_HELP.temp_camara.badge}
-              shortcut={CLINICAL_HELP.temp_camara.action}
-            >
+            <ClinicalTooltip title={CLINICAL_HELP.temp_camara.title} description={CLINICAL_HELP.temp_camara.desc} badge={CLINICAL_HELP.temp_camara.badge}>
               <div className="ultra-glass p-3.5 rounded-xl border border-cyan-500/30 w-full cursor-help">
                 <span className="text-[10px] font-mono text-cyan-400 block mb-1">TEMPERATURA CÁMARA</span>
                 <p className="text-2xl font-bold font-mono text-white">{(d?.temp_camara || 25.0).toFixed(1)} °C</p>
@@ -355,13 +346,7 @@ export default function DeviceDetailView({
               </div>
             </ClinicalTooltip>
 
-            {/* Medidor Presión */}
-            <ClinicalTooltip
-              title={CLINICAL_HELP.presion_camara.title}
-              description={CLINICAL_HELP.presion_camara.desc}
-              badge={CLINICAL_HELP.presion_camara.badge}
-              shortcut={CLINICAL_HELP.presion_camara.action}
-            >
+            <ClinicalTooltip title={CLINICAL_HELP.presion_camara.title} description={CLINICAL_HELP.presion_camara.desc} badge={CLINICAL_HELP.presion_camara.badge}>
               <div className="ultra-glass p-3.5 rounded-xl border border-pink-500/30 w-full cursor-help">
                 <span className="text-[10px] font-mono text-pink-400 block mb-1">PRESIÓN VAPOR</span>
                 <p className="text-2xl font-bold font-mono text-white">{(d?.presion || 0.0).toFixed(2)} bar</p>
@@ -369,13 +354,7 @@ export default function DeviceDetailView({
               </div>
             </ClinicalTooltip>
 
-            {/* Medidor Letalidad F0 */}
-            <ClinicalTooltip
-              title={CLINICAL_HELP.letalidad_f0.title}
-              description={CLINICAL_HELP.letalidad_f0.desc}
-              badge={CLINICAL_HELP.letalidad_f0.badge}
-              shortcut={CLINICAL_HELP.letalidad_f0.action}
-            >
+            <ClinicalTooltip title={CLINICAL_HELP.letalidad_f0.title} description={CLINICAL_HELP.letalidad_f0.desc} badge={CLINICAL_HELP.letalidad_f0.badge}>
               <div className="ultra-glass p-3.5 rounded-xl border border-emerald-500/30 w-full cursor-help">
                 <span className="text-[10px] font-mono text-emerald-400 block mb-1">LETALIDAD (F0)</span>
                 <p className="text-2xl font-bold font-mono text-emerald-300">{(device.f0Score || 0.0).toFixed(1)} min</p>
@@ -383,13 +362,7 @@ export default function DeviceDetailView({
               </div>
             </ClinicalTooltip>
 
-            {/* Fase Actual */}
-            <ClinicalTooltip
-              title={CLINICAL_HELP.fase_ciclo.title}
-              description={CLINICAL_HELP.fase_ciclo.desc}
-              badge={CLINICAL_HELP.fase_ciclo.badge}
-              shortcut={CLINICAL_HELP.fase_ciclo.action}
-            >
+            <ClinicalTooltip title={CLINICAL_HELP.fase_ciclo.title} description={CLINICAL_HELP.fase_ciclo.desc} badge={CLINICAL_HELP.fase_ciclo.badge}>
               <div className="ultra-glass p-3.5 rounded-xl border border-amber-500/30 w-full cursor-help">
                 <span className="text-[10px] font-mono text-amber-400 block mb-1">FASE ACTUAL</span>
                 <p className="text-lg font-bold font-mono text-white truncate">{d?.fase || 'ESPERA'}</p>
@@ -398,15 +371,9 @@ export default function DeviceDetailView({
             </ClinicalTooltip>
           </div>
 
-          {/* Botones de Control con Tooltips Explicativos */}
+          {/* Botones de Control */}
           <div className="flex gap-2.5">
-            <ClinicalTooltip
-              title={CLINICAL_HELP.btn_iniciar_ciclo.title}
-              description={CLINICAL_HELP.btn_iniciar_ciclo.desc}
-              badge={CLINICAL_HELP.btn_iniciar_ciclo.badge}
-              shortcut={CLINICAL_HELP.btn_iniciar_ciclo.action}
-              position="top"
-            >
+            <ClinicalTooltip title={CLINICAL_HELP.btn_iniciar_ciclo.title} description={CLINICAL_HELP.btn_iniciar_ciclo.desc} badge={CLINICAL_HELP.btn_iniciar_ciclo.badge}>
               <button
                 onClick={() => sendCommand(device.mac, { cmd: 'INICIAR_CICLO' })}
                 className="py-3 px-4 bg-gradient-to-r from-cyan-500 to-blue-600 font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg"
@@ -416,13 +383,7 @@ export default function DeviceDetailView({
               </button>
             </ClinicalTooltip>
 
-            <ClinicalTooltip
-              title={CLINICAL_HELP.btn_paro_emergencia.title}
-              description={CLINICAL_HELP.btn_paro_emergencia.desc}
-              badge={CLINICAL_HELP.btn_paro_emergencia.badge}
-              shortcut={CLINICAL_HELP.btn_paro_emergencia.action}
-              position="top"
-            >
+            <ClinicalTooltip title={CLINICAL_HELP.btn_paro_emergencia.title} description={CLINICAL_HELP.btn_paro_emergencia.desc} badge={CLINICAL_HELP.btn_paro_emergencia.badge}>
               <button
                 onClick={() => sendCommand(device.mac, { cmd: 'ABORTAR_CICLO' })}
                 className="py-3 px-4 bg-rose-600 hover:bg-rose-500 font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg"
@@ -432,13 +393,7 @@ export default function DeviceDetailView({
               </button>
             </ClinicalTooltip>
 
-            <ClinicalTooltip
-              title={CLINICAL_HELP.btn_reset_alarma.title}
-              description={CLINICAL_HELP.btn_reset_alarma.desc}
-              badge={CLINICAL_HELP.btn_reset_alarma.badge}
-              shortcut={CLINICAL_HELP.btn_reset_alarma.action}
-              position="top"
-            >
+            <ClinicalTooltip title={CLINICAL_HELP.btn_reset_alarma.title} description={CLINICAL_HELP.btn_reset_alarma.desc} badge={CLINICAL_HELP.btn_reset_alarma.badge}>
               <button
                 onClick={() => sendCommand(device.mac, { cmd: 'RESET_ALARMA' })}
                 className="py-3 px-4 bg-slate-900 border border-slate-700 text-slate-300 rounded-xl text-xs font-mono"
@@ -453,6 +408,237 @@ export default function DeviceDetailView({
             <SterilizationChart telemetryData={device.history || []} />
           </div>
         </div>
+      )}
+
+      {/* PESTAÑA: NVS (ENLACE DIRECTO A LOS PINES FÍSICOS) */}
+      {activeTab === 'nvs' && canEditHardware && (
+        <form onSubmit={handleTransmitNVS} className="ultra-glass p-5 md:p-6 rounded-2xl border border-cyan-500/30 space-y-5">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-cyan-500/20 pb-3">
+            <div>
+              <h3 className="text-sm font-bold text-white font-mono flex items-center gap-2">
+                <Sliders className="w-4 h-4 text-cyan-400" />
+                Ajustes NVS Flash & Estado Sincronizado en la Nube
+              </h3>
+              <p className="text-[11px] text-slate-400 font-mono mt-0.5">
+                Las órdenes cambiadas se almacenan como sombra en HiveMQ y Supabase. Si el equipo está apagado, las ejecuta al reconectar.
+              </p>
+            </div>
+
+            <div className="flex gap-1.5">
+              <button
+                type="button"
+                onClick={applyPreset134}
+                className="px-2.5 py-1.5 bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 text-cyan-300 rounded-lg text-xs font-mono font-bold flex items-center gap-1"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>134°C Instrumental</span>
+              </button>
+              <button
+                type="button"
+                onClick={applyPreset121}
+                className="px-2.5 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 rounded-lg text-xs font-mono font-bold flex items-center gap-1"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>121°C Plásticos</span>
+              </button>
+            </div>
+          </div>
+
+          {nvsMsg && (
+            <div className="p-3 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-mono rounded-xl flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span>{nvsMsg}</span>
+            </div>
+          )}
+
+          <div>
+            <span className="text-xs font-mono text-cyan-400 font-bold block mb-3 uppercase tracking-wider">
+              1. Parámetros del Ciclo de Esterilización
+            </span>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 space-y-1.5">
+                <label className="text-[11px] font-mono text-slate-300 block flex justify-between">
+                  <span>Temperatura Setpoint (°C)</span>
+                  <span className="text-cyan-400 font-bold">{spTemp}°C</span>
+                </label>
+                <input
+                  type="number"
+                  step="0.5"
+                  min="105.0"
+                  max="138.0"
+                  value={spTemp}
+                  onChange={(e) => setSpTemp(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-cyan-400"
+                />
+              </div>
+
+              <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 space-y-1.5">
+                <label className="text-[11px] font-mono text-slate-300 block flex justify-between">
+                  <span>Tiempo Meseta (minutos)</span>
+                  <span className="text-cyan-400 font-bold">{tCiclo} min</span>
+                </label>
+                <input
+                  type="number"
+                  step="1"
+                  min="1"
+                  max="60"
+                  value={tCiclo}
+                  onChange={(e) => setTCiclo(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-cyan-400"
+                />
+              </div>
+
+              {/* Interruptor Sistema Habilitado */}
+              <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 flex justify-between items-center">
+                <div>
+                  <span className="text-xs font-mono font-bold text-white block">Sistema Habilitado</span>
+                  <span className="text-[10px] text-slate-400 font-mono">Seguro maestro</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleToggleHardware('hab', isHabActive)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
+                    isHabActive ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' : 'bg-rose-500/20 text-rose-400 border-rose-500/40'
+                  }`}
+                >
+                  {isHabActive ? 'HABILITADO' : 'BLOQUEADO'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <span className="text-xs font-mono text-cyan-400 font-bold block mb-3 uppercase tracking-wider">
+              2. Actuadores Físicos (GPIOs Sincronizados en Caliente)
+            </span>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {/* Interruptor Motor / GPIO 2: VINCULADO DIRECTO AL PIN REAL */}
+              <ClinicalTooltip title={CLINICAL_HELP.actuador_motor.title} description={CLINICAL_HELP.actuador_motor.desc} badge="GPIO 2">
+                <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 flex justify-between items-center w-full cursor-help">
+                  <div>
+                    <span className="text-xs font-mono font-bold text-white block">Motor Agitador (GPIO 2)</span>
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      Estado: {isMotorActive ? '🟢 Encendido Físico' : '⚪ Apagado'}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleHardware('mot_ok', isMotorActive)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
+                      isMotorActive ? 'bg-emerald-500/25 text-emerald-300 border-emerald-400 shadow-[0_0_10px_rgba(0,255,136,0.3)]' : 'bg-slate-800 text-slate-400 border-slate-700'
+                    }`}
+                  >
+                    {isMotorActive ? 'ENCENDIDO' : 'APAGADO'}
+                  </button>
+                </div>
+              </ClinicalTooltip>
+
+              {/* Interruptor Bomba Vacío / GPIO 5 */}
+              <ClinicalTooltip title={CLINICAL_HELP.actuador_vacio.title} description={CLINICAL_HELP.actuador_vacio.desc} badge="GPIO 5">
+                <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 flex justify-between items-center w-full cursor-help">
+                  <div>
+                    <span className="text-xs font-mono font-bold text-white block">Bomba Vacío (GPIO 5)</span>
+                    <span className="text-[10px] text-slate-400 font-mono">
+                      Estado: {isVacioActive ? '🟢 Activa Física' : '⚪ Inactiva'}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleHardware('vacio_ok', isVacioActive)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
+                      isVacioActive ? 'bg-cyan-500/25 text-cyan-300 border-cyan-400 shadow-[0_0_10px_rgba(0,243,255,0.3)]' : 'bg-slate-800 text-slate-400 border-slate-700'
+                    }`}
+                  >
+                    {isVacioActive ? 'ACTIVA' : 'INACTIVA'}
+                  </button>
+                </div>
+              </ClinicalTooltip>
+
+              {/* Interruptor Purga Automática */}
+              <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 flex justify-between items-center">
+                <div>
+                  <span className="text-xs font-mono font-bold text-white block">Purga Automática</span>
+                  <span className="text-[10px] text-slate-400 font-mono">Válvula de alivio</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleToggleHardware('purga_ok', purgaOk)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
+                    purgaOk ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' : 'bg-slate-800 text-slate-400 border-slate-700'
+                  }`}
+                >
+                  {purgaOk ? 'ACTIVA' : 'MANUAL'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <span className="text-xs font-mono text-cyan-400 font-bold block mb-3 uppercase tracking-wider">
+              3. Seguridad, Odómetro y Alarmas
+            </span>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 space-y-1.5">
+                <label className="text-[11px] font-mono text-slate-300 block flex justify-between">
+                  <span>Límite Sobrepresión</span>
+                  <span className="text-pink-400 font-bold">{pMax} bar</span>
+                </label>
+                <input
+                  type="number"
+                  step="0.05"
+                  min="2.00"
+                  max="3.00"
+                  value={pMax}
+                  onChange={(e) => setPMax(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white font-mono focus:outline-none"
+                />
+              </div>
+
+              <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 space-y-1.5">
+                <label className="text-[11px] font-mono text-slate-300 block flex justify-between">
+                  <span>Límite Odómetro</span>
+                  <span className="text-amber-400 font-bold">{limMant}</span>
+                </label>
+                <input
+                  type="number"
+                  step="10"
+                  min="50"
+                  max="1000"
+                  value={limMant}
+                  onChange={(e) => setLimMant(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white font-mono focus:outline-none"
+                />
+              </div>
+
+              <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 flex justify-between items-center">
+                <div>
+                  <span className="text-xs font-mono font-bold text-white block">Zumbador Físico</span>
+                  <span className="text-[10px] text-slate-400 font-mono">Alarma sonora</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleToggleHardware('snd_ok', sndOk)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border ${
+                    sndOk ? 'bg-amber-500/20 text-amber-400 border-amber-500/40' : 'bg-slate-800 text-slate-400'
+                  }`}
+                >
+                  {sndOk ? 'AUDIBLE' : 'SILENCIOSO'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            className="w-full py-3 bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:opacity-90 text-white font-bold rounded-xl text-xs font-mono flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/25"
+          >
+            <Send className="w-4 h-4" />
+            <span>TRANSMITIR Y GRABAR PARÁMETROS EN NVS FLASH DEL ESP32</span>
+          </button>
+        </form>
       )}
 
       {/* PESTAÑA: HISTORIAL */}
@@ -531,242 +717,6 @@ export default function DeviceDetailView({
             </table>
           </div>
         </div>
-      )}
-
-      {/* PESTAÑA: NVS (CON TOOLTIPS EN CADA ACTUADOR) */}
-      {activeTab === 'nvs' && canEditHardware && (
-        <form onSubmit={handleTransmitNVS} className="ultra-glass p-5 md:p-6 rounded-2xl border border-cyan-500/30 space-y-5">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-cyan-500/20 pb-3">
-            <div>
-              <h3 className="text-sm font-bold text-white font-mono flex items-center gap-2">
-                <Sliders className="w-4 h-4 text-cyan-400" />
-                Ajustes de Parámetros del Ciclo & Memoria NVS Flash
-              </h3>
-              <p className="text-[11px] text-slate-400 font-mono mt-0.5">
-                Configuración del protocolo térmico para {cliente}.
-              </p>
-            </div>
-
-            <div className="flex gap-1.5">
-              <button
-                type="button"
-                onClick={applyPreset134}
-                className="px-2.5 py-1.5 bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 text-cyan-300 rounded-lg text-xs font-mono font-bold flex items-center gap-1"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>134°C Instrumental</span>
-              </button>
-              <button
-                type="button"
-                onClick={applyPreset121}
-                className="px-2.5 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 rounded-lg text-xs font-mono font-bold flex items-center gap-1"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>121°C Plásticos</span>
-              </button>
-            </div>
-          </div>
-
-          {nvsMsg && (
-            <div className="p-3 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-mono rounded-xl flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 shrink-0" />
-              <span>{nvsMsg}</span>
-            </div>
-          )}
-
-          <div>
-            <span className="text-xs font-mono text-cyan-400 font-bold block mb-3 uppercase tracking-wider">
-              1. Parámetros del Ciclo de Esterilización
-            </span>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 space-y-1.5">
-                <label className="text-[11px] font-mono text-slate-300 block flex justify-between">
-                  <span>Temperatura Setpoint (°C)</span>
-                  <span className="text-cyan-400 font-bold">{spTemp}°C</span>
-                </label>
-                <input
-                  type="number"
-                  step="0.5"
-                  min="105.0"
-                  max="138.0"
-                  value={spTemp}
-                  onChange={(e) => setSpTemp(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-cyan-400"
-                />
-              </div>
-
-              <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 space-y-1.5">
-                <label className="text-[11px] font-mono text-slate-300 block flex justify-between">
-                  <span>Tiempo Meseta (minutos)</span>
-                  <span className="text-cyan-400 font-bold">{tCiclo} min</span>
-                </label>
-                <input
-                  type="number"
-                  step="1"
-                  min="1"
-                  max="60"
-                  value={tCiclo}
-                  onChange={(e) => setTCiclo(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-cyan-400"
-                />
-              </div>
-
-              <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 flex justify-between items-center">
-                <div>
-                  <span className="text-xs font-mono font-bold text-white block">Sistema Habilitado</span>
-                  <span className="text-[10px] text-slate-400 font-mono">Seguro maestro</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => handleToggleSwitch('hab', hab, setHab)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
-                    hab ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' : 'bg-rose-500/20 text-rose-400 border-rose-500/40'
-                  }`}
-                >
-                  {hab ? 'HABILITADO' : 'BLOQUEADO'}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <span className="text-xs font-mono text-cyan-400 font-bold block mb-3 uppercase tracking-wider">
-              2. Actuadores Físicos & Relevadores
-            </span>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              {/* Tooltip Motor */}
-              <ClinicalTooltip
-                title={CLINICAL_HELP.actuador_motor.title}
-                description={CLINICAL_HELP.actuador_motor.desc}
-                badge={CLINICAL_HELP.actuador_motor.badge}
-                shortcut={CLINICAL_HELP.actuador_motor.action}
-              >
-                <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 flex justify-between items-center w-full cursor-help">
-                  <div>
-                    <span className="text-xs font-mono font-bold text-white block">Motor Agitador (GPIO 2)</span>
-                    <span className="text-[10px] text-slate-400 font-mono">Salida LED 1</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleToggleSwitch('mot_ok', motOk, setMotOk)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border ${
-                      motOk ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' : 'bg-slate-800 text-slate-400'
-                    }`}
-                  >
-                    {motOk ? 'ACTIVO' : 'INACTIVO'}
-                  </button>
-                </div>
-              </ClinicalTooltip>
-
-              {/* Tooltip Bomba Vacío */}
-              <ClinicalTooltip
-                title={CLINICAL_HELP.actuador_vacio.title}
-                description={CLINICAL_HELP.actuador_vacio.desc}
-                badge={CLINICAL_HELP.actuador_vacio.badge}
-                shortcut={CLINICAL_HELP.actuador_vacio.action}
-              >
-                <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 flex justify-between items-center w-full cursor-help">
-                  <div>
-                    <span className="text-xs font-mono font-bold text-white block">Bomba Vacío (GPIO 5)</span>
-                    <span className="text-[10px] text-slate-400 font-mono">Salida LED 3</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleToggleSwitch('vacio_ok', vacioOk, setVacioOk)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border ${
-                      vacioOk ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/40' : 'bg-slate-800 text-slate-400'
-                    }`}
-                  >
-                    {vacioOk ? 'ACTIVA' : 'INACTIVA'}
-                  </button>
-                </div>
-              </ClinicalTooltip>
-
-              {/* Purga Automática */}
-              <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 flex justify-between items-center">
-                <div>
-                  <span className="text-xs font-mono font-bold text-white block">Purga Automática</span>
-                  <span className="text-[10px] text-slate-400 font-mono">Válvula de alivio</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => handleToggleSwitch('purga_ok', purgaOk, setPurgaOk)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border ${
-                    purgaOk ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' : 'bg-slate-800 text-slate-400'
-                  }`}
-                >
-                  {purgaOk ? 'ACTIVA' : 'MANUAL'}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <span className="text-xs font-mono text-cyan-400 font-bold block mb-3 uppercase tracking-wider">
-              3. Seguridad, Odómetro y Alarmas
-            </span>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 space-y-1.5">
-                <label className="text-[11px] font-mono text-slate-300 block flex justify-between">
-                  <span>Límite Sobrepresión</span>
-                  <span className="text-pink-400 font-bold">{pMax} bar</span>
-                </label>
-                <input
-                  type="number"
-                  step="0.05"
-                  min="2.00"
-                  max="3.00"
-                  value={pMax}
-                  onChange={(e) => setPMax(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white font-mono focus:outline-none"
-                />
-              </div>
-
-              <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 space-y-1.5">
-                <label className="text-[11px] font-mono text-slate-300 block flex justify-between">
-                  <span>Límite Odómetro</span>
-                  <span className="text-amber-400 font-bold">{limMant}</span>
-                </label>
-                <input
-                  type="number"
-                  step="10"
-                  min="50"
-                  max="1000"
-                  value={limMant}
-                  onChange={(e) => setLimMant(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white font-mono focus:outline-none"
-                />
-              </div>
-
-              <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 flex justify-between items-center">
-                <div>
-                  <span className="text-xs font-mono font-bold text-white block">Zumbador Físico</span>
-                  <span className="text-[10px] text-slate-400 font-mono">Alarma sonora</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => handleToggleSwitch('snd_ok', sndOk, setSndOk)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border ${
-                    sndOk ? 'bg-amber-500/20 text-amber-400 border-amber-500/40' : 'bg-slate-800 text-slate-400'
-                  }`}
-                >
-                  {sndOk ? 'AUDIBLE' : 'SILENCIOSO'}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            className="w-full py-3 bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:opacity-90 text-white font-bold rounded-xl text-xs font-mono flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/25"
-          >
-            <Send className="w-4 h-4" />
-            <span>TRANSMITIR Y GRABAR PARÁMETROS EN NVS FLASH DEL ESP32</span>
-          </button>
-        </form>
       )}
 
       {/* PESTAÑA: FICHA */}
