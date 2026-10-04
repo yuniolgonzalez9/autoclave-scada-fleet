@@ -25,7 +25,7 @@ export default function SessionDetailModal({ isOpen, onClose, session }) {
   const fases = session.ciclos_detalle || session.fases_desglose || [];
   const eventos = session.eventos || [];
 
-  // Función para Imprimir el Certificado Clínico Oficial con Firmas
+  // Función de Impresión de Certificado Oficial
   const handlePrintCertificate = () => {
     const v = window.open('', '_blank');
     let fasesHtml = '';
@@ -162,32 +162,33 @@ export default function SessionDetailModal({ isOpen, onClose, session }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
-      <div className="ultra-glass border border-cyan-500/40 rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+    <div className="fixed inset-0 z-[999999] bg-black/85 backdrop-blur-md flex items-start sm:items-center justify-center p-2 sm:p-4 overflow-y-auto">
+      {/* Contenedor Ergonómico: Centrado vertical automático con scroll interno */}
+      <div className="my-auto w-full max-w-4xl max-h-[92vh] flex flex-col ultra-glass rounded-2xl border border-cyan-500/50 shadow-2xl overflow-hidden">
         
-        {/* Cabecera */}
-        <div className="px-6 py-4 border-b border-cyan-500/20 bg-slate-950/80 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400">
+        {/* Cabecera Fija */}
+        <div className="px-4 sm:px-6 py-3.5 border-b border-cyan-500/20 bg-slate-950/90 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 shrink-0">
               <FileText className="w-5 h-5" />
             </div>
-            <div>
-              <h3 className="text-base font-bold text-white tracking-wide">
-                Visor Forense del Paquete: {session.session_id}
+            <div className="truncate">
+              <h3 className="text-sm sm:text-base font-bold text-white tracking-wide truncate">
+                Visor Forense: {session.session_id}
               </h3>
-              <p className="text-xs text-cyan-300 font-mono">
-                {session.alias} • MAC: {session.mac} • {session.cliente || 'Hospital Central'}
+              <p className="text-[11px] text-cyan-300 font-mono truncate">
+                {session.alias} • {session.mac} • {session.cliente || 'Hospital Central'}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={handlePrintCertificate}
-              className="px-3.5 py-1.5 bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold rounded-lg text-xs flex items-center gap-1.5 shadow-lg shadow-cyan-500/20"
+              className="px-3 py-1.5 bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold rounded-lg text-xs flex items-center gap-1.5 shadow-lg shadow-cyan-500/20"
             >
               <Printer className="w-3.5 h-3.5" />
-              <span>Imprimir Certificado</span>
+              <span className="hidden sm:inline">Imprimir Certificado</span>
             </button>
             <button 
               onClick={onClose}
@@ -198,67 +199,64 @@ export default function SessionDetailModal({ isOpen, onClose, session }) {
           </div>
         </div>
 
-        {/* Contenido con scroll */}
-        <div className="p-6 overflow-y-auto flex-1 space-y-5">
+        {/* Cuerpo Scrollable fluido para móviles y PC */}
+        <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-4">
           
-          {/* Alerta si hubo fallo */}
           {huboAlarma && (
-            <div className="p-4 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-300 text-xs flex items-start gap-3">
+            <div className="p-3.5 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-300 text-xs flex items-start gap-2.5">
               <AlertTriangle className="w-5 h-5 shrink-0 text-rose-400 mt-0.5" />
               <div>
-                <strong className="block font-bold">FALLO O ALARMA DETECTADA EN LA SESIÓN</strong>
-                <p className="mt-0.5">Diagnóstico: {session.diagnostico_principal || 'Alarma crítica registrada'}</p>
+                <strong className="block font-bold">FALLO DETECTADO EN EL CICLO</strong>
+                <p className="mt-0.5">{session.diagnostico_principal || 'Alarma crítica registrada'}</p>
                 {session.errores_alarmas && (
-                  <p className="font-mono text-[11px] mt-1">
-                    Código #{session.errores_alarmas.codigo}: {session.errores_alarmas.mensaje} ({session.errores_alarmas.fase_del_fallo || 'Cámara'})
+                  <p className="font-mono text-[10px] mt-1 text-rose-200">
+                    Código #{session.errores_alarmas.codigo}: {session.errores_alarmas.mensaje}
                   </p>
                 )}
               </div>
             </div>
           )}
 
-          {/* Tarjetas de Resumen Termodinámico */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+          {/* Resumen Clínico */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            <div className="p-3 rounded-xl bg-slate-900/70 border border-slate-800">
               <span className="text-[10px] font-mono text-cyan-400 block mb-1">HORARIOS</span>
-              <p className="text-xs font-bold text-white font-mono">
+              <p className="text-xs font-bold text-white font-mono truncate">
                 {session.hora_encendido || session.inicio_ciclo || '--'} ➔ {session.hora_apagado || '--'}
               </p>
               <span className="text-[10px] text-slate-400 font-mono">Duración: {duracionTexto}</span>
             </div>
 
-            <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
-              <span className="text-[10px] font-mono text-cyan-400 block mb-1">MÁXIMA TEMPERATURA</span>
-              <p className="text-xl font-bold text-white font-mono">{parseFloat(session.temp_max || 0).toFixed(1)} °C</p>
-              <span className="text-[10px] text-emerald-400 font-mono">Pico térmico conforme</span>
+            <div className="p-3 rounded-xl bg-slate-900/70 border border-slate-800">
+              <span className="text-[10px] font-mono text-cyan-400 block mb-1">MÁXIMA T°</span>
+              <p className="text-lg sm:text-xl font-bold text-white font-mono">{parseFloat(session.temp_max || 0).toFixed(1)} °C</p>
+              <span className="text-[10px] text-emerald-400 font-mono">Pico Conforme</span>
             </div>
 
-            <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+            <div className="p-3 rounded-xl bg-slate-900/70 border border-slate-800">
               <span className="text-[10px] font-mono text-cyan-400 block mb-1">MÁXIMA PRESIÓN</span>
-              <p className="text-xl font-bold text-white font-mono">{parseFloat(session.pres_max || 0).toFixed(2)} bar</p>
+              <p className="text-lg sm:text-xl font-bold text-white font-mono">{parseFloat(session.pres_max || 0).toFixed(2)} bar</p>
               <span className="text-[10px] text-slate-400 font-mono">{((session.pres_max || 0) * 14.504).toFixed(1)} PSI</span>
             </div>
 
-            <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
-              <span className="text-[10px] font-mono text-cyan-400 block mb-1">ODÓMETRO TOTAL</span>
-              <p className="text-xl font-bold text-white font-mono">
+            <div className="p-3 rounded-xl bg-slate-900/70 border border-slate-800">
+              <span className="text-[10px] font-mono text-cyan-400 block mb-1">ODÓMETRO</span>
+              <p className="text-lg sm:text-xl font-bold text-white font-mono">
                 {session.ciclos_acumulados || 0} <span className="text-xs font-normal text-slate-400">/ {session.limite_mantenimiento || 200}</span>
               </p>
-              <span className="text-[10px] text-slate-400 font-mono">
-                Restan {(session.limite_mantenimiento || 200) - (session.ciclos_acumulados || 0)} ciclos
-              </span>
+              <span className="text-[10px] text-slate-400 font-mono">Ciclos acumulados</span>
             </div>
           </div>
 
-          {/* Desglose Cronométrico de Fases */}
+          {/* Fases Cronometradas */}
           <div>
-            <h4 className="text-xs font-bold text-cyan-300 font-mono uppercase tracking-wider mb-2.5">
-              Etapas Cronometradas del Ciclo:
+            <h4 className="text-xs font-bold text-cyan-300 font-mono uppercase tracking-wider mb-2">
+              Etapas Cronometradas:
             </h4>
 
             {fases.length === 0 ? (
-              <div className="p-4 rounded-xl bg-slate-900/40 border border-slate-800 text-center text-xs text-slate-400 font-mono">
-                Este paquete registra un ciclo continuo estándar a {session.temp_max || 134}°C / {session.pres_max || 2.1} bar.
+              <div className="p-3.5 rounded-xl bg-slate-900/40 border border-slate-800 text-center text-xs text-slate-400 font-mono">
+                Ciclo estándar conforme registrado a {session.temp_max || 134}°C / {session.pres_max || 2.1} bar.
               </div>
             ) : (
               <div className="space-y-2">
@@ -267,26 +265,26 @@ export default function SessionDetailModal({ isOpen, onClose, session }) {
                   return (
                     <div 
                       key={idx}
-                      className={`p-3.5 rounded-xl border flex flex-col md:flex-row justify-between items-start md:items-center gap-2 ${
+                      className={`p-3 rounded-xl border flex flex-col sm:flex-row justify-between items-start sm:items-center gap-1.5 ${
                         esFallo ? 'bg-rose-500/10 border-rose-500/30' : 'bg-slate-900/70 border-slate-800'
                       }`}
                     >
                       <div>
                         <div className="flex items-center gap-2">
                           <span className="font-bold text-xs text-white">FASE {idx + 1}: {f.fase || 'ETAPA'}</span>
-                          <span className={`px-2 py-0.2 rounded text-[10px] font-mono font-bold ${
+                          <span className={`px-1.5 py-0.2 rounded text-[10px] font-mono font-bold ${
                             esFallo ? 'bg-rose-500/20 text-rose-300' : 'bg-emerald-500/20 text-emerald-300'
                           }`}>
-                            {f.estado || 'CONFORME'} ({f.duracion_seg || 0}s)
+                            {f.estado || 'OK'} ({f.duracion_seg || 0}s)
                           </span>
                         </div>
-                        <p className="text-[11px] text-slate-400 font-mono mt-0.5">
-                          Inicio: {f.inicio || '--'} ➔ Fin: {f.fin || '--'}
+                        <p className="text-[10px] text-slate-400 font-mono mt-0.5">
+                          {f.inicio || '--'} ➔ {f.fin || '--'}
                         </p>
                       </div>
 
-                      <div className="text-right text-xs font-mono text-slate-300">
-                        <span>Pico: <strong className="text-cyan-400">{parseFloat(f.temp_max || 0).toFixed(1)}°C</strong> | <strong className="text-pink-400">{parseFloat(f.pres_max || 0).toFixed(2)}b</strong></span>
+                      <div className="text-xs font-mono text-slate-300">
+                        Pico: <strong className="text-cyan-400">{parseFloat(f.temp_max || 0).toFixed(1)}°C</strong> | <strong className="text-pink-400">{parseFloat(f.pres_max || 0).toFixed(2)}b</strong>
                       </div>
                     </div>
                   );
@@ -298,21 +296,14 @@ export default function SessionDetailModal({ isOpen, onClose, session }) {
           {/* Timeline de Eventos */}
           {eventos.length > 0 && (
             <div>
-              <h4 className="text-xs font-bold text-cyan-300 font-mono uppercase tracking-wider mb-2.5">
-                Registro Cronológico de Eventos:
+              <h4 className="text-xs font-bold text-cyan-300 font-mono uppercase tracking-wider mb-2">
+                Eventos Cronológicos:
               </h4>
-              <div className="space-y-2 pl-2 border-l-2 border-cyan-500/40">
+              <div className="space-y-1.5 pl-2 border-l-2 border-cyan-500/40">
                 {eventos.map((ev, i) => (
-                  <div key={i} className="pl-3 relative">
-                    <span className="absolute -left-[19px] top-1.5 w-2 h-2 rounded-full bg-cyan-400"></span>
-                    <p className="text-xs font-mono text-white">
-                      <strong>{ev.hora}</strong> [{ev.tipo}]: {ev.msg}
-                    </p>
-                    {ev.temp && (
-                      <p className="text-[10px] font-mono text-slate-400">
-                        Lectura: {parseFloat(ev.temp).toFixed(1)}°C / {parseFloat(ev.presion || 0).toFixed(2)} bar
-                      </p>
-                    )}
+                  <div key={i} className="pl-3 relative text-xs font-mono">
+                    <span className="absolute -left-[17px] top-1.5 w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
+                    <span className="text-slate-400">{ev.hora}</span> <strong className="text-cyan-300">[{ev.tipo}]:</strong> <span className="text-white">{ev.msg}</span>
                   </div>
                 ))}
               </div>
