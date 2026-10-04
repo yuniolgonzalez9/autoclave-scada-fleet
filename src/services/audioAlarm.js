@@ -1,9 +1,25 @@
 // =========================================================================
-// MOTOR DE SIRENA INDUSTRIAL BIOMÉDICA (WEB AUDIO API - 850 Hz <-> 1250 Hz)
+// MOTOR DE SIRENA INDUSTRIAL BIOMÉDICA CON DESBLOQUEO AUTOMÁTICO
 // =========================================================================
 let audioCtx = null;
 let sirenaInterval = null;
 let sirenaActiva = false;
+
+// Desbloquear audio en el primer toque del usuario en la pantalla
+export const initAudioUnlock = () => {
+  const unlock = () => {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume();
+    }
+    window.removeEventListener('click', unlock);
+    window.removeEventListener('touchstart', unlock);
+  };
+  window.addEventListener('click', unlock);
+  window.addEventListener('touchstart', unlock);
+};
 
 function sonarRafagaAlarma() {
   try {
@@ -15,14 +31,12 @@ function sonarRafagaAlarma() {
     const gain = audioCtx.createGain();
 
     osc.type = 'sawtooth';
-    // Sirena bitonal de alta penetración clínica
     osc.frequency.setValueAtTime(850, t);
     osc.frequency.exponentialRampToValueAtTime(1250, t + 0.25);
     osc.frequency.exponentialRampToValueAtTime(850, t + 0.5);
     osc.frequency.exponentialRampToValueAtTime(1250, t + 0.75);
     osc.frequency.exponentialRampToValueAtTime(850, t + 1.0);
 
-    // Volumen potente con decaimiento suave
     gain.gain.setValueAtTime(0.75, t);
     gain.gain.setValueAtTime(0.75, t + 1.0);
     gain.gain.exponentialRampToValueAtTime(0.01, t + 1.25);
