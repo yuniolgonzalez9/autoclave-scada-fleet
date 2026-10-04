@@ -3,14 +3,13 @@
 @tailwind utilities;
 
 /* =========================================================================
-   1. PALETA BASE Y VARIABLES GLOBALES
+   1. VARIABLES GLOBALES Y PALETA BASE
    ========================================================================= */
 :root {
   --glass-opacity: 0.82;
-  --glass-blur: 16px;
   --glass-bg: 15 23 42;
   --accent-color: #00f3ff;
-  --card-border: rgba(0, 243, 255, 0.28);
+  --card-border: rgba(0, 243, 255, 0.35);
   --laser-gradient: linear-gradient(90deg, transparent, #00f3ff, #3b82f6, #00f3ff, transparent);
   --laser-glow: 0 0 16px rgba(0, 243, 255, 0.6);
 }
@@ -19,7 +18,7 @@ body {
   font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
   color: #ffffff;
   background-color: #030712;
-  transition: background-color 0.3s ease, color 0.3s ease;
+  transition: background-color 0.3s ease;
   overflow-x: hidden;
 }
 
@@ -28,54 +27,63 @@ code, .font-mono {
 }
 
 /* =========================================================================
-   2. LOS 3 TEMAS OSCUROS DE ÉLITE REPOTENCIADOS
+   2. TEMAS VISUALES REPOTENCIADOS
    ========================================================================= */
 
-/* TEMA 1: PIZARRA TÁCTICA (TACTICAL SLATE) */
+/* TEMA 1: PIZARRA TÁCTICA */
 [data-theme="tactical"] {
   --glass-bg: 10 16 30;
   --accent-color: #00f3ff;
-  --card-border: rgba(0, 243, 255, 0.3);
+  --card-border: rgba(0, 243, 255, 0.38);
   --laser-gradient: linear-gradient(90deg, transparent, #00f3ff, #2563eb, #00ff88, transparent);
-  --laser-glow: 0 0 18px rgba(0, 243, 255, 0.5);
+  --laser-glow: 0 0 18px rgba(0, 243, 255, 0.6);
 }
 
-/* TEMA 2: CYBER SPEEDTEST (FUCSIA NEÓN ➔ VIOLETA ➔ CIAN) */
+/* TEMA 2: CYBER SPEEDTEST */
 [data-theme="cyber"] {
   --glass-bg: 22 10 38;
   --accent-color: #ff007f;
-  --card-border: rgba(255, 0, 127, 0.38);
+  --card-border: rgba(255, 0, 127, 0.45);
   --laser-gradient: linear-gradient(90deg, transparent, #ff007f, #8b5cf6, #00f3ff, #ff007f, transparent);
-  --laser-glow: 0 0 22px rgba(255, 0, 127, 0.65), 0 0 14px rgba(0, 243, 255, 0.4);
+  --laser-glow: 0 0 22px rgba(255, 0, 127, 0.7), 0 0 14px rgba(0, 243, 255, 0.4);
 }
 
-/* TEMA 3: BIO-CUÁNTICO (ESMERALDA ELÉCTRICO ➔ CIAN ➔ ÁMBAR) */
+/* TEMA 3: BIO-CUÁNTICO */
 [data-theme="hybrid"] {
   --glass-bg: 6 24 18;
   --accent-color: #00ff88;
-  --card-border: rgba(0, 255, 136, 0.35);
+  --card-border: rgba(0, 255, 136, 0.42);
   --laser-gradient: linear-gradient(90deg, transparent, #00ff88, #00f3ff, #f59e0b, #00ff88, transparent);
-  --laser-glow: 0 0 20px rgba(0, 255, 136, 0.6), 0 0 12px rgba(245, 158, 11, 0.35);
+  --laser-glow: 0 0 20px rgba(0, 255, 136, 0.65), 0 0 12px rgba(245, 158, 11, 0.4);
 }
 
 /* =========================================================================
-   3. ULTRA-GLASS CRISTAL TRASLÚCIDO REAL (0% A 100%)
+   3. ULTRA-GLASS CRISTAL REAL (0% A 100% DIÁFANO)
    ========================================================================= */
 .ultra-glass {
   background-color: rgb(var(--glass-bg) / var(--glass-opacity)) !important;
-  backdrop-filter: blur(var(--glass-blur)) !important;
-  -webkit-backdrop-filter: blur(var(--glass-blur)) !important;
+  backdrop-filter: blur(calc(var(--glass-opacity) * 16px + 2px)) !important;
+  -webkit-backdrop-filter: blur(calc(var(--glass-opacity) * 16px + 2px)) !important;
   border: 1.5px solid var(--card-border) !important;
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.1);
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, calc(var(--glass-opacity) * 0.6)), 
+              inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  transition: background-color 0.2s ease, border-color 0.2s ease, backdrop-filter 0.2s ease;
 }
 
 .ultra-glass:hover {
   border-color: var(--accent-color) !important;
+  box-shadow: 0 12px 36px 0 rgba(0, 0, 0, 0.7), 0 0 16px var(--accent-color);
+}
+
+/* Celdas interiores que se adaptan a la transparencia */
+.glass-cell {
+  background-color: rgb(var(--glass-bg) / calc(var(--glass-opacity) * 0.75 + 0.1)) !important;
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 /* =========================================================================
-   4. RAYITA LÁSER SPEEDTEST CONTINUA EN EL HEADER
+   4. RAYITA LÁSER SPEEDTEST ANIMADA EN EL HEADER
    ========================================================================= */
 .speedtest-laser-header {
   position: relative;
@@ -94,26 +102,11 @@ code, .font-mono {
 }
 
 @keyframes laserBeam {
-  0% {
-    transform: translateX(-100%);
-  }
-  100% {
-    transform: translateX(220%);
-  }
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(220%); }
 }
 
-/* Scrollbar industrial de perfil delgado */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: rgba(10, 10, 20, 0.7);
-}
-::-webkit-scrollbar-thumb {
-  background: rgba(0, 243, 255, 0.35);
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 243, 255, 0.7);
-}
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: rgba(10, 10, 20, 0.7); }
+::-webkit-scrollbar-thumb { background: rgba(0, 243, 255, 0.35); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(0, 243, 255, 0.7); }
