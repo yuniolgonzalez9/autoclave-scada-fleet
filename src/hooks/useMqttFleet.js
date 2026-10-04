@@ -8,7 +8,7 @@ export function useMqttFleet() {
   const [mqttConnected, setMqttConnected] = useState(false);
   const sendCommandRef = useRef(null);
 
-  // 1. Cargar la flota registrada en Supabase
+  // 1. Cargar la flota registrada en Supabase con MACs normalizadas
   useEffect(() => {
     const loadRegisteredDevices = async () => {
       try {
@@ -20,7 +20,10 @@ export function useMqttFleet() {
           setFleet((prev) => {
             const initialFleet = { ...prev };
             data.forEach((item) => {
-              const devMac = (item.mac || item.Mac || '').toUpperCase();
+              // Limpieza estricta: mayúsculas y sin dos puntos ni guiones
+              const rawMac = item.mac || item.Mac || '';
+              const devMac = rawMac.toUpperCase().replace(/[:\-]/g, '');
+              
               if (devMac && !initialFleet[devMac]) {
                 initialFleet[devMac] = {
                   mac: devMac,
@@ -36,12 +39,12 @@ export function useMqttFleet() {
                     cfg: { ciclos: item.ciclos || 0, lim_mant: item.limite || 200 }
                   },
                   esquema: null,
-                  meta: item,
+                  meta: { ...item, mac: devMac },
                   f0Score: 0.0,
                   history: []
                 };
               } else if (devMac && initialFleet[devMac]) {
-                initialFleet[devMac].meta = Object.assign(initialFleet[devMac].meta || {}, item);
+                initialFleet[devMac].meta = Object.assign(initialFleet[devMac].meta || {}, item, { mac: devMac });
               }
             });
             return initialFleet;
@@ -59,7 +62,7 @@ export function useMqttFleet() {
   useEffect(() => {
     const { client, sendCommand } = connectMqttFleet(
       ({ mac, channel, payload, isRetained }) => {
-        const cleanMac = mac.toUpperCase();
+        const cleanMac = mac.toUpperCase().replace(/[:\-]/g, '');
 
         setFleet((prevFleet) => {
           const currentDev = prevFleet[cleanMac] || {
@@ -78,11 +81,10 @@ export function useMqttFleet() {
             lastSeen: isFreshStream ? Date.now() : (currentDev.lastSeen || 0)
           };
 
-          // TELEMETRÍA EN VIVO (ACTUALIZACIÓN DIRECTA DEL HARDWARE)
+          // TELEMETRÍA EN VIVO (PINES FÍSICOS REALES)
           if (channel === 'telemetria') {
             updated.datos = payload;
 
-            // Integración matemática de F0
             const currentTemp = payload.temp_camara || 25.0;
             if (payload.fase === 'ESTERILIZANDO') {
               updated.f0Score = accumulateF0(currentDev.f0Score || 0, currentTemp, 2);
@@ -109,10 +111,10 @@ export function useMqttFleet() {
           }
 
           if (channel === 'meta') {
-            updated.meta = Object.assign(updated.meta || {}, payload);
+            updated.meta = Object.assign(updated.meta || {}, payload, { mac: cleanMac });
           }
 
-          // GUARDAR REPORTE DE FIN DE CICLO EN SUPABASE
+          // GUARDAR REPORTE FINAL DE CICLO EN SUPABASE
           if (channel === 'reporte_paquete') {
             const ciclosAcum = payload.ciclos_acumulados || payload.ciclos || 0;
             if (!updated.datos.cfg) updated.datos.cfg = {};
@@ -154,14 +156,12 @@ export function useMqttFleet() {
     };
   }, []);
 
-  // Función de comando con actualización optimista y persistencia en Supabase
   const sendDeviceCommand = (mac, cmd) => {
-    const cleanMac = mac.toUpperCase();
+    const cleanMac = mac.toUpperCase().replace(/[:\-]/g, '');
     if (sendCommandRef.current) {
-      // 1. Enviar por MQTT Retenido a HiveMQ
       sendCommandRef.current(cleanMac, cmd);
 
-      // 2. Reflejo optimista inmediato en la interfaz
+      // Reflejo optimista instantáneo
       setFleet((prev) => {
         const dev = prev[cleanMac];
         if (!dev) return prev;
@@ -176,26 +176,17 @@ export function useMqttFleet() {
           newDatos.vacio = cmd.vacio_ok;
           newCfg.vacio_ok = cmd.vacio_ok;
         }
-        if (cmd.hab !== undefined) {
-          newCfg.hab = cmd.hab;
-        }
-        if (cmd.sp_temp !== undefined) {
-          newCfg.sp_temp = cmd.sp_temp;
-        }
-        if (cmd.t_ciclo !== undefined) {
-          newCfg.t_ciclo = cmd.t_ciclo;
-        }
+        if (cmd.hab !== undefined) newCfg.hab = cmd.hab;
+        if (cmd.sp_temp !== undefined) newCfg.sp_temp = cmd.sp_temp;
+        if (cmd.t_ciclo !== undefined) newCfg.t_ciclo = cmd.t_ciclo;
 
         return {
           ...prev,
-          [cleanMac]: {
-            ...dev,
-            datos: { ...newDatos, cfg: newCfg }
-          }
+          [cleanMac]: { ...dev, datos: { ...newDatos, cfg: newCfg } }
         };
       });
 
-      // 3. Si no es un comando de disparo, guardar la configuración deseada en Supabase
+      // Persistencia en Supabase si es configuración
       if (!cmd.cmd) {
         supabase.from('asignaciones_equipos').update({
           config_deseada: cmd,
