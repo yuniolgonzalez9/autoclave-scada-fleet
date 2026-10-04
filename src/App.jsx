@@ -35,14 +35,11 @@ function ScadaAppContent() {
   const [currentBg, setCurrentBg] = useState(() => localStorage.getItem('scada_bg') || 'circuit-pcb');
   const [opacity, setOpacity] = useState(() => Number(localStorage.getItem('scada_transparency')) || 82);
 
-  // Inicializar desbloqueo de audio en el primer clic
   useEffect(() => {
     initAudioUnlock();
   }, []);
 
-  // =========================================================================
-  // MODO TERMINAL DEDICADA (KIOSK MODE) REACTIVO EN VIVO
-  // =========================================================================
+  // Persistencia de Navegación y Modo Kiosco
   const [kioskMac, setKioskMac] = useState(() => localStorage.getItem('scada_kiosk_mac') || null);
   const [activeSection, setActiveSection] = useState(() => {
     const savedKiosk = localStorage.getItem('scada_kiosk_mac');
@@ -75,7 +72,6 @@ function ScadaAppContent() {
     localStorage.setItem('scada_health_filter', healthFilter);
   }, [healthFilter]);
 
-  // Alternar el anclaje de terminal sin F5
   const toggleKioskMode = () => {
     if (kioskMac) {
       localStorage.removeItem('scada_kiosk_mac');
@@ -92,10 +88,10 @@ function ScadaAppContent() {
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [sirenActive, setSirenActive] = useState(false);
 
-  // Reloj de latido rápido cada 500ms
+  // Reloj de latido a 1000ms estable para no saturar navegadores móviles
   const [currentTime, setCurrentTime] = useState(Date.now());
   useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(Date.now()), 500);
+    const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
 
@@ -156,7 +152,6 @@ function ScadaAppContent() {
   useEffect(() => {
     const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'];
     const handleActivity = () => resetIdleTimer();
-    events.forEach((evt) => window.removeEventListener(evt, handleActivity));
     events.forEach((evt) => window.addEventListener(evt, handleActivity, { passive: true }));
     resetIdleTimer();
     return () => {
@@ -211,22 +206,7 @@ function ScadaAppContent() {
 
   const bgObj = WALLPAPERS_LIST.find((b) => b.id === currentBg) || WALLPAPERS_LIST[0];
 
-  const getBackgroundStyle = () => {
-    if (currentBg === 'oled') {
-      return {
-        backgroundColor: '#000000',
-        backgroundImage: 'radial-gradient(circle at 50% -5%, rgba(139, 92, 246, 0.25) 0%, transparent 55%), radial-gradient(circle at 100% 100%, rgba(0, 243, 255, 0.18) 0%, transparent 50%)'
-      };
-    }
-    if (bgObj.url) {
-      return {
-        backgroundImage: `linear-gradient(to bottom, rgba(4, 7, 18, 0.35), rgba(4, 7, 18, 0.65)), url('${bgObj.url}')`
-      };
-    }
-    return { backgroundColor: '#030712' };
-  };
-
-  // Motor de Salud de Autoclaves sin ciclos falsos
+  // Cálculo de salud
   const getDeviceHealthData = (dev) => {
     if (!dev || !dev.lastSeen || dev.lastSeen === 0) {
       return { status: 'OFFLINE', text: 'DESCONECTADO', timeAgo: 'Sin señal en vivo', colorClass: 'bg-rose-500/15 text-rose-400 border-rose-500/30' };
@@ -276,10 +256,21 @@ function ScadaAppContent() {
   }
 
   return (
-    <div 
-      className="min-h-screen flex flex-col relative transition-all duration-700 bg-cover bg-center bg-fixed pb-20 md:pb-6"
-      style={getBackgroundStyle()}
-    >
+    <div className="min-h-screen w-full relative pb-20 md:pb-6 flex flex-col">
+      
+      {/* CAPA DE FONDO FIJA INDEPENDIENTE (Evita temblores y repintados en celulares Android) */}
+      <div 
+        className="fixed inset-0 -z-10 pointer-events-none bg-cover bg-center"
+        style={{
+          backgroundImage: currentBg === 'oled'
+            ? 'radial-gradient(circle at 50% -5%, rgba(139, 92, 246, 0.25) 0%, transparent 55%), radial-gradient(circle at 100% 100%, rgba(0, 243, 255, 0.18) 0%, transparent 50%)'
+            : bgObj.url 
+            ? `linear-gradient(to bottom, rgba(4, 7, 18, 0.35), rgba(4, 7, 18, 0.65)), url('${bgObj.url}')`
+            : 'none',
+          backgroundColor: '#030712'
+        }}
+      />
+
       {/* Banner de Emergencia */}
       {sirenActive && (
         <div className="bg-rose-600 px-4 py-2.5 flex items-center justify-between text-white font-bold text-xs shadow-2xl animate-pulse sticky top-0 z-50">
@@ -373,7 +364,7 @@ function ScadaAppContent() {
         </div>
       </header>
 
-      {/* Dock Superior en PC (Oculto en modo terminal anclada) */}
+      {/* Dock Superior en PC */}
       {user && !kioskMac && !isOperator && (
         <div className="hidden md:flex items-center gap-2 px-6 py-2 bg-slate-950/60 border-b border-cyan-500/10">
           <button
@@ -411,7 +402,7 @@ function ScadaAppContent() {
         </div>
       )}
 
-      {/* Contenido Principal con Transición Fluida */}
+      {/* Contenido Principal con Contenedor Rígido Estable */}
       {!user ? (
         <main className="flex-1 flex items-center justify-center p-4 android-view-transition">
           <LoginModal />
@@ -588,7 +579,7 @@ function ScadaAppContent() {
         </main>
       )}
 
-      {/* BARRA INFERIOR PARA TELÉFONOS (Oculta en modo terminal anclada) */}
+      {/* BARRA INFERIOR PARA TELÉFONOS */}
       {user && !kioskMac && !isOperator && (
         <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-slate-950/90 border-t border-cyan-500/30 backdrop-blur-xl flex items-center justify-around z-50 px-2">
           <button
