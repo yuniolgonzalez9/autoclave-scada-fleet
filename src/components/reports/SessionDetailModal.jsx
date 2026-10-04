@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   FileText, 
   Printer, 
@@ -8,13 +9,89 @@ import {
   Clock, 
   Thermometer, 
   Gauge, 
-  Calendar,
+  Move,
   Building2,
   ShieldCheck
 } from 'lucide-react';
 
 export default function SessionDetailModal({ isOpen, onClose, session }) {
   if (!isOpen || !session) return null;
+
+  // =========================================================================
+  // SISTEMA ARRASTRABLE CON EL MOUSE O DEDO (DRAGGABLE WINDOW)
+  // =========================================================================
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartRef = useRef({ startX: 0, startY: 0, initialX: 0, initialY: 0 });
+
+  // Reiniciar posición al abrir un nuevo reporte
+  useEffect(() => {
+    setOffset({ x: 0, y: 0 });
+  }, [session?.session_id]);
+
+  const handleMouseDown = (e) => {
+    if (e.target.closest('button')) return; // No arrastrar si hace clic en un botón
+    setIsDragging(true);
+    dragStartRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      initialX: offset.x,
+      initialY: offset.y
+    };
+  };
+
+  const handleMouseMove = (e) => {
+    if (!isDragging) return;
+    const dx = e.clientX - dragStartRef.current.startX;
+    const dy = e.clientY - dragStartRef.current.startY;
+    setOffset({
+      x: dragStartRef.current.initialX + dx,
+      y: dragStartRef.current.initialY + dy
+    });
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  useEffect(() => {
+    if (isDragging) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+      return () => {
+        window.removeEventListener('mousemove', handleMouseMove);
+        window.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [isDragging]);
+
+  // Soporte táctil para mover en teléfonos celulares
+  const handleTouchStart = (e) => {
+    if (e.target.closest('button')) return;
+    const touch = e.touches[0];
+    setIsDragging(true);
+    dragStartRef.current = {
+      startX: touch.clientX,
+      startY: touch.clientY,
+      initialX: offset.x,
+      initialY: offset.y
+    };
+  };
+
+  const handleTouchMove = (e) => {
+    if (!isDragging) return;
+    const touch = e.touches[0];
+    const dx = touch.clientX - dragStartRef.current.startX;
+    const dy = touch.clientY - dragStartRef.current.startY;
+    setOffset({
+      x: dragStartRef.current.initialX + dx,
+      y: dragStartRef.current.initialY + dy
+    });
+  };
+
+  const handleTouchEnd = () => {
+    setIsDragging(false);
+  };
 
   const fechaFormateada = new Date(session.created_at || session.fecha || Date.now()).toLocaleDateString();
   const duracionTexto = session.duracion_total_seg 
@@ -25,7 +102,7 @@ export default function SessionDetailModal({ isOpen, onClose, session }) {
   const fases = session.ciclos_detalle || session.fases_desglose || [];
   const eventos = session.eventos || [];
 
-  // Función de Impresión de Certificado Oficial
+  // Función para Imprimir el Certificado Clínico Oficial
   const handlePrintCertificate = () => {
     const v = window.open('', '_blank');
     let fasesHtml = '';
@@ -96,7 +173,7 @@ export default function SessionDetailModal({ isOpen, onClose, session }) {
               <p><b>HOSPITAL / CLÍNICA:</b> ${session.cliente || 'CENTRO HOSPITALARIO'}</p>
               <p><b>EQUIPO:</b> ${session.alias || 'AUTOCLAVE QUIRÚRGICO'} (MAC: ${session.mac})</p>
               <p><b>MODELO:</b> ${session.modelo || 'CLASE B'}</p>
-              <p><b>PROGRAMA EJECUTADO:</b> ${session.programa || '134°C INSTRUMENTAL'}</p>
+              <p><b>PROGRAMA:</b> ${session.programa || '134°C INSTRUMENTAL'}</p>
             </div>
             <div class="data-box">
               <p><b>FECHA DE CICLO:</b> ${fechaFormateada}</p>
@@ -117,25 +194,25 @@ export default function SessionDetailModal({ isOpen, onClose, session }) {
             </thead>
             <tbody>
               <tr>
-                <td><b>Temperatura Máxima Alcanzada</b></td>
+                <td><b>Temperatura Máxima</b></td>
                 <td><b>${parseFloat(session.temp_max || 0).toFixed(1)} °C</b></td>
                 <td>134.0 °C - 138.0 °C (Clase B)</td>
                 <td><span style="color:#16a34a; font-weight:bold;">CONFORME</span></td>
               </tr>
               <tr>
-                <td><b>Presión Absoluta de Vapor</b></td>
+                <td><b>Presión de Vapor</b></td>
                 <td><b>${parseFloat(session.pres_max || 0).toFixed(2)} bar</b></td>
                 <td>2.10 - 2.50 bar</td>
                 <td><span style="color:#16a34a; font-weight:bold;">CONFORME</span></td>
               </tr>
               <tr>
-                <td><b>Incidentes / Alarmas Críticas</b></td>
+                <td><b>Incidentes / Alarmas</b></td>
                 <td>${session.conteo_alarmas || 0} eventos</td>
                 <td>0 incidencias en meseta</td>
                 <td><span style="color:${huboAlarma ? '#dc2626' : '#16a34a'}; font-weight:bold;">${huboAlarma ? 'FALLO DETECTADO' : 'APROBADO'}</span></td>
               </tr>
               <tr>
-                <td><b>Diagnóstico Global del Proceso</b></td>
+                <td><b>Diagnóstico Global</b></td>
                 <td colspan="3"><b>${session.diagnostico_principal || 'CICLO VÁLIDO'}</b></td>
               </tr>
             </tbody>
@@ -145,38 +222,51 @@ export default function SessionDetailModal({ isOpen, onClose, session }) {
 
           <div class="sign-box">
             <div>
-              <div class="sign-line">Ingeniero Biomédico / Técnico Responsable<br><span style="font-size:9px; color:#64748b;">Firma Digital y Matrícula Profesional</span></div>
+              <div class="sign-line">Ingeniero Biomédico / Técnico Responsable<br><span style="font-size:9px; color:#64748b;">Firma Digital</span></div>
             </div>
             <div>
-              <div class="sign-line">Supervisión Central de Esterilización (CEYE)<br><span style="font-size:9px; color:#64748b;">Sello y Conformidad Institucional</span></div>
+              <div class="sign-line">Supervisión Central de Esterilización (CEYE)<br><span style="font-size:9px; color:#64748b;">Sello de Conformidad</span></div>
             </div>
           </div>
-
-          <script>
-            window.print();
-          </script>
+          <script>window.print();</script>
         </body>
       </html>
     `);
     v.document.close();
   };
 
-  return (
-    <div className="fixed inset-0 z-[999999] bg-black/85 backdrop-blur-md flex items-start sm:items-center justify-center p-2 sm:p-4 overflow-y-auto">
-      {/* Contenedor Ergonómico: Centrado vertical automático con scroll interno */}
-      <div className="my-auto w-full max-w-4xl max-h-[92vh] flex flex-col ultra-glass rounded-2xl border border-cyan-500/50 shadow-2xl overflow-hidden">
+  // Renderizado a través de Portal directo al body (sin sombras negras opacas ni recortes)
+  return createPortal(
+    <div className="fixed inset-0 z-[999999] bg-black/25 backdrop-blur-[2px] flex items-start justify-center p-3 sm:p-6 pt-6 sm:pt-10 overflow-hidden pointer-events-auto">
+      
+      {/* Tarjeta Flotante Arrastrable con Posición Superior Inmediata */}
+      <div 
+        style={{
+          transform: `translate(${offset.x}px, ${offset.y}px)`,
+          transition: isDragging ? 'none' : 'transform 0.15s ease'
+        }}
+        className="w-full max-w-4xl max-h-[88vh] flex flex-col ultra-glass rounded-2xl border-2 border-cyan-400/60 shadow-[0_15px_50px_rgba(0,0,0,0.85)] overflow-hidden"
+      >
         
-        {/* Cabecera Fija */}
-        <div className="px-4 sm:px-6 py-3.5 border-b border-cyan-500/20 bg-slate-950/90 flex items-center justify-between shrink-0">
+        {/* Cabecera Arrastrable con Grip Cursor */}
+        <div 
+          onMouseDown={handleMouseDown}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          className="px-4 sm:px-6 py-3.5 border-b border-cyan-500/30 bg-slate-950/95 flex items-center justify-between shrink-0 cursor-grab active:cursor-grabbing select-none"
+          title="Arrastra con el mouse para mover esta ventana"
+        >
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 shrink-0">
-              <FileText className="w-5 h-5" />
+            <div className="p-1.5 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 shrink-0">
+              <Move className="w-4 h-4" />
             </div>
             <div className="truncate">
-              <h3 className="text-sm sm:text-base font-bold text-white tracking-wide truncate">
-                Visor Forense: {session.session_id}
+              <h3 className="text-sm sm:text-base font-bold text-white tracking-wide truncate flex items-center gap-2">
+                <span>Visor Forense: {session.session_id}</span>
+                <span className="text-[10px] text-cyan-400 font-mono font-normal hidden sm:inline">(Arrastrable)</span>
               </h3>
-              <p className="text-[11px] text-cyan-300 font-mono truncate">
+              <p className="text-[11px] text-slate-400 font-mono truncate">
                 {session.alias} • {session.mac} • {session.cliente || 'Hospital Central'}
               </p>
             </div>
@@ -185,21 +275,21 @@ export default function SessionDetailModal({ isOpen, onClose, session }) {
           <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={handlePrintCertificate}
-              className="px-3 py-1.5 bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold rounded-lg text-xs flex items-center gap-1.5 shadow-lg shadow-cyan-500/20"
+              className="px-3 py-1.5 bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold rounded-lg text-xs flex items-center gap-1.5 shadow-lg shadow-cyan-500/20 active:scale-95"
             >
               <Printer className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Imprimir Certificado</span>
             </button>
             <button 
               onClick={onClose}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 active:scale-95"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
         </div>
 
-        {/* Cuerpo Scrollable fluido para móviles y PC */}
+        {/* Cuerpo del Reporte con Scroll Fluido */}
         <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-4">
           
           {huboAlarma && (
@@ -312,6 +402,7 @@ export default function SessionDetailModal({ isOpen, onClose, session }) {
 
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
