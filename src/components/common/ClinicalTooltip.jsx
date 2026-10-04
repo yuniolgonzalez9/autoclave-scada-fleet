@@ -4,11 +4,11 @@ export default function ClinicalTooltip({ title, description, badge, shortcut, c
   const [visible, setVisible] = useState(false);
   const timerRef = useRef(null);
 
-  // Manejador para computadora (Hover con retardo elegante de 350ms)
+  // Computadora: Hover con retardo elegante
   const handleMouseEnter = () => {
     timerRef.current = setTimeout(() => {
       setVisible(true);
-    }, 350);
+    }, 280);
   };
 
   const handleMouseLeave = () => {
@@ -16,18 +16,17 @@ export default function ClinicalTooltip({ title, description, badge, shortcut, c
     setVisible(false);
   };
 
-  // Manejador para Celulares (Pulsación Larga / Long Press de 450ms)
+  // Celular: Long press de 400ms
   const handleTouchStart = () => {
     timerRef.current = setTimeout(() => {
       setVisible(true);
-    }, 450);
+    }, 400);
   };
 
   const handleTouchEnd = () => {
     clearTimeout(timerRef.current);
-    // Si se activó en celular, se cierra tras 2.5 segundos para no estorbar
     if (visible) {
-      setTimeout(() => setVisible(false), 2500);
+      setTimeout(() => setVisible(false), 2200);
     }
   };
 
@@ -56,27 +55,27 @@ export default function ClinicalTooltip({ title, description, badge, shortcut, c
 
       {visible && (
         <div 
-          className={`absolute z-[999999] pointer-events-none w-64 p-3 rounded-xl ultra-glass border border-cyan-400/50 shadow-2xl backdrop-blur-2xl animate-in fade-in zoom-in-95 duration-200 ${getPositionClass()}`}
+          className={`absolute z-[999999] pointer-events-none w-64 p-3 rounded-xl ultra-glass border-2 border-cyan-400 shadow-[0_10px_35px_rgba(0,0,0,0.9)] backdrop-blur-2xl animate-in fade-in zoom-in-95 duration-150 ${getPositionClass()}`}
         >
-          <div className="flex items-center justify-between gap-2 border-b border-cyan-500/20 pb-1.5 mb-1.5">
-            <span className="font-mono text-xs font-bold text-white tracking-wide uppercase">
+          <div className="flex items-center justify-between gap-1.5 border-b border-cyan-500/30 pb-1 mb-1.5">
+            <span className="font-mono text-[11px] font-bold text-white tracking-wide uppercase truncate">
               {title}
             </span>
             {badge && (
-              <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-cyan-500/20 border border-cyan-400/40 text-cyan-300">
+              <span className="text-[8px] font-mono font-bold px-1.5 py-0.5 rounded bg-cyan-500/20 border border-cyan-400/40 text-cyan-300 shrink-0">
                 {badge}
               </span>
             )}
           </div>
 
-          <p className="text-[11px] text-slate-300 font-sans leading-relaxed">
+          <p className="text-[10px] text-slate-200 font-sans leading-relaxed">
             {description}
           </p>
 
           {shortcut && (
-            <div className="mt-2 pt-1 border-t border-white/5 flex items-center justify-between text-[9px] font-mono text-slate-400">
+            <div className="mt-1.5 pt-1 border-t border-white/10 flex items-center justify-between text-[8px] font-mono text-slate-400">
               <span>ACCIÓN:</span>
-              <span className="text-cyan-400 font-bold">{shortcut}</span>
+              <span className="text-cyan-300 font-bold">{shortcut}</span>
             </div>
           )}
         </div>
