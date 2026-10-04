@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import LoginModal from './components/auth/LoginModal';
 import UserManagementModal from './components/admin/UserManagementModal';
+import UserManagementView from './components/admin/UserManagementView';
 import DeviceDetailView from './components/dashboard/DeviceDetailView';
 import ClinicalAuditView from './components/reports/ClinicalAuditView';
 import FotaHubView from './components/fota/FotaHubView';
@@ -28,7 +29,8 @@ import {
   Clock,
   Pin,
   PinOff,
-  Unlock
+  Unlock,
+  Shield
 } from 'lucide-react';
 
 function ScadaAppContent() {
@@ -43,9 +45,7 @@ function ScadaAppContent() {
     initAudioUnlock();
   }, []);
 
-  // =========================================================================
-  // GESTIÓN DE TERMINAL DEDICADA (KIOSK) & PERSISTENCIA DE RUTA
-  // =========================================================================
+  // GESTIÓN DE TERMINAL DEDICADA & PERSISTENCIA
   const [kioskMac, setKioskMac] = useState(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const directKiosk = urlParams.get('kiosk');
@@ -61,6 +61,7 @@ function ScadaAppContent() {
     return localStorage.getItem('scada_selected_mac') || null;
   });
 
+  // activeSection: 'flota' | 'gestion' | 'fota' | 'auditoria' | 'usuarios' | 'detalle'
   const [activeSection, setActiveSection] = useState(() => {
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('mac') || urlParams.get('kiosk') || localStorage.getItem('scada_kiosk_mac')) {
@@ -88,7 +89,6 @@ function ScadaAppContent() {
     localStorage.setItem('scada_health_filter', healthFilter);
   }, [healthFilter]);
 
-  // Alternar el anclaje de terminal sin quedarse atrapado
   const toggleKioskMode = (macToKiosk = null) => {
     if (kioskMac) {
       localStorage.removeItem('scada_kiosk_mac');
@@ -109,7 +109,6 @@ function ScadaAppContent() {
     }
   };
 
-  // Menú Contextual (Clic Secundario)
   const [contextMenu, setContextMenu] = useState({ isOpen: false, position: { x: 0, y: 0 }, device: null });
   const [assignModal, setAssignModal] = useState({ isOpen: false, device: null });
   const [qrModalDevice, setQrModalDevice] = useState(null);
@@ -127,14 +126,12 @@ function ScadaAppContent() {
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [sirenActive, setSirenActive] = useState(false);
 
-  // Reloj de latido rápido a 1000ms
   const [currentTime, setCurrentTime] = useState(Date.now());
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  // Temporizador de Inactividad (15 min)
   const [showTimeoutModal, setShowTimeoutModal] = useState(false);
   const [countdown, setCountdown] = useState(60);
   const idleTimerRef = useRef(null);
@@ -249,7 +246,7 @@ function ScadaAppContent() {
 
   const getDeviceHealthData = (dev) => {
     if (!dev || !dev.lastSeen || dev.lastSeen === 0) {
-      return { status: 'OFFLINE', text: 'DESCONECTADO', timeAgo: 'Sin señal en vivo', colorClass: 'bg-rose-500/15 text-rose-400 border-rose-500/30' };
+      return { status: 'OFFLINE', text: 'DESCONECTADO', timeAgo: 'Sin señal', colorClass: 'bg-rose-500/15 text-rose-400 border-rose-500/30' };
     }
     const diffSegundos = Math.floor((currentTime - dev.lastSeen) / 1000);
 
@@ -265,31 +262,31 @@ function ScadaAppContent() {
 
   const macKeys = Object.keys(fleet);
 
-  // =========================================================================
-  // AISLAMIENTO HOSPITALARIO MULTI-TENANT (FILTRADO POR CLIENTE / OPERADOR)
-  // =========================================================================
+  // AISLAMIENTO MULTI-TENANT
   const allowedDevices = macKeys
     .map((k) => fleet[k])
     .filter((dev) => {
-      // 1. El Superadministrador / Director Biomédico ve absolutamente toda la flota
       if (isAdmin) return true;
 
       const userHospital = (profile?.departamento || '').toLowerCase().trim();
       const devHospital = (dev?.meta?.cliente || '').toLowerCase().trim();
       const devAssignedUser = (dev?.meta?.usuario_asignado || '').toLowerCase().trim();
       const currentUsername = (profile?.usuario || user?.email || '').toLowerCase().trim();
+      const userAuthMacs = (profile?.equipos_autorizados || '').toUpperCase().split(',').map((x) => x.trim());
 
-      // 2. Si el autoclave tiene un operador exclusivo asignado, solo ese operador puede verlo
+      // 1. Si el usuario tiene asignada la MAC directamente en su perfil
+      if (userAuthMacs.includes(dev.mac)) return true;
+
+      // 2. Si el autoclave tiene un operador exclusivo asignado
       if (devAssignedUser) {
         return devAssignedUser === currentUsername;
       }
 
-      // 3. Si el usuario pertenece a una clínica/hospital, solo ve equipos de ese hospital
+      // 3. Si el usuario pertenece a la misma clínica/hospital
       if (userHospital && devHospital) {
         return devHospital.includes(userHospital) || userHospital.includes(devHospital);
       }
 
-      // 4. Si el equipo no está asignado o pertenece a otra clínica, queda protegido
       return false;
     });
 
@@ -309,7 +306,7 @@ function ScadaAppContent() {
     return true;
   });
 
-  // SEGURO ANTI-PANTALLA EN BLANCO: Garantiza que la consola del equipo siempre cargue
+  // Seguro anti-pantalla en blanco
   const inspectingMacToUse = kioskMac || selectedMac;
   const inspectingDevice = inspectingMacToUse 
     ? (fleet[inspectingMacToUse] || {
@@ -395,8 +392,6 @@ function ScadaAppContent() {
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-3 shrink-0 ml-2">
-            
-            {/* BOTÓN MAESTRO DE EMERGENCIA: SIEMPRE PERMITE DESANCLAR LA TERMINAL */}
             {kioskMac && (
               <button
                 onClick={() => toggleKioskMode(null)}
@@ -408,7 +403,6 @@ function ScadaAppContent() {
               </button>
             )}
 
-            {/* Insignia MQTT */}
             <ClinicalTooltip
               title="Conexión WebSocket Broker"
               description="Canal WSS en puerto 8884 hacia HiveMQ Cloud."
@@ -430,7 +424,7 @@ function ScadaAppContent() {
               <button
                 onClick={() => setShowAdminModal(true)}
                 className="relative p-1.5 sm:p-2 rounded-xl bg-slate-900 border border-amber-500/40 text-amber-300 shrink-0"
-                title="Personal y Aprobaciones"
+                title="Aprobaciones Rápidas"
               >
                 <Bell className="w-4 h-4 sm:w-5 sm:h-5" />
                 {pendingRequests.length > 0 && (
@@ -441,7 +435,6 @@ function ScadaAppContent() {
               </button>
             )}
 
-            {/* Engranaje */}
             {user && (
               <div className="shrink-0">
                 <GearMenu
@@ -460,7 +453,7 @@ function ScadaAppContent() {
           </div>
         </header>
 
-        {/* Dock Superior en PC (Oculto en modo terminal anclada o para operadores) */}
+        {/* Dock Superior en PC: Incluye el Apartado Dedicado de Usuarios */}
         {user && !kioskMac && !isOperator && (
           <div className="hidden md:flex items-center gap-2 px-6 py-2 bg-slate-950/60 border-b border-cyan-500/10">
             <button
@@ -478,6 +471,14 @@ function ScadaAppContent() {
               }`}
             >
               🏢 Gestión Flota
+            </button>
+            <button
+              onClick={() => { setActiveSection('usuarios'); setSelectedMac(null); }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
+                activeSection === 'usuarios' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              🛡️ Usuarios & Permisos
             </button>
             <button
               onClick={() => { setActiveSection('fota'); setSelectedMac(null); }}
@@ -498,7 +499,7 @@ function ScadaAppContent() {
           </div>
         )}
 
-        {/* Contenido Principal con Transición Fluida */}
+        {/* Contenido Principal */}
         {!user ? (
           <main className="flex-1 flex items-center justify-center p-4 android-view-transition">
             <LoginModal />
@@ -506,7 +507,6 @@ function ScadaAppContent() {
         ) : (
           <main className="flex-1 p-3 md:p-6 max-w-7xl mx-auto w-full flex flex-col gap-4 android-view-transition">
             
-            {/* Si está en modo terminal anclada O seleccionó ver detalle */}
             {(kioskMac || activeSection === 'detalle') && inspectingDevice ? (
               <DeviceDetailView
                 device={inspectingDevice}
@@ -659,12 +659,20 @@ function ScadaAppContent() {
                   </div>
                 )}
 
-                {/* SECCIÓN GESTIÓN */}
+                {/* SECCIÓN GESTIÓN FLOTA */}
                 {activeSection === 'gestion' && (
                   <FleetManagementView
                     fleet={fleet}
                     sendCommand={sendDeviceCommand}
                     onSelectDevice={(mac) => { setSelectedMac(mac); setActiveSection('detalle'); }}
+                  />
+                )}
+
+                {/* NUEVA SECCIÓN DEDICADA: USUARIOS & PERMISOS */}
+                {activeSection === 'usuarios' && (
+                  <UserManagementView
+                    fleet={fleet}
+                    onFleetUpdated={() => {}}
                   />
                 )}
 
@@ -683,12 +691,12 @@ function ScadaAppContent() {
           </main>
         )}
 
-        {/* BARRA INFERIOR PARA TELÉFONOS (Oculta solo si está anclado a un equipo) */}
-        {user && !kioskMac && (
+        {/* BARRA INFERIOR PARA TELÉFONOS */}
+        {user && !kioskMac && !isOperator && (
           <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-slate-950/90 border-t border-cyan-500/30 backdrop-blur-xl flex items-center justify-around z-50 px-2">
             <button
               onClick={() => { setActiveSection('flota'); setSelectedMac(null); }}
-              className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-lg text-xs font-mono ${
+              className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-xs font-mono ${
                 activeSection === 'flota' || activeSection === 'detalle' ? 'text-cyan-400 font-bold' : 'text-slate-400'
               }`}
             >
@@ -698,7 +706,7 @@ function ScadaAppContent() {
 
             <button
               onClick={() => { setActiveSection('gestion'); setSelectedMac(null); }}
-              className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-lg text-xs font-mono ${
+              className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-xs font-mono ${
                 activeSection === 'gestion' ? 'text-cyan-400 font-bold' : 'text-slate-400'
               }`}
             >
@@ -707,8 +715,18 @@ function ScadaAppContent() {
             </button>
 
             <button
+              onClick={() => { setActiveSection('usuarios'); setSelectedMac(null); }}
+              className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-xs font-mono ${
+                activeSection === 'usuarios' ? 'text-cyan-400 font-bold' : 'text-slate-400'
+              }`}
+            >
+              <Shield className="w-5 h-5" />
+              <span>Personal</span>
+            </button>
+
+            <button
               onClick={() => { setActiveSection('fota'); setSelectedMac(null); }}
-              className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-lg text-xs font-mono ${
+              className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-xs font-mono ${
                 activeSection === 'fota' ? 'text-cyan-400 font-bold' : 'text-slate-400'
               }`}
             >
@@ -718,7 +736,7 @@ function ScadaAppContent() {
 
             <button
               onClick={() => { setActiveSection('auditoria'); setSelectedMac(null); }}
-              className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-lg text-xs font-mono ${
+              className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-xs font-mono ${
                 activeSection === 'auditoria' ? 'text-cyan-400 font-bold' : 'text-slate-400'
               }`}
             >
@@ -796,7 +814,7 @@ function ScadaAppContent() {
           operatorName={profile?.nombre || user?.email}
         />
 
-        {/* Modal de Personal & Aprobaciones */}
+        {/* Modal de Personal & Aprobaciones Rápidas (Campana) */}
         <UserManagementModal 
           isOpen={showAdminModal} 
           onClose={() => setShowAdminModal(false)} 
