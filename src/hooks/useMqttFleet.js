@@ -9,23 +9,27 @@ export function useMqttFleet() {
 
   useEffect(() => {
     const { client, sendCommand } = connectMqttFleet(
-      ({ mac, channel, payload }) => {
+      ({ mac, channel, payload, isRetained }) => {
         setFleet((prevFleet) => {
           const currentDev = prevFleet[mac] || {
             mac,
-            lastSeen: Date.now(),
+            lastSeen: 0, // Inicia en 0: si no hay transmisión en caliente, es OFFLINE instantáneo
             datos: {},
             esquema: null,
             f0Score: 0.0,
             history: []
           };
 
-          const updated = { ...currentDev, lastSeen: Date.now() };
+          // Solo si el paquete es FRESCO en vivo (no retenido del pasado) se actualiza la hora
+          const isFreshStream = !isRetained;
+          const updated = { 
+            ...currentDev, 
+            lastSeen: isFreshStream ? Date.now() : (currentDev.lastSeen || 0)
+          };
 
           if (channel === 'telemetria') {
             updated.datos = payload;
 
-            // Integración matemática de F0 en tiempo real con los datos del sensor físico
             const currentTemp = payload.temp_camara || 25.0;
             if (payload.fase === 'ESTERILIZANDO') {
               updated.f0Score = accumulateF0(currentDev.f0Score || 0, currentTemp, 2);
@@ -33,7 +37,6 @@ export function useMqttFleet() {
               updated.f0Score = 0.0;
             }
 
-            // Historial de gráfica térmica en tiempo real
             const nowTime = new Date().toTimeString().slice(3, 8);
             const newPoint = {
               time: nowTime,
@@ -47,6 +50,10 @@ export function useMqttFleet() {
 
           if (channel === 'esquema') {
             updated.esquema = payload;
+          }
+
+          if (channel === 'meta') {
+            updated.meta = Object.assign(updated.meta || {}, payload);
           }
 
           return { ...prevFleet, [mac]: updated };
