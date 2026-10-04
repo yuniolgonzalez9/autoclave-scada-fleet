@@ -12,13 +12,9 @@ import {
   Trash2, 
   Clock, 
   ShieldCheck, 
-  Save, 
-  Send, 
   CheckCircle2, 
   AlertCircle,
-  Cpu,
-  Lock,
-  RotateCcw
+  Cpu
 } from 'lucide-react';
 
 export default function UserManagementView({ fleet, onFleetUpdated }) {
@@ -29,7 +25,7 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
   const [msg, setMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
-  // Formulario de Nuevo Usuario
+  // Formulario de Nuevo Usuario (Correo Opcional)
   const [uUser, setUUser] = useState('');
   const [uNombre, setUNombre] = useState('');
   const [uEmail, setUEmail] = useState('');
@@ -38,7 +34,7 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
   const [uHospital, setUHospital] = useState('');
   const [selectedDevices, setSelectedDevices] = useState({});
 
-  // Estados para Cambiar Contraseña / Editar Asignaciones
+  // Modales
   const [resetUser, setResetUser] = useState(null);
   const [tempPassword, setTempPassword] = useState('');
   const [editAssignUser, setEditAssignUser] = useState(null);
@@ -51,8 +47,7 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
     try {
       const { data } = await supabase
         .from('usuarios_scada')
-        .select('*')
-        .order('fecha_solicitud', { ascending: false });
+        .select('*');
       if (data) setUsersList(data);
     } catch (e) {
       console.warn(e);
@@ -77,7 +72,6 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
     fetchLogs();
   }, []);
 
-  // Generar clave segura automática
   const generateRandomPass = () => {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let pass = 'BIO-';
@@ -85,7 +79,9 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
     setUPass(pass);
   };
 
-  // Crear Usuario y Asignar Equipos en un Solo Paso
+  // =========================================================================
+  // CREACIÓN FLEXIBLE (CORREO OPCIONAL Y SIN COLUMNAS INEXISTENTES)
+  // =========================================================================
   const handleCreateUser = async (e) => {
     e.preventDefault();
     setMsg('');
@@ -95,23 +91,24 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
     const assignedMacs = Object.keys(selectedDevices).filter((m) => selectedDevices[m]);
 
     if (cleanUser.length < 3) {
-      return setErrorMsg('El usuario debe tener al menos 3 caracteres.');
+      return setErrorMsg('El nombre de usuario debe tener mínimo 3 caracteres.');
     }
     if (uPass.trim().length < 4) {
       return setErrorMsg('La contraseña debe tener mínimo 4 caracteres.');
     }
 
+    // Correo opcional: si lo dejas vacío, se genera un alias interno transparente
+    const finalEmail = uEmail.trim() ? uEmail.trim().toLowerCase() : `${cleanUser}@hospital.local`;
+
     try {
-      // 1. Insertar usuario en usuarios_scada
+      // 1. Guardar en usuarios_scada solo columnas universales probadas
       const userPayload = {
         usuario: cleanUser,
         nombre: uNombre.trim() || cleanUser,
-        email: uEmail.trim().toLowerCase(),
+        email: finalEmail,
         password: uPass.trim(),
         rol: uRol,
-        departamento: uHospital.trim() || 'Central Hospitalaria',
-        estado: 'ACTIVO',
-        equipos_autorizados: assignedMacs.join(',')
+        estado: 'ACTIVO'
       };
 
       const { error: userError } = await supabase
@@ -120,19 +117,19 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
 
       if (userError) throw userError;
 
-      // 2. Vincular los autoclaves seleccionados a este usuario en asignaciones_equipos
+      // 2. Vincular los autoclaves en asignaciones_equipos
       for (const mac of assignedMacs) {
         await supabase
           .from('asignaciones_equipos')
           .upsert({
             mac: mac,
-            cliente: uHospital.trim() || 'Hospital Asignado',
+            cliente: uHospital.trim() || 'Clínica Asignada',
             usuario_asignado: cleanUser,
             updated_at: new Date().toISOString()
           }, { onConflict: 'mac' });
       }
 
-      setMsg(`¡Usuario [${cleanUser.toUpperCase()}] creado con éxito y ${assignedMacs.length} equipo(s) asignado(s)!`);
+      setMsg(`¡Usuario [${cleanUser.toUpperCase()}] creado exitosamente con ${assignedMacs.length} equipo(s) vinculado(s)!`);
       
       // Limpiar formulario
       setUUser('');
@@ -149,9 +146,9 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
     }
   };
 
-  // Alternar Estado Activo / Suspendido
   const handleToggleStatus = async (user) => {
-    if (user.usuario === 'superadmin' || user.usuario === 'admin') {
+    const username = user.usuario || user.user;
+    if (username === 'superadmin' || username === 'admin') {
       return alert('No puedes suspender la cuenta del Superadministrador.');
     }
 
@@ -160,14 +157,7 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
       await supabase
         .from('usuarios_scada')
         .update({ estado: newStatus })
-        .eq('usuario', user.usuario);
-
-      await supabase.from('auditoria_accesos').insert([{
-        usuario_email: user.usuario,
-        evento: newStatus === 'ACTIVO' ? 'CUENTA_ACTIVADA' : 'CUENTA_SUSPENDIDA',
-        dispositivo: 'Consola Superadmin',
-        fecha_hora: new Date().toISOString()
-      }]);
+        .eq('usuario', username);
 
       fetchUsers();
     } catch (e) {
@@ -175,47 +165,42 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
     }
   };
 
-  // Cambiar Contraseña
   const handleSavePassword = async () => {
     if (!resetUser || tempPassword.trim().length < 4) return alert('Mínimo 4 caracteres.');
+    const username = resetUser.usuario || resetUser.user;
 
     try {
       await supabase
         .from('usuarios_scada')
         .update({ password: tempPassword.trim() })
-        .eq('usuario', resetUser.usuario);
+        .eq('usuario', username);
 
-      alert(`Contraseña de ${resetUser.usuario} actualizada a: ${tempPassword}`);
+      alert(`Contraseña de ${username} actualizada a: ${tempPassword}`);
       setResetUser(null);
       setTempPassword('');
       fetchUsers();
     } catch (e) {
-      alert('Error cambiando contraseña');
+      alert('Error actualizando contraseña');
     }
   };
 
-  // Guardar Edición de Equipos Asignados
   const handleSaveAssignedDevices = async () => {
     if (!editAssignUser) return;
+    const username = editAssignUser.usuario || editAssignUser.user;
     const newAssignedMacs = Object.keys(editUserDevices).filter((m) => editUserDevices[m]);
 
     try {
-      await supabase
-        .from('usuarios_scada')
-        .update({ equipos_autorizados: newAssignedMacs.join(',') })
-        .eq('usuario', editAssignUser.usuario);
-
       for (const mac of newAssignedMacs) {
         await supabase
           .from('asignaciones_equipos')
           .upsert({
             mac: mac,
-            usuario_asignado: editAssignUser.usuario,
+            usuario_asignado: username,
             updated_at: new Date().toISOString()
           }, { onConflict: 'mac' });
       }
 
-      alert(`Equipos asignados a [${editAssignUser.usuario}] actualizados.`);
+      alert(`Equipos asignados a [${username}] actualizados en la nube.`);
       setEditAssignUser(null);
       fetchUsers();
       if (onFleetUpdated) onFleetUpdated();
@@ -224,39 +209,38 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
     }
   };
 
-  // Abrir modal de asignación para un usuario
   const openEditAssignModal = (usr) => {
     setEditAssignUser(usr);
+    const username = (usr.usuario || usr.user || '').toLowerCase();
     const initialMap = {};
-    const authList = (usr.equipos_autorizados || '').split(',').map((x) => x.trim().toUpperCase());
     macList.forEach((m) => {
-      initialMap[m] = authList.includes(m) || (fleet[m]?.meta?.usuario_asignado || '').toLowerCase() === usr.usuario.toLowerCase();
+      initialMap[m] = (fleet[m]?.meta?.usuario_asignado || '').toLowerCase() === username;
     });
     setEditUserDevices(initialMap);
   };
 
-  // Eliminar Usuario
   const handleDeleteUser = async (user) => {
-    if (user.usuario === 'superadmin' || user.usuario === 'admin') {
+    const username = user.usuario || user.user;
+    if (username === 'superadmin' || username === 'admin') {
       return alert('No puedes eliminar la cuenta raíz de Superadmin.');
     }
-    if (!confirm(`¿Eliminar definitivamente la cuenta [${user.usuario.toUpperCase()}]?`)) return;
+    if (!confirm(`¿Eliminar definitivamente al usuario [${username.toUpperCase()}]?`)) return;
 
     try {
-      await supabase.from('usuarios_scada').delete().eq('usuario', user.usuario);
+      await supabase.from('usuarios_scada').delete().eq('usuario', username);
       fetchUsers();
     } catch (e) {
       alert('Error eliminando usuario');
     }
   };
 
-  // Aprobar Solicitud Pendiente
   const handleApproveRequest = async (reqUser, roleToAssign = 'OPERADOR') => {
+    const username = reqUser.usuario || reqUser.user;
     try {
       await supabase
         .from('usuarios_scada')
         .update({ estado: 'ACTIVO', rol: roleToAssign })
-        .eq('usuario', reqUser.usuario);
+        .eq('usuario', username);
       fetchUsers();
     } catch (e) {
       alert('Error aprobando');
@@ -276,11 +260,11 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
             Centro Maestro de Personal, Roles & Asignación de Flota
           </h2>
           <p className="text-xs text-slate-300 font-mono mt-0.5">
-            Gestión jerárquica RBAC, credenciales institucionales y vinculación hospitalaria multi-cliente
+            Gestión jerárquica de cuentas y vinculación de autoclaves por cliente
           </p>
         </div>
 
-        {/* Selector de Sub-Secciones */}
+        {/* Sub-Pestañas */}
         <div className="flex gap-1.5 flex-wrap">
           <button
             onClick={() => setActiveTab('directorio')}
@@ -302,7 +286,7 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
 
           <button
             onClick={() => setActiveTab('solicitudes')}
-            className={`relative px-3 py-1.5 rounded-xl text-xs font-mono font-bold transition-all ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-mono font-bold transition-all ${
               activeTab === 'solicitudes' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'bg-slate-900 border border-slate-700 text-slate-300 hover:text-white'
             }`}
           >
@@ -337,18 +321,15 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
         </div>
       )}
 
-      {/* SUB-SECCIÓN 1: DIRECTORIO DE PERSONAL REGISTRADO */}
+      {/* PESTAÑA 1: DIRECTORIO */}
       {activeTab === 'directorio' && (
         <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 space-y-4">
           <div className="flex justify-between items-center">
             <h3 className="text-sm font-bold text-white font-mono flex items-center gap-2">
               <Users className="w-4 h-4 text-cyan-400" />
-              Cuentas Activas & Equipos Vinculados
+              Directorio de Cuentas y Equipos Vinculados
             </h3>
-            <button
-              onClick={fetchUsers}
-              className="px-2.5 py-1 bg-slate-900 border border-slate-700 text-xs text-slate-300 rounded-lg hover:text-white"
-            >
+            <button onClick={fetchUsers} className="px-2.5 py-1 bg-slate-900 border border-slate-700 text-xs text-slate-300 rounded-lg hover:text-white">
               🔄 Recargar
             </button>
           </div>
@@ -358,52 +339,45 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
               <thead className="bg-slate-900/90 text-cyan-400 border-b border-slate-800">
                 <tr>
                   <th className="p-3">USUARIO / ID</th>
-                  <th className="p-3">NOMBRE Y CORREO</th>
-                  <th className="p-3">JERARQUÍA</th>
-                  <th className="p-3">CLÍNICA / HOSPITAL</th>
-                  <th className="p-3">AUTOCLAVES ASIGNADOS</th>
+                  <th className="p-3">NOMBRE</th>
+                  <th className="p-3">CORREO REGISTRADO</th>
+                  <th className="p-3">ROL</th>
+                  <th className="p-3">EQUIPOS ASIGNADOS</th>
                   <th className="p-3">ESTADO</th>
                   <th className="p-3 text-center">ACCIONES</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 text-slate-300">
                 {activeList.map((u) => {
+                  const username = u.usuario || u.user;
                   const isActive = u.estado === 'ACTIVO';
-                  const isRoot = u.usuario === 'superadmin' || u.usuario === 'admin';
-                  const authMacs = (u.equipos_autorizados || '').split(',').filter(Boolean);
+                  const isRoot = username === 'superadmin' || username === 'admin';
+                  
+                  // Autoclaves asignados a este usuario en fleet
+                  const userMacs = macList.filter(m => (fleet[m]?.meta?.usuario_asignado || '').toLowerCase() === username.toLowerCase());
 
                   return (
-                    <tr key={u.usuario} className="hover:bg-slate-800/40">
+                    <tr key={username} className="hover:bg-slate-800/40">
                       <td className="p-3 font-bold text-white">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-cyan-300">{u.usuario}</span>
-                          {isRoot && <span className="text-[9px] px-1 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">ROOT</span>}
-                        </div>
+                        <span className="text-cyan-300">{username}</span>
+                        {isRoot && <span className="text-[9px] px-1 ml-1 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">ROOT</span>}
                       </td>
+                      <td className="p-3 text-white">{u.nombre || username}</td>
+                      <td className="p-3 text-slate-400">{u.email ? (u.email.includes('@hospital.local') ? 'Sin correo' : u.email) : 'Sin correo'}</td>
                       <td className="p-3">
-                        <div className="text-white font-medium">{u.nombre || u.usuario}</div>
-                        <div className="text-[10px] text-slate-400">{u.email || 'Sin correo'}</div>
-                      </td>
-                      <td className="p-3">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
-                          (u.rol || '').toUpperCase().includes('SUPER') ? 'bg-amber-500/10 text-amber-300 border-amber-500/30' :
-                          (u.rol || '').toUpperCase().includes('TEC') ? 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30' :
-                          'bg-emerald-500/10 text-emerald-300 border-emerald-500/30'
-                        }`}>
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold border border-cyan-500/30 text-cyan-300 bg-cyan-500/10">
                           {u.rol || 'OPERADOR'}
                         </span>
                       </td>
-                      <td className="p-3 text-slate-300 font-sans">{u.departamento || 'Sin asignar'}</td>
                       
-                      {/* Equipos Asignados */}
                       <td className="p-3">
                         {isRoot ? (
                           <span className="text-[10px] text-amber-300 font-bold">🌐 TODA LA FLOTA</span>
-                        ) : authMacs.length === 0 ? (
+                        ) : userMacs.length === 0 ? (
                           <span className="text-[10px] text-slate-500 italic">Sin equipos</span>
                         ) : (
                           <div className="flex flex-wrap gap-1">
-                            {authMacs.map((m) => (
+                            {userMacs.map((m) => (
                               <span key={m} className="px-1.5 py-0.2 rounded text-[9px] bg-cyan-950/80 border border-cyan-500/40 text-cyan-300">
                                 {fleet[m]?.meta?.alias || m.slice(-4)}
                               </span>
@@ -420,7 +394,6 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
                         </span>
                       </td>
 
-                      {/* Acciones */}
                       <td className="p-3 text-center">
                         <div className="flex items-center justify-center gap-1.5">
                           <button
@@ -471,28 +444,28 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
         </div>
       )}
 
-      {/* SUB-SECCIÓN 2: FORMULARIO DE ALTA INTEGRAL CON SELECCIÓN DE AUTOCLAVES */}
+      {/* PESTAÑA 2: FORMULARIO DE ALTA (CORREO OPCIONAL) */}
       {activeTab === 'crear' && (
         <form onSubmit={handleCreateUser} className="ultra-glass p-6 rounded-2xl border border-cyan-500/30 space-y-5">
           <div className="border-b border-cyan-500/20 pb-3">
             <h3 className="text-sm font-bold text-white font-mono flex items-center gap-2">
               <UserPlus className="w-4 h-4 text-cyan-400" />
-              Creación de Usuario & Asignación Directa de Autoclaves
+              Alta de Usuario & Asignación de Autoclaves
             </h3>
             <p className="text-xs text-slate-300 font-mono mt-0.5">
-              Registra la credencial del operador y marca exactamente qué máquinas podrá supervisar.
+              Crea el usuario directamente. El correo es opcional para mayor rapidez.
             </p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5 text-xs font-mono">
             <div>
-              <label className="block text-slate-300 mb-1">Nombre de Usuario (ID Único)</label>
+              <label className="block text-slate-300 mb-1">Nombre de Usuario (ID de Acceso) *</label>
               <input
                 type="text"
                 required
                 value={uUser}
                 onChange={(e) => setUUser(e.target.value)}
-                placeholder="ej: operador_union"
+                placeholder="ej: fary"
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-cyan-400"
               />
             </div>
@@ -501,29 +474,30 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
               <label className="block text-slate-300 mb-1">Nombre Completo del Personal</label>
               <input
                 type="text"
-                required
                 value={uNombre}
                 onChange={(e) => setUNombre(e.target.value)}
-                placeholder="ej: Lic. Juan Pérez"
+                placeholder="ej: Fary Bonilla"
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-cyan-400 font-sans"
               />
             </div>
 
             <div>
-              <label className="block text-slate-300 mb-1">Correo Electrónico (Notificaciones)</label>
+              <label className="block text-slate-300 mb-1 flex justify-between">
+                <span>Correo Electrónico</span>
+                <span className="text-[10px] text-cyan-400">(Opcional)</span>
+              </label>
               <input
                 type="email"
-                required
                 value={uEmail}
                 onChange={(e) => setUEmail(e.target.value)}
-                placeholder="ej: juan@clinica.com"
+                placeholder="Dejar vacío si no aplica"
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-cyan-400"
               />
             </div>
 
             <div>
               <div className="flex justify-between items-center mb-1">
-                <label className="text-slate-300">Contraseña de Acceso</label>
+                <label className="text-slate-300">Contraseña de Acceso *</label>
                 <button
                   type="button"
                   onClick={generateRandomPass}
@@ -537,7 +511,7 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
                 required
                 value={uPass}
                 onChange={(e) => setUPass(e.target.value)}
-                placeholder="Mínimo 4 caracteres"
+                placeholder="ej: 1234"
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-cyan-400"
               />
             </div>
@@ -558,19 +532,18 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
             </div>
 
             <div>
-              <label className="block text-slate-300 mb-1">Hospital / Clínica / Cliente Asignado</label>
+              <label className="block text-slate-300 mb-1">Hospital / Clínica Asignada</label>
               <input
                 type="text"
-                required
                 value={uHospital}
                 onChange={(e) => setUHospital(e.target.value)}
-                placeholder="ej: Clínica Unión Médica"
+                placeholder="ej: Clínica Dr. Bonilla"
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-cyan-400 font-sans"
               />
             </div>
           </div>
 
-          {/* ASIGNACIÓN DE AUTOCLAVES CON CHECKBOXES */}
+          {/* ASIGNACIÓN DE AUTOCLAVES */}
           <div className="p-4 bg-slate-950/60 rounded-xl border border-slate-800 space-y-3">
             <div className="flex justify-between items-center">
               <div>
@@ -578,7 +551,7 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
                   Autoclaves Permitidos para este Usuario:
                 </span>
                 <p className="text-[11px] text-slate-400 font-mono">
-                  Marca las casillas de los autoclaves a los que tendrá acceso exclusivo.
+                  Marca las casillas de los equipos a los que tendrá acceso exclusivo.
                 </p>
               </div>
 
@@ -635,13 +608,13 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
         </form>
       )}
 
-      {/* SUB-SECCIÓN 3: SOLICITUDES PENDIENTES */}
+      {/* PESTAÑA 3: SOLICITUDES PENDIENTES */}
       {activeTab === 'solicitudes' && (
         <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 space-y-4">
           <div className="flex justify-between items-center border-b border-cyan-500/20 pb-3">
             <h3 className="text-sm font-bold text-white font-mono flex items-center gap-2">
               <Clock className="w-4 h-4 text-amber-400" />
-              Solicitudes Pendientes de Aprobación ({pendingList.length})
+              Solicitudes Pendientes ({pendingList.length})
             </h3>
             <button onClick={fetchUsers} className="px-2.5 py-1 bg-slate-900 border border-slate-700 text-xs text-slate-300 rounded-lg">
               🔄 Actualizar
@@ -655,13 +628,12 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
           ) : (
             <div className="space-y-3">
               {pendingList.map((req) => (
-                <div key={req.usuario} className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+                <div key={req.usuario || req.user} className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
                   <div>
                     <p className="text-sm font-bold text-white">{req.nombre || req.usuario}</p>
                     <p className="text-xs font-mono text-cyan-400">
-                      Usuario: <strong>{req.usuario}</strong> | Correo: {req.email}
+                      Usuario: <strong>{req.usuario || req.user}</strong> | Correo: {req.email}
                     </p>
-                    <p className="text-[11px] text-slate-300 font-sans mt-0.5">Área: {req.departamento}</p>
                   </div>
 
                   <div className="flex items-center gap-2">
@@ -686,13 +658,13 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
         </div>
       )}
 
-      {/* SUB-SECCIÓN 4: BITÁCORA FORENSE */}
+      {/* PESTAÑA 4: BITÁCORA FORENSE */}
       {activeTab === 'bitacora' && (
         <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 space-y-4">
           <div className="flex justify-between items-center border-b border-cyan-500/20 pb-3">
             <h3 className="text-sm font-bold text-white font-mono flex items-center gap-2">
               <ShieldCheck className="w-4 h-4 text-cyan-400" />
-              Auditoría Forense de Conexiones & Eventos en Vivo
+              Auditoría Forense de Conexiones
             </h3>
             <button onClick={fetchLogs} className="px-2.5 py-1 bg-slate-900 border border-slate-700 text-xs text-slate-300 rounded-lg">
               🔄 Actualizar
@@ -706,7 +678,7 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
                   <th className="p-3">FECHA / HORA</th>
                   <th className="p-3">USUARIO</th>
                   <th className="p-3">EVENTO DE SEGURIDAD</th>
-                  <th className="p-3">TERMINAL / DISPOSITIVO</th>
+                  <th className="p-3">DISPOSITIVO</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 text-slate-300">
@@ -736,7 +708,7 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
       {resetUser && (
         <div className="fixed inset-0 z-[999999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
           <div className="ultra-glass border-2 border-cyan-500 p-5 rounded-2xl max-w-sm w-full space-y-3 font-mono text-xs">
-            <h4 className="font-bold text-white text-sm">Cambiar Clave: {resetUser.usuario}</h4>
+            <h4 className="font-bold text-white text-sm">Cambiar Clave: {resetUser.usuario || resetUser.user}</h4>
             <input
               type="text"
               value={tempPassword}
@@ -770,7 +742,7 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
           <div className="ultra-glass border-2 border-purple-500/60 p-6 rounded-2xl max-w-lg w-full space-y-4 font-mono text-xs max-h-[85vh] overflow-y-auto">
             <div className="flex justify-between items-center border-b border-purple-500/30 pb-2">
               <h4 className="font-bold text-white text-sm">
-                Autoclaves Autorizados para [{editAssignUser.usuario}]
+                Autoclaves Autorizados para [{editAssignUser.usuario || editAssignUser.user}]
               </h4>
               <button onClick={() => setEditAssignUser(null)} className="text-slate-400 hover:text-white">
                 <X className="w-4 h-4" />
@@ -802,7 +774,7 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
                       />
                       <div>
                         <p className="font-bold text-white text-xs">{dev?.meta?.alias || `AUTOCLAVE [${mac.slice(-4)}]`}</p>
-                        <p className="text-[10px] text-slate-400 font-mono">{mac} • {dev?.meta?.cliente || 'Hospital'}</p>
+                        <p className="text-[10px] text-slate-400 font-mono">{mac}</p>
                       </div>
                     </div>
                   </label>
