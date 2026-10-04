@@ -2,9 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-/* =========================================================================
-   1. VARIABLES GLOBALES Y PALETA BASE
-   ========================================================================= */
 :root {
   --glass-opacity: 0.82;
   --glass-bg: 15 23 42;
@@ -20,6 +17,7 @@ body {
   background-color: #030712;
   transition: background-color 0.3s ease;
   overflow-x: hidden;
+  -webkit-tap-highlight-color: transparent;
 }
 
 code, .font-mono {
@@ -27,10 +25,34 @@ code, .font-mono {
 }
 
 /* =========================================================================
-   2. TEMAS VISUALES REPOTENCIADOS
+   1. TRANSICIONES FLUIDAS TIPO ANDROID NATIVO (MOTION TRANSITIONS)
    ========================================================================= */
+@keyframes androidViewEnter {
+  0% {
+    opacity: 0;
+    transform: translateY(12px) scale(0.985);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
 
-/* TEMA 1: PIZARRA TÁCTICA */
+.android-view-transition {
+  animation: androidViewEnter 0.28s cubic-bezier(0.2, 0.9, 0.3, 1) forwards;
+}
+
+/* Respuesta táctil suave al presionar cualquier botón */
+button, .btn-touch {
+  transition: transform 0.15s cubic-bezier(0.2, 0.9, 0.3, 1), filter 0.15s ease;
+}
+button:active, .btn-touch:active {
+  transform: scale(0.96) translateY(1px);
+}
+
+/* =========================================================================
+   2. TEMAS VISUALES OSCUROS
+   ========================================================================= */
 [data-theme="tactical"] {
   --glass-bg: 10 16 30;
   --accent-color: #00f3ff;
@@ -39,7 +61,6 @@ code, .font-mono {
   --laser-glow: 0 0 18px rgba(0, 243, 255, 0.6);
 }
 
-/* TEMA 2: CYBER SPEEDTEST */
 [data-theme="cyber"] {
   --glass-bg: 22 10 38;
   --accent-color: #ff007f;
@@ -48,7 +69,6 @@ code, .font-mono {
   --laser-glow: 0 0 22px rgba(255, 0, 127, 0.7), 0 0 14px rgba(0, 243, 255, 0.4);
 }
 
-/* TEMA 3: BIO-CUÁNTICO */
 [data-theme="hybrid"] {
   --glass-bg: 6 24 18;
   --accent-color: #00ff88;
@@ -67,7 +87,7 @@ code, .font-mono {
   border: 1.5px solid var(--card-border) !important;
   box-shadow: 0 8px 32px 0 rgba(0, 0, 0, calc(var(--glass-opacity) * 0.6)), 
               inset 0 1px 0 rgba(255, 255, 255, 0.15);
-  transition: background-color 0.2s ease, border-color 0.2s ease, backdrop-filter 0.2s ease;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
 .ultra-glass:hover {
@@ -75,7 +95,6 @@ code, .font-mono {
   box-shadow: 0 12px 36px 0 rgba(0, 0, 0, 0.7), 0 0 16px var(--accent-color);
 }
 
-/* Celdas interiores que se adaptan a la transparencia */
 .glass-cell {
   background-color: rgb(var(--glass-bg) / calc(var(--glass-opacity) * 0.75 + 0.1)) !important;
   backdrop-filter: blur(4px);
