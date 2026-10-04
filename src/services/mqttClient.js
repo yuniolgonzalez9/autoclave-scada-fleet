@@ -18,7 +18,6 @@ export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
 
   client.on('connect', () => {
     if (onStatusChange) onStatusChange(true);
-    // Suscripción universal a todos los autoclaves y equipos
     client.subscribe('autoclave_med_2026/+/telemetria');
     client.subscribe('autoclave_med_2026/+/esquema');
     client.subscribe('autoclave_med_2026/+/meta');
@@ -35,21 +34,23 @@ export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
     if (onStatusChange) onStatusChange(false);
   });
 
-  client.on('message', (topic, message) => {
+  // Detecta packet.retain para saber si es en vivo o histórico
+  client.on('message', (topic, message, packet) => {
     try {
       const payload = JSON.parse(message.toString());
       const parts = topic.split('/');
       const mac = parts[1];
       const channel = parts[2];
+      const isRetained = Boolean(packet && packet.retain);
+
       if (onMessageReceived) {
-        onMessageReceived({ mac, channel, payload, topic });
+        onMessageReceived({ mac, channel, payload, topic, isRetained });
       }
     } catch (e) {
       console.warn('[MQTT PARSE ERROR]', e);
     }
   });
 
-  // Función para enviar comandos al ESP32
   const sendCommand = (mac, cmdObject) => {
     if (client && client.connected) {
       const topic = `autoclave_med_2026/${mac}/config`;
