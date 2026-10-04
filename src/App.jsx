@@ -23,58 +23,84 @@ import {
   VolumeX,
   Bell,
   Clock,
-  Users
+  Pin,
+  PinOff
 } from 'lucide-react';
 
 function ScadaAppContent() {
   const { user, profile, loading, pendingRequests, logout } = useAuth();
   const { fleet, mqttConnected, sendDeviceCommand } = useMqttFleet();
 
-  // Estados visuales persistentes
   const [currentTheme, setCurrentTheme] = useState(() => localStorage.getItem('scada_theme') || 'tactical');
   const [currentBg, setCurrentBg] = useState(() => localStorage.getItem('scada_bg') || 'circuit-pcb');
   const [opacity, setOpacity] = useState(() => Number(localStorage.getItem('scada_transparency')) || 82);
 
   // =========================================================================
-  // PERSISTENCIA TOTAL DE NAVEGACIÓN (SI RECARGAS CON F5 TE DEJA EN EL MISMO LUGAR)
+  // MODO TERMINAL DEDICADA (KIOSK MODE) & PERSISTENCIA TOTAL
   // =========================================================================
-  const [activeSection, setActiveSection] = useState(() => localStorage.getItem('scada_active_section') || 'flota');
-  const [selectedMac, setSelectedMac] = useState(() => localStorage.getItem('scada_selected_mac') || null);
+  const [kioskMac, setKioskMac] = useState(() => localStorage.getItem('scada_kiosk_mac') || null);
+  const [activeSection, setActiveSection] = useState(() => {
+    const savedKiosk = localStorage.getItem('scada_kiosk_mac');
+    if (savedKiosk) return 'detalle';
+    return localStorage.getItem('scada_active_section') || 'flota';
+  });
+
+  const [selectedMac, setSelectedMac] = useState(() => {
+    const savedKiosk = localStorage.getItem('scada_kiosk_mac');
+    if (savedKiosk) return savedKiosk;
+    return localStorage.getItem('scada_selected_mac') || null;
+  });
+
   const [healthFilter, setHealthFilter] = useState(() => localStorage.getItem('scada_health_filter') || 'ALL');
 
   useEffect(() => {
-    localStorage.setItem('scada_active_section', activeSection);
-  }, [activeSection]);
+    if (!kioskMac) {
+      localStorage.setItem('scada_active_section', activeSection);
+    }
+  }, [activeSection, kioskMac]);
 
   useEffect(() => {
-    if (selectedMac) {
-      localStorage.setItem('scada_selected_mac', selectedMac);
-    } else {
-      localStorage.removeItem('scada_selected_mac');
+    if (!kioskMac) {
+      if (selectedMac) localStorage.setItem('scada_selected_mac', selectedMac);
+      else localStorage.removeItem('scada_selected_mac');
     }
-  }, [selectedMac]);
+  }, [selectedMac, kioskMac]);
 
   useEffect(() => {
     localStorage.setItem('scada_health_filter', healthFilter);
   }, [healthFilter]);
 
+  // Alternar el anclaje de un equipo específico
+  const toggleKioskMode = () => {
+    if (kioskMac) {
+      localStorage.removeItem('scada_kiosk_mac');
+      setKioskMac(null);
+      alert('Terminal desanclada. Volviendo al modo de supervisión de flota.');
+    } else if (selectedMac) {
+      localStorage.setItem('scada_kiosk_mac', selectedMac);
+      setKioskMac(selectedMac);
+      alert(`Terminal anclada a [${selectedMac}]. Esta pantalla mostrará únicamente este autoclave.`);
+    }
+  };
+
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [sirenActive, setSirenActive] = useState(false);
 
-  // Reloj de Latido en Tiempo Real (Heartbeat cada 500ms)
+  // Heartbeat cada 500ms
   const [currentTime, setCurrentTime] = useState(Date.now());
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(Date.now()), 500);
     return () => clearInterval(timer);
   }, []);
 
-  // Temporizador de Inactividad (14 min + 1 min advertencia = 15 min)
+  // Temporizador de Inactividad (15 min)
   const [showTimeoutModal, setShowTimeoutModal] = useState(false);
   const [countdown, setCountdown] = useState(60);
   const idleTimerRef = useRef(null);
   const countdownIntervalRef = useRef(null);
 
   const isAdmin = profile?.rol?.toLowerCase().includes('admin') || profile?.rol?.toLowerCase().includes('director');
+  const isOperator = profile?.rol?.toLowerCase().includes('operador') || profile?.rol?.toLowerCase().includes('cliente');
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', currentTheme);
@@ -124,6 +150,7 @@ function ScadaAppContent() {
   useEffect(() => {
     const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'];
     const handleActivity = () => resetIdleTimer();
+    events.forEach((evt) => window.removeEventListener(evt, handleActivity));
     events.forEach((evt) => window.addEventListener(evt, handleActivity, { passive: true }));
     resetIdleTimer();
     return () => {
@@ -132,7 +159,7 @@ function ScadaAppContent() {
     };
   }, [user]);
 
-  // Vigilante de Sirena Industrial
+  // Sirena & Telegram
   useEffect(() => {
     let hasCriticalAlarm = false;
     Object.keys(fleet).forEach((mac) => {
@@ -193,45 +220,19 @@ function ScadaAppContent() {
     return { backgroundColor: '#030712' };
   };
 
-  // =========================================================================
-  // CLASIFICACIÓN INSTANTÁNEA DE SALUD (SIN CICLOS FALSOS)
-  // =========================================================================
   const getDeviceHealthData = (dev) => {
-    // Si nunca ha transmitido en vivo en esta sesión, es OFFLINE inmediatamente
     if (!dev || !dev.lastSeen || dev.lastSeen === 0) {
-      return { 
-        status: 'OFFLINE', 
-        text: 'DESCONECTADO', 
-        timeAgo: 'Sin señal en vivo', 
-        colorClass: 'bg-rose-500/15 text-rose-400 border-rose-500/30' 
-      };
+      return { status: 'OFFLINE', text: 'DESCONECTADO', timeAgo: 'Sin señal en vivo', colorClass: 'bg-rose-500/15 text-rose-400 border-rose-500/30' };
     }
-
     const diffSegundos = Math.floor((currentTime - dev.lastSeen) / 1000);
 
-    // Umbrales rápidos y precisos
     if (diffSegundos <= 4) {
-      return { 
-        status: 'ONLINE', 
-        text: '100% ONLINE', 
-        timeAgo: diffSegundos === 0 ? 'En vivo' : `Hace ${diffSegundos}s`, 
-        colorClass: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' 
-      };
+      return { status: 'ONLINE', text: '100% ONLINE', timeAgo: diffSegundos === 0 ? 'En vivo' : `Hace ${diffSegundos}s`, colorClass: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' };
     } else if (diffSegundos <= 8) {
-      return { 
-        status: 'LATENCY', 
-        text: 'LATENCIA', 
-        timeAgo: `Hace ${diffSegundos}s`, 
-        colorClass: 'bg-amber-500/15 text-amber-300 border-amber-500/30' 
-      };
+      return { status: 'LATENCY', text: 'LATENCIA', timeAgo: `Hace ${diffSegundos}s`, colorClass: 'bg-amber-500/15 text-amber-300 border-amber-500/30' };
     } else {
       const mins = Math.floor(diffSegundos / 60);
-      return { 
-        status: 'OFFLINE', 
-        text: 'DESCONECTADO', 
-        timeAgo: mins > 0 ? `Hace ${mins}m` : `Hace ${diffSegundos}s`, 
-        colorClass: 'bg-rose-500/15 text-rose-400 border-rose-500/30' 
-      };
+      return { status: 'OFFLINE', text: 'DESCONECTADO', timeAgo: mins > 0 ? `Hace ${mins}m` : `Hace ${diffSegundos}s`, colorClass: 'bg-rose-500/15 text-rose-400 border-rose-500/30' };
     }
   };
 
@@ -255,7 +256,8 @@ function ScadaAppContent() {
       return true;
     });
 
-  const inspectingDevice = selectedMac ? fleet[selectedMac] : (filteredDevices[0] || null);
+  const inspectingMacToUse = kioskMac || selectedMac;
+  const inspectingDevice = inspectingMacToUse ? fleet[inspectingMacToUse] : (filteredDevices[0] || null);
 
   if (loading) {
     return (
@@ -288,7 +290,7 @@ function ScadaAppContent() {
         </div>
       )}
 
-      {/* Header Institucional con rayita láser Speedtest */}
+      {/* Header Institucional */}
       <header className="speedtest-laser-header border-b border-cyan-500/20 bg-slate-950/75 backdrop-blur-md px-4 md:px-6 py-3 flex items-center justify-between sticky top-0 z-40">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400">
@@ -309,7 +311,7 @@ function ScadaAppContent() {
           </div>
         </div>
 
-        {/* Acciones de Cabecera con Tooltips Clínicos */}
+        {/* Acciones de Cabecera */}
         <div className="flex items-center gap-2 md:gap-3">
           <ClinicalTooltip
             title="Conexión WebSocket Broker"
@@ -364,8 +366,8 @@ function ScadaAppContent() {
         </div>
       </header>
 
-      {/* Dock Superior en PC */}
-      {user && (
+      {/* Dock Superior en PC (Oculto si la terminal está anclada a un solo equipo) */}
+      {user && !kioskMac && !isOperator && (
         <div className="hidden md:flex items-center gap-2 px-6 py-2 bg-slate-950/60 border-b border-cyan-500/10">
           <button
             onClick={() => { setActiveSection('flota'); setSelectedMac(null); }}
@@ -410,180 +412,183 @@ function ScadaAppContent() {
       ) : (
         <main className="flex-1 p-3 md:p-6 max-w-7xl mx-auto w-full flex flex-col gap-4 android-view-transition">
           
-          {/* SECCIÓN 1: FLOTA */}
-          {activeSection === 'flota' && (
-            <div className="space-y-4">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                <h2 className="text-base md:text-lg font-bold font-mono flex items-center gap-2">
-                  <Flame className="w-5 h-5 text-cyan-400" />
-                  Monitor de Flota Activa
-                </h2>
-
-                {/* Filtros de Salud Clínicos */}
-                <div className="flex gap-2 overflow-x-auto w-full sm:w-auto pb-1">
-                  <ClinicalTooltip title="Filtro En Línea" description="Autoclaves transmitiendo paquetes en los últimos 4 segundos sin latencia." badge="0-4s">
-                    <button
-                      onClick={() => setHealthFilter('ONLINE')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
-                        healthFilter === 'ONLINE' ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-md' : 'bg-slate-900/80 border-slate-700 text-emerald-400'
-                      }`}
-                    >
-                      🟢 ONLINE ({countOn})
-                    </button>
-                  </ClinicalTooltip>
-
-                  <ClinicalTooltip title="Filtro Latencia" description="Autoclaves con paquetes demorados entre 4 y 8 segundos." badge="4-8s">
-                    <button
-                      onClick={() => setHealthFilter('LATENCY')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
-                        healthFilter === 'LATENCY' ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md' : 'bg-slate-900/80 border-slate-700 text-amber-300'
-                      }`}
-                    >
-                      🟡 LATENCIA ({countLat})
-                    </button>
-                  </ClinicalTooltip>
-
-                  <ClinicalTooltip title="Filtro Desconectados" description="Autoclaves sin contacto en vivo por más de 8 segundos o apagados." badge=">8s">
-                    <button
-                      onClick={() => setHealthFilter('OFFLINE')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
-                        healthFilter === 'OFFLINE' ? 'bg-rose-500 text-white border-rose-400 shadow-md' : 'bg-slate-900/80 border-slate-700 text-rose-400'
-                      }`}
-                    >
-                      🔴 OFFLINE ({countOff})
-                    </button>
-                  </ClinicalTooltip>
-
-                  <button
-                    onClick={() => setHealthFilter('ALL')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
-                      healthFilter === 'ALL' ? 'bg-cyan-500 text-slate-950 border-cyan-400 shadow-md' : 'bg-slate-900/80 border-slate-700 text-slate-300'
-                    }`}
-                  >
-                    🌐 TODOS ({macKeys.length})
-                  </button>
-                </div>
-              </div>
-
-              {/* Grid de Tarjetas */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {filteredDevices.length === 0 ? (
-                  <div className="col-span-full ultra-glass p-8 rounded-2xl text-center text-slate-400 font-mono text-xs">
-                    No hay autoclaves en el estado [{healthFilter}].
-                  </div>
-                ) : (
-                  filteredDevices.map((dev) => {
-                    const dDev = dev.datos || {};
-                    const health = getDeviceHealthData(dev);
-                    const cCount = dDev?.cfg?.ciclos || dev?.meta?.ciclosCompletados || 0;
-                    const cLim = dDev?.cfg?.lim_mant || dev?.meta?.limiteMantenimiento || 200;
-
-                    return (
-                      <div
-                        key={dev.mac}
-                        onClick={() => { setSelectedMac(dev.mac); setActiveSection('detalle'); }}
-                        className="ultra-glass p-5 rounded-2xl cursor-pointer transition-all duration-200 hover:-translate-y-1 shadow-xl flex flex-col justify-between"
-                      >
-                        <div>
-                          <div className="flex justify-between items-start mb-3">
-                            <div>
-                              <h3 className="font-bold text-sm text-white">{dev.meta?.alias || `AUTOCLAVE [${dev.mac.slice(-4)}]`}</h3>
-                              <p className="text-[11px] text-slate-400 font-mono">{dev.meta?.cliente || 'Hospital Central'} • {dev.mac}</p>
-                            </div>
-                            
-                            <div className="text-right">
-                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono border font-bold ${health.colorClass}`}>
-                                <span className={`w-1.5 h-1.5 rounded-full ${
-                                  health.status === 'ONLINE' ? 'bg-emerald-400 animate-ping' : 
-                                  health.status === 'LATENCY' ? 'bg-amber-400 animate-pulse' : 
-                                  'bg-rose-400'
-                                }`}></span>
-                                {health.text}
-                              </span>
-                              <span className="block text-[9px] text-slate-400 font-mono mt-0.5">
-                                {health.timeAgo}
-                              </span>
-                            </div>
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-2 my-3">
-                            <ClinicalTooltip title="Temperatura Cámara" description="Sensor PT100 de temperatura interna de la cámara quirúrgica." badge="°C">
-                              <div className="p-2.5 rounded-xl glass-cell text-center w-full">
-                                <span className="text-[10px] font-mono text-cyan-400 block">TEMPERATURA</span>
-                                <span className="text-xl font-bold font-mono text-white">{(dDev.temp_camara || 25).toFixed(1)}°C</span>
-                              </div>
-                            </ClinicalTooltip>
-
-                            <ClinicalTooltip title="Presión de Vapor" description="Transductor piezorresistivo de vapor saturado en bar y PSI." badge="BAR">
-                              <div className="p-2.5 rounded-xl glass-cell text-center w-full">
-                                <span className="text-[10px] font-mono text-pink-400 block">PRESIÓN</span>
-                                <span className="text-xl font-bold font-mono text-white">{(dDev.presion || 0).toFixed(2)}b</span>
-                              </div>
-                            </ClinicalTooltip>
-                          </div>
-
-                          <div className="space-y-1 mb-3">
-                            <div className="flex justify-between text-[10px] font-mono text-slate-400">
-                              <span>Odómetro: {cCount}/{cLim} ciclos</span>
-                              <span>{Math.round((cCount / cLim) * 100)}%</span>
-                            </div>
-                            <div className="w-full bg-slate-800/80 rounded-full h-1.5 overflow-hidden">
-                              <div className="bg-emerald-400 h-full" style={{ width: `${Math.min(100, (cCount / cLim) * 100)}%` }}></div>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="pt-3 border-t border-white/10 flex items-center justify-between text-xs font-mono text-cyan-400 font-bold">
-                          <span>ENTRAR A CONTROL TOTAL</span>
-                          <ChevronRight className="w-4 h-4" />
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* SECCIÓN 2: CONTROL TOTAL */}
-          {activeSection === 'detalle' && inspectingDevice && (
+          {/* Si está en modo terminal anclada O seleccionó detalle */}
+          {(kioskMac || activeSection === 'detalle') && inspectingDevice ? (
             <DeviceDetailView
               device={inspectingDevice}
               onBack={() => { setActiveSection('flota'); setSelectedMac(null); }}
               sendCommand={sendDeviceCommand}
               operatorName={profile?.nombre || user?.email}
+              userRole={profile?.rol || 'Operador'}
+              isKioskMode={Boolean(kioskMac)}
+              onToggleKiosk={toggleKioskMode}
             />
-          )}
+          ) : (
+            <>
+              {/* SECCIÓN FLOTA */}
+              {activeSection === 'flota' && (
+                <div className="space-y-4">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                    <h2 className="text-base md:text-lg font-bold font-mono flex items-center gap-2">
+                      <Flame className="w-5 h-5 text-cyan-400" />
+                      Monitor de Flota Activa
+                    </h2>
 
-          {/* SECCIÓN 3: GESTIÓN DE FLOTA */}
-          {activeSection === 'gestion' && (
-            <FleetManagementView
-              fleet={fleet}
-              sendCommand={sendDeviceCommand}
-              onSelectDevice={(mac) => { setSelectedMac(mac); setActiveSection('detalle'); }}
-            />
-          )}
+                    <div className="flex gap-2 overflow-x-auto w-full sm:w-auto pb-1">
+                      <ClinicalTooltip title="Filtro En Línea" description="Autoclaves transmitiendo paquetes en los últimos 4 segundos." badge="0-4s">
+                        <button
+                          onClick={() => setHealthFilter('ONLINE')}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
+                            healthFilter === 'ONLINE' ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-md' : 'bg-slate-900/80 border-slate-700 text-emerald-400'
+                          }`}
+                        >
+                          🟢 ONLINE ({countOn})
+                        </button>
+                      </ClinicalTooltip>
 
-          {/* SECCIÓN 4: FOTA CLOUD HUB */}
-          {activeSection === 'fota' && (
-            <FotaHubView fleet={fleet} sendCommand={sendDeviceCommand} />
-          )}
+                      <ClinicalTooltip title="Filtro Latencia" description="Autoclaves con paquetes demorados entre 4 y 8 segundos." badge="4-8s">
+                        <button
+                          onClick={() => setHealthFilter('LATENCY')}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
+                            healthFilter === 'LATENCY' ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md' : 'bg-slate-900/80 border-slate-700 text-amber-300'
+                          }`}
+                        >
+                          🟡 LATENCIA ({countLat})
+                        </button>
+                      </ClinicalTooltip>
 
-          {/* SECCIÓN 5: AUDITORÍA CLÍNICA */}
-          {activeSection === 'auditoria' && (
-            <ClinicalAuditView />
+                      <ClinicalTooltip title="Filtro Desconectados" description="Autoclaves sin contacto en vivo por más de 8 segundos." badge=">8s">
+                        <button
+                          onClick={() => setHealthFilter('OFFLINE')}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
+                            healthFilter === 'OFFLINE' ? 'bg-rose-500 text-white border-rose-400 shadow-md' : 'bg-slate-900/80 border-slate-700 text-rose-400'
+                          }`}
+                        >
+                          🔴 OFFLINE ({countOff})
+                        </button>
+                      </ClinicalTooltip>
+
+                      <button
+                        onClick={() => setHealthFilter('ALL')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
+                          healthFilter === 'ALL' ? 'bg-cyan-500 text-slate-950 border-cyan-400 shadow-md' : 'bg-slate-900/80 border-slate-700 text-slate-300'
+                        }`}
+                      >
+                        🌐 TODOS ({macKeys.length})
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {filteredDevices.length === 0 ? (
+                      <div className="col-span-full ultra-glass p-8 rounded-2xl text-center text-slate-400 font-mono text-xs">
+                        No hay autoclaves en el estado [{healthFilter}].
+                      </div>
+                    ) : (
+                      filteredDevices.map((dev) => {
+                        const dDev = dev.datos || {};
+                        const health = getDeviceHealthData(dev);
+                        const cCount = dDev?.cfg?.ciclos || dev?.meta?.ciclosCompletados || 0;
+                        const cLim = dDev?.cfg?.lim_mant || dev?.meta?.limiteMantenimiento || 200;
+
+                        return (
+                          <div
+                            key={dev.mac}
+                            onClick={() => { setSelectedMac(dev.mac); setActiveSection('detalle'); }}
+                            className="ultra-glass p-5 rounded-2xl cursor-pointer transition-all duration-200 hover:-translate-y-1 shadow-xl flex flex-col justify-between"
+                          >
+                            <div>
+                              <div className="flex justify-between items-start mb-3">
+                                <div>
+                                  <h3 className="font-bold text-sm text-white">{dev.meta?.alias || `AUTOCLAVE [${dev.mac.slice(-4)}]`}</h3>
+                                  <p className="text-[11px] text-slate-400 font-mono">{dev.meta?.cliente || 'Hospital Central'} • {dev.mac}</p>
+                                </div>
+                                
+                                <div className="text-right">
+                                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono border font-bold ${health.colorClass}`}>
+                                    <span className={`w-1.5 h-1.5 rounded-full ${
+                                      health.status === 'ONLINE' ? 'bg-emerald-400 animate-ping' : 
+                                      health.status === 'LATENCY' ? 'bg-amber-400 animate-pulse' : 
+                                      'bg-rose-400'
+                                    }`}></span>
+                                    {health.text}
+                                  </span>
+                                  <span className="block text-[9px] text-slate-400 font-mono mt-0.5">
+                                    {health.timeAgo}
+                                  </span>
+                                </div>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-2 my-3">
+                                <ClinicalTooltip title="Temperatura Cámara" description="Sensor PT100 interno." badge="°C">
+                                  <div className="p-2.5 rounded-xl glass-cell text-center w-full">
+                                    <span className="text-[10px] font-mono text-cyan-400 block">TEMPERATURA</span>
+                                    <span className="text-xl font-bold font-mono text-white">{(dDev.temp_camara || 25).toFixed(1)}°C</span>
+                                  </div>
+                                </ClinicalTooltip>
+
+                                <ClinicalTooltip title="Presión de Vapor" description="Transductor piezorresistivo de vapor saturado." badge="BAR">
+                                  <div className="p-2.5 rounded-xl glass-cell text-center w-full">
+                                    <span className="text-[10px] font-mono text-pink-400 block">PRESIÓN</span>
+                                    <span className="text-xl font-bold font-mono text-white">{(dDev.presion || 0).toFixed(2)}b</span>
+                                  </div>
+                                </ClinicalTooltip>
+                              </div>
+
+                              <div className="space-y-1 mb-3">
+                                <div className="flex justify-between text-[10px] font-mono text-slate-400">
+                                  <span>Odómetro: {cCount}/{cLim} ciclos</span>
+                                  <span>{Math.round((cCount / cLim) * 100)}%</span>
+                                </div>
+                                <div className="w-full bg-slate-800/80 rounded-full h-1.5 overflow-hidden">
+                                  <div className="bg-emerald-400 h-full" style={{ width: `${Math.min(100, (cCount / cLim) * 100)}%` }}></div>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="pt-3 border-t border-white/10 flex items-center justify-between text-xs font-mono text-cyan-400 font-bold">
+                              <span>ENTRAR A CONTROL TOTAL</span>
+                              <ChevronRight className="w-4 h-4" />
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* SECCIÓN GESTIÓN */}
+              {activeSection === 'gestion' && (
+                <FleetManagementView
+                  fleet={fleet}
+                  sendCommand={sendDeviceCommand}
+                  onSelectDevice={(mac) => { setSelectedMac(mac); setActiveSection('detalle'); }}
+                />
+              )}
+
+              {/* SECCIÓN FOTA */}
+              {activeSection === 'fota' && (
+                <FotaHubView fleet={fleet} sendCommand={sendDeviceCommand} />
+              )}
+
+              {/* SECCIÓN AUDITORÍA */}
+              {activeSection === 'auditoria' && (
+                <ClinicalAuditView />
+              )}
+            </>
           )}
 
         </main>
       )}
 
-      {/* BARRA INFERIOR PARA TELÉFONOS CELULARES */}
-      {user && (
+      {/* BARRA INFERIOR PARA TELÉFONOS (Oculta si la terminal está anclada a un solo equipo) */}
+      {user && !kioskMac && !isOperator && (
         <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-slate-950/90 border-t border-cyan-500/30 backdrop-blur-xl flex items-center justify-around z-50 px-2">
           <button
             onClick={() => { setActiveSection('flota'); setSelectedMac(null); }}
             className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-lg text-xs font-mono ${
-              activeSection === 'flota' || activeSection === 'detalle' ? 'text-cyan-400 font-bold' : 'text-slate-400'
+              activeSection === 'flota' ? 'text-cyan-400 font-bold' : 'text-slate-400'
             }`}
           >
             <Activity className="w-5 h-5" />
