@@ -8,6 +8,9 @@ import FotaHubView from './components/fota/FotaHubView';
 import FleetManagementView from './components/fleet/FleetManagementView';
 import GearMenu, { WALLPAPERS_LIST } from './components/common/GearMenu';
 import ClinicalTooltip from './components/common/ClinicalTooltip';
+import ContextMenu from './components/common/ContextMenu';
+import DeviceAssignmentModal from './components/admin/DeviceAssignmentModal';
+import SurgicalQRLabel from './components/labels/SurgicalQRLabel';
 import { useMqttFleet } from './hooks/useMqttFleet';
 import { startIndustrialSiren, stopIndustrialSiren, initAudioUnlock } from './services/audioAlarm';
 import { sendCriticalAlarmWithButtons } from './services/telegram';
@@ -39,17 +42,24 @@ function ScadaAppContent() {
     initAudioUnlock();
   }, []);
 
-  // Persistencia de Navegación y Modo Kiosco
+  // =========================================================================
+  // DETECCIÓN DE PARÁMETRO DE URL DIRECTA (?mac=XXXX) PARA ABRIR EN NUEVA PESTAÑA
+  // =========================================================================
   const [kioskMac, setKioskMac] = useState(() => localStorage.getItem('scada_kiosk_mac') || null);
+  
   const [activeSection, setActiveSection] = useState(() => {
-    const savedKiosk = localStorage.getItem('scada_kiosk_mac');
-    if (savedKiosk) return 'detalle';
+    const urlParams = new URLSearchParams(window.location.search);
+    const directMac = urlParams.get('mac');
+    if (directMac) return 'detalle';
+    if (localStorage.getItem('scada_kiosk_mac')) return 'detalle';
     return localStorage.getItem('scada_active_section') || 'flota';
   });
 
   const [selectedMac, setSelectedMac] = useState(() => {
-    const savedKiosk = localStorage.getItem('scada_kiosk_mac');
-    if (savedKiosk) return savedKiosk;
+    const urlParams = new URLSearchParams(window.location.search);
+    const directMac = urlParams.get('mac');
+    if (directMac) return directMac.toUpperCase();
+    if (localStorage.getItem('scada_kiosk_mac')) return localStorage.getItem('scada_kiosk_mac');
     return localStorage.getItem('scada_selected_mac') || null;
   });
 
@@ -72,23 +82,42 @@ function ScadaAppContent() {
     localStorage.setItem('scada_health_filter', healthFilter);
   }, [healthFilter]);
 
-  const toggleKioskMode = () => {
+  const toggleKioskMode = (macToKiosk = null) => {
+    const target = macToKiosk || selectedMac;
     if (kioskMac) {
       localStorage.removeItem('scada_kiosk_mac');
       setKioskMac(null);
       setActiveSection('flota');
       setSelectedMac(null);
-    } else if (selectedMac) {
-      localStorage.setItem('scada_kiosk_mac', selectedMac);
-      setKioskMac(selectedMac);
+    } else if (target) {
+      localStorage.setItem('scada_kiosk_mac', target);
+      setKioskMac(target);
+      setSelectedMac(target);
       setActiveSection('detalle');
     }
+  };
+
+  // =========================================================================
+  // MENÚ CONTEXTUAL DE CLIC DERECHO & ASIGNACIONES
+  // =========================================================================
+  const [contextMenu, setContextMenu] = useState({ isOpen: false, position: { x: 0, y: 0 }, device: null });
+  const [assignModal, setAssignModal] = useState({ isOpen: false, device: null });
+  const [qrModalDevice, setQrModalDevice] = useState(null);
+
+  const handleDeviceContextMenu = (e, dev) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({
+      isOpen: true,
+      position: { x: e.clientX, y: e.clientY },
+      device: dev
+    });
   };
 
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [sirenActive, setSirenActive] = useState(false);
 
-  // Reloj de latido a 1000ms
+  // Reloj de latido rápido a 1000ms
   const [currentTime, setCurrentTime] = useState(Date.now());
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
@@ -102,6 +131,7 @@ function ScadaAppContent() {
   const countdownIntervalRef = useRef(null);
 
   const isAdmin = profile?.rol?.toLowerCase().includes('admin') || profile?.rol?.toLowerCase().includes('director');
+  const canEditHardware = isAdmin || profile?.rol?.toLowerCase().includes('tecnico');
   const isOperator = profile?.rol?.toLowerCase().includes('operador') || profile?.rol?.toLowerCase().includes('cliente');
 
   useEffect(() => {
@@ -207,7 +237,6 @@ function ScadaAppContent() {
 
   const bgObj = WALLPAPERS_LIST.find((b) => b.id === currentBg) || WALLPAPERS_LIST[0];
 
-  // Cálculo de salud
   const getDeviceHealthData = (dev) => {
     if (!dev || !dev.lastSeen || dev.lastSeen === 0) {
       return { status: 'OFFLINE', text: 'DESCONECTADO', timeAgo: 'Sin señal', colorClass: 'bg-rose-500/15 text-rose-400 border-rose-500/30' };
@@ -225,24 +254,34 @@ function ScadaAppContent() {
   };
 
   const macKeys = Object.keys(fleet);
-  let countOn = 0, countLat = 0, countOff = 0;
 
-  macKeys.forEach((mac) => {
-    const health = getDeviceHealthData(fleet[mac]);
+  // FILTRADO POR CLIENTE / USUARIO ASIGNADO (MULTI-TENANT HOSPITALARIO)
+  const allowedDevices = macKeys
+    .map((k) => fleet[k])
+    .filter((dev) => {
+      if (isAdmin) return true; // El administrador ve toda la flota
+      // Si el equipo tiene un usuario exclusivo asignado
+      if (dev?.meta?.usuario_asignado) {
+        return dev.meta.usuario_asignado.toLowerCase() === (profile?.usuario || user?.email || '').toLowerCase();
+      }
+      return true;
+    });
+
+  let countOn = 0, countLat = 0, countOff = 0;
+  allowedDevices.forEach((dev) => {
+    const health = getDeviceHealthData(dev);
     if (health.status === 'ONLINE') countOn++;
     else if (health.status === 'LATENCY') countLat++;
     else countOff++;
   });
 
-  const filteredDevices = macKeys
-    .map((k) => fleet[k])
-    .filter((dev) => {
-      const health = getDeviceHealthData(dev);
-      if (healthFilter === 'ONLINE') return health.status === 'ONLINE';
-      if (healthFilter === 'LATENCY') return health.status === 'LATENCY';
-      if (healthFilter === 'OFFLINE') return health.status === 'OFFLINE';
-      return true;
-    });
+  const filteredDevices = allowedDevices.filter((dev) => {
+    const health = getDeviceHealthData(dev);
+    if (healthFilter === 'ONLINE') return health.status === 'ONLINE';
+    if (healthFilter === 'LATENCY') return health.status === 'LATENCY';
+    if (healthFilter === 'OFFLINE') return health.status === 'OFFLINE';
+    return true;
+  });
 
   const inspectingMacToUse = kioskMac || selectedMac;
   const inspectingDevice = inspectingMacToUse ? fleet[inspectingMacToUse] : (filteredDevices[0] || null);
@@ -259,7 +298,7 @@ function ScadaAppContent() {
   return (
     <div className="min-h-screen w-full relative pb-20 md:pb-6 flex flex-col overflow-x-hidden">
       
-      {/* CAPA DE FONDO FIJA VISIBLE (z-0) - 100% VIVA CON LOS CIRCUITOS */}
+      {/* CAPA DE FONDO FIJA VISIBLE (z-0) */}
       <div 
         id="scada-background"
         className="fixed inset-0 z-0 pointer-events-none bg-cover bg-center bg-no-repeat transition-[background-image] duration-500"
@@ -273,7 +312,6 @@ function ScadaAppContent() {
         }}
       />
 
-      {/* CONTENIDO PRINCIPAL ELEVADO (relative z-10) */}
       <div className="relative z-10 flex-1 flex flex-col w-full max-w-full">
 
         {/* Banner de Emergencia */}
@@ -292,10 +330,8 @@ function ScadaAppContent() {
           </div>
         )}
 
-        {/* Header Institucional 100% Adaptativo para Celulares */}
+        {/* Header Institucional */}
         <header className="speedtest-laser-header border-b border-cyan-500/20 bg-slate-950/80 backdrop-blur-md px-3 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between sticky top-0 z-40 w-full">
-          
-          {/* Bloque Izquierdo (Marca y Logo) */}
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <div className="p-1.5 sm:p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 shrink-0">
               <Activity className="w-5 h-5 sm:w-6 sm:h-6 animate-pulse" />
@@ -315,10 +351,7 @@ function ScadaAppContent() {
             </div>
           </div>
 
-          {/* Bloque Derecho (Acciones compactas que NUNCA empujan el engranaje) */}
           <div className="flex items-center gap-1.5 sm:gap-3 shrink-0 ml-2">
-            
-            {/* Insignia MQTT: En celular solo muestra el punto y abrevia */}
             <ClinicalTooltip
               title="Conexión WebSocket Broker"
               description="Canal WSS en puerto 8884 hacia HiveMQ Cloud."
@@ -351,7 +384,6 @@ function ScadaAppContent() {
               </button>
             )}
 
-            {/* El Engranaje: Siempre dentro del marco visible */}
             {user && (
               <div className="shrink-0">
                 <GearMenu
@@ -377,7 +409,7 @@ function ScadaAppContent() {
                 activeSection === 'flota' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
               }`}
             >
-              ⚡ Flota en Vivo ({macKeys.length})
+              ⚡ Flota en Vivo ({allowedDevices.length})
             </button>
             <button
               onClick={() => { setActiveSection('gestion'); setSelectedMac(null); }}
@@ -406,7 +438,7 @@ function ScadaAppContent() {
           </div>
         )}
 
-        {/* Vistas Principales */}
+        {/* Contenido Principal */}
         {!user ? (
           <main className="flex-1 flex items-center justify-center p-4 android-view-transition">
             <LoginModal />
@@ -430,13 +462,18 @@ function ScadaAppContent() {
                 {activeSection === 'flota' && (
                   <div className="space-y-4">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                      <h2 className="text-base md:text-lg font-bold font-mono flex items-center gap-2">
-                        <Flame className="w-5 h-5 text-cyan-400" />
-                        Monitor de Flota Activa
-                      </h2>
+                      <div>
+                        <h2 className="text-base md:text-lg font-bold font-mono flex items-center gap-2">
+                          <Flame className="w-5 h-5 text-cyan-400" />
+                          Monitor de Flota ({allowedDevices.length})
+                        </h2>
+                        <p className="text-[10px] text-slate-400 font-mono mt-0.5">
+                          👉 Haz <strong>clic derecho</strong> en cualquier autoclave para ver el menú contextual de opciones.
+                        </p>
+                      </div>
 
                       <div className="flex gap-2 overflow-x-auto w-full sm:w-auto pb-1">
-                        <ClinicalTooltip title="Filtro En Línea" description="Autoclaves transmitiendo paquetes en los últimos 4 segundos." badge="0-4s">
+                        <ClinicalTooltip title="Filtro En Línea" description="Autoclaves transmitiendo en los últimos 4 segundos." badge="0-4s">
                           <button
                             onClick={() => setHealthFilter('ONLINE')}
                             className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
@@ -447,7 +484,7 @@ function ScadaAppContent() {
                           </button>
                         </ClinicalTooltip>
 
-                        <ClinicalTooltip title="Filtro Latencia" description="Autoclaves con paquetes demorados entre 4 y 8 segundos." badge="4-8s">
+                        <ClinicalTooltip title="Filtro Latencia" description="Autoclaves con retraso de 4 a 8 segundos." badge="4-8s">
                           <button
                             onClick={() => setHealthFilter('LATENCY')}
                             className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
@@ -458,7 +495,7 @@ function ScadaAppContent() {
                           </button>
                         </ClinicalTooltip>
 
-                        <ClinicalTooltip title="Filtro Desconectados" description="Autoclaves sin contacto en vivo por más de 8 segundos." badge=">8s">
+                        <ClinicalTooltip title="Filtro Desconectados" description="Autoclaves sin señal por más de 8 segundos." badge=">8s">
                           <button
                             onClick={() => setHealthFilter('OFFLINE')}
                             className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
@@ -475,7 +512,7 @@ function ScadaAppContent() {
                             healthFilter === 'ALL' ? 'bg-cyan-500 text-slate-950 border-cyan-400 shadow-md' : 'bg-slate-900/80 border-slate-700 text-slate-300'
                           }`}
                         >
-                          🌐 TODOS ({macKeys.length})
+                          🌐 TODOS ({allowedDevices.length})
                         </button>
                       </div>
                     </div>
@@ -496,6 +533,7 @@ function ScadaAppContent() {
                             <div
                               key={dev.mac}
                               onClick={() => { setSelectedMac(dev.mac); setActiveSection('detalle'); }}
+                              onContextMenu={(e) => handleDeviceContextMenu(e, dev)}
                               className="ultra-glass p-5 rounded-2xl cursor-pointer transition-all duration-200 hover:-translate-y-1 shadow-xl flex flex-col justify-between"
                             >
                               <div>
@@ -503,6 +541,11 @@ function ScadaAppContent() {
                                   <div>
                                     <h3 className="font-bold text-sm text-white">{dev.meta?.alias || `AUTOCLAVE [${dev.mac.slice(-4)}]`}</h3>
                                     <p className="text-[11px] text-slate-400 font-mono">{dev.meta?.cliente || 'Hospital Central'} • {dev.mac}</p>
+                                    {dev.meta?.usuario_asignado && (
+                                      <span className="text-[9px] text-purple-300 font-mono block">
+                                        👤 Asignado a: {dev.meta.usuario_asignado}
+                                      </span>
+                                    )}
                                   </div>
                                   
                                   <div className="text-right">
@@ -521,19 +564,15 @@ function ScadaAppContent() {
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-2 my-3">
-                                  <ClinicalTooltip title="Temperatura Cámara" description="Sensor PT100 interno." badge="°C">
-                                    <div className="p-2.5 rounded-xl glass-cell text-center w-full">
-                                      <span className="text-[10px] font-mono text-cyan-400 block">TEMPERATURA</span>
-                                      <span className="text-xl font-bold font-mono text-white">{(dDev.temp_camara || 25).toFixed(1)}°C</span>
-                                    </div>
-                                  </ClinicalTooltip>
+                                  <div className="p-2.5 rounded-xl glass-cell text-center w-full">
+                                    <span className="text-[10px] font-mono text-cyan-400 block">TEMPERATURA</span>
+                                    <span className="text-xl font-bold font-mono text-white">{(dDev.temp_camara || 25).toFixed(1)}°C</span>
+                                  </div>
 
-                                  <ClinicalTooltip title="Presión de Vapor" description="Transductor piezorresistivo de vapor saturado." badge="BAR">
-                                    <div className="p-2.5 rounded-xl glass-cell text-center w-full">
-                                      <span className="text-[10px] font-mono text-pink-400 block">PRESIÓN</span>
-                                      <span className="text-xl font-bold font-mono text-white">{(dDev.presion || 0).toFixed(2)}b</span>
-                                    </div>
-                                  </ClinicalTooltip>
+                                  <div className="p-2.5 rounded-xl glass-cell text-center w-full">
+                                    <span className="text-[10px] font-mono text-pink-400 block">PRESIÓN</span>
+                                    <span className="text-xl font-bold font-mono text-white">{(dDev.presion || 0).toFixed(2)}b</span>
+                                  </div>
                                 </div>
 
                                 <div className="space-y-1 mb-3">
@@ -548,7 +587,7 @@ function ScadaAppContent() {
                               </div>
 
                               <div className="pt-3 border-t border-white/10 flex items-center justify-between text-xs font-mono text-cyan-400 font-bold">
-                                <span>ENTRAR A CONTROL TOTAL</span>
+                                <span>CONTROL TOTAL / CLIC DERECHO</span>
                                 <ChevronRight className="w-4 h-4" />
                               </div>
                             </div>
@@ -656,6 +695,45 @@ function ScadaAppContent() {
             </div>
           </div>
         )}
+
+        {/* Menú Contextual (Clic Secundario) */}
+        <ContextMenu
+          isOpen={contextMenu.isOpen}
+          position={contextMenu.position}
+          onClose={() => setContextMenu({ isOpen: false, position: { x: 0, y: 0 }, device: null })}
+          device={contextMenu.device}
+          isAdmin={isAdmin}
+          canEditHardware={canEditHardware}
+          onOpenDetail={(mac) => { setSelectedMac(mac); setActiveSection('detalle'); }}
+          onToggleKiosk={(mac) => toggleKioskMode(mac)}
+          onOpenAssignModal={(dev) => setAssignModal({ isOpen: true, device: dev })}
+          onTestMotor={(mac) => {
+            const current = fleet[mac]?.datos?.motor || false;
+            sendDeviceCommand(mac, { mot_ok: !current });
+          }}
+          onResetAlarm={(mac) => sendDeviceCommand(mac, { cmd: 'RESET_ALARMA' })}
+          onOpenQR={(dev) => setQrModalDevice(dev)}
+        />
+
+        {/* Modal de Asignación a Cliente / Usuario */}
+        <DeviceAssignmentModal
+          isOpen={assignModal.isOpen}
+          onClose={() => setAssignModal({ isOpen: false, device: null })}
+          device={assignModal.device}
+          onAssignmentUpdated={(updatedMeta) => {
+            if (fleet[updatedMeta.mac]) {
+              fleet[updatedMeta.mac].meta = Object.assign(fleet[updatedMeta.mac].meta || {}, updatedMeta);
+            }
+          }}
+        />
+
+        {/* Modal de Etiqueta QR lanzado desde el menú contextual */}
+        <SurgicalQRLabel
+          isOpen={qrModalDevice !== null}
+          onClose={() => setQrModalDevice(null)}
+          deviceData={qrModalDevice}
+          operatorName={profile?.nombre || user?.email}
+        />
 
         {/* Modal de Personal & Aprobaciones */}
         <UserManagementModal 
