@@ -9,6 +9,7 @@ import FleetManagementView from './components/fleet/FleetManagementView';
 import GearMenu, { WALLPAPERS_LIST } from './components/common/GearMenu';
 import { useMqttFleet } from './hooks/useMqttFleet';
 import { startIndustrialSiren, stopIndustrialSiren } from './services/audioAlarm';
+import { sendCriticalAlarmWithButtons } from './services/telegram';
 import { supabase } from './services/supabase';
 import { 
   Activity, 
@@ -28,26 +29,26 @@ function ScadaAppContent() {
   const { user, profile, loading, pendingRequests, logout } = useAuth();
   const { fleet, mqttConnected, sendDeviceCommand } = useMqttFleet();
 
-  // Estados visuales del Menú Engranaje
+  // Estados visuales del Menú Engranaje con persistencia en memoria local
   const [currentTheme, setCurrentTheme] = useState(() => localStorage.getItem('scada_theme') || 'tactical');
   const [currentBg, setCurrentBg] = useState(() => localStorage.getItem('scada_bg') || 'circuit-pcb');
   const [opacity, setOpacity] = useState(() => Number(localStorage.getItem('scada_transparency')) || 82);
 
-  // Navegación
+  // Navegación: 'flota' | 'gestion' | 'fota' | 'auditoria' | 'detalle'
   const [activeSection, setActiveSection] = useState('flota');
   const [selectedMac, setSelectedMac] = useState(null);
   const [healthFilter, setHealthFilter] = useState('ALL');
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [sirenActive, setSirenActive] = useState(false);
 
-  // Reloj de Latido en Tiempo Real (Heartbeat cada 1s)
+  // Reloj de Latido en Tiempo Real (Heartbeat cada 1 segundo exacto)
   const [currentTime, setCurrentTime] = useState(Date.now());
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  // Temporizador de Inactividad (14 min + 1 min advertencia = 15 min)
+  // Temporizador de Inactividad Hospitalaria (14 min + 1 min advertencia = 15 min)
   const [showTimeoutModal, setShowTimeoutModal] = useState(false);
   const [countdown, setCountdown] = useState(60);
   const idleTimerRef = useRef(null);
@@ -55,7 +56,7 @@ function ScadaAppContent() {
 
   const isAdmin = profile?.rol?.toLowerCase().includes('admin') || profile?.rol?.toLowerCase().includes('director');
 
-  // Inyección de Tema en HTML
+  // Inyección de Tema en HTML raíz
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', currentTheme);
     localStorage.setItem('scada_theme', currentTheme);
@@ -72,7 +73,7 @@ function ScadaAppContent() {
     localStorage.setItem('scada_bg', currentBg);
   }, [currentBg]);
 
-  // Inactividad
+  // Manejador de Inactividad de Usuario
   const resetIdleTimer = () => {
     if (!user) return;
     clearTimeout(idleTimerRef.current);
@@ -114,13 +115,21 @@ function ScadaAppContent() {
     };
   }, [user]);
 
-  // Vigilante de Sirena Industrial
+  // Vigilante de Sirena Industrial & Despacho a Telegram con Botones Interactivos
   useEffect(() => {
     let hasCriticalAlarm = false;
     Object.keys(fleet).forEach((mac) => {
       const dev = fleet[mac];
       if (dev?.datos?.alarma_cod && dev?.datos?.alarma_cod > 0) {
         hasCriticalAlarm = true;
+        sendCriticalAlarmWithButtons({
+          mac,
+          alias: dev?.meta?.alias || mac,
+          temp: dev?.datos?.temp_camara || 0,
+          pres: dev?.datos?.presion || 0,
+          fase: dev?.datos?.fase || 'CRÍTICA',
+          errorMsg: dev?.datos?.alarma_msg || 'Alarma en cámara'
+        });
       }
     });
 
@@ -135,7 +144,7 @@ function ScadaAppContent() {
     setSirenActive(false);
   };
 
-  // RECONOCIMIENTO EN TIEMPO REAL DESDE TELEGRAM (SUPABASE REALTIME)
+  // Reconocimiento Bidireccional desde Telegram (Supabase Realtime)
   useEffect(() => {
     const channel = supabase
       .channel('realtime_telegram_ack')
@@ -163,7 +172,6 @@ function ScadaAppContent() {
     }
     if (bgObj.url) {
       return {
-        // Velo cinematográfico transparente: deja ver con total claridad la PCB y circuitos
         backgroundImage: `linear-gradient(to bottom, rgba(4, 7, 18, 0.35), rgba(4, 7, 18, 0.65)), url('${bgObj.url}')`
       };
     }
