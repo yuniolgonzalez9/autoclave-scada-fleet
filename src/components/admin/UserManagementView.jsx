@@ -25,7 +25,7 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
   const [msg, setMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
-  // Formulario de Nuevo Usuario (Correo Opcional)
+  // Formulario de Alta con correo 100% opcional
   const [uUser, setUUser] = useState('');
   const [uNombre, setUNombre] = useState('');
   const [uEmail, setUEmail] = useState('');
@@ -45,12 +45,13 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('usuarios_scada')
-        .select('*');
-      if (data) setUsersList(data);
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (!error && data) setUsersList(data);
     } catch (e) {
-      console.warn(e);
+      console.warn('Error cargando usuarios:', e);
     } finally {
       setLoading(false);
     }
@@ -80,7 +81,7 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
   };
 
   // =========================================================================
-  // CREACIÓN FLEXIBLE (CORREO OPCIONAL Y SIN COLUMNAS INEXISTENTES)
+  // CREACIÓN LIMPIA CON CORREO OPCIONAL Y CAMPOS REALES DE SUPABASE
   // =========================================================================
   const handleCreateUser = async (e) => {
     e.preventDefault();
@@ -91,23 +92,22 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
     const assignedMacs = Object.keys(selectedDevices).filter((m) => selectedDevices[m]);
 
     if (cleanUser.length < 3) {
-      return setErrorMsg('El nombre de usuario debe tener mínimo 3 caracteres.');
+      return setErrorMsg('El nombre de usuario debe tener al menos 3 caracteres.');
     }
     if (uPass.trim().length < 4) {
       return setErrorMsg('La contraseña debe tener mínimo 4 caracteres.');
     }
 
-    // Correo opcional: si lo dejas vacío, se genera un alias interno transparente
-    const finalEmail = uEmail.trim() ? uEmail.trim().toLowerCase() : `${cleanUser}@hospital.local`;
-
     try {
-      // 1. Guardar en usuarios_scada solo columnas universales probadas
+      // 1. Guardar en usuarios_scada con columnas oficiales (correo opcional)
       const userPayload = {
         usuario: cleanUser,
         nombre: uNombre.trim() || cleanUser,
-        email: finalEmail,
+        email: uEmail.trim() ? uEmail.trim().toLowerCase() : null, // Guarda NULL si no se escribe correo
         password: uPass.trim(),
         rol: uRol,
+        departamento: uHospital.trim() || null,
+        equipos_autorizados: assignedMacs.length > 0 ? assignedMacs.join(',') : null,
         estado: 'ACTIVO'
       };
 
@@ -124,14 +124,15 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
           .upsert({
             mac: mac,
             cliente: uHospital.trim() || 'Clínica Asignada',
+            departamento: uHospital.trim() || null,
             usuario_asignado: cleanUser,
             updated_at: new Date().toISOString()
           }, { onConflict: 'mac' });
       }
 
-      setMsg(`¡Usuario [${cleanUser.toUpperCase()}] creado exitosamente con ${assignedMacs.length} equipo(s) vinculado(s)!`);
+      setMsg(`¡Usuario [${cleanUser.toUpperCase()}] creado exitosamente con ${assignedMacs.length} equipo(s) asignado(s)!`);
       
-      // Limpiar formulario
+      // Limpiar formulario y refrescar
       setUUser('');
       setUNombre('');
       setUEmail('');
@@ -190,6 +191,13 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
     const newAssignedMacs = Object.keys(editUserDevices).filter((m) => editUserDevices[m]);
 
     try {
+      // Actualizar en el usuario
+      await supabase
+        .from('usuarios_scada')
+        .update({ equipos_autorizados: newAssignedMacs.join(',') || null })
+        .eq('usuario', username);
+
+      // Actualizar en asignaciones_equipos
       for (const mac of newAssignedMacs) {
         await supabase
           .from('asignaciones_equipos')
@@ -200,7 +208,7 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
           }, { onConflict: 'mac' });
       }
 
-      alert(`Equipos asignados a [${username}] actualizados en la nube.`);
+      alert(`Equipos asignados a [${username}] actualizados.`);
       setEditAssignUser(null);
       fetchUsers();
       if (onFleetUpdated) onFleetUpdated();
@@ -212,9 +220,11 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
   const openEditAssignModal = (usr) => {
     setEditAssignUser(usr);
     const username = (usr.usuario || usr.user || '').toLowerCase();
+    const authList = (usr.equipos_autorizados || '').toUpperCase().split(',').map((x) => x.trim());
     const initialMap = {};
+    
     macList.forEach((m) => {
-      initialMap[m] = (fleet[m]?.meta?.usuario_asignado || '').toLowerCase() === username;
+      initialMap[m] = authList.includes(m) || (fleet[m]?.meta?.usuario_asignado || '').toLowerCase() === username;
     });
     setEditUserDevices(initialMap);
   };
@@ -260,7 +270,7 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
             Centro Maestro de Personal, Roles & Asignación de Flota
           </h2>
           <p className="text-xs text-slate-300 font-mono mt-0.5">
-            Gestión jerárquica de cuentas y vinculación de autoclaves por cliente
+            Gestión jerárquica de cuentas y vinculación de autoclaves por cliente (Supabase Cloud)
           </p>
         </div>
 
@@ -340,9 +350,10 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
                 <tr>
                   <th className="p-3">USUARIO / ID</th>
                   <th className="p-3">NOMBRE</th>
-                  <th className="p-3">CORREO REGISTRADO</th>
+                  <th className="p-3">CORREO</th>
                   <th className="p-3">ROL</th>
-                  <th className="p-3">EQUIPOS ASIGNADOS</th>
+                  <th className="p-3">HOSPITAL / CLÍNICA</th>
+                  <th className="p-3">AUTOCLAVES ASIGNADOS</th>
                   <th className="p-3">ESTADO</th>
                   <th className="p-3 text-center">ACCIONES</th>
                 </tr>
@@ -353,8 +364,8 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
                   const isActive = u.estado === 'ACTIVO';
                   const isRoot = username === 'superadmin' || username === 'admin';
                   
-                  // Autoclaves asignados a este usuario en fleet
-                  const userMacs = macList.filter(m => (fleet[m]?.meta?.usuario_asignado || '').toLowerCase() === username.toLowerCase());
+                  // Leer autoclaves asignados desde la columna oficial equipos_autorizados
+                  const authMacs = (u.equipos_autorizados || '').split(',').map((x) => x.trim()).filter(Boolean);
 
                   return (
                     <tr key={username} className="hover:bg-slate-800/40">
@@ -362,22 +373,23 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
                         <span className="text-cyan-300">{username}</span>
                         {isRoot && <span className="text-[9px] px-1 ml-1 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">ROOT</span>}
                       </td>
-                      <td className="p-3 text-white">{u.nombre || username}</td>
-                      <td className="p-3 text-slate-400">{u.email ? (u.email.includes('@hospital.local') ? 'Sin correo' : u.email) : 'Sin correo'}</td>
+                      <td className="p-3 text-white font-sans">{u.nombre || username}</td>
+                      <td className="p-3 text-slate-400">{u.email ? u.email : <span className="italic text-slate-600">Sin correo</span>}</td>
                       <td className="p-3">
                         <span className="px-2 py-0.5 rounded text-[10px] font-bold border border-cyan-500/30 text-cyan-300 bg-cyan-500/10">
                           {u.rol || 'OPERADOR'}
                         </span>
                       </td>
+                      <td className="p-3 text-slate-300 font-sans">{u.departamento || <span className="italic text-slate-600">General</span>}</td>
                       
                       <td className="p-3">
                         {isRoot ? (
                           <span className="text-[10px] text-amber-300 font-bold">🌐 TODA LA FLOTA</span>
-                        ) : userMacs.length === 0 ? (
+                        ) : authMacs.length === 0 ? (
                           <span className="text-[10px] text-slate-500 italic">Sin equipos</span>
                         ) : (
                           <div className="flex flex-wrap gap-1">
-                            {userMacs.map((m) => (
+                            {authMacs.map((m) => (
                               <span key={m} className="px-1.5 py-0.2 rounded text-[9px] bg-cyan-950/80 border border-cyan-500/40 text-cyan-300">
                                 {fleet[m]?.meta?.alias || m.slice(-4)}
                               </span>
@@ -444,7 +456,7 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
         </div>
       )}
 
-      {/* PESTAÑA 2: FORMULARIO DE ALTA (CORREO OPCIONAL) */}
+      {/* PESTAÑA 2: CREAR USUARIO (CORREO 100% OPCIONAL) */}
       {activeTab === 'crear' && (
         <form onSubmit={handleCreateUser} className="ultra-glass p-6 rounded-2xl border border-cyan-500/30 space-y-5">
           <div className="border-b border-cyan-500/20 pb-3">
@@ -453,13 +465,13 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
               Alta de Usuario & Asignación de Autoclaves
             </h3>
             <p className="text-xs text-slate-300 font-mono mt-0.5">
-              Crea el usuario directamente. El correo es opcional para mayor rapidez.
+              Crea el usuario directamente. El correo es opcional.
             </p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5 text-xs font-mono">
             <div>
-              <label className="block text-slate-300 mb-1">Nombre de Usuario (ID de Acceso) *</label>
+              <label className="block text-slate-300 mb-1">Nombre de Usuario (ID Único) *</label>
               <input
                 type="text"
                 required
@@ -484,7 +496,7 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
             <div>
               <label className="block text-slate-300 mb-1 flex justify-between">
                 <span>Correo Electrónico</span>
-                <span className="text-[10px] text-cyan-400">(Opcional)</span>
+                <span className="text-[10px] text-cyan-400 font-bold">(Opcional)</span>
               </label>
               <input
                 type="email"
@@ -532,7 +544,7 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
             </div>
 
             <div>
-              <label className="block text-slate-300 mb-1">Hospital / Clínica Asignada</label>
+              <label className="block text-slate-300 mb-1">Hospital / Clínica / Cliente Asignado</label>
               <input
                 type="text"
                 value={uHospital}
@@ -632,8 +644,9 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
                   <div>
                     <p className="text-sm font-bold text-white">{req.nombre || req.usuario}</p>
                     <p className="text-xs font-mono text-cyan-400">
-                      Usuario: <strong>{req.usuario || req.user}</strong> | Correo: {req.email}
+                      Usuario: <strong>{req.usuario || req.user}</strong> | Correo: {req.email || 'Sin correo'}
                     </p>
+                    <p className="text-[11px] text-slate-300 font-sans mt-0.5">Área: {req.departamento || 'General'}</p>
                   </div>
 
                   <div className="flex items-center gap-2">
@@ -678,7 +691,7 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
                   <th className="p-3">FECHA / HORA</th>
                   <th className="p-3">USUARIO</th>
                   <th className="p-3">EVENTO DE SEGURIDAD</th>
-                  <th className="p-3">DISPOSITIVO</th>
+                  <th className="p-3">TERMINAL / DISPOSITIVO</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 text-slate-300">
@@ -774,7 +787,7 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
                       />
                       <div>
                         <p className="font-bold text-white text-xs">{dev?.meta?.alias || `AUTOCLAVE [${mac.slice(-4)}]`}</p>
-                        <p className="text-[10px] text-slate-400 font-mono">{mac}</p>
+                        <p className="text-[10px] text-slate-400 font-mono">{mac} • {dev?.meta?.cliente || 'Hospital'}</p>
                       </div>
                     </div>
                   </label>
