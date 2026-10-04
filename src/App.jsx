@@ -9,6 +9,7 @@ import FleetManagementView from './components/fleet/FleetManagementView';
 import GearMenu, { WALLPAPERS_LIST } from './components/common/GearMenu';
 import { useMqttFleet } from './hooks/useMqttFleet';
 import { startIndustrialSiren, stopIndustrialSiren } from './services/audioAlarm';
+import { supabase } from './services/supabase';
 import { 
   Activity, 
   Flame, 
@@ -20,9 +21,7 @@ import {
   VolumeX,
   Bell,
   Clock,
-  Users,
-  Wifi,
-  WifiOff
+  Users
 } from 'lucide-react';
 
 function ScadaAppContent() {
@@ -34,24 +33,21 @@ function ScadaAppContent() {
   const [currentBg, setCurrentBg] = useState(() => localStorage.getItem('scada_bg') || 'circuit-pcb');
   const [opacity, setOpacity] = useState(() => Number(localStorage.getItem('scada_transparency')) || 82);
 
-  // Navegación: 'flota' | 'gestion' | 'fota' | 'auditoria' | 'detalle'
+  // Navegación
   const [activeSection, setActiveSection] = useState('flota');
   const [selectedMac, setSelectedMac] = useState(null);
   const [healthFilter, setHealthFilter] = useState('ALL');
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [sirenActive, setSirenActive] = useState(false);
 
-  // RELOJ DE LATIDO EN TIEMPO REAL (HEARTBEAT CADA 1 SEGUNDO)
+  // Reloj de Latido en Tiempo Real (Heartbeat cada 1s)
   const [currentTime, setCurrentTime] = useState(Date.now());
-
   useEffect(() => {
-    const heartbeatTimer = setInterval(() => {
-      setCurrentTime(Date.now());
-    }, 1000);
-    return () => clearInterval(heartbeatTimer);
+    const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
+    return () => clearInterval(timer);
   }, []);
 
-  // Temporizador de Inactividad (14 min + 1 min de advertencia = 15 min)
+  // Temporizador de Inactividad (14 min + 1 min advertencia = 15 min)
   const [showTimeoutModal, setShowTimeoutModal] = useState(false);
   const [countdown, setCountdown] = useState(60);
   const idleTimerRef = useRef(null);
@@ -59,13 +55,13 @@ function ScadaAppContent() {
 
   const isAdmin = profile?.rol?.toLowerCase().includes('admin') || profile?.rol?.toLowerCase().includes('director');
 
-  // Aplicar tema en tiempo real
+  // Inyección de Tema en HTML
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', currentTheme);
     localStorage.setItem('scada_theme', currentTheme);
   }, [currentTheme]);
 
-  // Aplicar opacidad Ultra-Glass en tiempo real
+  // Inyección de Transparencia Ultra-Glass en :root
   useEffect(() => {
     const alpha = (opacity / 100).toFixed(2);
     document.documentElement.style.setProperty('--glass-opacity', alpha);
@@ -76,7 +72,7 @@ function ScadaAppContent() {
     localStorage.setItem('scada_bg', currentBg);
   }, [currentBg]);
 
-  // Control de Inactividad Hospitalaria
+  // Inactividad
   const resetIdleTimer = () => {
     if (!user) return;
     clearTimeout(idleTimerRef.current);
@@ -110,7 +106,6 @@ function ScadaAppContent() {
   useEffect(() => {
     const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'];
     const handleActivity = () => resetIdleTimer();
-    events.forEach((evt) => window.removeEventListener(evt, handleActivity));
     events.forEach((evt) => window.addEventListener(evt, handleActivity, { passive: true }));
     resetIdleTimer();
     return () => {
@@ -140,16 +135,46 @@ function ScadaAppContent() {
     setSirenActive(false);
   };
 
+  // RECONOCIMIENTO EN TIEMPO REAL DESDE TELEGRAM (SUPABASE REALTIME)
+  useEffect(() => {
+    const channel = supabase
+      .channel('realtime_telegram_ack')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'auditoria_accesos' }, (payload) => {
+        if (payload.new && payload.new.evento === 'ACK_TELEGRAM') {
+          handleSilenceSiren();
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  // Fondo Fotográfico con velo translúcido nítido para resaltar los circuitos
   const bgObj = WALLPAPERS_LIST.find((b) => b.id === currentBg) || WALLPAPERS_LIST[0];
 
-  // =========================================================================
-  // MOTOR DE CÁLCULO PRECISO DE SALUD BASADO EN EL TIEMPO REAL (HEARTBEAT)
-  // =========================================================================
+  const getBackgroundStyle = () => {
+    if (currentBg === 'oled') {
+      return {
+        backgroundColor: '#000000',
+        backgroundImage: 'radial-gradient(circle at 50% -5%, rgba(139, 92, 246, 0.25) 0%, transparent 55%), radial-gradient(circle at 100% 100%, rgba(0, 243, 255, 0.18) 0%, transparent 50%)'
+      };
+    }
+    if (bgObj.url) {
+      return {
+        // Velo cinematográfico transparente: deja ver con total claridad la PCB y circuitos
+        backgroundImage: `linear-gradient(to bottom, rgba(4, 7, 18, 0.35), rgba(4, 7, 18, 0.65)), url('${bgObj.url}')`
+      };
+    }
+    return { backgroundColor: '#030712' };
+  };
+
+  // Motor de Salud de Autoclaves
   const getDeviceHealthData = (dev) => {
     if (!dev || !dev.lastSeen) {
       return { status: 'OFFLINE', text: 'OFFLINE', timeAgo: 'Sin señal', colorClass: 'bg-rose-500/15 text-rose-400 border-rose-500/30' };
     }
-
     const diffSegundos = Math.floor((currentTime - dev.lastSeen) / 1000);
 
     if (diffSegundos <= 5) {
@@ -168,11 +193,10 @@ function ScadaAppContent() {
       };
     } else {
       const mins = Math.floor(diffSegundos / 60);
-      const timeStr = mins > 0 ? `Hace ${mins}m` : `Hace ${diffSegundos}s`;
       return { 
         status: 'OFFLINE', 
         text: 'DESCONECTADO', 
-        timeAgo: timeStr, 
+        timeAgo: mins > 0 ? `Hace ${mins}m` : `Hace ${diffSegundos}s`, 
         colorClass: 'bg-rose-500/15 text-rose-400 border-rose-500/30' 
       };
     }
@@ -188,7 +212,6 @@ function ScadaAppContent() {
     else countOff++;
   });
 
-  // Filtrar los autoclaves en base a su estado calculado al milisegundo
   const filteredDevices = macKeys
     .map((k) => fleet[k])
     .filter((dev) => {
@@ -213,11 +236,7 @@ function ScadaAppContent() {
   return (
     <div 
       className="min-h-screen flex flex-col relative transition-all duration-700 bg-cover bg-center bg-fixed pb-20 md:pb-6"
-      style={{
-        backgroundImage: bgObj.url 
-          ? `linear-gradient(to bottom, rgba(7, 9, 19, 0.80), rgba(7, 9, 19, 0.94)), url('${bgObj.url}')`
-          : 'linear-gradient(to bottom, #030712, #0a1120)'
-      }}
+      style={getBackgroundStyle()}
     >
       {/* Banner de Emergencia / Sirena Industrial */}
       {sirenActive && (
@@ -237,7 +256,7 @@ function ScadaAppContent() {
       )}
 
       {/* Header Institucional con rayita láser Speedtest */}
-      <header className="speedtest-laser-header border-b border-cyan-500/20 bg-slate-950/85 backdrop-blur-md px-4 md:px-6 py-3 flex items-center justify-between sticky top-0 z-40">
+      <header className="speedtest-laser-header border-b border-cyan-500/20 bg-slate-950/75 backdrop-blur-md px-4 md:px-6 py-3 flex items-center justify-between sticky top-0 z-40">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400">
             <Activity className="w-5 h-5 md:w-6 md:h-6 animate-pulse" />
@@ -343,7 +362,7 @@ function ScadaAppContent() {
       ) : (
         <main className="flex-1 p-3 md:p-6 max-w-7xl mx-auto w-full flex flex-col gap-4">
           
-          {/* SECCIÓN 1: FLOTA CON FILTROS DINÁMICOS DE SALUD */}
+          {/* SECCIÓN 1: FLOTA */}
           {activeSection === 'flota' && (
             <div className="space-y-4">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
@@ -352,7 +371,6 @@ function ScadaAppContent() {
                   Monitor de Flota Activa
                 </h2>
 
-                {/* Filtros de Salud con contadores en caliente */}
                 <div className="flex gap-2 overflow-x-auto w-full sm:w-auto pb-1">
                   <button
                     onClick={() => setHealthFilter('ONLINE')}
@@ -389,7 +407,7 @@ function ScadaAppContent() {
                 </div>
               </div>
 
-              {/* Grid de Tarjetas de Autoclaves */}
+              {/* Grid de Tarjetas Ultra-Glass */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filteredDevices.length === 0 ? (
                   <div className="col-span-full ultra-glass p-8 rounded-2xl text-center text-slate-400 font-mono text-xs">
@@ -415,7 +433,6 @@ function ScadaAppContent() {
                               <p className="text-[11px] text-slate-400 font-mono">{dev.meta?.cliente || 'Hospital Central'} • {dev.mac}</p>
                             </div>
                             
-                            {/* Insignia Dinámica de Salud con tiempo exacto */}
                             <div className="text-right">
                               <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono border font-bold ${health.colorClass}`}>
                                 <span className={`w-1.5 h-1.5 rounded-full ${
@@ -432,11 +449,11 @@ function ScadaAppContent() {
                           </div>
 
                           <div className="grid grid-cols-2 gap-2 my-3">
-                            <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800 text-center">
+                            <div className="p-2.5 rounded-xl glass-cell text-center">
                               <span className="text-[10px] font-mono text-cyan-400 block">TEMPERATURA</span>
                               <span className="text-xl font-bold font-mono text-white">{(dDev.temp_camara || 25).toFixed(1)}°C</span>
                             </div>
-                            <div className="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800 text-center">
+                            <div className="p-2.5 rounded-xl glass-cell text-center">
                               <span className="text-[10px] font-mono text-pink-400 block">PRESIÓN</span>
                               <span className="text-xl font-bold font-mono text-white">{(dDev.presion || 0).toFixed(2)}b</span>
                             </div>
@@ -447,13 +464,13 @@ function ScadaAppContent() {
                               <span>Odómetro: {cCount}/{cLim} ciclos</span>
                               <span>{Math.round((cCount / cLim) * 100)}%</span>
                             </div>
-                            <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                            <div className="w-full bg-slate-800/80 rounded-full h-1.5 overflow-hidden">
                               <div className="bg-emerald-400 h-full" style={{ width: `${Math.min(100, (cCount / cLim) * 100)}%` }}></div>
                             </div>
                           </div>
                         </div>
 
-                        <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs font-mono text-cyan-400 font-bold">
+                        <div className="pt-3 border-t border-white/10 flex items-center justify-between text-xs font-mono text-cyan-400 font-bold">
                           <span>ENTRAR A CONTROL TOTAL</span>
                           <ChevronRight className="w-4 h-4" />
                         </div>
@@ -465,7 +482,7 @@ function ScadaAppContent() {
             </div>
           )}
 
-          {/* SECCIÓN 2: CONTROL TOTAL DEL EQUIPO */}
+          {/* SECCIÓN 2: CONTROL TOTAL */}
           {activeSection === 'detalle' && inspectingDevice && (
             <DeviceDetailView
               device={inspectingDevice}
@@ -475,7 +492,7 @@ function ScadaAppContent() {
             />
           )}
 
-          {/* SECCIÓN 3: GESTIÓN DE FLOTA (CRUD & PRUEBAS DE HARDWARE) */}
+          {/* SECCIÓN 3: GESTIÓN DE FLOTA */}
           {activeSection === 'gestion' && (
             <FleetManagementView
               fleet={fleet}
@@ -497,9 +514,9 @@ function ScadaAppContent() {
         </main>
       )}
 
-      {/* BARRA INFERIOR PARA TELÉFONOS CELULARES (Mobile Bottom Bar) */}
+      {/* BARRA INFERIOR PARA TELÉFONOS CELULARES */}
       {user && (
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-slate-950/95 border-t border-cyan-500/30 backdrop-blur-xl flex items-center justify-around z-50 px-2">
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-slate-950/90 border-t border-cyan-500/30 backdrop-blur-xl flex items-center justify-around z-50 px-2">
           <button
             onClick={() => { setActiveSection('flota'); setSelectedMac(null); }}
             className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-lg text-xs font-mono ${
@@ -542,7 +559,7 @@ function ScadaAppContent() {
         </nav>
       )}
 
-      {/* Modal de Advertencia por Inactividad (15 Minutos) */}
+      {/* Modal de Advertencia por Inactividad */}
       {showTimeoutModal && (
         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
           <div className="ultra-glass border-2 border-amber-500 p-6 rounded-2xl max-w-sm w-full text-center space-y-4 shadow-[0_0_30px_rgba(245,158,11,0.3)]">
