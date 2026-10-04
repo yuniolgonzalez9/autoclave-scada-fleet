@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import SterilizationChart from '../graphics/SterilizationChart';
 import SurgicalQRLabel from '../labels/SurgicalQRLabel';
 import SessionDetailModal from '../reports/SessionDetailModal';
+import ClinicalTooltip from '../common/ClinicalTooltip';
+import { CLINICAL_HELP } from '../../utils/clinicalDictionary';
 import { supabase } from '../../services/supabase';
 import { 
   Activity, 
@@ -24,7 +26,8 @@ import {
   Eye,
   Send,
   Sparkles,
-  Lock
+  Lock,
+  HelpCircle
 } from 'lucide-react';
 
 export default function DeviceDetailView({ 
@@ -40,13 +43,16 @@ export default function DeviceDetailView({
   const [showQRModal, setShowQRModal] = useState(false);
   const [nvsMsg, setNvsMsg] = useState('');
 
-  // Estados de Auditoría individual por MAC
+  // Auditoría individual por MAC
   const [macLogs, setMacLogs] = useState([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [inspectedSession, setInspectedSession] = useState(null);
 
-  // Permisos: Solo Técnicos o Superadmin pueden tocar hardware
+  // Permisos: Solo Técnicos o Superadmin pueden alterar configuraciones
   const canEditHardware = userRole && !userRole.toLowerCase().includes('operador') && !userRole.toLowerCase().includes('cliente');
+
+  // ADAPTABILIDAD DINÁMICA: Si el equipo indica que no genera reportes, se oculta la pestaña de historial
+  const tieneReportes = device?.esquema?.tiene_reportes !== false && device?.datos?.tipo !== 'sin_reportes';
 
   const d = device?.datos || {};
   const cfg = d?.cfg || {};
@@ -55,9 +61,8 @@ export default function DeviceDetailView({
     localStorage.setItem('scada_detail_tab', activeTab);
   }, [activeTab]);
 
-  // Cargar registros exclusivos de este autoclave desde Supabase
   const fetchMacLogs = async () => {
-    if (!device?.mac) return;
+    if (!device?.mac || !tieneReportes) return;
     setLoadingLogs(true);
     try {
       const { data, error } = await supabase
@@ -67,9 +72,7 @@ export default function DeviceDetailView({
         .order('created_at', { ascending: false })
         .limit(30);
 
-      if (!error && data) {
-        setMacLogs(data);
-      }
+      if (!error && data) setMacLogs(data);
     } catch (e) {
       console.warn('Error cargando historial de MAC:', e);
     } finally {
@@ -83,9 +86,7 @@ export default function DeviceDetailView({
     }
   }, [activeTab, device?.mac]);
 
-  // =========================================================================
-  // PARÁMETROS NVS DEL HARDWARE Y DEL CICLO
-  // =========================================================================
+  // Parámetros NVS
   const [spTemp, setSpTemp] = useState(cfg.sp_temp ?? 121.0);
   const [tCiclo, setTCiclo] = useState(cfg.t_ciclo ?? 2);
   const [hab, setHab] = useState(cfg.hab ?? true);
@@ -145,13 +146,11 @@ export default function DeviceDetailView({
   };
 
   const handleToggleSwitch = (key, currentVal, setter) => {
-    if (!canEditHardware) return alert('Permiso denegado: rol de operador no autorizado.');
     const nextVal = !currentVal;
     setter(nextVal);
     sendCommand(device.mac, { [key]: nextVal });
   };
 
-  // Estados de Ficha y Mantenimiento
   const [alias, setAlias] = useState(device?.meta?.alias || `AUTOCLAVE [${device.mac.slice(-4)}]`);
   const [cliente, setCliente] = useState(device?.meta?.cliente || 'Hospital Metropolitano');
   const [modelo, setModelo] = useState(device?.meta?.modelo || 'Quirúrgico Clase B');
@@ -207,7 +206,7 @@ export default function DeviceDetailView({
 
   return (
     <div className="flex flex-col gap-4 w-full">
-      {/* Cabecera con Botón de Anclaje de Terminal Dedicada */}
+      {/* Cabecera con Tooltips de Terminal y Etiquetas */}
       <div className="ultra-glass p-4 rounded-2xl border border-cyan-500/30 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
         <div className="flex items-center gap-3">
           {!isKioskMode && (
@@ -234,31 +233,47 @@ export default function DeviceDetailView({
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Botón de Anclaje / Modo Kiosco */}
-          <button
-            onClick={onToggleKiosk}
-            className={`px-3 py-1.5 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 border transition-all ${
-              isKioskMode 
-                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30' 
-                : 'bg-slate-900 border-slate-700 text-slate-300 hover:border-cyan-400'
-            }`}
-            title={isKioskMode ? 'Desanclar vista' : 'Anclar como pantalla única dedicada'}
+          {/* Tooltip Anclar Terminal */}
+          <ClinicalTooltip
+            title={CLINICAL_HELP.btn_anclar_terminal.title}
+            description={CLINICAL_HELP.btn_anclar_terminal.desc}
+            badge={CLINICAL_HELP.btn_anclar_terminal.badge}
+            shortcut={CLINICAL_HELP.btn_anclar_terminal.action}
+            position="bottom"
           >
-            {isKioskMode ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5" />}
-            <span className="hidden sm:inline">{isKioskMode ? 'Desanclar Terminal' : 'Anclar Equipo Fijo'}</span>
-          </button>
+            <button
+              onClick={onToggleKiosk}
+              className={`px-3 py-1.5 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 border transition-all ${
+                isKioskMode 
+                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30' 
+                  : 'bg-slate-900 border-slate-700 text-slate-300 hover:border-cyan-400'
+              }`}
+            >
+              {isKioskMode ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5" />}
+              <span className="hidden sm:inline">{isKioskMode ? 'Desanclar Terminal' : 'Anclar Equipo Fijo'}</span>
+            </button>
+          </ClinicalTooltip>
 
-          <button
-            onClick={() => setShowQRModal(true)}
-            className="px-3.5 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-lg"
+          {/* Tooltip Generador QR */}
+          <ClinicalTooltip
+            title={CLINICAL_HELP.btn_etiqueta_qr.title}
+            description={CLINICAL_HELP.btn_etiqueta_qr.desc}
+            badge={CLINICAL_HELP.btn_etiqueta_qr.badge}
+            shortcut={CLINICAL_HELP.btn_etiqueta_qr.action}
+            position="bottom"
           >
-            <QrCode className="w-4 h-4" />
-            <span>Etiqueta QR</span>
-          </button>
+            <button
+              onClick={() => setShowQRModal(true)}
+              className="px-3.5 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-lg"
+            >
+              <QrCode className="w-4 h-4" />
+              <span>Etiqueta QR</span>
+            </button>
+          </ClinicalTooltip>
         </div>
       </div>
 
-      {/* Pestañas de Navegación del Equipo */}
+      {/* Pestañas de Navegación del Equipo (Adaptativas según rol y tipo de equipo) */}
       <div className="flex gap-2 overflow-x-auto pb-1 border-b border-slate-800">
         <button
           onClick={() => setActiveTab('sensores')}
@@ -283,16 +298,18 @@ export default function DeviceDetailView({
           </button>
         ) : null}
 
-        {/* Pestaña de Historial de Ciclos por MAC */}
-        <button
-          onClick={() => setActiveTab('historial')}
-          className={`py-2 px-3.5 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 whitespace-nowrap transition-all ${
-            activeTab === 'historial' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white bg-slate-900/60'
-          }`}
-        >
-          <History className="w-4 h-4" />
-          <span>Historial de Ciclos</span>
-        </button>
+        {/* Pestaña de Historial: Solo se muestra si el equipo genera reportes */}
+        {tieneReportes && (
+          <button
+            onClick={() => setActiveTab('historial')}
+            className={`py-2 px-3.5 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 whitespace-nowrap transition-all ${
+              activeTab === 'historial' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white bg-slate-900/60'
+            }`}
+          >
+            <History className="w-4 h-4" />
+            <span>Historial de Ciclos</span>
+          </button>
+        )}
 
         {canEditHardware && (
           <>
@@ -319,54 +336,116 @@ export default function DeviceDetailView({
         )}
       </div>
 
-      {/* PESTAÑA 1: SENSORES, F0 Y GRÁFICA */}
+      {/* PESTAÑA 1: SENSORES, F0, CONTROLES CON TOOLTIPS CLÍNICOS */}
       {activeTab === 'sensores' && (
         <div className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div className="ultra-glass p-3.5 rounded-xl border border-cyan-500/30">
-              <span className="text-[10px] font-mono text-cyan-400 block mb-1">TEMPERATURA CÁMARA</span>
-              <p className="text-2xl font-bold font-mono text-white">{(d?.temp_camara || 25.0).toFixed(1)} °C</p>
-              <span className="text-[10px] text-slate-400 font-mono">Setpoint: {spTemp}°C</span>
-            </div>
-            <div className="ultra-glass p-3.5 rounded-xl border border-pink-500/30">
-              <span className="text-[10px] font-mono text-pink-400 block mb-1">PRESIÓN VAPOR</span>
-              <p className="text-2xl font-bold font-mono text-white">{(d?.presion || 0.0).toFixed(2)} bar</p>
-              <span className="text-[10px] text-slate-400 font-mono">Límite: {pMax}b</span>
-            </div>
-            <div className="ultra-glass p-3.5 rounded-xl border border-emerald-500/30">
-              <span className="text-[10px] font-mono text-emerald-400 block mb-1">LETALIDAD (F0)</span>
-              <p className="text-2xl font-bold font-mono text-emerald-300">{(device.f0Score || 0.0).toFixed(1)} min</p>
-              <span className="text-[10px] text-emerald-400/80 font-mono">ISO 17665</span>
-            </div>
-            <div className="ultra-glass p-3.5 rounded-xl border border-amber-500/30">
-              <span className="text-[10px] font-mono text-amber-400 block mb-1">FASE ACTUAL</span>
-              <p className="text-lg font-bold font-mono text-white truncate">{d?.fase || 'ESPERA'}</p>
-              <span className="text-[10px] text-slate-400 font-mono">Restante: {Math.floor((d?.seg_restantes || 0)/60)}:{(d?.seg_restantes || 0)%60}</span>
-            </div>
+            
+            {/* Medidor Temperatura */}
+            <ClinicalTooltip
+              title={CLINICAL_HELP.temp_camara.title}
+              description={CLINICAL_HELP.temp_camara.desc}
+              badge={CLINICAL_HELP.temp_camara.badge}
+              shortcut={CLINICAL_HELP.temp_camara.action}
+            >
+              <div className="ultra-glass p-3.5 rounded-xl border border-cyan-500/30 w-full cursor-help">
+                <span className="text-[10px] font-mono text-cyan-400 block mb-1">TEMPERATURA CÁMARA</span>
+                <p className="text-2xl font-bold font-mono text-white">{(d?.temp_camara || 25.0).toFixed(1)} °C</p>
+                <span className="text-[10px] text-slate-400 font-mono">Setpoint: {spTemp}°C</span>
+              </div>
+            </ClinicalTooltip>
+
+            {/* Medidor Presión */}
+            <ClinicalTooltip
+              title={CLINICAL_HELP.presion_camara.title}
+              description={CLINICAL_HELP.presion_camara.desc}
+              badge={CLINICAL_HELP.presion_camara.badge}
+              shortcut={CLINICAL_HELP.presion_camara.action}
+            >
+              <div className="ultra-glass p-3.5 rounded-xl border border-pink-500/30 w-full cursor-help">
+                <span className="text-[10px] font-mono text-pink-400 block mb-1">PRESIÓN VAPOR</span>
+                <p className="text-2xl font-bold font-mono text-white">{(d?.presion || 0.0).toFixed(2)} bar</p>
+                <span className="text-[10px] text-slate-400 font-mono">Límite: {pMax}b</span>
+              </div>
+            </ClinicalTooltip>
+
+            {/* Medidor Letalidad F0 */}
+            <ClinicalTooltip
+              title={CLINICAL_HELP.letalidad_f0.title}
+              description={CLINICAL_HELP.letalidad_f0.desc}
+              badge={CLINICAL_HELP.letalidad_f0.badge}
+              shortcut={CLINICAL_HELP.letalidad_f0.action}
+            >
+              <div className="ultra-glass p-3.5 rounded-xl border border-emerald-500/30 w-full cursor-help">
+                <span className="text-[10px] font-mono text-emerald-400 block mb-1">LETALIDAD (F0)</span>
+                <p className="text-2xl font-bold font-mono text-emerald-300">{(device.f0Score || 0.0).toFixed(1)} min</p>
+                <span className="text-[10px] text-emerald-400/80 font-mono">ISO 17665</span>
+              </div>
+            </ClinicalTooltip>
+
+            {/* Fase Actual */}
+            <ClinicalTooltip
+              title={CLINICAL_HELP.fase_ciclo.title}
+              description={CLINICAL_HELP.fase_ciclo.desc}
+              badge={CLINICAL_HELP.fase_ciclo.badge}
+              shortcut={CLINICAL_HELP.fase_ciclo.action}
+            >
+              <div className="ultra-glass p-3.5 rounded-xl border border-amber-500/30 w-full cursor-help">
+                <span className="text-[10px] font-mono text-amber-400 block mb-1">FASE ACTUAL</span>
+                <p className="text-lg font-bold font-mono text-white truncate">{d?.fase || 'ESPERA'}</p>
+                <span className="text-[10px] text-slate-400 font-mono">Restante: {Math.floor((d?.seg_restantes || 0)/60)}:{(d?.seg_restantes || 0)%60}</span>
+              </div>
+            </ClinicalTooltip>
           </div>
 
+          {/* Botones de Control con Tooltips Explicativos */}
           <div className="flex gap-2.5">
-            <button
-              onClick={() => sendCommand(device.mac, { cmd: 'INICIAR_CICLO' })}
-              className="flex-1 py-3 px-4 bg-gradient-to-r from-cyan-500 to-blue-600 font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg"
+            <ClinicalTooltip
+              title={CLINICAL_HELP.btn_iniciar_ciclo.title}
+              description={CLINICAL_HELP.btn_iniciar_ciclo.desc}
+              badge={CLINICAL_HELP.btn_iniciar_ciclo.badge}
+              shortcut={CLINICAL_HELP.btn_iniciar_ciclo.action}
+              position="top"
             >
-              <Play className="w-4 h-4 fill-white" />
-              <span>Iniciar Ciclo ({spTemp}°C)</span>
-            </button>
-            <button
-              onClick={() => sendCommand(device.mac, { cmd: 'ABORTAR_CICLO' })}
-              className="flex-1 py-3 px-4 bg-rose-600 hover:bg-rose-500 font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg"
+              <button
+                onClick={() => sendCommand(device.mac, { cmd: 'INICIAR_CICLO' })}
+                className="py-3 px-4 bg-gradient-to-r from-cyan-500 to-blue-600 font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg"
+              >
+                <Play className="w-4 h-4 fill-white" />
+                <span>Iniciar Ciclo ({spTemp}°C)</span>
+              </button>
+            </ClinicalTooltip>
+
+            <ClinicalTooltip
+              title={CLINICAL_HELP.btn_paro_emergencia.title}
+              description={CLINICAL_HELP.btn_paro_emergencia.desc}
+              badge={CLINICAL_HELP.btn_paro_emergencia.badge}
+              shortcut={CLINICAL_HELP.btn_paro_emergencia.action}
+              position="top"
             >
-              <Square className="w-4 h-4 fill-white" />
-              <span>Paro de Emergencia</span>
-            </button>
-            <button
-              onClick={() => sendCommand(device.mac, { cmd: 'RESET_ALARMA' })}
-              className="py-3 px-4 bg-slate-900 border border-slate-700 text-slate-300 rounded-xl text-xs font-mono"
-              title="Reset Alarma"
+              <button
+                onClick={() => sendCommand(device.mac, { cmd: 'ABORTAR_CICLO' })}
+                className="py-3 px-4 bg-rose-600 hover:bg-rose-500 font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg"
+              >
+                <Square className="w-4 h-4 fill-white" />
+                <span>Paro de Emergencia</span>
+              </button>
+            </ClinicalTooltip>
+
+            <ClinicalTooltip
+              title={CLINICAL_HELP.btn_reset_alarma.title}
+              description={CLINICAL_HELP.btn_reset_alarma.desc}
+              badge={CLINICAL_HELP.btn_reset_alarma.badge}
+              shortcut={CLINICAL_HELP.btn_reset_alarma.action}
+              position="top"
             >
-              <RotateCcw className="w-4 h-4" />
-            </button>
+              <button
+                onClick={() => sendCommand(device.mac, { cmd: 'RESET_ALARMA' })}
+                className="py-3 px-4 bg-slate-900 border border-slate-700 text-slate-300 rounded-xl text-xs font-mono"
+              >
+                <RotateCcw className="w-4 h-4" />
+              </button>
+            </ClinicalTooltip>
           </div>
 
           <div className="ultra-glass p-4 rounded-2xl border border-cyan-500/30">
@@ -376,8 +455,8 @@ export default function DeviceDetailView({
         </div>
       )}
 
-      {/* PESTAÑA: HISTORIAL DE CICLOS DE ESTE AUTOCLAVE */}
-      {activeTab === 'historial' && (
+      {/* PESTAÑA: HISTORIAL */}
+      {activeTab === 'historial' && tieneReportes && (
         <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 space-y-4">
           <div className="flex justify-between items-center border-b border-cyan-500/20 pb-3">
             <div>
@@ -412,7 +491,7 @@ export default function DeviceDetailView({
               <tbody className="divide-y divide-slate-800/60 text-slate-300">
                 {loadingLogs ? (
                   <tr>
-                    <td colSpan="6" className="p-6 text-center text-slate-400">Consultando registros del equipo en Supabase...</td>
+                    <td colSpan="6" className="p-6 text-center text-slate-400">Consultando registros en Supabase...</td>
                   </tr>
                 ) : macLogs.length === 0 ? (
                   <tr>
@@ -454,7 +533,7 @@ export default function DeviceDetailView({
         </div>
       )}
 
-      {/* PESTAÑA: NVS (SOLO TÉCNICOS/ADMIN) */}
+      {/* PESTAÑA: NVS (CON TOOLTIPS EN CADA ACTUADOR) */}
       {activeTab === 'nvs' && canEditHardware && (
         <form onSubmit={handleTransmitNVS} className="ultra-glass p-5 md:p-6 rounded-2xl border border-cyan-500/30 space-y-5">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-cyan-500/20 pb-3">
@@ -557,38 +636,55 @@ export default function DeviceDetailView({
             </span>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 flex justify-between items-center">
-                <div>
-                  <span className="text-xs font-mono font-bold text-white block">Motor Agitador (GPIO 2)</span>
-                  <span className="text-[10px] text-slate-400 font-mono">Salida LED 1</span>
+              {/* Tooltip Motor */}
+              <ClinicalTooltip
+                title={CLINICAL_HELP.actuador_motor.title}
+                description={CLINICAL_HELP.actuador_motor.desc}
+                badge={CLINICAL_HELP.actuador_motor.badge}
+                shortcut={CLINICAL_HELP.actuador_motor.action}
+              >
+                <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 flex justify-between items-center w-full cursor-help">
+                  <div>
+                    <span className="text-xs font-mono font-bold text-white block">Motor Agitador (GPIO 2)</span>
+                    <span className="text-[10px] text-slate-400 font-mono">Salida LED 1</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleSwitch('mot_ok', motOk, setMotOk)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border ${
+                      motOk ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' : 'bg-slate-800 text-slate-400'
+                    }`}
+                  >
+                    {motOk ? 'ACTIVO' : 'INACTIVO'}
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleToggleSwitch('mot_ok', motOk, setMotOk)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border ${
-                    motOk ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' : 'bg-slate-800 text-slate-400'
-                  }`}
-                >
-                  {motOk ? 'ACTIVO' : 'INACTIVO'}
-                </button>
-              </div>
+              </ClinicalTooltip>
 
-              <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 flex justify-between items-center">
-                <div>
-                  <span className="text-xs font-mono font-bold text-white block">Bomba Vacío (GPIO 5)</span>
-                  <span className="text-[10px] text-slate-400 font-mono">Salida LED 3</span>
+              {/* Tooltip Bomba Vacío */}
+              <ClinicalTooltip
+                title={CLINICAL_HELP.actuador_vacio.title}
+                description={CLINICAL_HELP.actuador_vacio.desc}
+                badge={CLINICAL_HELP.actuador_vacio.badge}
+                shortcut={CLINICAL_HELP.actuador_vacio.action}
+              >
+                <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 flex justify-between items-center w-full cursor-help">
+                  <div>
+                    <span className="text-xs font-mono font-bold text-white block">Bomba Vacío (GPIO 5)</span>
+                    <span className="text-[10px] text-slate-400 font-mono">Salida LED 3</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleSwitch('vacio_ok', vacioOk, setVacioOk)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border ${
+                      vacioOk ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/40' : 'bg-slate-800 text-slate-400'
+                    }`}
+                  >
+                    {vacioOk ? 'ACTIVA' : 'INACTIVA'}
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleToggleSwitch('vacio_ok', vacioOk, setVacioOk)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border ${
-                    vacioOk ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/40' : 'bg-slate-800 text-slate-400'
-                  }`}
-                >
-                  {vacioOk ? 'ACTIVA' : 'INACTIVA'}
-                </button>
-              </div>
+              </ClinicalTooltip>
 
+              {/* Purga Automática */}
               <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 flex justify-between items-center">
                 <div>
                   <span className="text-xs font-mono font-bold text-white block">Purga Automática</span>
@@ -747,13 +843,21 @@ export default function DeviceDetailView({
               <p className="text-[11px] text-slate-400 font-mono">
                 {limite - ciclos > 0 ? `Restan ${limite - ciclos} ciclos para servicio preventivo.` : '¡Mantenimiento vencido!'}
               </p>
-              <button
-                type="button"
-                onClick={() => sendCommand(device.mac, { cmd: 'RESET_ODOMETRO' })}
-                className="w-full mt-2 py-2 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 rounded-lg text-xs font-bold"
+              
+              <ClinicalTooltip
+                title={CLINICAL_HELP.btn_reset_odometro.title}
+                description={CLINICAL_HELP.btn_reset_odometro.desc}
+                badge={CLINICAL_HELP.btn_reset_odometro.badge}
+                shortcut={CLINICAL_HELP.btn_reset_odometro.action}
               >
-                🔄 Reiniciar Odómetro a Cero
-              </button>
+                <button
+                  type="button"
+                  onClick={() => sendCommand(device.mac, { cmd: 'RESET_ODOMETRO' })}
+                  className="w-full mt-2 py-2 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 rounded-lg text-xs font-bold"
+                >
+                  🔄 Reiniciar Odómetro a Cero
+                </button>
+              </ClinicalTooltip>
             </div>
           </div>
 
