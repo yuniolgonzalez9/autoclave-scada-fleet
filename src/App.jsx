@@ -88,7 +88,7 @@ function ScadaAppContent() {
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [sirenActive, setSirenActive] = useState(false);
 
-  // Reloj de latido a 1000ms estable para no saturar navegadores móviles
+  // Reloj de latido a 1000ms
   const [currentTime, setCurrentTime] = useState(Date.now());
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
@@ -152,6 +152,7 @@ function ScadaAppContent() {
   useEffect(() => {
     const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'];
     const handleActivity = () => resetIdleTimer();
+    events.forEach((evt) => window.removeEventListener(evt, handleActivity));
     events.forEach((evt) => window.addEventListener(evt, handleActivity, { passive: true }));
     resetIdleTimer();
     return () => {
@@ -209,7 +210,7 @@ function ScadaAppContent() {
   // Cálculo de salud
   const getDeviceHealthData = (dev) => {
     if (!dev || !dev.lastSeen || dev.lastSeen === 0) {
-      return { status: 'OFFLINE', text: 'DESCONECTADO', timeAgo: 'Sin señal en vivo', colorClass: 'bg-rose-500/15 text-rose-400 border-rose-500/30' };
+      return { status: 'OFFLINE', text: 'DESCONECTADO', timeAgo: 'Sin señal', colorClass: 'bg-rose-500/15 text-rose-400 border-rose-500/30' };
     }
     const diffSegundos = Math.floor((currentTime - dev.lastSeen) / 1000);
 
@@ -256,408 +257,412 @@ function ScadaAppContent() {
   }
 
   return (
-    <div className="min-h-screen w-full relative pb-20 md:pb-6 flex flex-col">
+    <div className="min-h-screen w-full relative pb-20 md:pb-6 flex flex-col overflow-x-hidden">
       
-      {/* CAPA DE FONDO FIJA INDEPENDIENTE (Evita temblores y repintados en celulares Android) */}
+      {/* CAPA DE FONDO FIJA VISIBLE (z-0) - 100% VIVA CON LOS CIRCUITOS */}
       <div 
-        className="fixed inset-0 -z-10 pointer-events-none bg-cover bg-center"
+        id="scada-background"
+        className="fixed inset-0 z-0 pointer-events-none bg-cover bg-center bg-no-repeat transition-[background-image] duration-500"
         style={{
           backgroundImage: currentBg === 'oled'
             ? 'radial-gradient(circle at 50% -5%, rgba(139, 92, 246, 0.25) 0%, transparent 55%), radial-gradient(circle at 100% 100%, rgba(0, 243, 255, 0.18) 0%, transparent 50%)'
-            : bgObj.url 
-            ? `linear-gradient(to bottom, rgba(4, 7, 18, 0.35), rgba(4, 7, 18, 0.65)), url('${bgObj.url}')`
+            : bgObj?.url 
+            ? `linear-gradient(to bottom, rgba(4, 7, 18, 0.30), rgba(4, 7, 18, 0.60)), url('${bgObj.url}')`
             : 'none',
           backgroundColor: '#030712'
         }}
       />
 
-      {/* Banner de Emergencia */}
-      {sirenActive && (
-        <div className="bg-rose-600 px-4 py-2.5 flex items-center justify-between text-white font-bold text-xs shadow-2xl animate-pulse sticky top-0 z-50">
-          <div className="flex items-center gap-2">
-            <Volume2 className="w-4 h-4 animate-bounce" />
-            <span>🚨 ALARMA CRÍTICA ACTIVA EN AUTOCLAVE // SIRENA INDUSTRIAL EN BUCLE</span>
-          </div>
-          <button
-            onClick={handleSilenceSiren}
-            className="px-3 py-1 bg-white text-rose-700 hover:bg-slate-100 rounded-lg text-xs font-black flex items-center gap-1 shadow-lg"
-          >
-            <VolumeX className="w-3.5 h-3.5" />
-            <span>SILENCIAR SIRENA (ACK)</span>
-          </button>
-        </div>
-      )}
+      {/* CONTENIDO PRINCIPAL ELEVADO (relative z-10) */}
+      <div className="relative z-10 flex-1 flex flex-col w-full max-w-full">
 
-      {/* Header Institucional */}
-      <header className="speedtest-laser-header border-b border-cyan-500/20 bg-slate-950/75 backdrop-blur-md px-4 md:px-6 py-3 flex items-center justify-between sticky top-0 z-40">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400">
-            <Activity className="w-5 h-5 md:w-6 md:h-6 animate-pulse" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-base md:text-lg font-bold tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-fuchsia-400 to-emerald-400">
-                BIOFLEET OS™
-              </h1>
-              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/30 text-cyan-300">
-                ENTERPRISE
-              </span>
+        {/* Banner de Emergencia */}
+        {sirenActive && (
+          <div className="bg-rose-600 px-3 sm:px-4 py-2 flex items-center justify-between text-white font-bold text-xs shadow-2xl animate-pulse sticky top-0 z-50">
+            <div className="flex items-center gap-2 truncate">
+              <Volume2 className="w-4 h-4 animate-bounce shrink-0" />
+              <span className="truncate">🚨 ALARMA CRÍTICA // SIRENA INDUSTRIAL EN BUCLE</span>
             </div>
-            <p className="text-[10px] md:text-[11px] text-slate-400 font-mono hidden sm:block">
-              Supervisión de Flota Biomédica & Trama Dinámica ESP32
-            </p>
+            <button
+              onClick={handleSilenceSiren}
+              className="px-2.5 py-1 bg-white text-rose-700 hover:bg-slate-100 rounded-lg text-xs font-black shrink-0 ml-2 shadow-lg"
+            >
+              SILENCIAR
+            </button>
           </div>
-        </div>
+        )}
 
-        {/* Acciones de Cabecera */}
-        <div className="flex items-center gap-2 md:gap-3">
-          <ClinicalTooltip
-            title="Conexión WebSocket Broker"
-            description="Canal WSS en puerto 8884 hacia HiveMQ Cloud para recepción de tramas en caliente."
-            badge="PUERTO 8884"
-            shortcut="AUTOMÁTICO"
-            position="bottom"
-          >
-            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-mono font-bold border cursor-help ${
-              mqttConnected 
-                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' 
-                : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
-          }`}>
-              <span className={`w-2 h-2 rounded-full ${mqttConnected ? 'bg-emerald-400 animate-ping' : 'bg-rose-400'}`}></span>
-              {mqttConnected ? 'HIVEMQ 8884' : 'OFFLINE'}
-            </span>
-          </ClinicalTooltip>
+        {/* Header Institucional 100% Adaptativo para Celulares */}
+        <header className="speedtest-laser-header border-b border-cyan-500/20 bg-slate-950/80 backdrop-blur-md px-3 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between sticky top-0 z-40 w-full">
+          
+          {/* Bloque Izquierdo (Marca y Logo) */}
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <div className="p-1.5 sm:p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 shrink-0">
+              <Activity className="w-5 h-5 sm:w-6 sm:h-6 animate-pulse" />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 truncate">
+                <h1 className="text-sm sm:text-base md:text-lg font-bold tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-fuchsia-400 to-emerald-400 truncate">
+                  BIOFLEET OS™
+                </h1>
+                <span className="text-[9px] sm:text-[10px] font-mono px-1 py-0.2 rounded bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 shrink-0">
+                  v2.0
+                </span>
+              </div>
+              <p className="text-[10px] text-slate-400 font-mono hidden sm:block truncate">
+                Supervisión de Flota Biomédica & Trama Dinámica ESP32
+              </p>
+            </div>
+          </div>
 
-          {user && isAdmin && (
+          {/* Bloque Derecho (Acciones compactas que NUNCA empujan el engranaje) */}
+          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0 ml-2">
+            
+            {/* Insignia MQTT: En celular solo muestra el punto y abrevia */}
             <ClinicalTooltip
-              title="Aprobaciones & Personal"
-              description="Bandeja de personal clínico en espera, gestión de firmas digitales y asignación de rangos RBAC."
-              badge="RBAC NIVEL 1"
-              shortcut="CLICK"
+              title="Conexión WebSocket Broker"
+              description="Canal WSS en puerto 8884 hacia HiveMQ Cloud."
+              badge="8884"
+              shortcut="AUTOMÁTICO"
               position="bottom"
             >
+              <span className={`inline-flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-full text-[10px] font-mono font-bold border cursor-help ${
+                mqttConnected 
+                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' 
+                  : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+              }`}>
+                <span className={`w-2 h-2 rounded-full shrink-0 ${mqttConnected ? 'bg-emerald-400 animate-ping' : 'bg-rose-400'}`}></span>
+                <span className="hidden sm:inline">{mqttConnected ? 'HIVEMQ 8884' : 'OFFLINE'}</span>
+              </span>
+            </ClinicalTooltip>
+
+            {user && isAdmin && (
               <button
                 onClick={() => setShowAdminModal(true)}
-                className="relative p-2 rounded-lg bg-slate-900 border border-amber-500/40 text-amber-300"
+                className="relative p-1.5 sm:p-2 rounded-xl bg-slate-900 border border-amber-500/40 text-amber-300 shrink-0"
+                title="Personal y Aprobaciones"
               >
-                <Bell className="w-4 h-4" />
+                <Bell className="w-4 h-4 sm:w-5 sm:h-5" />
                 {pendingRequests.length > 0 && (
                   <span className="absolute -top-1 -right-1 px-1.5 py-0.2 rounded-full bg-amber-500 text-slate-950 text-[9px] font-bold">
                     {pendingRequests.length}
                   </span>
                 )}
               </button>
-            </ClinicalTooltip>
-          )}
+            )}
 
-          {user && (
-            <GearMenu
-              currentTheme={currentTheme}
-              setTheme={setCurrentTheme}
-              currentBg={currentBg}
-              setBg={setCurrentBg}
-              opacity={opacity}
-              setOpacity={setOpacity}
-              onLogout={logout}
-            />
-          )}
-        </div>
-      </header>
+            {/* El Engranaje: Siempre dentro del marco visible */}
+            {user && (
+              <div className="shrink-0">
+                <GearMenu
+                  currentTheme={currentTheme}
+                  setTheme={setCurrentTheme}
+                  currentBg={currentBg}
+                  setBg={setCurrentBg}
+                  opacity={opacity}
+                  setOpacity={setOpacity}
+                  onLogout={logout}
+                />
+              </div>
+            )}
+          </div>
+        </header>
 
-      {/* Dock Superior en PC */}
-      {user && !kioskMac && !isOperator && (
-        <div className="hidden md:flex items-center gap-2 px-6 py-2 bg-slate-950/60 border-b border-cyan-500/10">
-          <button
-            onClick={() => { setActiveSection('flota'); setSelectedMac(null); }}
-            className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
-              activeSection === 'flota' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            ⚡ Flota en Vivo ({macKeys.length})
-          </button>
-          <button
-            onClick={() => { setActiveSection('gestion'); setSelectedMac(null); }}
-            className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
-              activeSection === 'gestion' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            🏢 Gestión Flota
-          </button>
-          <button
-            onClick={() => { setActiveSection('fota'); setSelectedMac(null); }}
-            className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
-              activeSection === 'fota' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            🚀 FOTA Hub
-          </button>
-          <button
-            onClick={() => { setActiveSection('auditoria'); setSelectedMac(null); }}
-            className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
-              activeSection === 'auditoria' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            📋 Auditoría Supabase
-          </button>
-        </div>
-      )}
+        {/* Dock Superior en PC */}
+        {user && !kioskMac && !isOperator && (
+          <div className="hidden md:flex items-center gap-2 px-6 py-2 bg-slate-950/60 border-b border-cyan-500/10">
+            <button
+              onClick={() => { setActiveSection('flota'); setSelectedMac(null); }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
+                activeSection === 'flota' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              ⚡ Flota en Vivo ({macKeys.length})
+            </button>
+            <button
+              onClick={() => { setActiveSection('gestion'); setSelectedMac(null); }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
+                activeSection === 'gestion' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              🏢 Gestión Flota
+            </button>
+            <button
+              onClick={() => { setActiveSection('fota'); setSelectedMac(null); }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
+                activeSection === 'fota' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              🚀 FOTA Hub
+            </button>
+            <button
+              onClick={() => { setActiveSection('auditoria'); setSelectedMac(null); }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
+                activeSection === 'auditoria' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              📋 Auditoría Supabase
+            </button>
+          </div>
+        )}
 
-      {/* Contenido Principal con Contenedor Rígido Estable */}
-      {!user ? (
-        <main className="flex-1 flex items-center justify-center p-4 android-view-transition">
-          <LoginModal />
-        </main>
-      ) : (
-        <main className="flex-1 p-3 md:p-6 max-w-7xl mx-auto w-full flex flex-col gap-4 android-view-transition">
-          
-          {(kioskMac || activeSection === 'detalle') && inspectingDevice ? (
-            <DeviceDetailView
-              device={inspectingDevice}
-              onBack={() => { setActiveSection('flota'); setSelectedMac(null); }}
-              sendCommand={sendDeviceCommand}
-              operatorName={profile?.nombre || user?.email}
-              userRole={profile?.rol || 'Operador'}
-              isKioskMode={Boolean(kioskMac)}
-              onToggleKiosk={toggleKioskMode}
-            />
-          ) : (
-            <>
-              {/* SECCIÓN FLOTA */}
-              {activeSection === 'flota' && (
-                <div className="space-y-4">
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                    <h2 className="text-base md:text-lg font-bold font-mono flex items-center gap-2">
-                      <Flame className="w-5 h-5 text-cyan-400" />
-                      Monitor de Flota Activa
-                    </h2>
+        {/* Vistas Principales */}
+        {!user ? (
+          <main className="flex-1 flex items-center justify-center p-4 android-view-transition">
+            <LoginModal />
+          </main>
+        ) : (
+          <main className="flex-1 p-3 md:p-6 max-w-7xl mx-auto w-full flex flex-col gap-4 android-view-transition">
+            
+            {(kioskMac || activeSection === 'detalle') && inspectingDevice ? (
+              <DeviceDetailView
+                device={inspectingDevice}
+                onBack={() => { setActiveSection('flota'); setSelectedMac(null); }}
+                sendCommand={sendDeviceCommand}
+                operatorName={profile?.nombre || user?.email}
+                userRole={profile?.rol || 'Operador'}
+                isKioskMode={Boolean(kioskMac)}
+                onToggleKiosk={toggleKioskMode}
+              />
+            ) : (
+              <>
+                {/* SECCIÓN FLOTA */}
+                {activeSection === 'flota' && (
+                  <div className="space-y-4">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                      <h2 className="text-base md:text-lg font-bold font-mono flex items-center gap-2">
+                        <Flame className="w-5 h-5 text-cyan-400" />
+                        Monitor de Flota Activa
+                      </h2>
 
-                    <div className="flex gap-2 overflow-x-auto w-full sm:w-auto pb-1">
-                      <ClinicalTooltip title="Filtro En Línea" description="Autoclaves transmitiendo paquetes en los últimos 4 segundos." badge="0-4s">
+                      <div className="flex gap-2 overflow-x-auto w-full sm:w-auto pb-1">
+                        <ClinicalTooltip title="Filtro En Línea" description="Autoclaves transmitiendo paquetes en los últimos 4 segundos." badge="0-4s">
+                          <button
+                            onClick={() => setHealthFilter('ONLINE')}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
+                              healthFilter === 'ONLINE' ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-md' : 'bg-slate-900/80 border-slate-700 text-emerald-400'
+                            }`}
+                          >
+                            🟢 ONLINE ({countOn})
+                          </button>
+                        </ClinicalTooltip>
+
+                        <ClinicalTooltip title="Filtro Latencia" description="Autoclaves con paquetes demorados entre 4 y 8 segundos." badge="4-8s">
+                          <button
+                            onClick={() => setHealthFilter('LATENCY')}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
+                              healthFilter === 'LATENCY' ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md' : 'bg-slate-900/80 border-slate-700 text-amber-300'
+                            }`}
+                          >
+                            🟡 LATENCIA ({countLat})
+                          </button>
+                        </ClinicalTooltip>
+
+                        <ClinicalTooltip title="Filtro Desconectados" description="Autoclaves sin contacto en vivo por más de 8 segundos." badge=">8s">
+                          <button
+                            onClick={() => setHealthFilter('OFFLINE')}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
+                              healthFilter === 'OFFLINE' ? 'bg-rose-500 text-white border-rose-400 shadow-md' : 'bg-slate-900/80 border-slate-700 text-rose-400'
+                            }`}
+                          >
+                            🔴 OFFLINE ({countOff})
+                          </button>
+                        </ClinicalTooltip>
+
                         <button
-                          onClick={() => setHealthFilter('ONLINE')}
+                          onClick={() => setHealthFilter('ALL')}
                           className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
-                            healthFilter === 'ONLINE' ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-md' : 'bg-slate-900/80 border-slate-700 text-emerald-400'
+                            healthFilter === 'ALL' ? 'bg-cyan-500 text-slate-950 border-cyan-400 shadow-md' : 'bg-slate-900/80 border-slate-700 text-slate-300'
                           }`}
                         >
-                          🟢 ONLINE ({countOn})
+                          🌐 TODOS ({macKeys.length})
                         </button>
-                      </ClinicalTooltip>
+                      </div>
+                    </div>
 
-                      <ClinicalTooltip title="Filtro Latencia" description="Autoclaves con paquetes demorados entre 4 y 8 segundos." badge="4-8s">
-                        <button
-                          onClick={() => setHealthFilter('LATENCY')}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
-                            healthFilter === 'LATENCY' ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md' : 'bg-slate-900/80 border-slate-700 text-amber-300'
-                          }`}
-                        >
-                          🟡 LATENCIA ({countLat})
-                        </button>
-                      </ClinicalTooltip>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {filteredDevices.length === 0 ? (
+                        <div className="col-span-full ultra-glass p-8 rounded-2xl text-center text-slate-400 font-mono text-xs">
+                          No hay autoclaves en el estado [{healthFilter}].
+                        </div>
+                      ) : (
+                        filteredDevices.map((dev) => {
+                          const dDev = dev.datos || {};
+                          const health = getDeviceHealthData(dev);
+                          const cCount = dDev?.cfg?.ciclos || dev?.meta?.ciclosCompletados || 0;
+                          const cLim = dDev?.cfg?.lim_mant || dev?.meta?.limiteMantenimiento || 200;
 
-                      <ClinicalTooltip title="Filtro Desconectados" description="Autoclaves sin contacto en vivo por más de 8 segundos." badge=">8s">
-                        <button
-                          onClick={() => setHealthFilter('OFFLINE')}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
-                            healthFilter === 'OFFLINE' ? 'bg-rose-500 text-white border-rose-400 shadow-md' : 'bg-slate-900/80 border-slate-700 text-rose-400'
-                          }`}
-                        >
-                          🔴 OFFLINE ({countOff})
-                        </button>
-                      </ClinicalTooltip>
+                          return (
+                            <div
+                              key={dev.mac}
+                              onClick={() => { setSelectedMac(dev.mac); setActiveSection('detalle'); }}
+                              className="ultra-glass p-5 rounded-2xl cursor-pointer transition-all duration-200 hover:-translate-y-1 shadow-xl flex flex-col justify-between"
+                            >
+                              <div>
+                                <div className="flex justify-between items-start mb-3">
+                                  <div>
+                                    <h3 className="font-bold text-sm text-white">{dev.meta?.alias || `AUTOCLAVE [${dev.mac.slice(-4)}]`}</h3>
+                                    <p className="text-[11px] text-slate-400 font-mono">{dev.meta?.cliente || 'Hospital Central'} • {dev.mac}</p>
+                                  </div>
+                                  
+                                  <div className="text-right">
+                                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono border font-bold ${health.colorClass}`}>
+                                      <span className={`w-1.5 h-1.5 rounded-full ${
+                                        health.status === 'ONLINE' ? 'bg-emerald-400 animate-ping' : 
+                                        health.status === 'LATENCY' ? 'bg-amber-400 animate-pulse' : 
+                                        'bg-rose-400'
+                                      }`}></span>
+                                      {health.text}
+                                    </span>
+                                    <span className="block text-[9px] text-slate-400 font-mono mt-0.5">
+                                      {health.timeAgo}
+                                    </span>
+                                  </div>
+                                </div>
 
-                      <button
-                        onClick={() => setHealthFilter('ALL')}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
-                          healthFilter === 'ALL' ? 'bg-cyan-500 text-slate-950 border-cyan-400 shadow-md' : 'bg-slate-900/80 border-slate-700 text-slate-300'
-                        }`}
-                      >
-                        🌐 TODOS ({macKeys.length})
-                      </button>
+                                <div className="grid grid-cols-2 gap-2 my-3">
+                                  <ClinicalTooltip title="Temperatura Cámara" description="Sensor PT100 interno." badge="°C">
+                                    <div className="p-2.5 rounded-xl glass-cell text-center w-full">
+                                      <span className="text-[10px] font-mono text-cyan-400 block">TEMPERATURA</span>
+                                      <span className="text-xl font-bold font-mono text-white">{(dDev.temp_camara || 25).toFixed(1)}°C</span>
+                                    </div>
+                                  </ClinicalTooltip>
+
+                                  <ClinicalTooltip title="Presión de Vapor" description="Transductor piezorresistivo de vapor saturado." badge="BAR">
+                                    <div className="p-2.5 rounded-xl glass-cell text-center w-full">
+                                      <span className="text-[10px] font-mono text-pink-400 block">PRESIÓN</span>
+                                      <span className="text-xl font-bold font-mono text-white">{(dDev.presion || 0).toFixed(2)}b</span>
+                                    </div>
+                                  </ClinicalTooltip>
+                                </div>
+
+                                <div className="space-y-1 mb-3">
+                                  <div className="flex justify-between text-[10px] font-mono text-slate-400">
+                                    <span>Odómetro: {cCount}/{cLim} ciclos</span>
+                                    <span>{Math.round((cCount / cLim) * 100)}%</span>
+                                  </div>
+                                  <div className="w-full bg-slate-800/80 rounded-full h-1.5 overflow-hidden">
+                                    <div className="bg-emerald-400 h-full" style={{ width: `${Math.min(100, (cCount / cLim) * 100)}%` }}></div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="pt-3 border-t border-white/10 flex items-center justify-between text-xs font-mono text-cyan-400 font-bold">
+                                <span>ENTRAR A CONTROL TOTAL</span>
+                                <ChevronRight className="w-4 h-4" />
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
                     </div>
                   </div>
+                )}
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {filteredDevices.length === 0 ? (
-                      <div className="col-span-full ultra-glass p-8 rounded-2xl text-center text-slate-400 font-mono text-xs">
-                        No hay autoclaves en el estado [{healthFilter}].
-                      </div>
-                    ) : (
-                      filteredDevices.map((dev) => {
-                        const dDev = dev.datos || {};
-                        const health = getDeviceHealthData(dev);
-                        const cCount = dDev?.cfg?.ciclos || dev?.meta?.ciclosCompletados || 0;
-                        const cLim = dDev?.cfg?.lim_mant || dev?.meta?.limiteMantenimiento || 200;
+                {/* SECCIÓN GESTIÓN */}
+                {activeSection === 'gestion' && (
+                  <FleetManagementView
+                    fleet={fleet}
+                    sendCommand={sendDeviceCommand}
+                    onSelectDevice={(mac) => { setSelectedMac(mac); setActiveSection('detalle'); }}
+                  />
+                )}
 
-                        return (
-                          <div
-                            key={dev.mac}
-                            onClick={() => { setSelectedMac(dev.mac); setActiveSection('detalle'); }}
-                            className="ultra-glass p-5 rounded-2xl cursor-pointer transition-all duration-200 hover:-translate-y-1 shadow-xl flex flex-col justify-between"
-                          >
-                            <div>
-                              <div className="flex justify-between items-start mb-3">
-                                <div>
-                                  <h3 className="font-bold text-sm text-white">{dev.meta?.alias || `AUTOCLAVE [${dev.mac.slice(-4)}]`}</h3>
-                                  <p className="text-[11px] text-slate-400 font-mono">{dev.meta?.cliente || 'Hospital Central'} • {dev.mac}</p>
-                                </div>
-                                
-                                <div className="text-right">
-                                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono border font-bold ${health.colorClass}`}>
-                                    <span className={`w-1.5 h-1.5 rounded-full ${
-                                      health.status === 'ONLINE' ? 'bg-emerald-400 animate-ping' : 
-                                      health.status === 'LATENCY' ? 'bg-amber-400 animate-pulse' : 
-                                      'bg-rose-400'
-                                    }`}></span>
-                                    {health.text}
-                                  </span>
-                                  <span className="block text-[9px] text-slate-400 font-mono mt-0.5">
-                                    {health.timeAgo}
-                                  </span>
-                                </div>
-                              </div>
+                {/* SECCIÓN FOTA */}
+                {activeSection === 'fota' && (
+                  <FotaHubView fleet={fleet} sendCommand={sendDeviceCommand} />
+                )}
 
-                              <div className="grid grid-cols-2 gap-2 my-3">
-                                <ClinicalTooltip title="Temperatura Cámara" description="Sensor PT100 interno." badge="°C">
-                                  <div className="p-2.5 rounded-xl glass-cell text-center w-full">
-                                    <span className="text-[10px] font-mono text-cyan-400 block">TEMPERATURA</span>
-                                    <span className="text-xl font-bold font-mono text-white">{(dDev.temp_camara || 25).toFixed(1)}°C</span>
-                                  </div>
-                                </ClinicalTooltip>
+                {/* SECCIÓN AUDITORÍA */}
+                {activeSection === 'auditoria' && (
+                  <ClinicalAuditView />
+                )}
+              </>
+            )}
 
-                                <ClinicalTooltip title="Presión de Vapor" description="Transductor piezorresistivo de vapor saturado." badge="BAR">
-                                  <div className="p-2.5 rounded-xl glass-cell text-center w-full">
-                                    <span className="text-[10px] font-mono text-pink-400 block">PRESIÓN</span>
-                                    <span className="text-xl font-bold font-mono text-white">{(dDev.presion || 0).toFixed(2)}b</span>
-                                  </div>
-                                </ClinicalTooltip>
-                              </div>
+          </main>
+        )}
 
-                              <div className="space-y-1 mb-3">
-                                <div className="flex justify-between text-[10px] font-mono text-slate-400">
-                                  <span>Odómetro: {cCount}/{cLim} ciclos</span>
-                                  <span>{Math.round((cCount / cLim) * 100)}%</span>
-                                </div>
-                                <div className="w-full bg-slate-800/80 rounded-full h-1.5 overflow-hidden">
-                                  <div className="bg-emerald-400 h-full" style={{ width: `${Math.min(100, (cCount / cLim) * 100)}%` }}></div>
-                                </div>
-                              </div>
-                            </div>
+        {/* BARRA INFERIOR PARA TELÉFONOS */}
+        {user && !kioskMac && !isOperator && (
+          <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-slate-950/90 border-t border-cyan-500/30 backdrop-blur-xl flex items-center justify-around z-50 px-2">
+            <button
+              onClick={() => { setActiveSection('flota'); setSelectedMac(null); }}
+              className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-lg text-xs font-mono ${
+                activeSection === 'flota' || activeSection === 'detalle' ? 'text-cyan-400 font-bold' : 'text-slate-400'
+              }`}
+            >
+              <Activity className="w-5 h-5" />
+              <span>Flota</span>
+            </button>
 
-                            <div className="pt-3 border-t border-white/10 flex items-center justify-between text-xs font-mono text-cyan-400 font-bold">
-                              <span>ENTRAR A CONTROL TOTAL</span>
-                              <ChevronRight className="w-4 h-4" />
-                            </div>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                </div>
-              )}
+            <button
+              onClick={() => { setActiveSection('gestion'); setSelectedMac(null); }}
+              className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-lg text-xs font-mono ${
+                activeSection === 'gestion' ? 'text-cyan-400 font-bold' : 'text-slate-400'
+              }`}
+            >
+              <Building2 className="w-5 h-5" />
+              <span>Gestión</span>
+            </button>
 
-              {/* SECCIÓN GESTIÓN */}
-              {activeSection === 'gestion' && (
-                <FleetManagementView
-                  fleet={fleet}
-                  sendCommand={sendDeviceCommand}
-                  onSelectDevice={(mac) => { setSelectedMac(mac); setActiveSection('detalle'); }}
-                />
-              )}
+            <button
+              onClick={() => { setActiveSection('fota'); setSelectedMac(null); }}
+              className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-lg text-xs font-mono ${
+                activeSection === 'fota' ? 'text-cyan-400 font-bold' : 'text-slate-400'
+              }`}
+            >
+              <Rocket className="w-5 h-5" />
+              <span>FOTA</span>
+            </button>
 
-              {/* SECCIÓN FOTA */}
-              {activeSection === 'fota' && (
-                <FotaHubView fleet={fleet} sendCommand={sendDeviceCommand} />
-              )}
+            <button
+              onClick={() => { setActiveSection('auditoria'); setSelectedMac(null); }}
+              className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-lg text-xs font-mono ${
+                activeSection === 'auditoria' ? 'text-cyan-400 font-bold' : 'text-slate-400'
+              }`}
+            >
+              <FileText className="w-5 h-5" />
+              <span>Auditoría</span>
+            </button>
+          </nav>
+        )}
 
-              {/* SECCIÓN AUDITORÍA */}
-              {activeSection === 'auditoria' && (
-                <ClinicalAuditView />
-              )}
-            </>
-          )}
-
-        </main>
-      )}
-
-      {/* BARRA INFERIOR PARA TELÉFONOS */}
-      {user && !kioskMac && !isOperator && (
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-slate-950/90 border-t border-cyan-500/30 backdrop-blur-xl flex items-center justify-around z-50 px-2">
-          <button
-            onClick={() => { setActiveSection('flota'); setSelectedMac(null); }}
-            className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-lg text-xs font-mono ${
-              activeSection === 'flota' || activeSection === 'detalle' ? 'text-cyan-400 font-bold' : 'text-slate-400'
-            }`}
-          >
-            <Activity className="w-5 h-5" />
-            <span>Flota</span>
-          </button>
-
-          <button
-            onClick={() => { setActiveSection('gestion'); setSelectedMac(null); }}
-            className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-lg text-xs font-mono ${
-              activeSection === 'gestion' ? 'text-cyan-400 font-bold' : 'text-slate-400'
-            }`}
-          >
-            <Building2 className="w-5 h-5" />
-            <span>Gestión</span>
-          </button>
-
-          <button
-            onClick={() => { setActiveSection('fota'); setSelectedMac(null); }}
-            className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-lg text-xs font-mono ${
-              activeSection === 'fota' ? 'text-cyan-400 font-bold' : 'text-slate-400'
-            }`}
-          >
-            <Rocket className="w-5 h-5" />
-            <span>FOTA</span>
-          </button>
-
-          <button
-            onClick={() => { setActiveSection('auditoria'); setSelectedMac(null); }}
-            className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-lg text-xs font-mono ${
-              activeSection === 'auditoria' ? 'text-cyan-400 font-bold' : 'text-slate-400'
-            }`}
-          >
-            <FileText className="w-5 h-5" />
-            <span>Auditoría</span>
-          </button>
-        </nav>
-      )}
-
-      {/* Modal de Advertencia por Inactividad */}
-      {showTimeoutModal && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="ultra-glass border-2 border-amber-500 p-6 rounded-2xl max-w-sm w-full text-center space-y-4 shadow-[0_0_30px_rgba(245,158,11,0.3)]">
-            <div className="inline-flex p-3 rounded-full bg-amber-500/20 text-amber-300 animate-bounce">
-              <Clock className="w-8 h-8" />
-            </div>
-            <h3 className="text-base font-bold text-white font-mono uppercase">Sesión por Expirar</h3>
-            <p className="text-xs text-slate-300 leading-relaxed font-mono">
-              Por protocolo de seguridad hospitalaria, tu turno se cerrará en <strong className="text-cyan-300 text-sm">{countdown}s</strong> debido a inactividad en la estación.
-            </p>
-            <div className="flex gap-2 pt-2">
-              <button
-                onClick={logout}
-                className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold"
-              >
-                Cerrar Turno
-              </button>
-              <button
-                onClick={() => { setShowTimeoutModal(false); resetIdleTimer(); }}
-                className="flex-1 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:opacity-90 text-white rounded-xl text-xs font-bold shadow-lg"
-              >
-                Seguir Conectado
-              </button>
+        {/* Modal de Advertencia por Inactividad */}
+        {showTimeoutModal && (
+          <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+            <div className="ultra-glass border-2 border-amber-500 p-6 rounded-2xl max-w-sm w-full text-center space-y-4 shadow-[0_0_30px_rgba(245,158,11,0.3)]">
+              <div className="inline-flex p-3 rounded-full bg-amber-500/20 text-amber-300 animate-bounce">
+                <Clock className="w-8 h-8" />
+              </div>
+              <h3 className="text-base font-bold text-white font-mono uppercase">Sesión por Expirar</h3>
+              <p className="text-xs text-slate-300 leading-relaxed font-mono">
+                Por protocolo de seguridad hospitalaria, tu turno se cerrará en <strong className="text-cyan-300 text-sm">{countdown}s</strong> debido a inactividad.
+              </p>
+              <div className="flex gap-2 pt-2">
+                <button
+                  onClick={logout}
+                  className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold"
+                >
+                  Cerrar Turno
+                </button>
+                <button
+                  onClick={() => { setShowTimeoutModal(false); resetIdleTimer(); }}
+                  className="flex-1 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:opacity-90 text-white rounded-xl text-xs font-bold shadow-lg"
+                >
+                  Seguir Conectado
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Modal de Personal & Aprobaciones */}
-      <UserManagementModal 
-        isOpen={showAdminModal} 
-        onClose={() => setShowAdminModal(false)} 
-      />
+        {/* Modal de Personal & Aprobaciones */}
+        <UserManagementModal 
+          isOpen={showAdminModal} 
+          onClose={() => setShowAdminModal(false)} 
+        />
+      </div>
     </div>
   );
 }
