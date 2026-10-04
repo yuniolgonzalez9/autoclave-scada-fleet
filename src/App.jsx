@@ -44,19 +44,19 @@ function ScadaAppContent() {
   }, []);
 
   // =========================================================================
-  // GESTIÓN DE TERMINAL DEDICADA (KIOSK) & PERSISTENCIA SIN BLOQUEOS
+  // GESTIÓN DE TERMINAL DEDICADA (KIOSK) & PERSISTENCIA DE RUTA
   // =========================================================================
   const [kioskMac, setKioskMac] = useState(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const directKiosk = urlParams.get('kiosk');
-    if (directKiosk) return directKiosk.toUpperCase();
+    if (directKiosk) return directKiosk.toUpperCase().replace(/[:\-]/g, '');
     return localStorage.getItem('scada_kiosk_mac') || null;
   });
 
   const [selectedMac, setSelectedMac] = useState(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const directMac = urlParams.get('mac') || urlParams.get('kiosk');
-    if (directMac) return directMac.toUpperCase();
+    if (directMac) return directMac.toUpperCase().replace(/[:\-]/g, '');
     if (localStorage.getItem('scada_kiosk_mac')) return localStorage.getItem('scada_kiosk_mac');
     return localStorage.getItem('scada_selected_mac') || null;
   });
@@ -88,19 +88,18 @@ function ScadaAppContent() {
     localStorage.setItem('scada_health_filter', healthFilter);
   }, [healthFilter]);
 
-  // Función universal para Desanclar o Anclar cualquier equipo sin quedarse atrapado
+  // Alternar el anclaje de terminal sin quedarse atrapado
   const toggleKioskMode = (macToKiosk = null) => {
     if (kioskMac) {
       localStorage.removeItem('scada_kiosk_mac');
       setKioskMac(null);
-      // Limpiar parámetro de URL si existía
       if (window.location.search.includes('mac=') || window.location.search.includes('kiosk=')) {
         window.history.replaceState({}, '', window.location.pathname);
       }
       setActiveSection('flota');
       setSelectedMac(null);
     } else {
-      const target = (macToKiosk || selectedMac || '').toUpperCase();
+      const target = (macToKiosk || selectedMac || '').toUpperCase().replace(/[:\-]/g, '');
       if (target) {
         localStorage.setItem('scada_kiosk_mac', target);
         setKioskMac(target);
@@ -110,7 +109,7 @@ function ScadaAppContent() {
     }
   };
 
-  // Menú Contextual
+  // Menú Contextual (Clic Secundario)
   const [contextMenu, setContextMenu] = useState({ isOpen: false, position: { x: 0, y: 0 }, device: null });
   const [assignModal, setAssignModal] = useState({ isOpen: false, device: null });
   const [qrModalDevice, setQrModalDevice] = useState(null);
@@ -128,14 +127,14 @@ function ScadaAppContent() {
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [sirenActive, setSirenActive] = useState(false);
 
-  // Heartbeat cada 1 segundo
+  // Reloj de latido rápido a 1000ms
   const [currentTime, setCurrentTime] = useState(Date.now());
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  // Inactividad
+  // Temporizador de Inactividad (15 min)
   const [showTimeoutModal, setShowTimeoutModal] = useState(false);
   const [countdown, setCountdown] = useState(60);
   const idleTimerRef = useRef(null);
@@ -143,6 +142,7 @@ function ScadaAppContent() {
 
   const isAdmin = profile?.rol?.toLowerCase().includes('admin') || profile?.rol?.toLowerCase().includes('director');
   const canEditHardware = isAdmin || profile?.rol?.toLowerCase().includes('tecnico');
+  const isOperator = profile?.rol?.toLowerCase().includes('operador') || profile?.rol?.toLowerCase().includes('cliente');
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', currentTheme);
@@ -249,7 +249,7 @@ function ScadaAppContent() {
 
   const getDeviceHealthData = (dev) => {
     if (!dev || !dev.lastSeen || dev.lastSeen === 0) {
-      return { status: 'OFFLINE', text: 'DESCONECTADO', timeAgo: 'Sin señal', colorClass: 'bg-rose-500/15 text-rose-400 border-rose-500/30' };
+      return { status: 'OFFLINE', text: 'DESCONECTADO', timeAgo: 'Sin señal en vivo', colorClass: 'bg-rose-500/15 text-rose-400 border-rose-500/30' };
     }
     const diffSegundos = Math.floor((currentTime - dev.lastSeen) / 1000);
 
@@ -265,15 +265,32 @@ function ScadaAppContent() {
 
   const macKeys = Object.keys(fleet);
 
-  // Filtrado de equipos por usuario
+  // =========================================================================
+  // AISLAMIENTO HOSPITALARIO MULTI-TENANT (FILTRADO POR CLIENTE / OPERADOR)
+  // =========================================================================
   const allowedDevices = macKeys
     .map((k) => fleet[k])
     .filter((dev) => {
+      // 1. El Superadministrador / Director Biomédico ve absolutamente toda la flota
       if (isAdmin) return true;
-      if (dev?.meta?.usuario_asignado) {
-        return dev.meta.usuario_asignado.toLowerCase() === (profile?.usuario || user?.email || '').toLowerCase();
+
+      const userHospital = (profile?.departamento || '').toLowerCase().trim();
+      const devHospital = (dev?.meta?.cliente || '').toLowerCase().trim();
+      const devAssignedUser = (dev?.meta?.usuario_asignado || '').toLowerCase().trim();
+      const currentUsername = (profile?.usuario || user?.email || '').toLowerCase().trim();
+
+      // 2. Si el autoclave tiene un operador exclusivo asignado, solo ese operador puede verlo
+      if (devAssignedUser) {
+        return devAssignedUser === currentUsername;
       }
-      return true;
+
+      // 3. Si el usuario pertenece a una clínica/hospital, solo ve equipos de ese hospital
+      if (userHospital && devHospital) {
+        return devHospital.includes(userHospital) || userHospital.includes(devHospital);
+      }
+
+      // 4. Si el equipo no está asignado o pertenece a otra clínica, queda protegido
+      return false;
     });
 
   let countOn = 0, countLat = 0, countOff = 0;
@@ -292,10 +309,7 @@ function ScadaAppContent() {
     return true;
   });
 
-  // =========================================================================
-  // SEGURO ANTI-PANTALLA EN BLANCO: Si el equipo aún no llega por MQTT,
-  // se genera su consola de inmediato en estado de sincronización.
-  // =========================================================================
+  // SEGURO ANTI-PANTALLA EN BLANCO: Garantiza que la consola del equipo siempre cargue
   const inspectingMacToUse = kioskMac || selectedMac;
   const inspectingDevice = inspectingMacToUse 
     ? (fleet[inspectingMacToUse] || {
@@ -446,8 +460,8 @@ function ScadaAppContent() {
           </div>
         </header>
 
-        {/* Dock Superior en PC (Oculto solo si está anclado) */}
-        {user && !kioskMac && (
+        {/* Dock Superior en PC (Oculto en modo terminal anclada o para operadores) */}
+        {user && !kioskMac && !isOperator && (
           <div className="hidden md:flex items-center gap-2 px-6 py-2 bg-slate-950/60 border-b border-cyan-500/10">
             <button
               onClick={() => { setActiveSection('flota'); setSelectedMac(null); }}
@@ -484,7 +498,7 @@ function ScadaAppContent() {
           </div>
         )}
 
-        {/* Contenido Principal */}
+        {/* Contenido Principal con Transición Fluida */}
         {!user ? (
           <main className="flex-1 flex items-center justify-center p-4 android-view-transition">
             <LoginModal />
