@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import SterilizationChart from '../graphics/SterilizationChart';
 import SurgicalQRLabel from '../labels/SurgicalQRLabel';
+import SessionDetailModal from '../reports/SessionDetailModal';
 import { supabase } from '../../services/supabase';
 import { 
   Activity, 
@@ -17,27 +18,73 @@ import {
   QrCode, 
   CheckCircle2, 
   AlertTriangle,
-  FileSpreadsheet,
-  Printer,
   ChevronLeft,
-  Flame,
-  Volume2,
-  VolumeX,
-  ShieldCheck,
+  Pin,
+  PinOff,
+  Eye,
   Send,
-  Sparkles
+  Sparkles,
+  Lock
 } from 'lucide-react';
 
-export default function DeviceDetailView({ device, onBack, sendCommand, operatorName }) {
-  const [activeTab, setActiveTab] = useState('sensores'); // 'sensores' | 'nvs' | 'ficha' | 'historial' | 'mantenimiento'
+export default function DeviceDetailView({ 
+  device, 
+  onBack, 
+  sendCommand, 
+  operatorName, 
+  userRole,
+  isKioskMode,
+  onToggleKiosk
+}) {
+  const [activeTab, setActiveTab] = useState(() => localStorage.getItem('scada_detail_tab') || 'sensores');
   const [showQRModal, setShowQRModal] = useState(false);
   const [nvsMsg, setNvsMsg] = useState('');
+
+  // Estados de Auditoría individual por MAC
+  const [macLogs, setMacLogs] = useState([]);
+  const [loadingLogs, setLoadingLogs] = useState(false);
+  const [inspectedSession, setInspectedSession] = useState(null);
+
+  // Permisos: Solo Técnicos o Superadmin pueden tocar hardware
+  const canEditHardware = userRole && !userRole.toLowerCase().includes('operador') && !userRole.toLowerCase().includes('cliente');
 
   const d = device?.datos || {};
   const cfg = d?.cfg || {};
 
+  useEffect(() => {
+    localStorage.setItem('scada_detail_tab', activeTab);
+  }, [activeTab]);
+
+  // Cargar registros exclusivos de este autoclave desde Supabase
+  const fetchMacLogs = async () => {
+    if (!device?.mac) return;
+    setLoadingLogs(true);
+    try {
+      const { data, error } = await supabase
+        .from('reportes_autoclaves')
+        .select('*')
+        .eq('mac', device.mac)
+        .order('created_at', { ascending: false })
+        .limit(30);
+
+      if (!error && data) {
+        setMacLogs(data);
+      }
+    } catch (e) {
+      console.warn('Error cargando historial de MAC:', e);
+    } finally {
+      setLoadingLogs(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'historial') {
+      fetchMacLogs();
+    }
+  }, [activeTab, device?.mac]);
+
   // =========================================================================
-  // PARÁMETROS NVS DEL HARDWARE Y DEL CICLO (LEÍDOS DESDE EL ESP32)
+  // PARÁMETROS NVS DEL HARDWARE Y DEL CICLO
   // =========================================================================
   const [spTemp, setSpTemp] = useState(cfg.sp_temp ?? 121.0);
   const [tCiclo, setTCiclo] = useState(cfg.t_ciclo ?? 2);
@@ -49,7 +96,6 @@ export default function DeviceDetailView({ device, onBack, sendCommand, operator
   const [limMant, setLimMant] = useState(cfg.lim_mant ?? 200);
   const [sndOk, setSndOk] = useState(cfg.snd_ok ?? true);
 
-  // Sincronizar automáticamente cuando el ESP32 envíe nueva configuración
   useEffect(() => {
     if (cfg.sp_temp !== undefined) setSpTemp(cfg.sp_temp);
     if (cfg.t_ciclo !== undefined) setTCiclo(cfg.t_ciclo);
@@ -62,7 +108,6 @@ export default function DeviceDetailView({ device, onBack, sendCommand, operator
     if (cfg.snd_ok !== undefined) setSndOk(cfg.snd_ok);
   }, [cfg.sp_temp, cfg.t_ciclo, cfg.hab, cfg.mot_ok, cfg.vacio_ok, cfg.purga_ok, cfg.p_max, cfg.lim_mant, cfg.snd_ok]);
 
-  // Presets Rápidos Clínicos
   const applyPreset134 = () => {
     setSpTemp(134.0);
     setTCiclo(4);
@@ -79,9 +124,9 @@ export default function DeviceDetailView({ device, onBack, sendCommand, operator
     setHab(true);
   };
 
-  // Transmitir Ajustes a la Memoria Flash NVS del ESP32 por MQTT
   const handleTransmitNVS = (e) => {
     e.preventDefault();
+    if (!canEditHardware) return alert('Permiso denegado: tu rol es de solo operación clínica.');
     const payload = {
       sp_temp: Number(spTemp),
       t_ciclo: Number(tCiclo),
@@ -95,24 +140,23 @@ export default function DeviceDetailView({ device, onBack, sendCommand, operator
     };
 
     sendCommand(device.mac, payload);
-    setNvsMsg(`⚡ Parámetros transmitidos hacia ${device.mac}. Guardando en memoria Flash NVS...`);
+    setNvsMsg(`⚡ Parámetros transmitidos a ${device.mac}. Guardando en memoria Flash NVS...`);
     setTimeout(() => setNvsMsg(''), 4000);
   };
 
-  // Cambio optimista de switch individual en tiempo real
   const handleToggleSwitch = (key, currentVal, setter) => {
+    if (!canEditHardware) return alert('Permiso denegado: rol de operador no autorizado.');
     const nextVal = !currentVal;
     setter(nextVal);
     sendCommand(device.mac, { [key]: nextVal });
   };
 
-  // Estados para Ficha de Cliente
+  // Estados de Ficha y Mantenimiento
   const [alias, setAlias] = useState(device?.meta?.alias || `AUTOCLAVE [${device.mac.slice(-4)}]`);
   const [cliente, setCliente] = useState(device?.meta?.cliente || 'Hospital Metropolitano');
   const [modelo, setModelo] = useState(device?.meta?.modelo || 'Quirúrgico Clase B');
   const [guardandoFicha, setGuardandoFicha] = useState(false);
 
-  // Estados para Programar Mantenimiento
   const [maintFecha, setMaintFecha] = useState('');
   const [maintTipo, setMaintTipo] = useState('PREVENTIVO_GENERAL');
   const [maintTecnico, setMaintTecnico] = useState('');
@@ -135,7 +179,7 @@ export default function DeviceDetailView({ device, onBack, sendCommand, operator
       };
       await supabase.from('asignaciones_equipos').upsert(metaPayload, { onConflict: 'mac' });
       sendCommand(device.mac, { cmd: 'SET_META', ...metaPayload });
-      alert('Ficha vinculada y guardada en Supabase Cloud');
+      alert('Ficha vinculada en Supabase Cloud');
     } catch (err) {
       alert('Error guardando ficha: ' + err.message);
     } finally {
@@ -154,38 +198,62 @@ export default function DeviceDetailView({ device, onBack, sendCommand, operator
         ciclos_al_momento: ciclos,
         created_at: new Date().toISOString()
       }]);
-      alert('Mantenimiento programado con éxito en Supabase Cloud');
+      alert('Mantenimiento agendado en Supabase Cloud');
       setMaintNotas('');
     } catch (err) {
-      alert('Error agendando mantenimiento: ' + err.message);
+      alert('Error: ' + err.message);
     }
   };
 
   return (
     <div className="flex flex-col gap-4 w-full">
-      {/* Cabecera */}
+      {/* Cabecera con Botón de Anclaje de Terminal Dedicada */}
       <div className="ultra-glass p-4 rounded-2xl border border-cyan-500/30 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
         <div className="flex items-center gap-3">
-          <button
-            onClick={onBack}
-            className="p-2 rounded-xl bg-slate-900 border border-slate-700 text-slate-300 hover:text-white flex items-center gap-1 text-xs font-mono"
-          >
-            <ChevronLeft className="w-4 h-4" />
-            <span>Volver a Flota</span>
-          </button>
+          {!isKioskMode && (
+            <button
+              onClick={onBack}
+              className="p-2 rounded-xl bg-slate-900 border border-slate-700 text-slate-300 hover:text-white flex items-center gap-1 text-xs font-mono"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              <span>Flota</span>
+            </button>
+          )}
+
           <div>
-            <h2 className="text-lg font-bold text-white tracking-wide">{alias.toUpperCase()}</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-bold text-white tracking-wide">{alias.toUpperCase()}</h2>
+              {isKioskMode && (
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-cyan-500/20 text-cyan-300 border border-cyan-400 flex items-center gap-1">
+                  <Lock className="w-3 h-3" /> TERMINAL ANCLADA
+                </span>
+              )}
+            </div>
             <p className="text-xs text-cyan-300 font-mono">MAC: {device.mac} • {cliente} • Setpoint: {spTemp}°C</p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Botón de Anclaje / Modo Kiosco */}
+          <button
+            onClick={onToggleKiosk}
+            className={`px-3 py-1.5 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 border transition-all ${
+              isKioskMode 
+                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30' 
+                : 'bg-slate-900 border-slate-700 text-slate-300 hover:border-cyan-400'
+            }`}
+            title={isKioskMode ? 'Desanclar vista' : 'Anclar como pantalla única dedicada'}
+          >
+            {isKioskMode ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5" />}
+            <span className="hidden sm:inline">{isKioskMode ? 'Desanclar Terminal' : 'Anclar Equipo Fijo'}</span>
+          </button>
+
           <button
             onClick={() => setShowQRModal(true)}
-            className="px-3.5 py-2 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-lg"
+            className="px-3.5 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-lg"
           >
             <QrCode className="w-4 h-4" />
-            <span>Generar Etiqueta QR</span>
+            <span>Etiqueta QR</span>
           </button>
         </div>
       </div>
@@ -202,35 +270,53 @@ export default function DeviceDetailView({ device, onBack, sendCommand, operator
           <span>Sensores & Gráfica</span>
         </button>
 
+        {/* Solo Técnicos o Superadmin ven NVS */}
+        {canEditHardware ? (
+          <button
+            onClick={() => setActiveTab('nvs')}
+            className={`py-2 px-3.5 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 whitespace-nowrap transition-all ${
+              activeTab === 'nvs' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white bg-slate-900/60'
+            }`}
+          >
+            <Sliders className="w-4 h-4" />
+            <span>Ajustes NVS & Parámetros</span>
+          </button>
+        ) : null}
+
+        {/* Pestaña de Historial de Ciclos por MAC */}
         <button
-          onClick={() => setActiveTab('nvs')}
+          onClick={() => setActiveTab('historial')}
           className={`py-2 px-3.5 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 whitespace-nowrap transition-all ${
-            activeTab === 'nvs' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white bg-slate-900/60'
+            activeTab === 'historial' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white bg-slate-900/60'
           }`}
         >
-          <Sliders className="w-4 h-4" />
-          <span>Ajustes NVS & Parámetros</span>
+          <History className="w-4 h-4" />
+          <span>Historial de Ciclos</span>
         </button>
 
-        <button
-          onClick={() => setActiveTab('ficha')}
-          className={`py-2 px-3.5 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 whitespace-nowrap transition-all ${
-            activeTab === 'ficha' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white bg-slate-900/60'
-          }`}
-        >
-          <Building2 className="w-4 h-4" />
-          <span>Ficha de Cliente</span>
-        </button>
+        {canEditHardware && (
+          <>
+            <button
+              onClick={() => setActiveTab('ficha')}
+              className={`py-2 px-3.5 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 whitespace-nowrap transition-all ${
+                activeTab === 'ficha' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white bg-slate-900/60'
+              }`}
+            >
+              <Building2 className="w-4 h-4" />
+              <span>Ficha Cliente</span>
+            </button>
 
-        <button
-          onClick={() => setActiveTab('mantenimiento')}
-          className={`py-2 px-3.5 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 whitespace-nowrap transition-all ${
-            activeTab === 'mantenimiento' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white bg-slate-900/60'
-          }`}
-        >
-          <Wrench className="w-4 h-4" />
-          <span>Mantenimiento & Odómetro</span>
-        </button>
+            <button
+              onClick={() => setActiveTab('mantenimiento')}
+              className={`py-2 px-3.5 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 whitespace-nowrap transition-all ${
+                activeTab === 'mantenimiento' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white bg-slate-900/60'
+              }`}
+            >
+              <Wrench className="w-4 h-4" />
+              <span>Mantenimiento</span>
+            </button>
+          </>
+        )}
       </div>
 
       {/* PESTAÑA 1: SENSORES, F0 Y GRÁFICA */}
@@ -290,8 +376,86 @@ export default function DeviceDetailView({ device, onBack, sendCommand, operator
         </div>
       )}
 
-      {/* PESTAÑA 2: GESTOR COMPLETO NVS & PARÁMETROS DEL CICLO */}
-      {activeTab === 'nvs' && (
+      {/* PESTAÑA: HISTORIAL DE CICLOS DE ESTE AUTOCLAVE */}
+      {activeTab === 'historial' && (
+        <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 space-y-4">
+          <div className="flex justify-between items-center border-b border-cyan-500/20 pb-3">
+            <div>
+              <h3 className="text-sm font-bold text-white font-mono flex items-center gap-2">
+                <History className="w-4 h-4 text-cyan-400" />
+                Historial de Ciclos en la Nube [{device.mac}]
+              </h3>
+              <p className="text-[11px] text-slate-400 font-mono mt-0.5">
+                Paquetes clínicos auditados de este equipo en Supabase Cloud
+              </p>
+            </div>
+            <button
+              onClick={fetchMacLogs}
+              className="px-2.5 py-1 bg-slate-900 border border-slate-700 text-xs text-slate-300 rounded-lg font-mono hover:text-white"
+            >
+              🔄 Recargar
+            </button>
+          </div>
+
+          <div className="rounded-xl border border-slate-800 overflow-x-auto">
+            <table className="w-full text-left text-xs font-mono">
+              <thead className="bg-slate-900/90 text-cyan-400 border-b border-slate-800">
+                <tr>
+                  <th className="p-3">FECHA / HORA</th>
+                  <th className="p-3">ID SESIÓN</th>
+                  <th className="p-3">PROGRAMA</th>
+                  <th className="p-3">MÁXIMOS (T°/P)</th>
+                  <th className="p-3">DIAGNÓSTICO</th>
+                  <th className="p-3 text-center">VER</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/60 text-slate-300">
+                {loadingLogs ? (
+                  <tr>
+                    <td colSpan="6" className="p-6 text-center text-slate-400">Consultando registros del equipo en Supabase...</td>
+                  </tr>
+                ) : macLogs.length === 0 ? (
+                  <tr>
+                    <td colSpan="6" className="p-6 text-center text-slate-400">Sin ciclos registrados aún para este autoclave.</td>
+                  </tr>
+                ) : (
+                  macLogs.map((log) => (
+                    <tr 
+                      key={log.session_id} 
+                      onClick={() => setInspectedSession(log)}
+                      className="hover:bg-slate-800/40 cursor-pointer transition-colors"
+                    >
+                      <td className="p-3 font-bold text-white">{new Date(log.created_at || log.fecha).toLocaleString()}</td>
+                      <td className="p-3 text-cyan-400">{log.session_id}</td>
+                      <td className="p-3">{log.programa || '134°C'}</td>
+                      <td className="p-3">T: {parseFloat(log.temp_max||0).toFixed(1)}°C | P: {parseFloat(log.pres_max||0).toFixed(2)}b</td>
+                      <td className="p-3">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          (log.diagnostico_principal || '').includes('CONFORME') ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/10 text-rose-400 border border-rose-500/30'
+                        }`}>
+                          {log.diagnostico_principal || 'CONFORME'}
+                        </span>
+                      </td>
+                      <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          onClick={() => setInspectedSession(log)}
+                          className="p-1.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded-lg text-xs"
+                          title="Abrir visor y certificado PDF"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* PESTAÑA: NVS (SOLO TÉCNICOS/ADMIN) */}
+      {activeTab === 'nvs' && canEditHardware && (
         <form onSubmit={handleTransmitNVS} className="ultra-glass p-5 md:p-6 rounded-2xl border border-cyan-500/30 space-y-5">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-cyan-500/20 pb-3">
             <div>
@@ -300,17 +464,15 @@ export default function DeviceDetailView({ device, onBack, sendCommand, operator
                 Ajustes de Parámetros del Ciclo & Memoria NVS Flash
               </h3>
               <p className="text-[11px] text-slate-400 font-mono mt-0.5">
-                Configuración del protocolo térmico para {cliente || 'el cliente'}. Se guarda directamente en el microcontrolador.
+                Configuración del protocolo térmico para {cliente}.
               </p>
             </div>
 
-            {/* Presets Rápidos Clínicos */}
             <div className="flex gap-1.5">
               <button
                 type="button"
                 onClick={applyPreset134}
                 className="px-2.5 py-1.5 bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 text-cyan-300 rounded-lg text-xs font-mono font-bold flex items-center gap-1"
-                title="Cargar 134°C para Instrumental Quirúrgico"
               >
                 <Sparkles className="w-3.5 h-3.5" />
                 <span>134°C Instrumental</span>
@@ -319,7 +481,6 @@ export default function DeviceDetailView({ device, onBack, sendCommand, operator
                 type="button"
                 onClick={applyPreset121}
                 className="px-2.5 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 rounded-lg text-xs font-mono font-bold flex items-center gap-1"
-                title="Cargar 121°C para Gomas y Plásticos"
               >
                 <Sparkles className="w-3.5 h-3.5" />
                 <span>121°C Plásticos</span>
@@ -334,14 +495,12 @@ export default function DeviceDetailView({ device, onBack, sendCommand, operator
             </div>
           )}
 
-          {/* CATEGORÍA 1: PARÁMETROS DEL CICLO */}
           <div>
             <span className="text-xs font-mono text-cyan-400 font-bold block mb-3 uppercase tracking-wider">
               1. Parámetros del Ciclo de Esterilización
             </span>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              {/* Setpoint Temp */}
               <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 space-y-1.5">
                 <label className="text-[11px] font-mono text-slate-300 block flex justify-between">
                   <span>Temperatura Setpoint (°C)</span>
@@ -356,10 +515,8 @@ export default function DeviceDetailView({ device, onBack, sendCommand, operator
                   onChange={(e) => setSpTemp(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-cyan-400"
                 />
-                <span className="text-[9px] text-slate-500 font-mono block">Rango clínico: 105.0°C a 138.0°C</span>
               </div>
 
-              {/* Tiempo de Meseta */}
               <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 space-y-1.5">
                 <label className="text-[11px] font-mono text-slate-300 block flex justify-between">
                   <span>Tiempo Meseta (minutos)</span>
@@ -374,14 +531,12 @@ export default function DeviceDetailView({ device, onBack, sendCommand, operator
                   onChange={(e) => setTCiclo(e.target.value)}
                   className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-cyan-400"
                 />
-                <span className="text-[9px] text-slate-500 font-mono block">Duración de esterilización en meseta</span>
               </div>
 
-              {/* Sistema Habilitado */}
               <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 flex justify-between items-center">
                 <div>
                   <span className="text-xs font-mono font-bold text-white block">Sistema Habilitado</span>
-                  <span className="text-[10px] text-slate-400 font-mono">Seguro maestro del ciclo</span>
+                  <span className="text-[10px] text-slate-400 font-mono">Seguro maestro</span>
                 </div>
                 <button
                   type="button"
@@ -396,14 +551,12 @@ export default function DeviceDetailView({ device, onBack, sendCommand, operator
             </div>
           </div>
 
-          {/* CATEGORÍA 2: ACTUADORES FÍSICOS & SALIDAS (GPIO 2, 4 y 5) */}
           <div>
             <span className="text-xs font-mono text-cyan-400 font-bold block mb-3 uppercase tracking-wider">
               2. Actuadores Físicos & Relevadores
             </span>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              {/* Motor / LED (GPIO 2) */}
               <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 flex justify-between items-center">
                 <div>
                   <span className="text-xs font-mono font-bold text-white block">Motor Agitador (GPIO 2)</span>
@@ -412,7 +565,7 @@ export default function DeviceDetailView({ device, onBack, sendCommand, operator
                 <button
                   type="button"
                   onClick={() => handleToggleSwitch('mot_ok', motOk, setMotOk)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border ${
                     motOk ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' : 'bg-slate-800 text-slate-400'
                   }`}
                 >
@@ -420,7 +573,6 @@ export default function DeviceDetailView({ device, onBack, sendCommand, operator
                 </button>
               </div>
 
-              {/* Bomba Vacío (GPIO 5) */}
               <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 flex justify-between items-center">
                 <div>
                   <span className="text-xs font-mono font-bold text-white block">Bomba Vacío (GPIO 5)</span>
@@ -429,7 +581,7 @@ export default function DeviceDetailView({ device, onBack, sendCommand, operator
                 <button
                   type="button"
                   onClick={() => handleToggleSwitch('vacio_ok', vacioOk, setVacioOk)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border ${
                     vacioOk ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/40' : 'bg-slate-800 text-slate-400'
                   }`}
                 >
@@ -437,16 +589,15 @@ export default function DeviceDetailView({ device, onBack, sendCommand, operator
                 </button>
               </div>
 
-              {/* Purga Automática */}
               <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 flex justify-between items-center">
                 <div>
                   <span className="text-xs font-mono font-bold text-white block">Purga Automática</span>
-                  <span className="text-[10px] text-slate-400 font-mono">Evacuación periódica</span>
+                  <span className="text-[10px] text-slate-400 font-mono">Válvula de alivio</span>
                 </div>
                 <button
                   type="button"
                   onClick={() => handleToggleSwitch('purga_ok', purgaOk, setPurgaOk)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border ${
                     purgaOk ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' : 'bg-slate-800 text-slate-400'
                   }`}
                 >
@@ -456,17 +607,15 @@ export default function DeviceDetailView({ device, onBack, sendCommand, operator
             </div>
           </div>
 
-          {/* CATEGORÍA 3: SEGURIDAD, MANTENIMIENTO Y ALARMAS */}
           <div>
             <span className="text-xs font-mono text-cyan-400 font-bold block mb-3 uppercase tracking-wider">
               3. Seguridad, Odómetro y Alarmas
             </span>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              {/* Límite Sobrepresión */}
               <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 space-y-1.5">
                 <label className="text-[11px] font-mono text-slate-300 block flex justify-between">
-                  <span>Límite Sobrepresión (Bar)</span>
+                  <span>Límite Sobrepresión</span>
                   <span className="text-pink-400 font-bold">{pMax} bar</span>
                 </label>
                 <input
@@ -476,15 +625,13 @@ export default function DeviceDetailView({ device, onBack, sendCommand, operator
                   max="3.00"
                   value={pMax}
                   onChange={(e) => setPMax(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-cyan-400"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white font-mono focus:outline-none"
                 />
-                <span className="text-[9px] text-slate-500 font-mono block">Disparo de alarma de escape</span>
               </div>
 
-              {/* Límite Mantenimiento */}
               <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 space-y-1.5">
                 <label className="text-[11px] font-mono text-slate-300 block flex justify-between">
-                  <span>Límite Odómetro (Ciclos)</span>
+                  <span>Límite Odómetro</span>
                   <span className="text-amber-400 font-bold">{limMant}</span>
                 </label>
                 <input
@@ -494,21 +641,19 @@ export default function DeviceDetailView({ device, onBack, sendCommand, operator
                   max="1000"
                   value={limMant}
                   onChange={(e) => setLimMant(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-cyan-400"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white font-mono focus:outline-none"
                 />
-                <span className="text-[9px] text-slate-500 font-mono block">Alerta de servicio preventivo</span>
               </div>
 
-              {/* Alarma Sonora */}
               <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 flex justify-between items-center">
                 <div>
-                  <span className="text-xs font-mono font-bold text-white block">Zumbador / Sirena Física</span>
-                  <span className="text-[10px] text-slate-400 font-mono">Alarma sonora en placa</span>
+                  <span className="text-xs font-mono font-bold text-white block">Zumbador Físico</span>
+                  <span className="text-[10px] text-slate-400 font-mono">Alarma sonora</span>
                 </div>
                 <button
                   type="button"
                   onClick={() => handleToggleSwitch('snd_ok', sndOk, setSndOk)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
+                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border ${
                     sndOk ? 'bg-amber-500/20 text-amber-400 border-amber-500/40' : 'bg-slate-800 text-slate-400'
                   }`}
                 >
@@ -518,10 +663,9 @@ export default function DeviceDetailView({ device, onBack, sendCommand, operator
             </div>
           </div>
 
-          {/* Botón de Transmisión NVS */}
           <button
             type="submit"
-            className="w-full py-3 bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:opacity-90 text-white font-bold rounded-xl text-xs font-mono flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/25 pt-3"
+            className="w-full py-3 bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:opacity-90 text-white font-bold rounded-xl text-xs font-mono flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/25"
           >
             <Send className="w-4 h-4" />
             <span>TRANSMITIR Y GRABAR PARÁMETROS EN NVS FLASH DEL ESP32</span>
@@ -529,8 +673,8 @@ export default function DeviceDetailView({ device, onBack, sendCommand, operator
         </form>
       )}
 
-      {/* PESTAÑA 3: FICHA DE CLIENTE */}
-      {activeTab === 'ficha' && (
+      {/* PESTAÑA: FICHA */}
+      {activeTab === 'ficha' && canEditHardware && (
         <form onSubmit={handleGuardarFicha} className="ultra-glass p-6 rounded-2xl border border-cyan-500/30 space-y-4 max-w-xl">
           <h3 className="text-sm font-bold text-white font-mono flex items-center gap-2">
             <Building2 className="w-4 h-4 text-cyan-400" />
@@ -580,8 +724,8 @@ export default function DeviceDetailView({ device, onBack, sendCommand, operator
         </form>
       )}
 
-      {/* PESTAÑA 4: MANTENIMIENTOS & ODÓMETRO */}
-      {activeTab === 'mantenimiento' && (
+      {/* PESTAÑA: MANTENIMIENTO */}
+      {activeTab === 'mantenimiento' && canEditHardware && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 space-y-3">
             <h3 className="text-sm font-bold text-white font-mono flex items-center gap-2">
@@ -608,7 +752,7 @@ export default function DeviceDetailView({ device, onBack, sendCommand, operator
                 onClick={() => sendCommand(device.mac, { cmd: 'RESET_ODOMETRO' })}
                 className="w-full mt-2 py-2 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 rounded-lg text-xs font-bold"
               >
-                🔄 Reiniciar Odómetro a Cero (RESET_ODOMETRO)
+                🔄 Reiniciar Odómetro a Cero
               </button>
             </div>
           </div>
@@ -653,6 +797,13 @@ export default function DeviceDetailView({ device, onBack, sendCommand, operator
         onClose={() => setShowQRModal(false)}
         deviceData={device}
         operatorName={operatorName}
+      />
+
+      {/* Visor Forense de la Sesión Seleccionada */}
+      <SessionDetailModal
+        isOpen={inspectedSession !== null}
+        onClose={() => setInspectedSession(null)}
+        session={inspectedSession}
       />
     </div>
   );
