@@ -7,9 +7,8 @@ export function useMqttFleet() {
   const [fleet, setFleet] = useState({});
   const [mqttConnected, setMqttConnected] = useState(false);
   const sendCommandRef = useRef(null);
-  const pendingLocksRef = useRef({}); // Candado optimista para evitar rebote de switches
 
-  // 1. Pre-cargar equipos registrados en Supabase al abrir la plataforma
+  // 1. Cargar la flota registrada en Supabase
   useEffect(() => {
     const loadRegisteredDevices = async () => {
       try {
@@ -25,10 +24,13 @@ export function useMqttFleet() {
               if (devMac && !initialFleet[devMac]) {
                 initialFleet[devMac] = {
                   mac: devMac,
-                  lastSeen: 0, // Inicia en 0: OFFLINE garantizado hasta que el ESP32 hable
+                  lastSeen: 0,
                   datos: {
                     temp_camara: 25.0,
                     presion: 0.0,
+                    motor: false,
+                    calentador: false,
+                    vacio: false,
                     fase: 'APAGADO',
                     seg_restantes: 0,
                     cfg: { ciclos: item.ciclos || 0, lim_mant: item.limite || 200 }
@@ -53,7 +55,7 @@ export function useMqttFleet() {
     loadRegisteredDevices();
   }, []);
 
-  // 2. Conexión WebSocket y procesamiento en caliente
+  // 2. Conexión WebSocket y actualización reactiva
   useEffect(() => {
     const { client, sendCommand } = connectMqttFleet(
       ({ mac, channel, payload, isRetained }) => {
@@ -76,22 +78,11 @@ export function useMqttFleet() {
             lastSeen: isFreshStream ? Date.now() : (currentDev.lastSeen || 0)
           };
 
-          // PROCESAR TELEMETRÍA EN VIVO
+          // TELEMETRÍA EN VIVO (ACTUALIZACIÓN DIRECTA DEL HARDWARE)
           if (channel === 'telemetria') {
-            const currentLocks = pendingLocksRef.current[cleanMac] || {};
-            const ahora = Date.now();
-
-            // Respetar candados optimistas en configuración
-            if (payload.cfg && currentDev.datos?.cfg) {
-              Object.keys(currentLocks).forEach((k) => {
-                if (ahora < currentLocks[k]) {
-                  payload.cfg[k] = currentDev.datos.cfg[k];
-                }
-              });
-            }
-
             updated.datos = payload;
 
+            // Integración matemática de F0
             const currentTemp = payload.temp_camara || 25.0;
             if (payload.fase === 'ESTERILIZANDO') {
               updated.f0Score = accumulateF0(currentDev.f0Score || 0, currentTemp, 2);
@@ -110,7 +101,6 @@ export function useMqttFleet() {
             updated.history = newHistory;
           }
 
-          // PROCESAR ESQUEMA DINÁMICO
           if (channel === 'esquema') {
             updated.esquema = payload;
             if (payload.modelo && updated.meta.modelo === 'Clase B') {
@@ -118,18 +108,16 @@ export function useMqttFleet() {
             }
           }
 
-          // PROCESAR METADATOS
           if (channel === 'meta') {
             updated.meta = Object.assign(updated.meta || {}, payload);
           }
 
-          // PROCESAR Y GUARDAR PAQUETE FINAL DE CICLO EN SUPABASE
+          // GUARDAR REPORTE DE FIN DE CICLO EN SUPABASE
           if (channel === 'reporte_paquete') {
             const ciclosAcum = payload.ciclos_acumulados || payload.ciclos || 0;
             if (!updated.datos.cfg) updated.datos.cfg = {};
             updated.datos.cfg.ciclos = ciclosAcum;
 
-            // Inserción asíncrona segura en Supabase
             supabase.from('reportes_autoclaves').upsert({
               session_id: payload.session_id || `SES-${cleanMac}-${Date.now()}`,
               mac: cleanMac,
@@ -150,9 +138,7 @@ export function useMqttFleet() {
               fase_final: payload.fase_final || 'FINALIZADO',
               ciclos_detalle: payload.ciclos_detalle || payload.fases_desglose || [],
               eventos: payload.eventos || []
-            }, { onConflict: 'session_id' }).then(({ error }) => {
-              if (error) console.warn('[SUPABASE] Fallo guardado de paquete:', error);
-            });
+            }, { onConflict: 'session_id' }).catch((e) => console.warn(e));
           }
 
           return { ...prevFleet, [cleanMac]: updated };
@@ -168,18 +154,54 @@ export function useMqttFleet() {
     };
   }, []);
 
+  // Función de comando con actualización optimista y persistencia en Supabase
   const sendDeviceCommand = (mac, cmd) => {
     const cleanMac = mac.toUpperCase();
     if (sendCommandRef.current) {
-      // Registrar candado optimista de 2.5 segundos para evitar rebotes
-      pendingLocksRef.current[cleanMac] = pendingLocksRef.current[cleanMac] || {};
-      Object.keys(cmd).forEach((k) => {
-        if (k !== 'cmd') {
-          pendingLocksRef.current[cleanMac][k] = Date.now() + 2500;
+      // 1. Enviar por MQTT Retenido a HiveMQ
+      sendCommandRef.current(cleanMac, cmd);
+
+      // 2. Reflejo optimista inmediato en la interfaz
+      setFleet((prev) => {
+        const dev = prev[cleanMac];
+        if (!dev) return prev;
+        const newDatos = { ...dev.datos };
+        const newCfg = { ...(dev.datos?.cfg || {}) };
+
+        if (cmd.mot_ok !== undefined) {
+          newDatos.motor = cmd.mot_ok;
+          newCfg.mot_ok = cmd.mot_ok;
         }
+        if (cmd.vacio_ok !== undefined) {
+          newDatos.vacio = cmd.vacio_ok;
+          newCfg.vacio_ok = cmd.vacio_ok;
+        }
+        if (cmd.hab !== undefined) {
+          newCfg.hab = cmd.hab;
+        }
+        if (cmd.sp_temp !== undefined) {
+          newCfg.sp_temp = cmd.sp_temp;
+        }
+        if (cmd.t_ciclo !== undefined) {
+          newCfg.t_ciclo = cmd.t_ciclo;
+        }
+
+        return {
+          ...prev,
+          [cleanMac]: {
+            ...dev,
+            datos: { ...newDatos, cfg: newCfg }
+          }
+        };
       });
 
-      sendCommandRef.current(cleanMac, cmd);
+      // 3. Si no es un comando de disparo, guardar la configuración deseada en Supabase
+      if (!cmd.cmd) {
+        supabase.from('asignaciones_equipos').update({
+          config_deseada: cmd,
+          updated_at: new Date().toISOString()
+        }).eq('mac', cleanMac).catch(() => {});
+      }
     }
   };
 
