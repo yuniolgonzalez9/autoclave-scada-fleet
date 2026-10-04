@@ -27,7 +27,7 @@ import {
   Send,
   Sparkles,
   Lock,
-  Radio
+  Power
 } from 'lucide-react';
 
 export default function DeviceDetailView({ 
@@ -43,7 +43,7 @@ export default function DeviceDetailView({
   const [showQRModal, setShowQRModal] = useState(false);
   const [nvsMsg, setNvsMsg] = useState('');
 
-  // Auditoría individual por MAC
+  // Auditoría por MAC
   const [macLogs, setMacLogs] = useState([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [inspectedSession, setInspectedSession] = useState(null);
@@ -54,13 +54,9 @@ export default function DeviceDetailView({
   const d = device?.datos || {};
   const cfg = d?.cfg || {};
 
-  // =========================================================================
-  // ENLACE DIRECTO AL HARDWARE REAL EN TIEMPO REAL (SIN LAG NI F5)
-  // =========================================================================
-  // Si el hardware reporta datos.motor, se toma la verdad física del pin GPIO 2
+  // Estado real de hardware
   const isMotorActive = (d.motor !== undefined) ? Boolean(d.motor) : Boolean(cfg.mot_ok);
   const isVacioActive = (d.vacio !== undefined) ? Boolean(d.vacio) : Boolean(cfg.vacio_ok);
-  const isCalentadorActive = (d.calentador !== undefined) ? Boolean(d.calentador) : false;
   const isHabActive = cfg.hab !== false;
 
   useEffect(() => {
@@ -80,7 +76,7 @@ export default function DeviceDetailView({
 
       if (!error && data) setMacLogs(data);
     } catch (e) {
-      console.warn('Error cargando historial de MAC:', e);
+      console.warn(e);
     } finally {
       setLoadingLogs(false);
     }
@@ -92,7 +88,7 @@ export default function DeviceDetailView({
     }
   }, [activeTab, device?.mac]);
 
-  // Parámetros numéricos configurables
+  // Parámetros NVS
   const [spTemp, setSpTemp] = useState(cfg.sp_temp ?? 121.0);
   const [tCiclo, setTCiclo] = useState(cfg.t_ciclo ?? 2);
   const [purgaOk, setPurgaOk] = useState(cfg.purga_ok ?? true);
@@ -127,7 +123,7 @@ export default function DeviceDetailView({
 
   const handleTransmitNVS = (e) => {
     e.preventDefault();
-    if (!canEditHardware) return alert('Permiso denegado: tu rol es de solo operación clínica.');
+    if (!canEditHardware) return alert('Permiso denegado: solo personal técnico autorizado.');
     const payload = {
       sp_temp: Number(spTemp),
       t_ciclo: Number(tCiclo),
@@ -141,15 +137,12 @@ export default function DeviceDetailView({
     };
 
     sendCommand(device.mac, payload);
-    setNvsMsg(`⚡ Parámetros enviados a ${device.mac} y almacenados en la nube para el hardware.`);
+    setNvsMsg(`⚡ Parámetros enviados a ${device.mac} y almacenados en la nube.`);
     setTimeout(() => setNvsMsg(''), 4000);
   };
 
-  // Alternar interruptor de hardware con sincronización a la nube
   const handleToggleHardware = (key, currentState) => {
-    if (!canEditHardware) return alert('Permiso denegado: rol de operador no autorizado.');
     const nextState = !currentState;
-    // Envía la orden con retain: true a HiveMQ y Supabase
     sendCommand(device.mac, { [key]: nextState });
   };
 
@@ -180,9 +173,9 @@ export default function DeviceDetailView({
       };
       await supabase.from('asignaciones_equipos').upsert(metaPayload, { onConflict: 'mac' });
       sendCommand(device.mac, { cmd: 'SET_META', ...metaPayload });
-      alert('Ficha vinculada en Supabase Cloud');
+      alert('Ficha guardada en Supabase Cloud');
     } catch (err) {
-      alert('Error guardando ficha: ' + err.message);
+      alert('Error: ' + err.message);
     } finally {
       setGuardandoFicha(false);
     }
@@ -282,7 +275,7 @@ export default function DeviceDetailView({
           }`}
         >
           <Activity className="w-4 h-4" />
-          <span>Sensores & Gráfica</span>
+          <span>Sensores & Salidas</span>
         </button>
 
         {canEditHardware ? (
@@ -334,7 +327,7 @@ export default function DeviceDetailView({
         )}
       </div>
 
-      {/* PESTAÑA 1: SENSORES, F0 Y ESTADO DE ACTUADORES */}
+      {/* PESTAÑA 1: SENSORES, F0 Y CONTROLES OPERATIVOS DE SALIDAS (ACCESIBLES PARA TODOS) */}
       {activeTab === 'sensores' && (
         <div className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -371,7 +364,51 @@ export default function DeviceDetailView({
             </ClinicalTooltip>
           </div>
 
-          {/* Botones de Control */}
+          {/* ACCIONAMIENTO DE SALIDAS (VÁLVULAS Y MOTOR EN VIVO) */}
+          <div className="ultra-glass p-4 rounded-xl border border-slate-800 space-y-2">
+            <span className="text-xs font-mono font-bold text-cyan-300 block mb-2 uppercase">
+              Accionamiento de Salidas & Actuadores (Hardware en Vivo):
+            </span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div className="p-3 bg-slate-900/80 rounded-xl border border-slate-800 flex justify-between items-center">
+                <div>
+                  <span className="text-xs font-mono font-bold text-white block">Motor Agitador (GPIO 2)</span>
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    Estado: {isMotorActive ? '🟢 Encendido' : '⚪ Apagado'}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleToggleHardware('mot_ok', isMotorActive)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
+                    isMotorActive ? 'bg-emerald-500/25 text-emerald-300 border-emerald-400 shadow-[0_0_10px_rgba(0,255,136,0.3)]' : 'bg-slate-800 text-slate-400 border-slate-700'
+                  }`}
+                >
+                  {isMotorActive ? 'ENCENDIDO' : 'APAGADO'}
+                </button>
+              </div>
+
+              <div className="p-3 bg-slate-900/80 rounded-xl border border-slate-800 flex justify-between items-center">
+                <div>
+                  <span className="text-xs font-mono font-bold text-white block">Bomba Vacío (GPIO 5)</span>
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    Estado: {isVacioActive ? '🟢 Activa' : '⚪ Inactiva'}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleToggleHardware('vacio_ok', isVacioActive)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
+                    isVacioActive ? 'bg-cyan-500/25 text-cyan-300 border-cyan-400 shadow-[0_0_10px_rgba(0,243,255,0.3)]' : 'bg-slate-800 text-slate-400 border-slate-700'
+                  }`}
+                >
+                  {isVacioActive ? 'ACTIVA' : 'INACTIVA'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Botones de Marcha / Paro */}
           <div className="flex gap-2.5">
             <ClinicalTooltip title={CLINICAL_HELP.btn_iniciar_ciclo.title} description={CLINICAL_HELP.btn_iniciar_ciclo.desc} badge={CLINICAL_HELP.btn_iniciar_ciclo.badge}>
               <button
@@ -408,237 +445,6 @@ export default function DeviceDetailView({
             <SterilizationChart telemetryData={device.history || []} />
           </div>
         </div>
-      )}
-
-      {/* PESTAÑA: NVS (ENLACE DIRECTO A LOS PINES FÍSICOS) */}
-      {activeTab === 'nvs' && canEditHardware && (
-        <form onSubmit={handleTransmitNVS} className="ultra-glass p-5 md:p-6 rounded-2xl border border-cyan-500/30 space-y-5">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-cyan-500/20 pb-3">
-            <div>
-              <h3 className="text-sm font-bold text-white font-mono flex items-center gap-2">
-                <Sliders className="w-4 h-4 text-cyan-400" />
-                Ajustes NVS Flash & Estado Sincronizado en la Nube
-              </h3>
-              <p className="text-[11px] text-slate-400 font-mono mt-0.5">
-                Las órdenes cambiadas se almacenan como sombra en HiveMQ y Supabase. Si el equipo está apagado, las ejecuta al reconectar.
-              </p>
-            </div>
-
-            <div className="flex gap-1.5">
-              <button
-                type="button"
-                onClick={applyPreset134}
-                className="px-2.5 py-1.5 bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 text-cyan-300 rounded-lg text-xs font-mono font-bold flex items-center gap-1"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>134°C Instrumental</span>
-              </button>
-              <button
-                type="button"
-                onClick={applyPreset121}
-                className="px-2.5 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 rounded-lg text-xs font-mono font-bold flex items-center gap-1"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>121°C Plásticos</span>
-              </button>
-            </div>
-          </div>
-
-          {nvsMsg && (
-            <div className="p-3 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-mono rounded-xl flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 shrink-0" />
-              <span>{nvsMsg}</span>
-            </div>
-          )}
-
-          <div>
-            <span className="text-xs font-mono text-cyan-400 font-bold block mb-3 uppercase tracking-wider">
-              1. Parámetros del Ciclo de Esterilización
-            </span>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 space-y-1.5">
-                <label className="text-[11px] font-mono text-slate-300 block flex justify-between">
-                  <span>Temperatura Setpoint (°C)</span>
-                  <span className="text-cyan-400 font-bold">{spTemp}°C</span>
-                </label>
-                <input
-                  type="number"
-                  step="0.5"
-                  min="105.0"
-                  max="138.0"
-                  value={spTemp}
-                  onChange={(e) => setSpTemp(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-cyan-400"
-                />
-              </div>
-
-              <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 space-y-1.5">
-                <label className="text-[11px] font-mono text-slate-300 block flex justify-between">
-                  <span>Tiempo Meseta (minutos)</span>
-                  <span className="text-cyan-400 font-bold">{tCiclo} min</span>
-                </label>
-                <input
-                  type="number"
-                  step="1"
-                  min="1"
-                  max="60"
-                  value={tCiclo}
-                  onChange={(e) => setTCiclo(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-cyan-400"
-                />
-              </div>
-
-              {/* Interruptor Sistema Habilitado */}
-              <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 flex justify-between items-center">
-                <div>
-                  <span className="text-xs font-mono font-bold text-white block">Sistema Habilitado</span>
-                  <span className="text-[10px] text-slate-400 font-mono">Seguro maestro</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => handleToggleHardware('hab', isHabActive)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
-                    isHabActive ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' : 'bg-rose-500/20 text-rose-400 border-rose-500/40'
-                  }`}
-                >
-                  {isHabActive ? 'HABILITADO' : 'BLOQUEADO'}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <span className="text-xs font-mono text-cyan-400 font-bold block mb-3 uppercase tracking-wider">
-              2. Actuadores Físicos (GPIOs Sincronizados en Caliente)
-            </span>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              {/* Interruptor Motor / GPIO 2: VINCULADO DIRECTO AL PIN REAL */}
-              <ClinicalTooltip title={CLINICAL_HELP.actuador_motor.title} description={CLINICAL_HELP.actuador_motor.desc} badge="GPIO 2">
-                <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 flex justify-between items-center w-full cursor-help">
-                  <div>
-                    <span className="text-xs font-mono font-bold text-white block">Motor Agitador (GPIO 2)</span>
-                    <span className="text-[10px] text-slate-400 font-mono">
-                      Estado: {isMotorActive ? '🟢 Encendido Físico' : '⚪ Apagado'}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleToggleHardware('mot_ok', isMotorActive)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
-                      isMotorActive ? 'bg-emerald-500/25 text-emerald-300 border-emerald-400 shadow-[0_0_10px_rgba(0,255,136,0.3)]' : 'bg-slate-800 text-slate-400 border-slate-700'
-                    }`}
-                  >
-                    {isMotorActive ? 'ENCENDIDO' : 'APAGADO'}
-                  </button>
-                </div>
-              </ClinicalTooltip>
-
-              {/* Interruptor Bomba Vacío / GPIO 5 */}
-              <ClinicalTooltip title={CLINICAL_HELP.actuador_vacio.title} description={CLINICAL_HELP.actuador_vacio.desc} badge="GPIO 5">
-                <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 flex justify-between items-center w-full cursor-help">
-                  <div>
-                    <span className="text-xs font-mono font-bold text-white block">Bomba Vacío (GPIO 5)</span>
-                    <span className="text-[10px] text-slate-400 font-mono">
-                      Estado: {isVacioActive ? '🟢 Activa Física' : '⚪ Inactiva'}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleToggleHardware('vacio_ok', isVacioActive)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
-                      isVacioActive ? 'bg-cyan-500/25 text-cyan-300 border-cyan-400 shadow-[0_0_10px_rgba(0,243,255,0.3)]' : 'bg-slate-800 text-slate-400 border-slate-700'
-                    }`}
-                  >
-                    {isVacioActive ? 'ACTIVA' : 'INACTIVA'}
-                  </button>
-                </div>
-              </ClinicalTooltip>
-
-              {/* Interruptor Purga Automática */}
-              <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 flex justify-between items-center">
-                <div>
-                  <span className="text-xs font-mono font-bold text-white block">Purga Automática</span>
-                  <span className="text-[10px] text-slate-400 font-mono">Válvula de alivio</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => handleToggleHardware('purga_ok', purgaOk)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
-                    purgaOk ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' : 'bg-slate-800 text-slate-400 border-slate-700'
-                  }`}
-                >
-                  {purgaOk ? 'ACTIVA' : 'MANUAL'}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <span className="text-xs font-mono text-cyan-400 font-bold block mb-3 uppercase tracking-wider">
-              3. Seguridad, Odómetro y Alarmas
-            </span>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 space-y-1.5">
-                <label className="text-[11px] font-mono text-slate-300 block flex justify-between">
-                  <span>Límite Sobrepresión</span>
-                  <span className="text-pink-400 font-bold">{pMax} bar</span>
-                </label>
-                <input
-                  type="number"
-                  step="0.05"
-                  min="2.00"
-                  max="3.00"
-                  value={pMax}
-                  onChange={(e) => setPMax(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white font-mono focus:outline-none"
-                />
-              </div>
-
-              <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 space-y-1.5">
-                <label className="text-[11px] font-mono text-slate-300 block flex justify-between">
-                  <span>Límite Odómetro</span>
-                  <span className="text-amber-400 font-bold">{limMant}</span>
-                </label>
-                <input
-                  type="number"
-                  step="10"
-                  min="50"
-                  max="1000"
-                  value={limMant}
-                  onChange={(e) => setLimMant(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white font-mono focus:outline-none"
-                />
-              </div>
-
-              <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 flex justify-between items-center">
-                <div>
-                  <span className="text-xs font-mono font-bold text-white block">Zumbador Físico</span>
-                  <span className="text-[10px] text-slate-400 font-mono">Alarma sonora</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => handleToggleHardware('snd_ok', sndOk)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border ${
-                    sndOk ? 'bg-amber-500/20 text-amber-400 border-amber-500/40' : 'bg-slate-800 text-slate-400'
-                  }`}
-                >
-                  {sndOk ? 'AUDIBLE' : 'SILENCIOSO'}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            className="w-full py-3 bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:opacity-90 text-white font-bold rounded-xl text-xs font-mono flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/25"
-          >
-            <Send className="w-4 h-4" />
-            <span>TRANSMITIR Y GRABAR PARÁMETROS EN NVS FLASH DEL ESP32</span>
-          </button>
-        </form>
       )}
 
       {/* PESTAÑA: HISTORIAL */}
@@ -719,7 +525,170 @@ export default function DeviceDetailView({
         </div>
       )}
 
-      {/* PESTAÑA: FICHA */}
+      {/* PESTAÑA: NVS (CALIBRACIÓN TÉCNICA PROTEGIDA) */}
+      {activeTab === 'nvs' && canEditHardware && (
+        <form onSubmit={handleTransmitNVS} className="ultra-glass p-5 md:p-6 rounded-2xl border border-cyan-500/30 space-y-5">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-cyan-500/20 pb-3">
+            <div>
+              <h3 className="text-sm font-bold text-white font-mono flex items-center gap-2">
+                <Sliders className="w-4 h-4 text-cyan-400" />
+                Ajustes NVS Flash & Parámetros Críticos (Solo Técnicos)
+              </h3>
+              <p className="text-[11px] text-slate-400 font-mono mt-0.5">
+                Calibración de setpoints térmicos para {cliente}.
+              </p>
+            </div>
+
+            <div className="flex gap-1.5">
+              <button
+                type="button"
+                onClick={applyPreset134}
+                className="px-2.5 py-1.5 bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 text-cyan-300 rounded-lg text-xs font-mono font-bold flex items-center gap-1"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>134°C Instrumental</span>
+              </button>
+              <button
+                type="button"
+                onClick={applyPreset121}
+                className="px-2.5 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 rounded-lg text-xs font-mono font-bold flex items-center gap-1"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>121°C Plásticos</span>
+              </button>
+            </div>
+          </div>
+
+          {nvsMsg && (
+            <div className="p-3 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-mono rounded-xl flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span>{nvsMsg}</span>
+            </div>
+          )}
+
+          <div>
+            <span className="text-xs font-mono text-cyan-400 font-bold block mb-3 uppercase tracking-wider">
+              1. Parámetros del Ciclo de Esterilización
+            </span>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 space-y-1.5">
+                <label className="text-[11px] font-mono text-slate-300 block flex justify-between">
+                  <span>Temperatura Setpoint (°C)</span>
+                  <span className="text-cyan-400 font-bold">{spTemp}°C</span>
+                </label>
+                <input
+                  type="number"
+                  step="0.5"
+                  min="105.0"
+                  max="138.0"
+                  value={spTemp}
+                  onChange={(e) => setSpTemp(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white font-mono focus:outline-none"
+                />
+              </div>
+
+              <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 space-y-1.5">
+                <label className="text-[11px] font-mono text-slate-300 block flex justify-between">
+                  <span>Tiempo Meseta (minutos)</span>
+                  <span className="text-cyan-400 font-bold">{tCiclo} min</span>
+                </label>
+                <input
+                  type="number"
+                  step="1"
+                  min="1"
+                  max="60"
+                  value={tCiclo}
+                  onChange={(e) => setTCiclo(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white font-mono focus:outline-none"
+                />
+              </div>
+
+              <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 flex justify-between items-center">
+                <div>
+                  <span className="text-xs font-mono font-bold text-white block">Sistema Habilitado</span>
+                  <span className="text-[10px] text-slate-400 font-mono">Seguro maestro</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleToggleHardware('hab', isHabActive)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
+                    isHabActive ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' : 'bg-rose-500/20 text-rose-400 border-rose-500/40'
+                  }`}
+                >
+                  {isHabActive ? 'HABILITADO' : 'BLOQUEADO'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <span className="text-xs font-mono text-cyan-400 font-bold block mb-3 uppercase tracking-wider">
+              2. Límites de Seguridad & Odómetro
+            </span>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 space-y-1.5">
+                <label className="text-[11px] font-mono text-slate-300 block flex justify-between">
+                  <span>Límite Sobrepresión</span>
+                  <span className="text-pink-400 font-bold">{pMax} bar</span>
+                </label>
+                <input
+                  type="number"
+                  step="0.05"
+                  min="2.00"
+                  max="3.00"
+                  value={pMax}
+                  onChange={(e) => setPMax(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white font-mono focus:outline-none"
+                />
+              </div>
+
+              <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 space-y-1.5">
+                <label className="text-[11px] font-mono text-slate-300 block flex justify-between">
+                  <span>Límite Odómetro</span>
+                  <span className="text-amber-400 font-bold">{limMant}</span>
+                </label>
+                <input
+                  type="number"
+                  step="10"
+                  min="50"
+                  max="1000"
+                  value={limMant}
+                  onChange={(e) => setLimMant(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white font-mono focus:outline-none"
+                />
+              </div>
+
+              <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 flex justify-between items-center">
+                <div>
+                  <span className="text-xs font-mono font-bold text-white block">Zumbador Físico</span>
+                  <span className="text-[10px] text-slate-400 font-mono">Alarma sonora</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleToggleHardware('snd_ok', sndOk)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border ${
+                    sndOk ? 'bg-amber-500/20 text-amber-400 border-amber-500/40' : 'bg-slate-800 text-slate-400'
+                  }`}
+                >
+                  {sndOk ? 'AUDIBLE' : 'SILENCIOSO'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            className="w-full py-3 bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:opacity-90 text-white font-bold rounded-xl text-xs font-mono flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/25"
+          >
+            <Send className="w-4 h-4" />
+            <span>TRANSMITIR Y GRABAR PARÁMETROS EN NVS FLASH DEL ESP32</span>
+          </button>
+        </form>
+      )}
+
+      {/* PESTAÑA: FICHA CLIENTE */}
       {activeTab === 'ficha' && canEditHardware && (
         <form onSubmit={handleGuardarFicha} className="ultra-glass p-6 rounded-2xl border border-cyan-500/30 space-y-4 max-w-xl">
           <h3 className="text-sm font-bold text-white font-mono flex items-center gap-2">
@@ -853,7 +822,7 @@ export default function DeviceDetailView({
         operatorName={operatorName}
       />
 
-      {/* Visor Forense de la Sesión Seleccionada */}
+      {/* Visor Forense de la Sesión */}
       <SessionDetailModal
         isOpen={inspectedSession !== null}
         onClose={() => setInspectedSession(null)}
