@@ -8,7 +8,8 @@ import {
   Waves, 
   Palette, 
   Image as ImageIcon,
-  X
+  X,
+  Unlock
 } from 'lucide-react';
 
 export const WALLPAPERS_LIST = [
@@ -28,7 +29,9 @@ export default function GearMenu({
   setBg, 
   opacity, 
   setOpacity, 
-  onLogout 
+  onLogout,
+  kioskMac,
+  onUnlockKiosk
 }) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -46,7 +49,6 @@ export default function GearMenu({
 
   return (
     <div>
-      {/* Botón de Engranaje con tamaño adecuado que nunca se desborda */}
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
@@ -63,7 +65,6 @@ export default function GearMenu({
             onClick={() => setIsOpen(false)}
           />
 
-          {/* Menú fijo centrado en móvil y anclado a la derecha en PC */}
           <div className="fixed right-2 sm:right-6 top-14 sm:top-16 w-[calc(100vw-16px)] sm:w-88 max-w-sm ultra-glass p-4 sm:p-5 rounded-2xl shadow-2xl border-2 border-cyan-500/50 z-[99999] backdrop-blur-2xl space-y-3 sm:space-y-4 max-h-[85vh] overflow-y-auto">
             
             <div className="flex justify-between items-center border-b border-cyan-500/20 pb-2.5">
@@ -79,6 +80,26 @@ export default function GearMenu({
                 <X className="w-4 h-4" />
               </button>
             </div>
+
+            {/* BOTÓN DE RESCATE SI ESTÁ EN MODO KIOSCO */}
+            {kioskMac && (
+              <div className="p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/40 space-y-1.5">
+                <p className="text-[11px] font-mono font-bold text-amber-300 flex items-center gap-1.5">
+                  <Unlock className="w-3.5 h-3.5" />
+                  Terminal Anclada a [{kioskMac.slice(-4)}]
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onUnlockKiosk();
+                    setIsOpen(false);
+                  }}
+                  className="w-full py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg text-xs font-mono font-bold transition-all shadow-md"
+                >
+                  Desanclar y Ver Toda la Flota
+                </button>
+              </div>
+            )}
 
             {/* 1. Selector de Temas */}
             <div>
