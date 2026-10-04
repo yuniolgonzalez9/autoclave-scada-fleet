@@ -13,11 +13,12 @@ export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
     password: MQTT_PASS,
     clean: true,
     keepalive: 60,
-    reconnectPeriod: 3000
+    reconnectPeriod: 2500
   });
 
   client.on('connect', () => {
     if (onStatusChange) onStatusChange(true);
+    // Suscripción universal a todos los canales de la flota
     client.subscribe('autoclave_med_2026/+/telemetria');
     client.subscribe('autoclave_med_2026/+/esquema');
     client.subscribe('autoclave_med_2026/+/meta');
@@ -34,7 +35,6 @@ export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
     if (onStatusChange) onStatusChange(false);
   });
 
-  // Detecta packet.retain para saber si es en vivo o histórico
   client.on('message', (topic, message, packet) => {
     try {
       const payload = JSON.parse(message.toString());
@@ -51,10 +51,20 @@ export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
     }
   });
 
-  const sendCommand = (mac, cmdObject) => {
+  // Envío inteligente de comandos:
+  // Si es un cambio de estado (motor, vacío, setpoint, hab), se retiene en HiveMQ (retain: true)
+  // para que si el equipo está offline, lo reciba en cuanto encienda.
+  const sendCommand = (mac, cmdObject, forceRetain = null) => {
     if (client && client.connected) {
-      const topic = `autoclave_med_2026/${mac}/config`;
-      client.publish(topic, JSON.stringify(cmdObject), { qos: 1 });
+      const cleanMac = mac.toUpperCase();
+      const topic = `autoclave_med_2026/${cleanMac}/config`;
+
+      // Los comandos instantáneos únicos (como disparar ciclo o paro) NO se retienen
+      // Las configuraciones de estado (mot_ok, vacio_ok, sp_temp, etc.) SÍ se retienen
+      const isInstantTrigger = Boolean(cmdObject.cmd);
+      const shouldRetain = forceRetain !== null ? forceRetain : !isInstantTrigger;
+
+      client.publish(topic, JSON.stringify(cmdObject), { qos: 1, retain: shouldRetain });
     }
   };
 
