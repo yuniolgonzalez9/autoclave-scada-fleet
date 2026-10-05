@@ -1,14 +1,44 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
-export default function ClinicalTooltip({ title, description, badge, shortcut, children, position = 'top' }) {
+export default function ClinicalTooltip({ 
+  title, 
+  description, 
+  badge, 
+  shortcut, 
+  extraDetails, 
+  children, 
+  position = 'bottom' 
+}) {
   const [visible, setVisible] = useState(false);
+  const [coords, setCoords] = useState({ top: 0, left: 0 });
+  const triggerRef = useRef(null);
   const timerRef = useRef(null);
 
-  // Computadora: Hover con retardo elegante
+  // Calcula la posición exacta en pantalla sin importar scroll ni contenedores padres
+  const updateCoords = () => {
+    if (!triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    const tooltipWidth = 280;
+
+    let top = rect.bottom + 8;
+    if (position === 'top') {
+      top = rect.top - 8;
+    }
+
+    // Centrar con respecto al botón y evitar que se salga por los bordes de la pantalla
+    let left = rect.left + rect.width / 2 - tooltipWidth / 2;
+    left = Math.max(12, Math.min(left, window.innerWidth - tooltipWidth - 12));
+
+    setCoords({ top, left });
+  };
+
   const handleMouseEnter = () => {
+    updateCoords();
     timerRef.current = setTimeout(() => {
+      updateCoords();
       setVisible(true);
-    }, 280);
+    }, 200);
   };
 
   const handleMouseLeave = () => {
@@ -16,36 +46,38 @@ export default function ClinicalTooltip({ title, description, badge, shortcut, c
     setVisible(false);
   };
 
-  // Celular: Long press de 400ms
   const handleTouchStart = () => {
+    updateCoords();
     timerRef.current = setTimeout(() => {
+      updateCoords();
       setVisible(true);
-    }, 400);
+    }, 350);
   };
 
   const handleTouchEnd = () => {
     clearTimeout(timerRef.current);
     if (visible) {
-      setTimeout(() => setVisible(false), 2200);
+      setTimeout(() => setVisible(false), 3000);
     }
   };
 
-  const getPositionClass = () => {
-    switch (position) {
-      case 'bottom':
-        return 'top-[calc(100%+8px)] left-1/2 -translate-x-1/2';
-      case 'left':
-        return 'right-[calc(100%+8px)] top-1/2 -translate-y-1/2';
-      case 'right':
-        return 'left-[calc(100%+8px)] top-1/2 -translate-y-1/2';
-      default: // top
-        return 'bottom-[calc(100%+8px)] left-1/2 -translate-x-1/2';
+  // Mantener posición firme si el usuario hace scroll
+  useEffect(() => {
+    if (visible) {
+      const handleReposition = () => updateCoords();
+      window.addEventListener('scroll', handleReposition, true);
+      window.addEventListener('resize', handleReposition);
+      return () => {
+        window.removeEventListener('scroll', handleReposition, true);
+        window.removeEventListener('resize', handleReposition);
+      };
     }
-  };
+  }, [visible]);
 
   return (
     <div 
-      className="relative inline-flex items-center"
+      ref={triggerRef}
+      className="inline-flex items-center cursor-help"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       onTouchStart={handleTouchStart}
@@ -53,32 +85,42 @@ export default function ClinicalTooltip({ title, description, badge, shortcut, c
     >
       {children}
 
-      {visible && (
+      {/* Renderizado en la raíz del documento: NUNCA queda por debajo de nada */}
+      {visible && typeof document !== 'undefined' && createPortal(
         <div 
-          className={`absolute z-[999999] pointer-events-none w-64 p-3 rounded-xl ultra-glass border-2 border-cyan-400 shadow-[0_10px_35px_rgba(0,0,0,0.9)] backdrop-blur-2xl animate-in fade-in zoom-in-95 duration-150 ${getPositionClass()}`}
+          style={{ top: `${coords.top}px`, left: `${coords.left}px` }}
+          className="fixed z-[9999999] pointer-events-none w-[280px] p-3.5 rounded-2xl ultra-glass border-2 border-cyan-400 shadow-[0_20px_50px_rgba(0,0,0,0.95)] backdrop-blur-2xl animate-in fade-in zoom-in-95 duration-150 text-left select-none"
         >
-          <div className="flex items-center justify-between gap-1.5 border-b border-cyan-500/30 pb-1 mb-1.5">
-            <span className="font-mono text-[11px] font-bold text-white tracking-wide uppercase truncate">
+          <div className="flex items-center justify-between gap-1.5 border-b border-cyan-500/30 pb-1.5 mb-2">
+            <span className="font-mono text-xs font-bold text-white tracking-wide uppercase truncate">
               {title}
             </span>
             {badge && (
-              <span className="text-[8px] font-mono font-bold px-1.5 py-0.5 rounded bg-cyan-500/20 border border-cyan-400/40 text-cyan-300 shrink-0">
+              <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-cyan-500/20 border border-cyan-400/40 text-cyan-300 shrink-0">
                 {badge}
               </span>
             )}
           </div>
 
-          <p className="text-[10px] text-slate-200 font-sans leading-relaxed">
+          <p className="text-[11px] text-slate-200 font-sans leading-relaxed mb-1.5">
             {description}
           </p>
 
+          {/* Detalles enriquecidos (Ficha del usuario, IP, hospital) */}
+          {extraDetails && (
+            <div className="my-2 py-1.5 border-t border-b border-white/10 text-[10px] font-mono space-y-1">
+              {extraDetails}
+            </div>
+          )}
+
           {shortcut && (
-            <div className="mt-1.5 pt-1 border-t border-white/10 flex items-center justify-between text-[8px] font-mono text-slate-400">
-              <span>ACCIÓN:</span>
+            <div className="mt-1 pt-1 border-t border-white/10 flex items-center justify-between text-[9px] font-mono text-slate-400">
+              <span>ESTADO:</span>
               <span className="text-cyan-300 font-bold">{shortcut}</span>
             </div>
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
