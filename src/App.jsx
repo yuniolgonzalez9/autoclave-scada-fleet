@@ -346,6 +346,9 @@ function ScadaAppContent() {
   // Nombre y Rol del Usuario Activo
   const displayName = profile?.nombre || profile?.usuario || profile?.user || user?.email?.split('@')[0] || 'ADMIN';
   const displayRole = profile?.rol || 'SUPERADMIN';
+  const displayUser = profile?.usuario || profile?.user || user?.email?.split('@')[0] || 'admin';
+  const displayHospital = profile?.departamento || 'Central Hospitalaria';
+  const displayAuthMacs = profile?.equipos_autorizados ? profile.equipos_autorizados : 'Flota Completa (Root)';
 
   return (
     <div className="min-h-screen w-full relative pb-20 md:pb-6 flex flex-col overflow-x-hidden">
@@ -382,12 +385,10 @@ function ScadaAppContent() {
           </div>
         )}
 
-        {/* =========================================================================
-            HEADER INSTITUCIONAL: REDES EN VIVO (MQTT + SUPABASE) + USUARIO + AJUSTES
-           ========================================================================= */}
+        {/* Header Institucional */}
         <header className="speedtest-laser-header border-b border-cyan-500/20 bg-slate-950/80 backdrop-blur-md px-3 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between sticky top-0 z-40 w-full">
           
-          {/* Bloque Izquierdo: Marca */}
+          {/* Bloque Izquierdo */}
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <div className="p-1.5 sm:p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 shrink-0">
               <Activity className="w-5 h-5 sm:w-6 sm:h-6 animate-pulse" />
@@ -407,7 +408,7 @@ function ScadaAppContent() {
             </div>
           </div>
 
-          {/* Bloque Derecho: Estado de Redes + Usuario + Alertas + Engranaje */}
+          {/* Bloque Derecho: Redes + Ficha de Usuario con Tooltip + Ajustes */}
           <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0 ml-2">
             
             {kioskMac && (
@@ -421,7 +422,7 @@ function ScadaAppContent() {
               </button>
             )}
 
-            {/* 1. INDICADOR VISUAL MQTT (HIVEMQ 8884) */}
+            {/* 1. Indicador MQTT */}
             <ClinicalTooltip
               title="Broker MQTT (HiveMQ Cloud)"
               description="Transmisión bidireccional continua por WebSockets (puerto seguro 8884) para telemetría de actuadores."
@@ -439,7 +440,7 @@ function ScadaAppContent() {
               </span>
             </ClinicalTooltip>
 
-            {/* 2. INDICADOR VISUAL SUPABASE CLOUD (IDÉNTICO AL DE HIVEMQ) */}
+            {/* 2. Indicador Supabase Cloud */}
             <ClinicalTooltip
               title="Base de Datos Supabase Cloud"
               description="Canal central de persistencia Postgres en tiempo real para sesiones, trazabilidad y control de personal."
@@ -457,24 +458,52 @@ function ScadaAppContent() {
               </span>
             </ClinicalTooltip>
 
-            {/* 3. CHIP DEL USUARIO ACTIVO (SUPERIOR DERECHA) */}
+            {/* 3. CHIP DEL USUARIO CON TOOLTIP DE DETALLES CLÍNICOS AL POSAR EL CURSOR */}
             {user && (
-              <div className="flex items-center gap-2 bg-slate-900/90 px-2 sm:px-3 py-1 rounded-xl border border-slate-700/80 shadow-inner">
-                <div className="w-6 h-6 rounded-lg bg-cyan-500/20 border border-cyan-400/50 text-cyan-300 flex items-center justify-center font-bold text-xs uppercase shrink-0">
-                  {displayName[0]}
+              <ClinicalTooltip
+                title={displayName}
+                badge={displayRole}
+                description="Credencial biomédica activa en esta estación de trabajo."
+                extraDetails={
+                  <div className="space-y-1 text-slate-300 font-mono text-[10px]">
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">ID Usuario:</span>
+                      <span className="text-cyan-300 font-bold">{displayUser}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Rango / Rol:</span>
+                      <span className="text-emerald-400 font-bold">{displayRole}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Clínica / Depto:</span>
+                      <span className="text-white truncate max-w-[130px] font-sans">{displayHospital}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Equipos Asignados:</span>
+                      <span className="text-purple-300 truncate max-w-[130px]">{displayAuthMacs}</span>
+                    </div>
+                  </div>
+                }
+                shortcut="SESIÓN ACTIVA"
+                position="bottom"
+              >
+                <div className="flex items-center gap-2 bg-slate-900/90 px-2 sm:px-3 py-1 rounded-xl border border-slate-700/80 shadow-inner hover:border-cyan-400/50 transition-colors cursor-help">
+                  <div className="w-6 h-6 rounded-lg bg-cyan-500/20 border border-cyan-400/50 text-cyan-300 flex items-center justify-center font-bold text-xs uppercase shrink-0">
+                    {displayName[0]}
+                  </div>
+                  <div className="text-left hidden sm:block">
+                    <p className="text-xs font-bold text-white leading-tight truncate max-w-[110px]">
+                      {displayName}
+                    </p>
+                    <p className="text-[9px] text-cyan-400 font-mono leading-none font-semibold">
+                      {displayRole}
+                    </p>
+                  </div>
                 </div>
-                <div className="text-left hidden sm:block">
-                  <p className="text-xs font-bold text-white leading-tight truncate max-w-[110px]">
-                    {displayName}
-                  </p>
-                  <p className="text-[9px] text-cyan-400 font-mono leading-none font-semibold">
-                    {displayRole}
-                  </p>
-                </div>
-              </div>
+              </ClinicalTooltip>
             )}
 
-            {/* 4. Notificaciones para Administrador */}
+            {/* Notificaciones para Administrador */}
             {user && isAdmin && (
               <button
                 onClick={() => setShowAdminModal(true)}
@@ -490,7 +519,7 @@ function ScadaAppContent() {
               </button>
             )}
 
-            {/* 5. Engranaje de Ajustes */}
+            {/* Engranaje */}
             {user && (
               <div className="shrink-0">
                 <GearMenu
@@ -555,7 +584,7 @@ function ScadaAppContent() {
           </div>
         )}
 
-        {/* Contenido Principal */}
+        {/* Contenido Principal con Transición Fluida */}
         {!user ? (
           <main className="flex-1 flex items-center justify-center p-4 android-view-transition">
             <LoginModal />
@@ -752,7 +781,7 @@ function ScadaAppContent() {
           <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-slate-950/90 border-t border-cyan-500/30 backdrop-blur-xl flex items-center justify-around z-50 px-2">
             <button
               onClick={() => { setActiveSection('flota'); setSelectedMac(null); }}
-              className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-xs font-mono ${
+              className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-lg text-xs font-mono ${
                 activeSection === 'flota' || activeSection === 'detalle' ? 'text-cyan-400 font-bold' : 'text-slate-400'
               }`}
             >
@@ -762,7 +791,7 @@ function ScadaAppContent() {
 
             <button
               onClick={() => { setActiveSection('gestion'); setSelectedMac(null); }}
-              className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-xs font-mono ${
+              className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-lg text-xs font-mono ${
                 activeSection === 'gestion' ? 'text-cyan-400 font-bold' : 'text-slate-400'
               }`}
             >
@@ -772,7 +801,7 @@ function ScadaAppContent() {
 
             <button
               onClick={() => { setActiveSection('usuarios'); setSelectedMac(null); }}
-              className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-xs font-mono ${
+              className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-lg text-xs font-mono ${
                 activeSection === 'usuarios' ? 'text-cyan-400 font-bold' : 'text-slate-400'
               }`}
             >
@@ -782,7 +811,7 @@ function ScadaAppContent() {
 
             <button
               onClick={() => { setActiveSection('fota'); setSelectedMac(null); }}
-              className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-xs font-mono ${
+              className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-lg text-xs font-mono ${
                 activeSection === 'fota' ? 'text-cyan-400 font-bold' : 'text-slate-400'
               }`}
             >
@@ -792,7 +821,7 @@ function ScadaAppContent() {
 
             <button
               onClick={() => { setActiveSection('auditoria'); setSelectedMac(null); }}
-              className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-xs font-mono ${
+              className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-lg text-xs font-mono ${
                 activeSection === 'auditoria' ? 'text-cyan-400 font-bold' : 'text-slate-400'
               }`}
             >
