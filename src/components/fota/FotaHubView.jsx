@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import ClinicalTooltip from '../common/ClinicalTooltip';
+import { CLINICAL_HELP } from '../../utils/clinicalDictionary';
 import { 
   Rocket, 
   Radio, 
@@ -15,13 +17,12 @@ export default function FotaHubView({ fleet, sendCommand }) {
   const [fotaVersion, setFotaVersion] = useState('v3.6');
   const [fotaUrl, setFotaUrl] = useState('https://raw.githubusercontent.com/yuniolgonzalez9/autoclave-scada-fleet/main/firmwares/firmware.bin');
   const [selectedTargets, setSelectedTargets] = useState({});
-  const [filterOnline, setFilterOnline] = useState('ALL'); // 'ALL' | 'ONLINE' | 'OFFLINE'
+  const [filterOnline, setFilterOnline] = useState('ALL');
   const [transmitting, setTransmitting] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
 
   const macList = Object.keys(fleet);
 
-  // Filtrado de equipos
   const filteredMacs = macList.filter((mac) => {
     const isOnline = Date.now() - (fleet[mac]?.lastSeen || 0) < 18000;
     if (filterOnline === 'ONLINE') return isOnline;
@@ -68,7 +69,6 @@ export default function FotaHubView({ fleet, sendCommand }) {
 
   return (
     <div className="space-y-4">
-      {/* Cabecera */}
       <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 flex justify-between items-center">
         <div>
           <h2 className="text-lg font-bold text-white flex items-center gap-2">
@@ -88,7 +88,7 @@ export default function FotaHubView({ fleet, sendCommand }) {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Panel Izquierdo: Configuración del Paquete */}
+        {/* Panel Izquierdo */}
         <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 space-y-4">
           <h3 className="text-sm font-bold text-white font-mono">1. Parámetros del Binario</h3>
 
@@ -119,7 +119,7 @@ export default function FotaHubView({ fleet, sendCommand }) {
           </div>
         </div>
 
-        {/* Panel Derecho: Selección de Equipos Destino */}
+        {/* Panel Derecho */}
         <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 space-y-4 flex flex-col justify-between">
           <div>
             <div className="flex justify-between items-center mb-3">
@@ -173,7 +173,7 @@ export default function FotaHubView({ fleet, sendCommand }) {
                         />
                         <div>
                           <p className="text-xs font-bold text-white">{dev?.meta?.alias || `AUTOCLAVE [${mac.slice(-4)}]`}</p>
-                          <p className="text-[10px] font-mono text-slate-400">MAC: {mac} • FW Actual: {dev?.esquema?.fw || 'v3.5'}</p>
+                          <p className="text-[10px] font-mono text-slate-400">MAC: {mac} • FW: {dev?.esquema?.fw || 'v3.5'}</p>
                         </div>
                       </div>
 
@@ -189,23 +189,25 @@ export default function FotaHubView({ fleet, sendCommand }) {
             </div>
           </div>
 
-          <button
-            onClick={handleExecuteFota}
-            disabled={transmitting}
-            className="w-full py-3 bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:opacity-90 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/25 mt-3 disabled:opacity-50"
-          >
-            {transmitting ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Transmitiendo Paquete FOTA...</span>
-              </>
-            ) : (
-              <>
-                <Rocket className="w-4 h-4" />
-                <span>🚀 Transmitir Actualización FOTA</span>
-              </>
-            )}
-          </button>
+          <ClinicalTooltip title={CLINICAL_HELP.btn_fota_trigger.title} description={CLINICAL_HELP.btn_fota_trigger.desc} badge={CLINICAL_HELP.btn_fota_trigger.badge}>
+            <button
+              onClick={handleExecuteFota}
+              disabled={transmitting}
+              className="w-full py-3 bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:opacity-90 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/25 mt-3 disabled:opacity-50"
+            >
+              {transmitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Transmitiendo Paquete FOTA...</span>
+                </>
+              ) : (
+                <>
+                  <Rocket className="w-4 h-4" />
+                  <span>🚀 Transmitir Actualización FOTA</span>
+                </>
+              )}
+            </button>
+          </ClinicalTooltip>
         </div>
       </div>
     </div>
