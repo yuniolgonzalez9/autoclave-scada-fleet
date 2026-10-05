@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { supabase } from '../../services/supabase';
+import ClinicalTooltip from '../common/ClinicalTooltip';
+import { CLINICAL_HELP } from '../../utils/clinicalDictionary';
 import { 
   Building2, 
   Cpu, 
@@ -63,7 +65,6 @@ export default function FleetManagementView({ fleet, sendCommand, onSelectDevice
     }
   };
 
-  // Pruebas directas de hardware al ESP32 (GPIO 2 / Reset)
   const testToggleMotor = () => {
     if (!selectedMacForTest) return alert('Selecciona un autoclave de la tabla primero');
     const current = fleet[selectedMacForTest]?.datos?.motor || false;
@@ -77,7 +78,6 @@ export default function FleetManagementView({ fleet, sendCommand, onSelectDevice
 
   return (
     <div className="space-y-4">
-      {/* Cabecera */}
       <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 flex justify-between items-center">
         <div>
           <h2 className="text-lg font-bold text-white flex items-center gap-2">
@@ -98,7 +98,7 @@ export default function FleetManagementView({ fleet, sendCommand, onSelectDevice
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Formulario de Asignación */}
+        {/* Formulario */}
         <form onSubmit={handleSaveDevice} className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 space-y-3.5">
           <h3 className="text-sm font-bold text-white font-mono flex items-center gap-2">
             <Cpu className="w-4 h-4 text-cyan-400" />
@@ -161,35 +161,40 @@ export default function FleetManagementView({ fleet, sendCommand, onSelectDevice
             {submitting ? 'Propagando en la nube...' : '💾 Guardar y Vincular en Nube'}
           </button>
 
-          {/* Pruebas rápidas de hardware */}
+          {/* Pruebas de Hardware con Tooltips */}
           {selectedMacForTest && (
             <div className="pt-3 border-t border-slate-800 space-y-2">
               <span className="text-[11px] font-mono text-cyan-300 block font-bold">
                 PRUEBAS DE HARDWARE EN VIVO [{selectedMacForTest}]:
               </span>
               <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={testToggleMotor}
-                  className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 border border-cyan-500/40 text-cyan-300 text-xs font-mono rounded-lg flex items-center justify-center gap-1.5"
-                >
-                  <Lightbulb className="w-3.5 h-3.5" />
-                  <span>Probar LED (GPIO 2)</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={testResetAlarm}
-                  className="flex-1 py-2 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 text-xs font-mono rounded-lg flex items-center justify-center gap-1.5"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Reset Alarma</span>
-                </button>
+                <ClinicalTooltip title={CLINICAL_HELP.btn_test_motor_hw.title} description={CLINICAL_HELP.btn_test_motor_hw.desc} badge={CLINICAL_HELP.btn_test_motor_hw.badge}>
+                  <button
+                    type="button"
+                    onClick={testToggleMotor}
+                    className="w-full py-2 bg-slate-800 hover:bg-slate-700 border border-cyan-500/40 text-cyan-300 text-xs font-mono rounded-lg flex items-center justify-center gap-1.5"
+                  >
+                    <Lightbulb className="w-3.5 h-3.5" />
+                    <span>Probar LED (GPIO 2)</span>
+                  </button>
+                </ClinicalTooltip>
+
+                <ClinicalTooltip title={CLINICAL_HELP.btn_test_reset_hw.title} description={CLINICAL_HELP.btn_test_reset_hw.desc} badge={CLINICAL_HELP.btn_test_reset_hw.badge}>
+                  <button
+                    type="button"
+                    onClick={testResetAlarm}
+                    className="w-full py-2 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 text-xs font-mono rounded-lg flex items-center justify-center gap-1.5"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Reset Alarma</span>
+                  </button>
+                </ClinicalTooltip>
               </div>
             </div>
           )}
         </form>
 
-        {/* Tabla de Equipos Registrados */}
+        {/* Tabla */}
         <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 flex flex-col justify-between">
           <div>
             <h3 className="text-sm font-bold text-white font-mono mb-2">Equipos en la Red ({macList.length})</h3>
