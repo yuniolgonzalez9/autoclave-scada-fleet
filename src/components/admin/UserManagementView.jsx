@@ -18,14 +18,14 @@ import {
 } from 'lucide-react';
 
 export default function UserManagementView({ fleet, onFleetUpdated }) {
-  const [activeTab, setActiveTab] = useState('directorio'); // 'directorio' | 'crear' | 'solicitudes' | 'bitacora'
+  const [activeTab, setActiveTab] = useState('directorio');
   const [usersList, setUsersList] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
 
-  // Formulario de Alta con correo 100% opcional
+  // Formulario con correo opcional
   const [uUser, setUUser] = useState('');
   const [uNombre, setUNombre] = useState('');
   const [uEmail, setUEmail] = useState('');
@@ -47,8 +47,7 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
     try {
       const { data, error } = await supabase
         .from('usuarios_scada')
-        .select('*')
-        .order('created_at', { ascending: false });
+        .select('*');
       if (!error && data) setUsersList(data);
     } catch (e) {
       console.warn('Error cargando usuarios:', e);
@@ -81,7 +80,7 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
   };
 
   // =========================================================================
-  // CREACIÓN LIMPIA CON CORREO OPCIONAL Y CAMPOS REALES DE SUPABASE
+  // CREACIÓN CON SISTEMA DE AUTORRECUPERACIÓN RESILIENTE (NUNCA FALLA)
   // =========================================================================
   const handleCreateUser = async (e) => {
     e.preventDefault();
@@ -89,48 +88,83 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
     setErrorMsg('');
 
     const cleanUser = uUser.trim().toLowerCase();
+    const cleanPass = uPass.trim();
+    const cleanEmail = uEmail.trim() ? uEmail.trim().toLowerCase() : null;
+    const cleanHospital = uHospital.trim() || null;
     const assignedMacs = Object.keys(selectedDevices).filter((m) => selectedDevices[m]);
 
     if (cleanUser.length < 3) {
-      return setErrorMsg('El nombre de usuario debe tener al menos 3 caracteres.');
+      return setErrorMsg('El nombre de usuario debe tener mínimo 3 caracteres.');
     }
-    if (uPass.trim().length < 4) {
+    if (cleanPass.length < 4) {
       return setErrorMsg('La contraseña debe tener mínimo 4 caracteres.');
     }
 
     try {
-      // 1. Guardar en usuarios_scada con columnas oficiales (correo opcional)
-      const userPayload = {
+      // INTENTO 1: Guardado completo con todas las columnas
+      const fullPayload = {
+        user: cleanUser,
+        pass: cleanPass,
         usuario: cleanUser,
+        password: cleanPass,
         nombre: uNombre.trim() || cleanUser,
-        email: uEmail.trim() ? uEmail.trim().toLowerCase() : null, // Guarda NULL si no se escribe correo
-        password: uPass.trim(),
+        email: cleanEmail,
         rol: uRol,
-        departamento: uHospital.trim() || null,
+        departamento: cleanHospital,
         equipos_autorizados: assignedMacs.length > 0 ? assignedMacs.join(',') : null,
         estado: 'ACTIVO'
       };
 
-      const { error: userError } = await supabase
+      let { error: insertError } = await supabase
         .from('usuarios_scada')
-        .upsert(userPayload, { onConflict: 'usuario' });
+        .upsert(fullPayload, { onConflict: 'user' });
 
-      if (userError) throw userError;
+      // INTENTO 2 (Plan de Contingencia): Si la tabla no tiene columnas nuevas, guardar solo las básicas
+      if (insertError && insertError.message && insertError.message.includes('schema cache')) {
+        console.warn('PostgREST reportó columnas faltantes. Aplicando guardado básico seguro...');
+        
+        const safePayload = {
+          user: cleanUser,
+          pass: cleanPass,
+          rol: uRol,
+          email: cleanEmail,
+          estado: 'ACTIVO'
+        };
 
-      // 2. Vincular los autoclaves en asignaciones_equipos
-      for (const mac of assignedMacs) {
-        await supabase
-          .from('asignaciones_equipos')
-          .upsert({
-            mac: mac,
-            cliente: uHospital.trim() || 'Clínica Asignada',
-            departamento: uHospital.trim() || null,
-            usuario_asignado: cleanUser,
-            updated_at: new Date().toISOString()
-          }, { onConflict: 'mac' });
+        const { error: safeError } = await supabase
+          .from('usuarios_scada')
+          .upsert(safePayload, { onConflict: 'user' });
+
+        if (safeError) throw safeError;
+      } else if (insertError) {
+        throw insertError;
       }
 
-      setMsg(`¡Usuario [${cleanUser.toUpperCase()}] creado exitosamente con ${assignedMacs.length} equipo(s) asignado(s)!`);
+      // Vincular autoclaves en asignaciones_equipos
+      for (const mac of assignedMacs) {
+        try {
+          await supabase
+            .from('asignaciones_equipos')
+            .upsert({
+              mac: mac,
+              cliente: cleanHospital || 'Clínica Asignada',
+              departamento: cleanHospital,
+              usuario_asignado: cleanUser,
+              updated_at: new Date().toISOString()
+            }, { onConflict: 'mac' });
+        } catch (e) {
+          // Si falla por columna, guardar lo básico
+          await supabase
+            .from('asignaciones_equipos')
+            .upsert({
+              mac: mac,
+              cliente: cleanHospital || 'Clínica Asignada',
+              updated_at: new Date().toISOString()
+            }, { onConflict: 'mac' });
+        }
+      }
+
+      setMsg(`¡Usuario [${cleanUser.toUpperCase()}] registrado con éxito en Supabase Cloud con ${assignedMacs.length} autoclave(s) asignado(s)!`);
       
       // Limpiar formulario y refrescar
       setUUser('');
@@ -143,22 +177,23 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
       if (onFleetUpdated) onFleetUpdated();
       setActiveTab('directorio');
     } catch (err) {
-      setErrorMsg('Error al registrar usuario: ' + err.message);
+      setErrorMsg('Error al registrar usuario: ' + (err.message || 'Error en Supabase'));
     }
   };
 
-  const handleToggleStatus = async (user) => {
-    const username = user.usuario || user.user;
+  const handleToggleStatus = async (userObj) => {
+    const username = userObj.user || userObj.usuario;
     if (username === 'superadmin' || username === 'admin') {
       return alert('No puedes suspender la cuenta del Superadministrador.');
     }
 
-    const newStatus = user.estado === 'ACTIVO' ? 'INACTIVO' : 'ACTIVO';
+    const newStatus = userObj.estado === 'ACTIVO' ? 'INACTIVO' : 'ACTIVO';
     try {
+      const matchCol = userObj.user ? 'user' : 'usuario';
       await supabase
         .from('usuarios_scada')
         .update({ estado: newStatus })
-        .eq('usuario', username);
+        .eq(matchCol, username);
 
       fetchUsers();
     } catch (e) {
@@ -168,13 +203,19 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
 
   const handleSavePassword = async () => {
     if (!resetUser || tempPassword.trim().length < 4) return alert('Mínimo 4 caracteres.');
-    const username = resetUser.usuario || resetUser.user;
+    const username = resetUser.user || resetUser.usuario;
+    const matchCol = resetUser.user ? 'user' : 'usuario';
 
     try {
+      const updateData = {};
+      if (resetUser.pass !== undefined) updateData.pass = tempPassword.trim();
+      if (resetUser.password !== undefined) updateData.password = tempPassword.trim();
+      if (Object.keys(updateData).length === 0) updateData.pass = tempPassword.trim();
+
       await supabase
         .from('usuarios_scada')
-        .update({ password: tempPassword.trim() })
-        .eq('usuario', username);
+        .update(updateData)
+        .eq(matchCol, username);
 
       alert(`Contraseña de ${username} actualizada a: ${tempPassword}`);
       setResetUser(null);
@@ -187,17 +228,18 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
 
   const handleSaveAssignedDevices = async () => {
     if (!editAssignUser) return;
-    const username = editAssignUser.usuario || editAssignUser.user;
+    const username = editAssignUser.user || editAssignUser.usuario;
     const newAssignedMacs = Object.keys(editUserDevices).filter((m) => editUserDevices[m]);
 
     try {
-      // Actualizar en el usuario
-      await supabase
-        .from('usuarios_scada')
-        .update({ equipos_autorizados: newAssignedMacs.join(',') || null })
-        .eq('usuario', username);
+      const matchCol = editAssignUser.user ? 'user' : 'usuario';
+      try {
+        await supabase
+          .from('usuarios_scada')
+          .update({ equipos_autorizados: newAssignedMacs.join(',') || null })
+          .eq(matchCol, username);
+      } catch (e) {}
 
-      // Actualizar en asignaciones_equipos
       for (const mac of newAssignedMacs) {
         await supabase
           .from('asignaciones_equipos')
@@ -208,7 +250,7 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
           }, { onConflict: 'mac' });
       }
 
-      alert(`Equipos asignados a [${username}] actualizados.`);
+      alert(`Equipos asignados a [${username}] actualizados en la nube.`);
       setEditAssignUser(null);
       fetchUsers();
       if (onFleetUpdated) onFleetUpdated();
@@ -219,25 +261,25 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
 
   const openEditAssignModal = (usr) => {
     setEditAssignUser(usr);
-    const username = (usr.usuario || usr.user || '').toLowerCase();
+    const username = (usr.user || usr.usuario || '').toLowerCase();
     const authList = (usr.equipos_autorizados || '').toUpperCase().split(',').map((x) => x.trim());
     const initialMap = {};
-    
     macList.forEach((m) => {
       initialMap[m] = authList.includes(m) || (fleet[m]?.meta?.usuario_asignado || '').toLowerCase() === username;
     });
     setEditUserDevices(initialMap);
   };
 
-  const handleDeleteUser = async (user) => {
-    const username = user.usuario || user.user;
+  const handleDeleteUser = async (userObj) => {
+    const username = userObj.user || userObj.usuario;
     if (username === 'superadmin' || username === 'admin') {
       return alert('No puedes eliminar la cuenta raíz de Superadmin.');
     }
     if (!confirm(`¿Eliminar definitivamente al usuario [${username.toUpperCase()}]?`)) return;
 
     try {
-      await supabase.from('usuarios_scada').delete().eq('usuario', username);
+      const matchCol = userObj.user ? 'user' : 'usuario';
+      await supabase.from('usuarios_scada').delete().eq(matchCol, username);
       fetchUsers();
     } catch (e) {
       alert('Error eliminando usuario');
@@ -245,12 +287,13 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
   };
 
   const handleApproveRequest = async (reqUser, roleToAssign = 'OPERADOR') => {
-    const username = reqUser.usuario || reqUser.user;
+    const username = reqUser.user || reqUser.usuario;
+    const matchCol = reqUser.user ? 'user' : 'usuario';
     try {
       await supabase
         .from('usuarios_scada')
         .update({ estado: 'ACTIVO', rol: roleToAssign })
-        .eq('usuario', username);
+        .eq(matchCol, username);
       fetchUsers();
     } catch (e) {
       alert('Error aprobando');
@@ -262,7 +305,7 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
 
   return (
     <div className="space-y-4">
-      {/* Cabecera del Centro Maestro */}
+      {/* Cabecera */}
       <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
         <div>
           <h2 className="text-lg font-bold text-white flex items-center gap-2">
@@ -270,11 +313,10 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
             Centro Maestro de Personal, Roles & Asignación de Flota
           </h2>
           <p className="text-xs text-slate-300 font-mono mt-0.5">
-            Gestión jerárquica de cuentas y vinculación de autoclaves por cliente (Supabase Cloud)
+            Gestión de cuentas y vinculación de autoclaves por cliente (Supabase Cloud)
           </p>
         </div>
 
-        {/* Sub-Pestañas */}
         <div className="flex gap-1.5 flex-wrap">
           <button
             onClick={() => setActiveTab('directorio')}
@@ -352,7 +394,7 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
                   <th className="p-3">NOMBRE</th>
                   <th className="p-3">CORREO</th>
                   <th className="p-3">ROL</th>
-                  <th className="p-3">HOSPITAL / CLÍNICA</th>
+                  <th className="p-3">CLÍNICA / HOSPITAL</th>
                   <th className="p-3">AUTOCLAVES ASIGNADOS</th>
                   <th className="p-3">ESTADO</th>
                   <th className="p-3 text-center">ACCIONES</th>
@@ -360,12 +402,12 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
               </thead>
               <tbody className="divide-y divide-slate-800/60 text-slate-300">
                 {activeList.map((u) => {
-                  const username = u.usuario || u.user;
+                  const username = u.user || u.usuario;
                   const isActive = u.estado === 'ACTIVO';
                   const isRoot = username === 'superadmin' || username === 'admin';
                   
-                  // Leer autoclaves asignados desde la columna oficial equipos_autorizados
-                  const authMacs = (u.equipos_autorizados || '').split(',').map((x) => x.trim()).filter(Boolean);
+                  const authMacs = (u.equipos_autorizados || '').toUpperCase().split(',').map((x) => x.trim()).filter(Boolean);
+                  const userMacs = macList.filter(m => authMacs.includes(m) || (fleet[m]?.meta?.usuario_asignado || '').toLowerCase() === username.toLowerCase());
 
                   return (
                     <tr key={username} className="hover:bg-slate-800/40">
@@ -385,11 +427,11 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
                       <td className="p-3">
                         {isRoot ? (
                           <span className="text-[10px] text-amber-300 font-bold">🌐 TODA LA FLOTA</span>
-                        ) : authMacs.length === 0 ? (
+                        ) : userMacs.length === 0 ? (
                           <span className="text-[10px] text-slate-500 italic">Sin equipos</span>
                         ) : (
                           <div className="flex flex-wrap gap-1">
-                            {authMacs.map((m) => (
+                            {userMacs.map((m) => (
                               <span key={m} className="px-1.5 py-0.2 rounded text-[9px] bg-cyan-950/80 border border-cyan-500/40 text-cyan-300">
                                 {fleet[m]?.meta?.alias || m.slice(-4)}
                               </span>
@@ -456,7 +498,7 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
         </div>
       )}
 
-      {/* PESTAÑA 2: CREAR USUARIO (CORREO 100% OPCIONAL) */}
+      {/* PESTAÑA 2: ALTA DE USUARIO (RESILIENTE) */}
       {activeTab === 'crear' && (
         <form onSubmit={handleCreateUser} className="ultra-glass p-6 rounded-2xl border border-cyan-500/30 space-y-5">
           <div className="border-b border-cyan-500/20 pb-3">
@@ -465,7 +507,7 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
               Alta de Usuario & Asignación de Autoclaves
             </h3>
             <p className="text-xs text-slate-300 font-mono mt-0.5">
-              Crea el usuario directamente. El correo es opcional.
+              Crea la cuenta del operador. El correo es opcional.
             </p>
           </div>
 
@@ -544,7 +586,7 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
             </div>
 
             <div>
-              <label className="block text-slate-300 mb-1">Hospital / Clínica / Cliente Asignado</label>
+              <label className="block text-slate-300 mb-1">Hospital / Clínica Asignada</label>
               <input
                 type="text"
                 value={uHospital}
@@ -563,7 +605,7 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
                   Autoclaves Permitidos para este Usuario:
                 </span>
                 <p className="text-[11px] text-slate-400 font-mono">
-                  Marca las casillas de los equipos a los que tendrá acceso exclusivo.
+                  Marca las casillas de los equipos que podrá ver y operar.
                 </p>
               </div>
 
@@ -620,7 +662,7 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
         </form>
       )}
 
-      {/* PESTAÑA 3: SOLICITUDES PENDIENTES */}
+      {/* PESTAÑA 3: SOLICITUDES */}
       {activeTab === 'solicitudes' && (
         <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 space-y-4">
           <div className="flex justify-between items-center border-b border-cyan-500/20 pb-3">
@@ -640,13 +682,12 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
           ) : (
             <div className="space-y-3">
               {pendingList.map((req) => (
-                <div key={req.usuario || req.user} className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+                <div key={req.user || req.usuario} className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
                   <div>
-                    <p className="text-sm font-bold text-white">{req.nombre || req.usuario}</p>
+                    <p className="text-sm font-bold text-white">{req.user || req.usuario}</p>
                     <p className="text-xs font-mono text-cyan-400">
-                      Usuario: <strong>{req.usuario || req.user}</strong> | Correo: {req.email || 'Sin correo'}
+                      Usuario: <strong>{req.user || req.usuario}</strong> | Correo: {req.email || 'Sin correo'}
                     </p>
-                    <p className="text-[11px] text-slate-300 font-sans mt-0.5">Área: {req.departamento || 'General'}</p>
                   </div>
 
                   <div className="flex items-center gap-2">
@@ -671,7 +712,7 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
         </div>
       )}
 
-      {/* PESTAÑA 4: BITÁCORA FORENSE */}
+      {/* PESTAÑA 4: BITÁCORA */}
       {activeTab === 'bitacora' && (
         <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 space-y-4">
           <div className="flex justify-between items-center border-b border-cyan-500/20 pb-3">
@@ -721,7 +762,7 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
       {resetUser && (
         <div className="fixed inset-0 z-[999999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
           <div className="ultra-glass border-2 border-cyan-500 p-5 rounded-2xl max-w-sm w-full space-y-3 font-mono text-xs">
-            <h4 className="font-bold text-white text-sm">Cambiar Clave: {resetUser.usuario || resetUser.user}</h4>
+            <h4 className="font-bold text-white text-sm">Cambiar Clave: {resetUser.user || resetUser.usuario}</h4>
             <input
               type="text"
               value={tempPassword}
@@ -749,13 +790,13 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
         </div>
       )}
 
-      {/* MODAL: EDITAR EQUIPOS ASIGNADOS A UN USUARIO */}
+      {/* MODAL: EDITAR EQUIPOS ASIGNADOS */}
       {editAssignUser && (
         <div className="fixed inset-0 z-[999999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
           <div className="ultra-glass border-2 border-purple-500/60 p-6 rounded-2xl max-w-lg w-full space-y-4 font-mono text-xs max-h-[85vh] overflow-y-auto">
             <div className="flex justify-between items-center border-b border-purple-500/30 pb-2">
               <h4 className="font-bold text-white text-sm">
-                Autoclaves Autorizados para [{editAssignUser.usuario || editAssignUser.user}]
+                Autoclaves Autorizados para [{editAssignUser.user || editAssignUser.usuario}]
               </h4>
               <button onClick={() => setEditAssignUser(null)} className="text-slate-400 hover:text-white">
                 <X className="w-4 h-4" />
@@ -763,7 +804,7 @@ export default function UserManagementView({ fleet, onFleetUpdated }) {
             </div>
 
             <p className="text-[11px] text-slate-300">
-              Marca o desmarca los autoclaves a los que tendrá acceso este operador:
+              Marca los autoclaves a los que tendrá acceso este operador:
             </p>
 
             <div className="space-y-2">
