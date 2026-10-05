@@ -1,6 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { supabase } from '../../services/supabase';
 import SessionDetailModal from './SessionDetailModal';
+import ClinicalTooltip from '../common/ClinicalTooltip';
+import { CLINICAL_HELP } from '../../utils/clinicalDictionary';
 import { 
   FileText, 
   FileSpreadsheet, 
@@ -30,7 +32,6 @@ export default function ClinicalAuditView() {
   const [filterLimit, setFilterLimit] = useState('100');
   const [filterText, setFilterText] = useState('');
 
-  // Checkboxes de selección múltiple
   const [selectedIds, setSelectedIds] = useState([]);
   const fileInputRef = useRef(null);
 
@@ -70,7 +71,6 @@ export default function ClinicalAuditView() {
     fetchReports();
   }, [filterDevice, filterLimit, filterDesde, filterHasta]);
 
-  // Selección múltiple
   const toggleSelectAll = () => {
     if (selectedIds.length === reports.length) {
       setSelectedIds([]);
@@ -85,7 +85,6 @@ export default function ClinicalAuditView() {
     );
   };
 
-  // Exportar a Excel (CSV)
   const exportToExcel = () => {
     const listToExport = selectedIds.length > 0 
       ? reports.filter((r) => selectedIds.includes(r.session_id))
@@ -105,7 +104,6 @@ export default function ClinicalAuditView() {
     a.click();
   };
 
-  // Descargar Copia de Seguridad JSON
   const downloadBackupJSON = () => {
     if (!reports.length) return alert('No hay reportes para respaldar.');
     const backupPkg = {
@@ -121,7 +119,6 @@ export default function ClinicalAuditView() {
     a.click();
   };
 
-  // Restaurar Copia JSON
   const handleRestoreJSON = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -146,7 +143,6 @@ export default function ClinicalAuditView() {
     reader.readAsText(file);
   };
 
-  // Eliminar Reportes Marcados
   const deleteSelected = async () => {
     if (!selectedIds.length) return alert('Selecciona al menos un paquete para eliminar.');
     if (!confirm(`¿Eliminar definitivamente ${selectedIds.length} paquete(s) de la base de datos de la nube?`)) return;
@@ -161,10 +157,8 @@ export default function ClinicalAuditView() {
     }
   };
 
-  // Lista única de MACs para el selector
   const uniqueMacs = Array.from(new Set(reports.map((r) => r.mac).filter(Boolean)));
 
-  // Filtrado final en memoria por tipo y buscador de texto
   const filteredReports = reports.filter((r) => {
     if (filterType === 'CICLO_OK' && !(r.diagnostico_principal || '').includes('CONFORME')) return false;
     if (filterType === 'ALARMA' && !((r.conteo_alarmas > 0) || (r.diagnostico_principal || '').includes('ABORTADO'))) return false;
@@ -181,13 +175,12 @@ export default function ClinicalAuditView() {
     return true;
   });
 
-  // KPIs
   const totalCiclosConformes = reports.filter((r) => (r.diagnostico_principal || '').includes('CONFORME')).length;
   const totalAlarmas = reports.filter((r) => (r.conteo_alarmas > 0) || (r.diagnostico_principal || '').includes('ABORTADO')).length;
 
   return (
     <div className="space-y-4">
-      {/* Cabecera y Acciones */}
+      {/* Cabecera y Acciones con Tooltips */}
       <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
         <div>
           <h2 className="text-lg font-bold text-white flex items-center gap-2">
@@ -200,32 +193,38 @@ export default function ClinicalAuditView() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={exportToExcel}
-            className="px-3 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 text-xs font-bold rounded-xl flex items-center gap-1.5"
-            title="Exportar registros a Excel"
-          >
-            <FileSpreadsheet className="w-3.5 h-3.5" />
-            <span>Excel (CSV)</span>
-          </button>
+          {/* Tooltip Excel */}
+          <ClinicalTooltip title={CLINICAL_HELP.btn_export_excel.title} description={CLINICAL_HELP.btn_export_excel.desc} badge={CLINICAL_HELP.btn_export_excel.badge}>
+            <button
+              onClick={exportToExcel}
+              className="px-3 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 text-xs font-bold rounded-xl flex items-center gap-1.5"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5" />
+              <span>Excel (CSV)</span>
+            </button>
+          </ClinicalTooltip>
 
-          <button
-            onClick={downloadBackupJSON}
-            className="px-3 py-1.5 bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 text-cyan-300 text-xs font-bold rounded-xl flex items-center gap-1.5"
-            title="Descargar copia de seguridad en JSON"
-          >
-            <Download className="w-3.5 h-3.5" />
-            <span>Backup JSON</span>
-          </button>
+          {/* Tooltip Backup JSON */}
+          <ClinicalTooltip title={CLINICAL_HELP.btn_backup_json.title} description={CLINICAL_HELP.btn_backup_json.desc} badge={CLINICAL_HELP.btn_backup_json.badge}>
+            <button
+              onClick={downloadBackupJSON}
+              className="px-3 py-1.5 bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 text-cyan-300 text-xs font-bold rounded-xl flex items-center gap-1.5"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Backup JSON</span>
+            </button>
+          </ClinicalTooltip>
 
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="px-3 py-1.5 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/40 text-purple-300 text-xs font-bold rounded-xl flex items-center gap-1.5"
-            title="Restaurar backup"
-          >
-            <Upload className="w-3.5 h-3.5" />
-            <span>Restaurar</span>
-          </button>
+          {/* Tooltip Restaurar */}
+          <ClinicalTooltip title={CLINICAL_HELP.btn_restore_json.title} description={CLINICAL_HELP.btn_restore_json.desc} badge={CLINICAL_HELP.btn_restore_json.badge}>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="px-3 py-1.5 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/40 text-purple-300 text-xs font-bold rounded-xl flex items-center gap-1.5"
+            >
+              <Upload className="w-3.5 h-3.5" />
+              <span>Restaurar</span>
+            </button>
+          </ClinicalTooltip>
           <input
             ref={fileInputRef}
             type="file"
@@ -331,7 +330,6 @@ export default function ClinicalAuditView() {
           </div>
         </div>
 
-        {/* Buscador de texto libre */}
         <div className="relative">
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
           <input
@@ -436,7 +434,6 @@ export default function ClinicalAuditView() {
                       <button
                         onClick={() => setSelectedSession(r)}
                         className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded-lg text-xs"
-                        title="Ver desglose forense"
                       >
                         👁️ Ver
                       </button>
@@ -449,7 +446,6 @@ export default function ClinicalAuditView() {
         </table>
       </div>
 
-      {/* Modal Forense del Paquete Seleccionado */}
       <SessionDetailModal
         isOpen={selectedSession !== null}
         onClose={() => setSelectedSession(null)}
