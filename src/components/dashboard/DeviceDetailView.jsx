@@ -3,6 +3,7 @@ import SterilizationChart from '../graphics/SterilizationChart';
 import SurgicalQRLabel from '../labels/SurgicalQRLabel';
 import SessionDetailModal from '../reports/SessionDetailModal';
 import ClinicalTooltip from '../common/ClinicalTooltip';
+import ActionConfirmModal from '../common/ActionConfirmModal';
 import { CLINICAL_HELP } from '../../utils/clinicalDictionary';
 import { supabase } from '../../services/supabase';
 import { 
@@ -27,7 +28,8 @@ import {
   Send,
   Sparkles,
   Lock,
-  Power
+  Power,
+  ShieldCheck
 } from 'lucide-react';
 
 export default function DeviceDetailView({ 
@@ -43,6 +45,15 @@ export default function DeviceDetailView({
   const [showQRModal, setShowQRModal] = useState(false);
   const [nvsMsg, setNvsMsg] = useState('');
 
+  // Modal de Confirmación de Seguridad
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    title: '',
+    description: '',
+    actionType: 'WARNING',
+    onConfirm: () => {}
+  });
+
   // Auditoría por MAC
   const [macLogs, setMacLogs] = useState([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
@@ -54,7 +65,6 @@ export default function DeviceDetailView({
   const d = device?.datos || {};
   const cfg = d?.cfg || {};
 
-  // Estado real de hardware
   const isMotorActive = (d.motor !== undefined) ? Boolean(d.motor) : Boolean(cfg.mot_ok);
   const isVacioActive = (d.vacio !== undefined) ? Boolean(d.vacio) : Boolean(cfg.vacio_ok);
   const isHabActive = cfg.hab !== false;
@@ -119,6 +129,37 @@ export default function DeviceDetailView({
     setPMax(2.40);
     setPurgaOk(true);
     sendCommand(device.mac, { sp_temp: 121.0, t_ciclo: 15, p_max: 2.40, purga_ok: true, hab: true });
+  };
+
+  // Disparo de Confirmación para Acciones Críticas
+  const requestStartCycle = () => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Iniciar Ciclo de Esterilización',
+      description: `¿Confirmas el inicio del protocolo térmico a ${spTemp}°C durante ${tCiclo} minutos? Asegúrate de que la puerta esté enclavada herméticamente.`,
+      actionType: 'START',
+      onConfirm: () => sendCommand(device.mac, { cmd: 'INICIAR_CICLO' })
+    });
+  };
+
+  const requestEmergencyStop = () => {
+    setConfirmModal({
+      isOpen: true,
+      title: '¡PARO DE EMERGENCIA EN CÁMARA!',
+      description: 'Esta orden cortará inmediatamente la alimentación de las resistencias calefactoras y abrirá el escape de vapor. El ciclo quedará invalidado.',
+      actionType: 'STOP',
+      onConfirm: () => sendCommand(device.mac, { cmd: 'ABORTAR_CICLO' })
+    });
+  };
+
+  const requestResetAlarm = () => {
+    setConfirmModal({
+      isOpen: true,
+      title: 'Restablecer Código de Alarma',
+      description: '¿Confirmas que la causa de la anomalía ha sido inspeccionada y resuelta en la cámara?',
+      actionType: 'RESET',
+      onConfirm: () => sendCommand(device.mac, { cmd: 'RESET_ALARMA' })
+    });
   };
 
   const handleTransmitNVS = (e) => {
@@ -327,7 +368,7 @@ export default function DeviceDetailView({
         )}
       </div>
 
-      {/* PESTAÑA 1: SENSORES, F0 Y CONTROLES OPERATIVOS DE SALIDAS (ACCESIBLES PARA TODOS) */}
+      {/* PESTAÑA 1: SENSORES, F0 Y ACCIONES CON CONFIRMACIÓN */}
       {activeTab === 'sensores' && (
         <div className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -364,7 +405,7 @@ export default function DeviceDetailView({
             </ClinicalTooltip>
           </div>
 
-          {/* ACCIONAMIENTO DE SALIDAS (VÁLVULAS Y MOTOR EN VIVO) */}
+          {/* Accionamiento de Salidas */}
           <div className="ultra-glass p-4 rounded-xl border border-slate-800 space-y-2">
             <span className="text-xs font-mono font-bold text-cyan-300 block mb-2 uppercase">
               Accionamiento de Salidas & Actuadores (Hardware en Vivo):
@@ -408,11 +449,11 @@ export default function DeviceDetailView({
             </div>
           </div>
 
-          {/* Botones de Marcha / Paro */}
+          {/* Botones de Control con Modal de Doble Confirmación */}
           <div className="flex gap-2.5">
             <ClinicalTooltip title={CLINICAL_HELP.btn_iniciar_ciclo.title} description={CLINICAL_HELP.btn_iniciar_ciclo.desc} badge={CLINICAL_HELP.btn_iniciar_ciclo.badge}>
               <button
-                onClick={() => sendCommand(device.mac, { cmd: 'INICIAR_CICLO' })}
+                onClick={requestStartCycle}
                 className="py-3 px-4 bg-gradient-to-r from-cyan-500 to-blue-600 font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg"
               >
                 <Play className="w-4 h-4 fill-white" />
@@ -422,7 +463,7 @@ export default function DeviceDetailView({
 
             <ClinicalTooltip title={CLINICAL_HELP.btn_paro_emergencia.title} description={CLINICAL_HELP.btn_paro_emergencia.desc} badge={CLINICAL_HELP.btn_paro_emergencia.badge}>
               <button
-                onClick={() => sendCommand(device.mac, { cmd: 'ABORTAR_CICLO' })}
+                onClick={requestEmergencyStop}
                 className="py-3 px-4 bg-rose-600 hover:bg-rose-500 font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg"
               >
                 <Square className="w-4 h-4 fill-white" />
@@ -432,7 +473,7 @@ export default function DeviceDetailView({
 
             <ClinicalTooltip title={CLINICAL_HELP.btn_reset_alarma.title} description={CLINICAL_HELP.btn_reset_alarma.desc} badge={CLINICAL_HELP.btn_reset_alarma.badge}>
               <button
-                onClick={() => sendCommand(device.mac, { cmd: 'RESET_ALARMA' })}
+                onClick={requestResetAlarm}
                 className="py-3 px-4 bg-slate-900 border border-slate-700 text-slate-300 rounded-xl text-xs font-mono"
               >
                 <RotateCcw className="w-4 h-4" />
@@ -525,7 +566,7 @@ export default function DeviceDetailView({
         </div>
       )}
 
-      {/* PESTAÑA: NVS (CALIBRACIÓN TÉCNICA PROTEGIDA) */}
+      {/* PESTAÑA: NVS */}
       {activeTab === 'nvs' && canEditHardware && (
         <form onSubmit={handleTransmitNVS} className="ultra-glass p-5 md:p-6 rounded-2xl border border-cyan-500/30 space-y-5">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-cyan-500/20 pb-3">
@@ -827,6 +868,18 @@ export default function DeviceDetailView({
         isOpen={inspectedSession !== null}
         onClose={() => setInspectedSession(null)}
         session={inspectedSession}
+      />
+
+      {/* Modal de Doble Confirmación y Firma Operativa */}
+      <ActionConfirmModal
+        isOpen={confirmModal.isOpen}
+        onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmModal.onConfirm}
+        title={confirmModal.title}
+        description={confirmModal.description}
+        actionType={confirmModal.actionType}
+        deviceName={alias}
+        operatorName={operatorName}
       />
     </div>
   );
