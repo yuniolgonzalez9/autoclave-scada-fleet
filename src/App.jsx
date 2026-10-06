@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import LoginModal from './components/auth/LoginModal';
 import UserManagementModal from './components/admin/UserManagementModal';
 import UserManagementView from './components/admin/UserManagementView';
+import CloudDiagnosticsModal from './components/admin/CloudDiagnosticsModal';
 import DeviceDetailView from './components/dashboard/DeviceDetailView';
 import ClinicalAuditView from './components/reports/ClinicalAuditView';
 import FotaHubView from './components/fota/FotaHubView';
@@ -63,56 +64,55 @@ function ScadaAppContent() {
     initAudioUnlock();
   }, []);
 
-  // =========================================================================
-  // BLINDAJE 1: AISLAMIENTO DE PESTAÑAS (SESSIONSTORAGE EN VEZ DE LOCALSTORAGE)
-  // Cada pestaña o ventana puede anclar un autoclave diferente sin colisiones
-  // =========================================================================
+  // Modal de Diagnóstico de Recursos Cloud para Superadmin ('hivemq' | 'supabase' | null)
+  const [cloudDiagType, setCloudDiagType] = useState(null);
+
+  // GESTIÓN DE TERMINAL DEDICADA & PERSISTENCIA
   const [kioskMac, setKioskMac] = useState(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const directKiosk = urlParams.get('kiosk');
     if (directKiosk) return directKiosk.toUpperCase().replace(/[:\-]/g, '');
-    return sessionStorage.getItem('scada_tab_kiosk_mac') || null;
+    return localStorage.getItem('scada_kiosk_mac') || null;
   });
 
   const [selectedMac, setSelectedMac] = useState(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const directMac = urlParams.get('mac') || urlParams.get('kiosk');
     if (directMac) return directMac.toUpperCase().replace(/[:\-]/g, '');
-    if (sessionStorage.getItem('scada_tab_kiosk_mac')) return sessionStorage.getItem('scada_tab_kiosk_mac');
-    return sessionStorage.getItem('scada_tab_selected_mac') || null;
+    if (localStorage.getItem('scada_kiosk_mac')) return localStorage.getItem('scada_kiosk_mac');
+    return localStorage.getItem('scada_selected_mac') || null;
   });
 
   const [activeSection, setActiveSection] = useState(() => {
     const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('mac') || urlParams.get('kiosk') || sessionStorage.getItem('scada_tab_kiosk_mac')) {
+    if (urlParams.get('mac') || urlParams.get('kiosk') || localStorage.getItem('scada_kiosk_mac')) {
       return 'detalle';
     }
-    return sessionStorage.getItem('scada_tab_active_section') || 'flota';
+    return localStorage.getItem('scada_active_section') || 'flota';
   });
 
-  const [healthFilter, setHealthFilter] = useState(() => sessionStorage.getItem('scada_tab_health_filter') || 'ALL');
+  const [healthFilter, setHealthFilter] = useState(() => localStorage.getItem('scada_health_filter') || 'ALL');
 
   useEffect(() => {
     if (!kioskMac) {
-      sessionStorage.setItem('scada_tab_active_section', activeSection);
+      localStorage.setItem('scada_active_section', activeSection);
     }
   }, [activeSection, kioskMac]);
 
   useEffect(() => {
     if (!kioskMac) {
-      if (selectedMac) sessionStorage.setItem('scada_tab_selected_mac', selectedMac);
-      else sessionStorage.removeItem('scada_tab_selected_mac');
+      if (selectedMac) localStorage.setItem('scada_selected_mac', selectedMac);
+      else localStorage.removeItem('scada_selected_mac');
     }
   }, [selectedMac, kioskMac]);
 
   useEffect(() => {
-    sessionStorage.setItem('scada_tab_health_filter', healthFilter);
+    localStorage.setItem('scada_health_filter', healthFilter);
   }, [healthFilter]);
 
-  // Alternar el anclaje de terminal de forma independiente por pestaña
   const toggleKioskMode = (macToKiosk = null) => {
     if (kioskMac) {
-      sessionStorage.removeItem('scada_tab_kiosk_mac');
+      localStorage.removeItem('scada_kiosk_mac');
       setKioskMac(null);
       if (window.location.search.includes('mac=') || window.location.search.includes('kiosk=')) {
         window.history.replaceState({}, '', window.location.pathname);
@@ -122,29 +122,13 @@ function ScadaAppContent() {
     } else {
       const target = (macToKiosk || selectedMac || '').toUpperCase().replace(/[:\-]/g, '');
       if (target) {
-        sessionStorage.setItem('scada_tab_kiosk_mac', target);
+        localStorage.setItem('scada_kiosk_mac', target);
         setKioskMac(target);
         setSelectedMac(target);
         setActiveSection('detalle');
       }
     }
   };
-
-  // =========================================================================
-  // BLINDAJE 2: CIERRE DE SESIÓN SINCRONIZADO CROSS-TAB (SEGURIDAD HOSPITALARIA)
-  // Si sales en una pestaña, todas las pestañas se cierran en el acto
-  // =========================================================================
-  useEffect(() => {
-    const handleStorageChange = (e) => {
-      if (e.key === 'biofleet_enterprise_session' && !e.newValue) {
-        // La sesión fue cerrada en otra pestaña -> cerrar aquí inmediatamente
-        sessionStorage.clear();
-        window.location.reload();
-      }
-    };
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
 
   const [contextMenu, setContextMenu] = useState({ isOpen: false, position: { x: 0, y: 0 }, device: null });
   const [assignModal, setAssignModal] = useState({ isOpen: false, device: null });
@@ -163,6 +147,7 @@ function ScadaAppContent() {
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [sirenActive, setSirenActive] = useState(false);
 
+  // Reloj de latido a 1000ms
   const [currentTime, setCurrentTime] = useState(Date.now());
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
@@ -300,7 +285,7 @@ function ScadaAppContent() {
 
   const macKeys = Object.keys(fleet);
 
-  // Aislamiento Multi-Tenant Hospitalario
+  // Aislamiento Multi-Tenant
   const allowedDevices = macKeys
     .map((k) => fleet[k])
     .filter((dev) => {
@@ -335,7 +320,6 @@ function ScadaAppContent() {
     return true;
   });
 
-  // Seguro anti-pantalla en blanco
   const inspectingMacToUse = kioskMac || selectedMac;
   const inspectingDevice = inspectingMacToUse 
     ? (fleet[inspectingMacToUse] || {
@@ -405,8 +389,12 @@ function ScadaAppContent() {
           </div>
         )}
 
-        {/* Header Institucional */}
+        {/* =========================================================================
+            HEADER INSTITUCIONAL CON DIAGNÓSTICO EN CLIC (SUPERADMIN)
+           ========================================================================= */}
         <header className="speedtest-laser-header border-b border-cyan-500/20 bg-slate-950/80 backdrop-blur-md px-3 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between sticky top-0 z-40 w-full">
+          
+          {/* Bloque Izquierdo */}
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <div className="p-1.5 sm:p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 shrink-0">
               <Activity className="w-5 h-5 sm:w-6 sm:h-6 animate-pulse" />
@@ -426,7 +414,9 @@ function ScadaAppContent() {
             </div>
           </div>
 
+          {/* Bloque Derecho */}
           <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0 ml-2">
+            
             {kioskMac && (
               <button
                 onClick={() => toggleKioskMode(null)}
@@ -438,43 +428,53 @@ function ScadaAppContent() {
               </button>
             )}
 
-            {/* 1. Indicador MQTT */}
+            {/* 1. Indicador MQTT (CLICKEABLE PARA SUPERADMIN: ABRE DIAGNÓSTICO) */}
             <ClinicalTooltip
               title="Broker MQTT (HiveMQ Cloud)"
-              description="Transmisión bidireccional continua por WebSockets (puerto seguro 8884) para telemetría de actuadores."
+              description={isAdmin ? "⚡ Click para abrir la Consola de Recursos y Latencia MQTT." : "Transmisión bidireccional continua por WebSockets (puerto seguro 8884)."}
               badge="WSS 8884"
-              shortcut="EN TIEMPO REAL"
+              shortcut={isAdmin ? "CLICK PARA AUDITAR" : "EN TIEMPO REAL"}
               position="bottom"
             >
-              <span className={`inline-flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-full text-[10px] font-mono font-bold border cursor-help ${
-                mqttConnected 
-                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' 
-                  : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
-              }`}>
+              <button
+                onClick={() => { if (isAdmin) setCloudDiagType('hivemq'); }}
+                className={`inline-flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-full text-[10px] font-mono font-bold border transition-all ${
+                  isAdmin ? 'cursor-pointer hover:scale-105 active:scale-95' : 'cursor-help'
+                } ${
+                  mqttConnected 
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20' 
+                    : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                }`}
+              >
                 <span className={`w-2 h-2 rounded-full shrink-0 ${mqttConnected ? 'bg-emerald-400 animate-ping' : 'bg-rose-400'}`}></span>
                 <span className="hidden sm:inline">{mqttConnected ? 'HIVEMQ 8884' : 'OFFLINE'}</span>
-              </span>
+              </button>
             </ClinicalTooltip>
 
-            {/* 2. Indicador Supabase Cloud */}
+            {/* 2. Indicador Supabase Cloud (CLICKEABLE PARA SUPERADMIN: ABRE INVENTARIO DE TABLAS) */}
             <ClinicalTooltip
               title="Base de Datos Supabase Cloud"
-              description="Canal central de persistencia Postgres en tiempo real para sesiones, trazabilidad y control de personal."
+              description={isAdmin ? "⚡ Click para abrir el Inventario de Registros, Tablas y Latencia DB." : "Canal central de persistencia Postgres en tiempo real para sesiones."}
               badge="POSTGRES REST"
-              shortcut="EN LÍNEA"
+              shortcut={isAdmin ? "CLICK PARA AUDITAR" : "EN LÍNEA"}
               position="bottom"
             >
-              <span className={`inline-flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-full text-[10px] font-mono font-bold border cursor-help ${
-                supabaseConnected 
-                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' 
-                  : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
-              }`}>
+              <button
+                onClick={() => { if (isAdmin) setCloudDiagType('supabase'); }}
+                className={`inline-flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-full text-[10px] font-mono font-bold border transition-all ${
+                  isAdmin ? 'cursor-pointer hover:scale-105 active:scale-95' : 'cursor-help'
+                } ${
+                  supabaseConnected 
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20' 
+                    : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                }`}
+              >
                 <span className={`w-2 h-2 rounded-full shrink-0 ${supabaseConnected ? 'bg-emerald-400 animate-ping' : 'bg-rose-400'}`}></span>
                 <span className="hidden sm:inline">{supabaseConnected ? 'SUPABASE NUBE' : 'SIN RED'}</span>
-              </span>
+              </button>
             </ClinicalTooltip>
 
-            {/* 3. Chip del Usuario con Ficha al Cursor */}
+            {/* 3. Chip del Usuario */}
             {user && (
               <ClinicalTooltip
                 title={displayName}
@@ -600,7 +600,7 @@ function ScadaAppContent() {
           </div>
         )}
 
-        {/* Contenido Principal con Transición Fluida */}
+        {/* Contenido Principal */}
         {!user ? (
           <main className="flex-1 flex items-center justify-center p-4 android-view-transition">
             <LoginModal />
@@ -875,6 +875,16 @@ function ScadaAppContent() {
             </div>
           </div>
         )}
+
+        {/* MODAL DE DIAGNÓSTICO CLOUD (HIVEMQ / SUPABASE) PARA SUPERADMIN */}
+        <CloudDiagnosticsModal
+          isOpen={Boolean(cloudDiagType)}
+          onClose={() => setCloudDiagType(null)}
+          type={cloudDiagType || 'hivemq'}
+          fleet={fleet}
+          mqttConnected={mqttConnected}
+          supabaseConnected={supabaseConnected}
+        />
 
         {/* Menú Contextual (Clic Secundario) */}
         <ContextMenu
