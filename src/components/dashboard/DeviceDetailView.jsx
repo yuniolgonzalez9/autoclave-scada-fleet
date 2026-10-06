@@ -29,7 +29,13 @@ import {
   Sparkles,
   Lock,
   Power,
-  ShieldCheck
+  ShieldCheck,
+  Cpu,
+  Search,
+  FileJson,
+  RefreshCw,
+  Check,
+  Download
 } from 'lucide-react';
 
 export default function DeviceDetailView({ 
@@ -64,6 +70,7 @@ export default function DeviceDetailView({
 
   const d = device?.datos || {};
   const cfg = d?.cfg || {};
+  const hwProf = device?.hwProfile || {};
 
   const isMotorActive = (d.motor !== undefined) ? Boolean(d.motor) : Boolean(cfg.mot_ok);
   const isVacioActive = (d.vacio !== undefined) ? Boolean(d.vacio) : Boolean(cfg.vacio_ok);
@@ -106,6 +113,19 @@ export default function DeviceDetailView({
   const [limMant, setLimMant] = useState(cfg.lim_mant ?? 200);
   const [sndOk, setSndOk] = useState(cfg.snd_ok ?? true);
 
+  // NUEVO: Mapeo de Pines Dinámicos (GPIOs)
+  const [pinMotor, setPinMotor] = useState(hwProf.pin_motor ?? 2);
+  const [pinCalentador, setPinCalentador] = useState(hwProf.pin_calentador ?? 4);
+  const [pinVacio, setPinVacio] = useState(hwProf.pin_vacio ?? 5);
+
+  // NUEVO: Editor JSON Android-Style
+  const [showJsonEditor, setShowJsonEditor] = useState(false);
+  const [jsonContent, setJsonContent] = useState('');
+  const [jsonError, setJsonError] = useState('');
+
+  // NUEVO: Estado del Escáner I2C
+  const [scanningI2c, setScanningI2c] = useState(false);
+
   useEffect(() => {
     if (cfg.sp_temp !== undefined) setSpTemp(cfg.sp_temp);
     if (cfg.t_ciclo !== undefined) setTCiclo(cfg.t_ciclo);
@@ -113,7 +133,39 @@ export default function DeviceDetailView({
     if (cfg.p_max !== undefined) setPMax(cfg.p_max);
     if (cfg.lim_mant !== undefined) setLimMant(cfg.lim_mant);
     if (cfg.snd_ok !== undefined) setSndOk(cfg.snd_ok);
-  }, [cfg.sp_temp, cfg.t_ciclo, cfg.purga_ok, cfg.p_max, cfg.lim_mant, cfg.snd_ok]);
+
+    if (hwProf.pin_motor !== undefined) setPinMotor(hwProf.pin_motor);
+    if (hwProf.pin_calentador !== undefined) setPinCalentador(hwProf.pin_calentador);
+    if (hwProf.pin_vacio !== undefined) setPinVacio(hwProf.pin_vacio);
+  }, [cfg, hwProf]);
+
+  // Generar representación JSON sincronizada
+  useEffect(() => {
+    const currentProfile = {
+      perfil_version: "v2.0-HAL",
+      dispositivo: {
+        mac: device.mac,
+        alias: alias
+      },
+      salidas_gpios: {
+        pin_motor: Number(pinMotor),
+        pin_calentador: Number(pinCalentador),
+        pin_vacio: Number(pinVacio)
+      },
+      ciclo_parametros: {
+        sp_temp: Number(spTemp),
+        t_ciclo: Number(tCiclo),
+        hab: Boolean(isHabActive),
+        purga_ok: Boolean(purgaOk)
+      },
+      limites_seguridad: {
+        p_max: Number(pMax),
+        lim_mant: Number(limMant),
+        snd_ok: Boolean(sndOk)
+      }
+    };
+    setJsonContent(JSON.stringify(currentProfile, null, 2));
+  }, [pinMotor, pinCalentador, pinVacio, spTemp, tCiclo, isHabActive, purgaOk, pMax, limMant, sndOk]);
 
   const applyPreset134 = () => {
     setSpTemp(134.0);
@@ -131,7 +183,6 @@ export default function DeviceDetailView({
     sendCommand(device.mac, { sp_temp: 121.0, t_ciclo: 15, p_max: 2.40, purga_ok: true, hab: true });
   };
 
-  // Disparo de Confirmación para Acciones Críticas
   const requestStartCycle = () => {
     setConfirmModal({
       isOpen: true,
@@ -162,29 +213,85 @@ export default function DeviceDetailView({
     });
   };
 
-  const handleTransmitNVS = (e) => {
+  // TRANSMISIÓN DUAL: SUPABASE CLOUD (AUDITORÍA) + ESP32 (HIVEMQ)
+  const handleTransmitNVS = async (e) => {
     e.preventDefault();
     if (!canEditHardware) return alert('Permiso denegado: solo personal técnico autorizado.');
-    const payload = {
-      sp_temp: Number(spTemp),
-      t_ciclo: Number(tCiclo),
-      hab: isHabActive,
-      mot_ok: isMotorActive,
-      vacio_ok: isVacioActive,
-      purga_ok: Boolean(purgaOk),
-      p_max: Number(pMax),
-      lim_mant: Number(limMant),
-      snd_ok: Boolean(sndOk)
-    };
+    setJsonError('');
 
-    sendCommand(device.mac, payload);
-    setNvsMsg(`⚡ Parámetros enviados a ${device.mac} y almacenados en la nube.`);
-    setTimeout(() => setNvsMsg(''), 4000);
+    let payloadMqtt = {};
+    let fullJsonProfile = {};
+
+    if (showJsonEditor) {
+      try {
+        fullJsonProfile = JSON.parse(jsonContent);
+        payloadMqtt = {
+          sp_temp: Number(fullJsonProfile.ciclo_parametros?.sp_temp ?? spTemp),
+          t_ciclo: Number(fullJsonProfile.ciclo_parametros?.t_ciclo ?? tCiclo),
+          hab: Boolean(fullJsonProfile.ciclo_parametros?.hab ?? isHabActive),
+          mot_ok: isMotorActive,
+          vacio_ok: isVacioActive,
+          purga_ok: Boolean(fullJsonProfile.ciclo_parametros?.purga_ok ?? purgaOk),
+          p_max: Number(fullJsonProfile.limites_seguridad?.p_max ?? pMax),
+          lim_mant: Number(fullJsonProfile.limites_seguridad?.lim_mant ?? limMant),
+          snd_ok: Boolean(fullJsonProfile.limites_seguridad?.snd_ok ?? sndOk),
+          pin_motor: Number(fullJsonProfile.salidas_gpios?.pin_motor ?? pinMotor),
+          pin_calentador: Number(fullJsonProfile.salidas_gpios?.pin_calentador ?? pinCalentador),
+          pin_vacio: Number(fullJsonProfile.salidas_gpios?.pin_vacio ?? pinVacio)
+        };
+      } catch (err) {
+        setJsonError('Error de sintaxis en el archivo JSON: ' + err.message);
+        return;
+      }
+    } else {
+      payloadMqtt = {
+        sp_temp: Number(spTemp),
+        t_ciclo: Number(tCiclo),
+        hab: isHabActive,
+        mot_ok: isMotorActive,
+        vacio_ok: isVacioActive,
+        purga_ok: Boolean(purgaOk),
+        p_max: Number(pMax),
+        lim_mant: Number(limMant),
+        snd_ok: Boolean(sndOk),
+        pin_motor: Number(pinMotor),
+        pin_calentador: Number(pinCalentador),
+        pin_vacio: Number(pinVacio)
+      };
+      fullJsonProfile = JSON.parse(jsonContent);
+    }
+
+    // 1. Guardar primero en Supabase Cloud (Persistencia y Trazabilidad)
+    try {
+      await supabase.from('perfiles_hardware').upsert({
+        mac: device.mac,
+        alias: alias,
+        perfil_json: fullJsonProfile,
+        version_config: `v${Date.now().toString().slice(-4)}`,
+        actualizado_por: operatorName || 'Director Biomédico',
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'mac' });
+    } catch (err) {
+      console.warn('[SUPABASE PERFIL ERROR]', err);
+    }
+
+    // 2. Transmitir por HiveMQ al microcontrolador ESP32
+    sendCommand(device.mac, payloadMqtt);
+
+    setNvsMsg(`⚡ Perfil guardado en Supabase y transmitido a Flash NVS de ${device.mac}.`);
+    setTimeout(() => setNvsMsg(''), 4500);
   };
 
   const handleToggleHardware = (key, currentState) => {
     const nextState = !currentState;
     sendCommand(device.mac, { [key]: nextState });
+  };
+
+  // DISPARAR ESCANEO I2C EN TIEMPO REAL
+  const handleTriggerI2CScan = () => {
+    setScanningI2c(true);
+    sendCommand(device.mac, { cmd: 'SCAN_I2C' });
+    setTimeout(() => setScanningI2c(false), 3000);
   };
 
   const [alias, setAlias] = useState(device?.meta?.alias || `AUTOCLAVE [${device.mac.slice(-4)}]`);
@@ -239,6 +346,9 @@ export default function DeviceDetailView({
       alert('Error: ' + err.message);
     }
   };
+
+  // Dispositivos I2C detectados
+  const i2cDevices = device?.i2cReport?.dispositivos || device?.i2cReport?.perifericos || device?.i2cReport?.encontrados || [];
 
   return (
     <div className="flex flex-col gap-4 w-full">
@@ -362,13 +472,13 @@ export default function DeviceDetailView({
               }`}
             >
               <Wrench className="w-4 h-4" />
-              <span>Mantenimiento</span>
+              <span>Mantenimiento & Diagnóstico</span>
             </button>
           </>
         )}
       </div>
 
-      {/* PESTAÑA 1: SENSORES, F0 Y ACCIONES CON CONFIRMACIÓN */}
+      {/* PESTAÑA 1: SENSORES, F0 Y ACCIONES */}
       {activeTab === 'sensores' && (
         <div className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -413,7 +523,7 @@ export default function DeviceDetailView({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div className="p-3 bg-slate-900/80 rounded-xl border border-slate-800 flex justify-between items-center">
                 <div>
-                  <span className="text-xs font-mono font-bold text-white block">Motor Agitador (GPIO 2)</span>
+                  <span className="text-xs font-mono font-bold text-white block">Motor Agitador (GPIO {pinMotor})</span>
                   <span className="text-[10px] text-slate-400 font-mono">
                     Estado: {isMotorActive ? '🟢 Encendido' : '⚪ Apagado'}
                   </span>
@@ -431,7 +541,7 @@ export default function DeviceDetailView({
 
               <div className="p-3 bg-slate-900/80 rounded-xl border border-slate-800 flex justify-between items-center">
                 <div>
-                  <span className="text-xs font-mono font-bold text-white block">Bomba Vacío (GPIO 5)</span>
+                  <span className="text-xs font-mono font-bold text-white block">Bomba Vacío (GPIO {pinVacio})</span>
                   <span className="text-[10px] text-slate-400 font-mono">
                     Estado: {isVacioActive ? '🟢 Activa' : '⚪ Inactiva'}
                   </span>
@@ -449,7 +559,7 @@ export default function DeviceDetailView({
             </div>
           </div>
 
-          {/* Botones de Control con Modal de Doble Confirmación */}
+          {/* Botones de Control */}
           <div className="flex gap-2.5">
             <ClinicalTooltip title={CLINICAL_HELP.btn_iniciar_ciclo.title} description={CLINICAL_HELP.btn_iniciar_ciclo.desc} badge={CLINICAL_HELP.btn_iniciar_ciclo.badge}>
               <button
@@ -488,7 +598,7 @@ export default function DeviceDetailView({
         </div>
       )}
 
-      {/* PESTAÑA: HISTORIAL */}
+      {/* PESTAÑA 2: HISTORIAL */}
       {activeTab === 'historial' && tieneReportes && (
         <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 space-y-4">
           <div className="flex justify-between items-center border-b border-cyan-500/20 pb-3">
@@ -566,28 +676,38 @@ export default function DeviceDetailView({
         </div>
       )}
 
-      {/* PESTAÑA: NVS */}
+      {/* PESTAÑA 3: NVS + PERFIL DINÁMICO JSON (ANDROID-STYLE) */}
       {activeTab === 'nvs' && canEditHardware && (
         <form onSubmit={handleTransmitNVS} className="ultra-glass p-5 md:p-6 rounded-2xl border border-cyan-500/30 space-y-5">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-cyan-500/20 pb-3">
             <div>
               <h3 className="text-sm font-bold text-white font-mono flex items-center gap-2">
                 <Sliders className="w-4 h-4 text-cyan-400" />
-                Ajustes NVS Flash & Parámetros Críticos (Solo Técnicos)
+                Ajustes NVS & Perfil Dinámico de Hardware
               </h3>
               <p className="text-[11px] text-slate-400 font-mono mt-0.5">
-                Calibración de setpoints térmicos para {cliente}.
+                Calibración y reconfiguración remota para {cliente} (Guardado en Supabase Cloud).
               </p>
             </div>
 
             <div className="flex gap-1.5">
               <button
                 type="button"
+                onClick={() => setShowJsonEditor(!showJsonEditor)}
+                className={`px-2.5 py-1.5 border rounded-lg text-xs font-mono font-bold flex items-center gap-1 transition-all ${
+                  showJsonEditor ? 'bg-cyan-500 text-slate-950 border-cyan-400 shadow-md shadow-cyan-500/30' : 'bg-slate-900 border-slate-700 text-cyan-300 hover:border-cyan-400'
+                }`}
+              >
+                <FileJson className="w-3.5 h-3.5" />
+                <span>{showJsonEditor ? 'Ocultar JSON' : 'Editor JSON'}</span>
+              </button>
+              <button
+                type="button"
                 onClick={applyPreset134}
                 className="px-2.5 py-1.5 bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 text-cyan-300 rounded-lg text-xs font-mono font-bold flex items-center gap-1"
               >
                 <Sparkles className="w-3.5 h-3.5" />
-                <span>134°C Instrumental</span>
+                <span>134°C</span>
               </button>
               <button
                 type="button"
@@ -595,7 +715,7 @@ export default function DeviceDetailView({
                 className="px-2.5 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 rounded-lg text-xs font-mono font-bold flex items-center gap-1"
               >
                 <Sparkles className="w-3.5 h-3.5" />
-                <span>121°C Plásticos</span>
+                <span>121°C</span>
               </button>
             </div>
           </div>
@@ -607,129 +727,218 @@ export default function DeviceDetailView({
             </div>
           )}
 
-          <div>
-            <span className="text-xs font-mono text-cyan-400 font-bold block mb-3 uppercase tracking-wider">
-              1. Parámetros del Ciclo de Esterilización
-            </span>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 space-y-1.5">
-                <label className="text-[11px] font-mono text-slate-300 block flex justify-between">
-                  <span>Temperatura Setpoint (°C)</span>
-                  <span className="text-cyan-400 font-bold">{spTemp}°C</span>
-                </label>
-                <input
-                  type="number"
-                  step="0.5"
-                  min="105.0"
-                  max="138.0"
-                  value={spTemp}
-                  onChange={(e) => setSpTemp(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white font-mono focus:outline-none"
-                />
-              </div>
-
-              <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 space-y-1.5">
-                <label className="text-[11px] font-mono text-slate-300 block flex justify-between">
-                  <span>Tiempo Meseta (minutos)</span>
-                  <span className="text-cyan-400 font-bold">{tCiclo} min</span>
-                </label>
-                <input
-                  type="number"
-                  step="1"
-                  min="1"
-                  max="60"
-                  value={tCiclo}
-                  onChange={(e) => setTCiclo(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white font-mono focus:outline-none"
-                />
-              </div>
-
-              <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 flex justify-between items-center">
-                <div>
-                  <span className="text-xs font-mono font-bold text-white block">Sistema Habilitado</span>
-                  <span className="text-[10px] text-slate-400 font-mono">Seguro maestro</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => handleToggleHardware('hab', isHabActive)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
-                    isHabActive ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' : 'bg-rose-500/20 text-rose-400 border-rose-500/40'
-                  }`}
-                >
-                  {isHabActive ? 'HABILITADO' : 'BLOQUEADO'}
-                </button>
-              </div>
+          {jsonError && (
+            <div className="p-3 bg-rose-500/20 border border-rose-500/40 text-rose-300 text-xs font-mono rounded-xl flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              <span>{jsonError}</span>
             </div>
-          </div>
+          )}
 
-          <div>
-            <span className="text-xs font-mono text-cyan-400 font-bold block mb-3 uppercase tracking-wider">
-              2. Límites de Seguridad & Odómetro
-            </span>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 space-y-1.5">
-                <label className="text-[11px] font-mono text-slate-300 block flex justify-between">
-                  <span>Límite Sobrepresión</span>
-                  <span className="text-pink-400 font-bold">{pMax} bar</span>
-                </label>
-                <input
-                  type="number"
-                  step="0.05"
-                  min="2.00"
-                  max="3.00"
-                  value={pMax}
-                  onChange={(e) => setPMax(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white font-mono focus:outline-none"
-                />
+          {/* EDITOR JSON DINÁMICO (MODO ANDROID SYSTEM MANIFEST) */}
+          {showJsonEditor ? (
+            <div className="p-4 bg-slate-950 rounded-xl border border-cyan-500/40 space-y-2">
+              <div className="flex justify-between items-center text-xs font-mono text-cyan-300">
+                <span className="flex items-center gap-1.5">
+                  <FileJson className="w-4 h-4 text-cyan-400" />
+                  Archivo de Perfil JSON Activo (hw_profile.json)
+                </span>
+                <span className="text-[10px] text-slate-400">Edición Directa para el ESP32</span>
               </div>
-
-              <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 space-y-1.5">
-                <label className="text-[11px] font-mono text-slate-300 block flex justify-between">
-                  <span>Límite Odómetro</span>
-                  <span className="text-amber-400 font-bold">{limMant}</span>
-                </label>
-                <input
-                  type="number"
-                  step="10"
-                  min="50"
-                  max="1000"
-                  value={limMant}
-                  onChange={(e) => setLimMant(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white font-mono focus:outline-none"
-                />
-              </div>
-
-              <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 flex justify-between items-center">
-                <div>
-                  <span className="text-xs font-mono font-bold text-white block">Zumbador Físico</span>
-                  <span className="text-[10px] text-slate-400 font-mono">Alarma sonora</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => handleToggleHardware('snd_ok', sndOk)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border ${
-                    sndOk ? 'bg-amber-500/20 text-amber-400 border-amber-500/40' : 'bg-slate-800 text-slate-400'
-                  }`}
-                >
-                  {sndOk ? 'AUDIBLE' : 'SILENCIOSO'}
-                </button>
-              </div>
+              <textarea
+                rows={12}
+                value={jsonContent}
+                onChange={(e) => setJsonContent(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 font-mono text-xs text-cyan-200 focus:outline-none focus:border-cyan-400 leading-relaxed"
+                placeholder="Estructura del archivo JSON..."
+              />
+              <p className="text-[10px] text-slate-400 font-mono">
+                💡 Este archivo se guarda en Supabase Cloud y se descarga en la memoria Flash (LittleFS) del microcontrolador.
+              </p>
             </div>
-          </div>
+          ) : (
+            <>
+              {/* SECCIÓN 1: PARÁMETROS DEL CICLO */}
+              <div>
+                <span className="text-xs font-mono text-cyan-400 font-bold block mb-3 uppercase tracking-wider">
+                  1. Parámetros del Ciclo de Esterilización
+                </span>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 space-y-1.5">
+                    <label className="text-[11px] font-mono text-slate-300 block flex justify-between">
+                      <span>Temperatura Setpoint (°C)</span>
+                      <span className="text-cyan-400 font-bold">{spTemp}°C</span>
+                    </label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="105.0"
+                      max="138.0"
+                      value={spTemp}
+                      onChange={(e) => setSpTemp(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white font-mono focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 space-y-1.5">
+                    <label className="text-[11px] font-mono text-slate-300 block flex justify-between">
+                      <span>Tiempo Meseta (minutos)</span>
+                      <span className="text-cyan-400 font-bold">{tCiclo} min</span>
+                    </label>
+                    <input
+                      type="number"
+                      step="1"
+                      min="1"
+                      max="60"
+                      value={tCiclo}
+                      onChange={(e) => setTCiclo(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white font-mono focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 flex justify-between items-center">
+                    <div>
+                      <span className="text-xs font-mono font-bold text-white block">Sistema Habilitado</span>
+                      <span className="text-[10px] text-slate-400 font-mono">Seguro maestro</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleHardware('hab', isHabActive)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
+                        isHabActive ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' : 'bg-rose-500/20 text-rose-400 border-rose-500/40'
+                      }`}
+                    >
+                      {isHabActive ? 'HABILITADO' : 'BLOQUEADO'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* SECCIÓN 2: LÍMITES DE SEGURIDAD & ODÓMETRO */}
+              <div>
+                <span className="text-xs font-mono text-cyan-400 font-bold block mb-3 uppercase tracking-wider">
+                  2. Límites de Seguridad & Odómetro
+                </span>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 space-y-1.5">
+                    <label className="text-[11px] font-mono text-slate-300 block flex justify-between">
+                      <span>Límite Sobrepresión</span>
+                      <span className="text-pink-400 font-bold">{pMax} bar</span>
+                    </label>
+                    <input
+                      type="number"
+                      step="0.05"
+                      min="2.00"
+                      max="3.00"
+                      value={pMax}
+                      onChange={(e) => setPMax(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white font-mono focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 space-y-1.5">
+                    <label className="text-[11px] font-mono text-slate-300 block flex justify-between">
+                      <span>Límite Odómetro</span>
+                      <span className="text-amber-400 font-bold">{limMant}</span>
+                    </label>
+                    <input
+                      type="number"
+                      step="10"
+                      min="50"
+                      max="1000"
+                      value={limMant}
+                      onChange={(e) => setLimMant(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white font-mono focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 flex justify-between items-center">
+                    <div>
+                      <span className="text-xs font-mono font-bold text-white block">Zumbador Físico</span>
+                      <span className="text-[10px] text-slate-400 font-mono">Alarma sonora</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleHardware('snd_ok', sndOk)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border ${
+                        sndOk ? 'bg-amber-500/20 text-amber-400 border-amber-500/40' : 'bg-slate-800 text-slate-400'
+                      }`}
+                    >
+                      {sndOk ? 'AUDIBLE' : 'SILENCIOSO'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* SECCIÓN 3: MAPEO DINÁMICO DE HARDWARE (GPIOS & HAL) */}
+              <div>
+                <span className="text-xs font-mono text-cyan-400 font-bold block mb-3 uppercase tracking-wider flex items-center gap-1.5">
+                  <Cpu className="w-4 h-4 text-cyan-400" />
+                  3. Mapeo Dinámico de Hardware (GPIOs & Relés)
+                </span>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 space-y-1.5">
+                    <label className="text-[11px] font-mono text-slate-300 block flex justify-between">
+                      <span>Pin GPIO Motor</span>
+                      <span className="text-emerald-400 font-bold">GPIO {pinMotor}</span>
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="39"
+                      value={pinMotor}
+                      onChange={(e) => setPinMotor(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white font-mono focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 space-y-1.5">
+                    <label className="text-[11px] font-mono text-slate-300 block flex justify-between">
+                      <span>Pin GPIO Calentador</span>
+                      <span className="text-rose-400 font-bold">GPIO {pinCalentador}</span>
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="39"
+                      value={pinCalentador}
+                      onChange={(e) => setPinCalentador(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white font-mono focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="p-3.5 bg-slate-900/80 rounded-xl border border-slate-800 space-y-1.5">
+                    <label className="text-[11px] font-mono text-slate-300 block flex justify-between">
+                      <span>Pin GPIO Bomba Vacío</span>
+                      <span className="text-cyan-400 font-bold">GPIO {pinVacio}</span>
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="39"
+                      value={pinVacio}
+                      onChange={(e) => setPinVacio(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-sm text-white font-mono focus:outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
 
           <button
             type="submit"
             className="w-full py-3 bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:opacity-90 text-white font-bold rounded-xl text-xs font-mono flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/25"
           >
             <Send className="w-4 h-4" />
-            <span>TRANSMITIR Y GRABAR PARÁMETROS EN NVS FLASH DEL ESP32</span>
+            <span>TRANSMITIR Y GRABAR EN SUPABASE & ESP32 FLASH</span>
           </button>
         </form>
       )}
 
-      {/* PESTAÑA: FICHA CLIENTE */}
+      {/* PESTAÑA 4: FICHA CLIENTE */}
       {activeTab === 'ficha' && canEditHardware && (
         <form onSubmit={handleGuardarFicha} className="ultra-glass p-6 rounded-2xl border border-cyan-500/30 space-y-4 max-w-xl">
           <h3 className="text-sm font-bold text-white font-mono flex items-center gap-2">
@@ -780,78 +989,136 @@ export default function DeviceDetailView({
         </form>
       )}
 
-      {/* PESTAÑA: MANTENIMIENTO */}
+      {/* PESTAÑA 5: MANTENIMIENTO & DIAGNÓSTICO I2C */}
       {activeTab === 'mantenimiento' && canEditHardware && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 space-y-3">
-            <h3 className="text-sm font-bold text-white font-mono flex items-center gap-2">
-              <Wrench className="w-4 h-4 text-cyan-400" />
-              Estado del Odómetro Físico
-            </h3>
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 space-y-3">
+              <h3 className="text-sm font-bold text-white font-mono flex items-center gap-2">
+                <Wrench className="w-4 h-4 text-cyan-400" />
+                Estado del Odómetro Físico
+              </h3>
 
-            <div className="p-4 bg-slate-900/80 rounded-xl border border-slate-800 space-y-2">
-              <div className="flex justify-between text-xs font-mono text-slate-300">
-                <span>Ciclos Acumulados:</span>
-                <span className="font-bold text-cyan-300">{ciclos} / {limite}</span>
-              </div>
-              <div className="w-full bg-slate-800 rounded-full h-3 overflow-hidden border border-slate-700">
-                <div
-                  className={`h-full ${pctMant > 90 ? 'bg-rose-500' : 'bg-emerald-400'}`}
-                  style={{ width: `${pctMant}%` }}
-                ></div>
-              </div>
-              <p className="text-[11px] text-slate-400 font-mono">
-                {limite - ciclos > 0 ? `Restan ${limite - ciclos} ciclos para servicio preventivo.` : '¡Mantenimiento vencido!'}
-              </p>
-              
-              <ClinicalTooltip
-                title={CLINICAL_HELP.btn_reset_odometro.title}
-                description={CLINICAL_HELP.btn_reset_odometro.desc}
-                badge={CLINICAL_HELP.btn_reset_odometro.badge}
-                shortcut={CLINICAL_HELP.btn_reset_odometro.action}
-              >
-                <button
-                  type="button"
-                  onClick={() => sendCommand(device.mac, { cmd: 'RESET_ODOMETRO' })}
-                  className="w-full mt-2 py-2 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 rounded-lg text-xs font-bold"
+              <div className="p-4 bg-slate-900/80 rounded-xl border border-slate-800 space-y-2">
+                <div className="flex justify-between text-xs font-mono text-slate-300">
+                  <span>Ciclos Acumulados:</span>
+                  <span className="font-bold text-cyan-300">{ciclos} / {limite}</span>
+                </div>
+                <div className="w-full bg-slate-800 rounded-full h-3 overflow-hidden border border-slate-700">
+                  <div
+                    className={`h-full ${pctMant > 90 ? 'bg-rose-500' : 'bg-emerald-400'}`}
+                    style={{ width: `${pctMant}%` }}
+                  ></div>
+                </div>
+                <p className="text-[11px] text-slate-400 font-mono">
+                  {limite - ciclos > 0 ? `Restan ${limite - ciclos} ciclos para servicio preventivo.` : '¡Mantenimiento vencido!'}
+                </p>
+                
+                <ClinicalTooltip
+                  title={CLINICAL_HELP.btn_reset_odometro.title}
+                  description={CLINICAL_HELP.btn_reset_odometro.desc}
+                  badge={CLINICAL_HELP.btn_reset_odometro.badge}
+                  shortcut={CLINICAL_HELP.btn_reset_odometro.action}
                 >
-                  🔄 Reiniciar Odómetro a Cero
-                </button>
-              </ClinicalTooltip>
+                  <button
+                    type="button"
+                    onClick={() => sendCommand(device.mac, { cmd: 'RESET_ODOMETRO' })}
+                    className="w-full mt-2 py-2 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 rounded-lg text-xs font-bold"
+                  >
+                    🔄 Reiniciar Odómetro a Cero
+                  </button>
+                </ClinicalTooltip>
+              </div>
             </div>
+
+            <form onSubmit={handleGuardarMantenimiento} className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 space-y-3">
+              <h3 className="text-sm font-bold text-white font-mono">Agendar Mantenimiento Preventivo</h3>
+              <input
+                type="date"
+                required
+                value={maintFecha}
+                onChange={(e) => setMaintFecha(e.target.value)}
+                className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white"
+              />
+              <input
+                type="text"
+                required
+                placeholder="Técnico responsable..."
+                value={maintTecnico}
+                onChange={(e) => setMaintTecnico(e.target.value)}
+                className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white"
+              />
+              <input
+                type="text"
+                placeholder="Notas u observaciones del servicio..."
+                value={maintNotas}
+                onChange={(e) => setMaintNotas(e.target.value)}
+                className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white"
+              />
+              <button
+                type="submit"
+                className="w-full py-2 bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold rounded-lg text-xs"
+              >
+                Agendar en Supabase Cloud
+              </button>
+            </form>
           </div>
 
-          <form onSubmit={handleGuardarMantenimiento} className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 space-y-3">
-            <h3 className="text-sm font-bold text-white font-mono">Agendar Mantenimiento Preventivo</h3>
-            <input
-              type="date"
-              required
-              value={maintFecha}
-              onChange={(e) => setMaintFecha(e.target.value)}
-              className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white"
-            />
-            <input
-              type="text"
-              required
-              placeholder="Técnico responsable..."
-              value={maintTecnico}
-              onChange={(e) => setMaintTecnico(e.target.value)}
-              className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white"
-            />
-            <input
-              type="text"
-              placeholder="Notas u observaciones del servicio..."
-              value={maintNotas}
-              onChange={(e) => setMaintNotas(e.target.value)}
-              className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white"
-            />
-            <button
-              type="submit"
-              className="w-full py-2 bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold rounded-lg text-xs"
-            >
-              Agendar en Supabase Cloud
-            </button>
-          </form>
+          {/* DIAGNÓSTICO Y ESCANEO I2C PLUG & PLAY */}
+          <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 space-y-3">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-cyan-500/20 pb-3">
+              <div>
+                <h3 className="text-sm font-bold text-white font-mono flex items-center gap-2">
+                  <Search className="w-4 h-4 text-cyan-400" />
+                  Diagnóstico y Escaneo de Periféricos I2C (Plug & Play)
+                </h3>
+                <p className="text-[11px] text-slate-400 font-mono mt-0.5">
+                  Detección física de chips en el bus del ESP32 (Registrado en Supabase).
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleTriggerI2CScan}
+                disabled={scanningI2c}
+                className="px-3.5 py-1.5 bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400 text-cyan-300 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 transition-all disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${scanningI2c ? 'animate-spin' : ''}`} />
+                <span>{scanningI2c ? 'Escaneando...' : '🔍 Escanear Bus I2C'}</span>
+              </button>
+            </div>
+
+            {i2cDevices.length === 0 ? (
+              <div className="p-6 text-center text-xs font-mono text-slate-400 border border-dashed border-slate-800 rounded-xl">
+                Presiona "Escanear Bus I2C" para consultar los periféricos conectados al microcontrolador.
+              </div>
+            ) : (
+              <div className="rounded-xl border border-slate-800 overflow-x-auto">
+                <table className="w-full text-left text-xs font-mono">
+                  <thead className="bg-slate-900/90 text-cyan-400 border-b border-slate-800">
+                    <tr>
+                      <th className="p-3">DIRECCIÓN HEX</th>
+                      <th className="p-3">CHIP / HARDWARE RECONOCIDO</th>
+                      <th className="p-3">ESTADO</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60 text-slate-300">
+                    {i2cDevices.map((dev, idx) => (
+                      <tr key={idx} className="hover:bg-slate-800/40">
+                        <td className="p-3 font-bold text-cyan-300">{dev.dir || dev.addr || dev.dir_hex}</td>
+                        <td className="p-3 text-white">{dev.chip || dev.tipo || dev.posible_chip || 'Periférico I2C'}</td>
+                        <td className="p-3">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1 w-fit">
+                            <Check className="w-3 h-3" /> CONECTADO
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
