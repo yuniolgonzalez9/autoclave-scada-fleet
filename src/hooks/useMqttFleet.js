@@ -8,7 +8,7 @@ export function useMqttFleet() {
   const [mqttConnected, setMqttConnected] = useState(false);
   const sendCommandRef = useRef(null);
 
-  // 1. Cargar la flota registrada en Supabase con MACs normalizadas
+  // 1. Cargar la flota y perfiles registrados en Supabase
   useEffect(() => {
     const loadRegisteredDevices = async () => {
       try {
@@ -16,11 +16,22 @@ export function useMqttFleet() {
           .from('asignaciones_equipos')
           .select('*');
 
+        // Cargar perfiles JSON guardados previamente en Supabase
+        const { data: savedProfiles } = await supabase
+          .from('perfiles_hardware')
+          .select('*');
+
+        const profileMap = {};
+        if (savedProfiles) {
+          savedProfiles.forEach(p => {
+            if (p.mac) profileMap[p.mac.toUpperCase().replace(/[:\-]/g, '')] = p.perfil_json;
+          });
+        }
+
         if (!error && data && data.length > 0) {
           setFleet((prev) => {
             const initialFleet = { ...prev };
             data.forEach((item) => {
-              // Limpieza estricta: mayúsculas y sin dos puntos ni guiones
               const rawMac = item.mac || item.Mac || '';
               const devMac = rawMac.toUpperCase().replace(/[:\-]/g, '');
               
@@ -41,10 +52,15 @@ export function useMqttFleet() {
                   esquema: null,
                   meta: { ...item, mac: devMac },
                   f0Score: 0.0,
-                  history: []
+                  history: [],
+                  i2cReport: null,
+                  hwProfile: profileMap[devMac] || null
                 };
               } else if (devMac && initialFleet[devMac]) {
                 initialFleet[devMac].meta = Object.assign(initialFleet[devMac].meta || {}, item, { mac: devMac });
+                if (profileMap[devMac]) {
+                  initialFleet[devMac].hwProfile = profileMap[devMac];
+                }
               }
             });
             return initialFleet;
@@ -72,7 +88,9 @@ export function useMqttFleet() {
             esquema: null,
             meta: { alias: `AUTOCLAVE [${cleanMac.slice(-4)}]`, cliente: 'Hospital', modelo: 'Clase B' },
             f0Score: 0.0,
-            history: []
+            history: [],
+            i2cReport: null,
+            hwProfile: null
           };
 
           const isFreshStream = !isRetained;
@@ -81,7 +99,7 @@ export function useMqttFleet() {
             lastSeen: isFreshStream ? Date.now() : (currentDev.lastSeen || 0)
           };
 
-          // TELEMETRÍA EN VIVO (PINES FÍSICOS REALES)
+          // TELEMETRÍA EN VIVO
           if (channel === 'telemetria') {
             updated.datos = payload;
 
@@ -112,6 +130,30 @@ export function useMqttFleet() {
 
           if (channel === 'meta') {
             updated.meta = Object.assign(updated.meta || {}, payload, { mac: cleanMac });
+          }
+
+          // DIAGNÓSTICO I2C: Guarda en Supabase y actualiza la vista
+          if (channel === 'i2c_report') {
+            updated.i2cReport = payload;
+            supabase.from('diagnosticos_i2c').insert([{
+              mac: cleanMac,
+              dispositivos_detectados: payload.dispositivos || payload.perifericos || payload.encontrados || [],
+              total_encontrados: payload.total || payload.total_encontrados || 0,
+              escaneado_por: 'Biofleet SCADA'
+            }]).catch(err => console.warn('[SUPABASE] Error guardando diagnostico I2C:', err));
+          }
+
+          // PERFIL DE HARDWARE ENVIADO POR EL ESP32
+          if (channel === 'hw_profile') {
+            updated.hwProfile = payload;
+            supabase.from('perfiles_hardware').upsert({
+              mac: cleanMac,
+              alias: updated.meta?.alias || cleanMac,
+              perfil_json: payload,
+              version_config: payload.version || 'v1.0',
+              actualizado_por: 'ESP32 Hardware',
+              updated_at: new Date().toISOString()
+            }, { onConflict: 'mac' }).catch(err => console.warn('[SUPABASE] Error guardando hw_profile:', err));
           }
 
           // GUARDAR REPORTE FINAL DE CICLO EN SUPABASE
