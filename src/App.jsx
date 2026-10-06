@@ -12,7 +12,6 @@ import ClinicalTooltip from './components/common/ClinicalTooltip';
 import ContextMenu from './components/common/ContextMenu';
 import DeviceAssignmentModal from './components/admin/DeviceAssignmentModal';
 import SurgicalQRLabel from './components/labels/SurgicalQRLabel';
-import { CLINICAL_HELP } from './utils/clinicalDictionary';
 import { useMqttFleet } from './hooks/useMqttFleet';
 import { startIndustrialSiren, stopIndustrialSiren, initAudioUnlock } from './services/audioAlarm';
 import { sendCriticalAlarmWithButtons } from './services/telegram';
@@ -40,6 +39,7 @@ function ScadaAppContent() {
   const { user, profile, loading, pendingRequests, logout } = useAuth();
   const { fleet, mqttConnected, sendDeviceCommand } = useMqttFleet();
 
+  // Auditoría en vivo de conexión con Supabase Cloud
   const [supabaseConnected, setSupabaseConnected] = useState(true);
   useEffect(() => {
     const checkSupabase = async () => {
@@ -63,52 +63,56 @@ function ScadaAppContent() {
     initAudioUnlock();
   }, []);
 
-  // GESTIÓN DE TERMINAL DEDICADA & PERSISTENCIA
+  // =========================================================================
+  // BLINDAJE 1: AISLAMIENTO DE PESTAÑAS (SESSIONSTORAGE EN VEZ DE LOCALSTORAGE)
+  // Cada pestaña o ventana puede anclar un autoclave diferente sin colisiones
+  // =========================================================================
   const [kioskMac, setKioskMac] = useState(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const directKiosk = urlParams.get('kiosk');
     if (directKiosk) return directKiosk.toUpperCase().replace(/[:\-]/g, '');
-    return localStorage.getItem('scada_kiosk_mac') || null;
+    return sessionStorage.getItem('scada_tab_kiosk_mac') || null;
   });
 
   const [selectedMac, setSelectedMac] = useState(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const directMac = urlParams.get('mac') || urlParams.get('kiosk');
     if (directMac) return directMac.toUpperCase().replace(/[:\-]/g, '');
-    if (localStorage.getItem('scada_kiosk_mac')) return localStorage.getItem('scada_kiosk_mac');
-    return localStorage.getItem('scada_selected_mac') || null;
+    if (sessionStorage.getItem('scada_tab_kiosk_mac')) return sessionStorage.getItem('scada_tab_kiosk_mac');
+    return sessionStorage.getItem('scada_tab_selected_mac') || null;
   });
 
   const [activeSection, setActiveSection] = useState(() => {
     const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('mac') || urlParams.get('kiosk') || localStorage.getItem('scada_kiosk_mac')) {
+    if (urlParams.get('mac') || urlParams.get('kiosk') || sessionStorage.getItem('scada_tab_kiosk_mac')) {
       return 'detalle';
     }
-    return localStorage.getItem('scada_active_section') || 'flota';
+    return sessionStorage.getItem('scada_tab_active_section') || 'flota';
   });
 
-  const [healthFilter, setHealthFilter] = useState(() => localStorage.getItem('scada_health_filter') || 'ALL');
+  const [healthFilter, setHealthFilter] = useState(() => sessionStorage.getItem('scada_tab_health_filter') || 'ALL');
 
   useEffect(() => {
     if (!kioskMac) {
-      localStorage.setItem('scada_active_section', activeSection);
+      sessionStorage.setItem('scada_tab_active_section', activeSection);
     }
   }, [activeSection, kioskMac]);
 
   useEffect(() => {
     if (!kioskMac) {
-      if (selectedMac) localStorage.setItem('scada_selected_mac', selectedMac);
-      else localStorage.removeItem('scada_selected_mac');
+      if (selectedMac) sessionStorage.setItem('scada_tab_selected_mac', selectedMac);
+      else sessionStorage.removeItem('scada_tab_selected_mac');
     }
   }, [selectedMac, kioskMac]);
 
   useEffect(() => {
-    localStorage.setItem('scada_health_filter', healthFilter);
+    sessionStorage.setItem('scada_tab_health_filter', healthFilter);
   }, [healthFilter]);
 
+  // Alternar el anclaje de terminal de forma independiente por pestaña
   const toggleKioskMode = (macToKiosk = null) => {
     if (kioskMac) {
-      localStorage.removeItem('scada_kiosk_mac');
+      sessionStorage.removeItem('scada_tab_kiosk_mac');
       setKioskMac(null);
       if (window.location.search.includes('mac=') || window.location.search.includes('kiosk=')) {
         window.history.replaceState({}, '', window.location.pathname);
@@ -118,13 +122,29 @@ function ScadaAppContent() {
     } else {
       const target = (macToKiosk || selectedMac || '').toUpperCase().replace(/[:\-]/g, '');
       if (target) {
-        localStorage.setItem('scada_kiosk_mac', target);
+        sessionStorage.setItem('scada_tab_kiosk_mac', target);
         setKioskMac(target);
         setSelectedMac(target);
         setActiveSection('detalle');
       }
     }
   };
+
+  // =========================================================================
+  // BLINDAJE 2: CIERRE DE SESIÓN SINCRONIZADO CROSS-TAB (SEGURIDAD HOSPITALARIA)
+  // Si sales en una pestaña, todas las pestañas se cierran en el acto
+  // =========================================================================
+  useEffect(() => {
+    const handleStorageChange = (e) => {
+      if (e.key === 'biofleet_enterprise_session' && !e.newValue) {
+        // La sesión fue cerrada en otra pestaña -> cerrar aquí inmediatamente
+        sessionStorage.clear();
+        window.location.reload();
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
 
   const [contextMenu, setContextMenu] = useState({ isOpen: false, position: { x: 0, y: 0 }, device: null });
   const [assignModal, setAssignModal] = useState({ isOpen: false, device: null });
@@ -149,6 +169,7 @@ function ScadaAppContent() {
     return () => clearInterval(timer);
   }, []);
 
+  // Temporizador de Inactividad (15 min)
   const [showTimeoutModal, setShowTimeoutModal] = useState(false);
   const [countdown, setCountdown] = useState(60);
   const idleTimerRef = useRef(null);
@@ -279,7 +300,7 @@ function ScadaAppContent() {
 
   const macKeys = Object.keys(fleet);
 
-  // Aislamiento Multi-Tenant
+  // Aislamiento Multi-Tenant Hospitalario
   const allowedDevices = macKeys
     .map((k) => fleet[k])
     .filter((dev) => {
@@ -314,6 +335,7 @@ function ScadaAppContent() {
     return true;
   });
 
+  // Seguro anti-pantalla en blanco
   const inspectingMacToUse = kioskMac || selectedMac;
   const inspectingDevice = inspectingMacToUse 
     ? (fleet[inspectingMacToUse] || {
@@ -383,9 +405,8 @@ function ScadaAppContent() {
           </div>
         )}
 
-        {/* HEADER INSTITUCIONAL CON TOOLTIPS UNIVERSALES */}
+        {/* Header Institucional */}
         <header className="speedtest-laser-header border-b border-cyan-500/20 bg-slate-950/80 backdrop-blur-md px-3 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between sticky top-0 z-40 w-full">
-          
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <div className="p-1.5 sm:p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 shrink-0">
               <Activity className="w-5 h-5 sm:w-6 sm:h-6 animate-pulse" />
@@ -406,23 +427,15 @@ function ScadaAppContent() {
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0 ml-2">
-            
             {kioskMac && (
-              <ClinicalTooltip
-                title={CLINICAL_HELP.btn_anclar_terminal.title}
-                description="Haz clic aquí para liberar esta pantalla y regresar a la vista completa de la flota."
-                badge="MODO KIOSCO ACTIVO"
-                shortcut="CLICK PARA LIBERAR"
-                position="bottom"
+              <button
+                onClick={() => toggleKioskMode(null)}
+                className="flex items-center gap-1 px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500 text-amber-300 rounded-lg text-xs font-mono font-bold transition-all shadow-[0_0_15px_rgba(245,158,11,0.3)] animate-pulse"
+                title="Desanclar y volver a la flota completa"
               >
-                <button
-                  onClick={() => toggleKioskMode(null)}
-                  className="flex items-center gap-1 px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500 text-amber-300 rounded-lg text-xs font-mono font-bold transition-all shadow-[0_0_15px_rgba(245,158,11,0.3)] animate-pulse"
-                >
-                  <Unlock className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">DESANCLAR [{kioskMac.slice(-4)}]</span>
-                </button>
-              </ClinicalTooltip>
+                <Unlock className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">DESANCLAR [{kioskMac.slice(-4)}]</span>
+              </button>
             )}
 
             {/* 1. Indicador MQTT */}
@@ -461,7 +474,7 @@ function ScadaAppContent() {
               </span>
             </ClinicalTooltip>
 
-            {/* 3. Chip del Usuario con Ficha Detallada al Poner el Cursor */}
+            {/* 3. Chip del Usuario con Ficha al Cursor */}
             {user && (
               <ClinicalTooltip
                 title={displayName}
@@ -506,30 +519,23 @@ function ScadaAppContent() {
               </ClinicalTooltip>
             )}
 
-            {/* 4. Notificaciones */}
+            {/* Notificaciones */}
             {user && isAdmin && (
-              <ClinicalTooltip
-                title="Bandeja de Aprobaciones Rápidas"
-                description="Revisa solicitudes pendientes de nuevos operadores y alertas clínicas registradas."
-                badge="ADMIN"
-                shortcut="CLICK"
-                position="bottom"
+              <button
+                onClick={() => setShowAdminModal(true)}
+                className="relative p-1.5 sm:p-2 rounded-xl bg-slate-900 border border-amber-500/40 text-amber-300 shrink-0"
+                title="Personal y Aprobaciones"
               >
-                <button
-                  onClick={() => setShowAdminModal(true)}
-                  className="relative p-1.5 sm:p-2 rounded-xl bg-slate-900 border border-amber-500/40 text-amber-300 shrink-0"
-                >
-                  <Bell className="w-4 h-4 sm:w-5 sm:h-5" />
-                  {pendingRequests.length > 0 && (
-                    <span className="absolute -top-1 -right-1 px-1.5 py-0.2 rounded-full bg-amber-500 text-slate-950 text-[9px] font-bold">
-                      {pendingRequests.length}
-                    </span>
-                  )}
-                </button>
-              </ClinicalTooltip>
+                <Bell className="w-4 h-4 sm:w-5 sm:h-5" />
+                {pendingRequests.length > 0 && (
+                  <span className="absolute -top-1 -right-1 px-1.5 py-0.2 rounded-full bg-amber-500 text-slate-950 text-[9px] font-bold">
+                    {pendingRequests.length}
+                  </span>
+                )}
+              </button>
             )}
 
-            {/* 5. Engranaje */}
+            {/* Engranaje */}
             {user && (
               <div className="shrink-0">
                 <GearMenu
@@ -548,63 +554,49 @@ function ScadaAppContent() {
           </div>
         </header>
 
-        {/* DOCK SUPERIOR EN PC CON TOOLTIPS EN CADA SECCIÓN */}
+        {/* Dock Superior en PC */}
         {user && !kioskMac && !isOperator && (
           <div className="hidden md:flex items-center gap-2 px-6 py-2 bg-slate-950/60 border-b border-cyan-500/10">
-            <ClinicalTooltip title={CLINICAL_HELP.nav_flota.title} description={CLINICAL_HELP.nav_flota.desc} badge={CLINICAL_HELP.nav_flota.badge}>
-              <button
-                onClick={() => { setActiveSection('flota'); setSelectedMac(null); }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
-                  activeSection === 'flota' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                ⚡ Flota en Vivo ({allowedDevices.length})
-              </button>
-            </ClinicalTooltip>
-
-            <ClinicalTooltip title={CLINICAL_HELP.nav_gestion.title} description={CLINICAL_HELP.nav_gestion.desc} badge={CLINICAL_HELP.nav_gestion.badge}>
-              <button
-                onClick={() => { setActiveSection('gestion'); setSelectedMac(null); }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
-                  activeSection === 'gestion' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                🏢 Gestión Flota
-              </button>
-            </ClinicalTooltip>
-
-            <ClinicalTooltip title={CLINICAL_HELP.nav_usuarios.title} description={CLINICAL_HELP.nav_usuarios.desc} badge={CLINICAL_HELP.nav_usuarios.badge}>
-              <button
-                onClick={() => { setActiveSection('usuarios'); setSelectedMac(null); }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
-                  activeSection === 'usuarios' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                🛡️ Usuarios & Permisos
-              </button>
-            </ClinicalTooltip>
-
-            <ClinicalTooltip title={CLINICAL_HELP.nav_fota.title} description={CLINICAL_HELP.nav_fota.desc} badge={CLINICAL_HELP.nav_fota.badge}>
-              <button
-                onClick={() => { setActiveSection('fota'); setSelectedMac(null); }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
-                  activeSection === 'fota' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                🚀 FOTA Hub
-              </button>
-            </ClinicalTooltip>
-
-            <ClinicalTooltip title={CLINICAL_HELP.nav_auditoria.title} description={CLINICAL_HELP.nav_auditoria.desc} badge={CLINICAL_HELP.nav_auditoria.badge}>
-              <button
-                onClick={() => { setActiveSection('auditoria'); setSelectedMac(null); }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
-                  activeSection === 'auditoria' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                📋 Auditoría Supabase
-              </button>
-            </ClinicalTooltip>
+            <button
+              onClick={() => { setActiveSection('flota'); setSelectedMac(null); }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
+                activeSection === 'flota' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              ⚡ Flota en Vivo ({allowedDevices.length})
+            </button>
+            <button
+              onClick={() => { setActiveSection('gestion'); setSelectedMac(null); }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
+                activeSection === 'gestion' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              🏢 Gestión Flota
+            </button>
+            <button
+              onClick={() => { setActiveSection('usuarios'); setSelectedMac(null); }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
+                activeSection === 'usuarios' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              🛡️ Usuarios & Permisos
+            </button>
+            <button
+              onClick={() => { setActiveSection('fota'); setSelectedMac(null); }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
+                activeSection === 'fota' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              🚀 FOTA Hub
+            </button>
+            <button
+              onClick={() => { setActiveSection('auditoria'); setSelectedMac(null); }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
+                activeSection === 'auditoria' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              📋 Auditoría Supabase
+            </button>
           </div>
         )}
 
@@ -628,7 +620,7 @@ function ScadaAppContent() {
               />
             ) : (
               <>
-                {/* SECCIÓN FLOTA CON TOOLTIPS EN FILTROS Y TARJETAS */}
+                {/* SECCIÓN FLOTA */}
                 {activeSection === 'flota' && (
                   <div className="space-y-4">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
@@ -643,7 +635,7 @@ function ScadaAppContent() {
                       </div>
 
                       <div className="flex gap-2 overflow-x-auto w-full sm:w-auto pb-1">
-                        <ClinicalTooltip title={CLINICAL_HELP.filter_online.title} description={CLINICAL_HELP.filter_online.desc} badge={CLINICAL_HELP.filter_online.badge}>
+                        <ClinicalTooltip title="Filtro En Línea" description="Autoclaves transmitiendo en los últimos 4 segundos." badge="0-4s">
                           <button
                             onClick={() => setHealthFilter('ONLINE')}
                             className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
@@ -654,7 +646,7 @@ function ScadaAppContent() {
                           </button>
                         </ClinicalTooltip>
 
-                        <ClinicalTooltip title={CLINICAL_HELP.filter_latency.title} description={CLINICAL_HELP.filter_latency.desc} badge={CLINICAL_HELP.filter_latency.badge}>
+                        <ClinicalTooltip title="Filtro Latencia" description="Autoclaves con retraso de 4 a 8 segundos." badge="4-8s">
                           <button
                             onClick={() => setHealthFilter('LATENCY')}
                             className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
@@ -665,7 +657,7 @@ function ScadaAppContent() {
                           </button>
                         </ClinicalTooltip>
 
-                        <ClinicalTooltip title={CLINICAL_HELP.filter_offline.title} description={CLINICAL_HELP.filter_offline.desc} badge={CLINICAL_HELP.filter_offline.badge}>
+                        <ClinicalTooltip title="Filtro Desconectados" description="Autoclaves sin señal por más de 8 segundos." badge=">8s">
                           <button
                             onClick={() => setHealthFilter('OFFLINE')}
                             className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
@@ -676,16 +668,14 @@ function ScadaAppContent() {
                           </button>
                         </ClinicalTooltip>
 
-                        <ClinicalTooltip title={CLINICAL_HELP.filter_all.title} description={CLINICAL_HELP.filter_all.desc} badge={CLINICAL_HELP.filter_all.badge}>
-                          <button
-                            onClick={() => setHealthFilter('ALL')}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
-                              healthFilter === 'ALL' ? 'bg-cyan-500 text-slate-950 border-cyan-400 shadow-md' : 'bg-slate-900/80 border-slate-700 text-slate-300'
-                            }`}
-                          >
-                            🌐 TODOS ({allowedDevices.length})
-                          </button>
-                        </ClinicalTooltip>
+                        <button
+                          onClick={() => setHealthFilter('ALL')}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
+                            healthFilter === 'ALL' ? 'bg-cyan-500 text-slate-950 border-cyan-400 shadow-md' : 'bg-slate-900/80 border-slate-700 text-slate-300'
+                          }`}
+                        >
+                          🌐 TODOS ({allowedDevices.length})
+                        </button>
                       </div>
                     </div>
 
@@ -736,40 +726,32 @@ function ScadaAppContent() {
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-2 my-3">
-                                  <ClinicalTooltip title={CLINICAL_HELP.temp_camara.title} description={CLINICAL_HELP.temp_camara.desc} badge="°C">
-                                    <div className="p-2.5 rounded-xl glass-cell text-center w-full">
-                                      <span className="text-[10px] font-mono text-cyan-400 block">TEMPERATURA</span>
-                                      <span className="text-xl font-bold font-mono text-white">{(dDev.temp_camara || 25).toFixed(1)}°C</span>
-                                    </div>
-                                  </ClinicalTooltip>
+                                  <div className="p-2.5 rounded-xl glass-cell text-center w-full">
+                                    <span className="text-[10px] font-mono text-cyan-400 block">TEMPERATURA</span>
+                                    <span className="text-xl font-bold font-mono text-white">{(dDev.temp_camara || 25).toFixed(1)}°C</span>
+                                  </div>
 
-                                  <ClinicalTooltip title={CLINICAL_HELP.presion_camara.title} description={CLINICAL_HELP.presion_camara.desc} badge="BAR">
-                                    <div className="p-2.5 rounded-xl glass-cell text-center w-full">
-                                      <span className="text-[10px] font-mono text-pink-400 block">PRESIÓN</span>
-                                      <span className="text-xl font-bold font-mono text-white">{(dDev.presion || 0).toFixed(2)}b</span>
-                                    </div>
-                                  </ClinicalTooltip>
+                                  <div className="p-2.5 rounded-xl glass-cell text-center w-full">
+                                    <span className="text-[10px] font-mono text-pink-400 block">PRESIÓN</span>
+                                    <span className="text-xl font-bold font-mono text-white">{(dDev.presion || 0).toFixed(2)}b</span>
+                                  </div>
                                 </div>
 
-                                <ClinicalTooltip title={CLINICAL_HELP.card_odometro.title} description={CLINICAL_HELP.card_odometro.desc} badge="VIDA ÚTIL">
-                                  <div className="space-y-1 mb-3 w-full">
-                                    <div className="flex justify-between text-[10px] font-mono text-slate-400">
-                                      <span>Odómetro: {cCount}/{cLim} ciclos</span>
-                                      <span>{Math.round((cCount / cLim) * 100)}%</span>
-                                    </div>
-                                    <div className="w-full bg-slate-800/80 rounded-full h-1.5 overflow-hidden">
-                                      <div className="bg-emerald-400 h-full" style={{ width: `${Math.min(100, (cCount / cLim) * 100)}%` }}></div>
-                                    </div>
+                                <div className="space-y-1 mb-3">
+                                  <div className="flex justify-between text-[10px] font-mono text-slate-400">
+                                    <span>Odómetro: {cCount}/{cLim} ciclos</span>
+                                    <span>{Math.round((cCount / cLim) * 100)}%</span>
                                   </div>
-                                </ClinicalTooltip>
+                                  <div className="w-full bg-slate-800/80 rounded-full h-1.5 overflow-hidden">
+                                    <div className="bg-emerald-400 h-full" style={{ width: `${Math.min(100, (cCount / cLim) * 100)}%` }}></div>
+                                  </div>
+                                </div>
                               </div>
 
-                              <ClinicalTooltip title={CLINICAL_HELP.card_control_total.title} description={CLINICAL_HELP.card_control_total.desc} badge="ENTRAR">
-                                <div className="pt-3 border-t border-white/10 flex items-center justify-between text-xs font-mono text-cyan-400 font-bold w-full">
-                                  <span>ENTRAR A CONTROL TOTAL</span>
-                                  <ChevronRight className="w-4 h-4" />
-                                </div>
-                              </ClinicalTooltip>
+                              <div className="pt-3 border-t border-white/10 flex items-center justify-between text-xs font-mono text-cyan-400 font-bold">
+                                <span>CONTROL TOTAL / CLIC DERECHO</span>
+                                <ChevronRight className="w-4 h-4" />
+                              </div>
                             </div>
                           );
                         })
@@ -815,7 +797,7 @@ function ScadaAppContent() {
           <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-slate-950/90 border-t border-cyan-500/30 backdrop-blur-xl flex items-center justify-around z-50 px-2">
             <button
               onClick={() => { setActiveSection('flota'); setSelectedMac(null); }}
-              className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-xs font-mono ${
+              className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-lg text-xs font-mono ${
                 activeSection === 'flota' || activeSection === 'detalle' ? 'text-cyan-400 font-bold' : 'text-slate-400'
               }`}
             >
@@ -825,7 +807,7 @@ function ScadaAppContent() {
 
             <button
               onClick={() => { setActiveSection('gestion'); setSelectedMac(null); }}
-              className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-xs font-mono ${
+              className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-lg text-xs font-mono ${
                 activeSection === 'gestion' ? 'text-cyan-400 font-bold' : 'text-slate-400'
               }`}
             >
@@ -835,7 +817,7 @@ function ScadaAppContent() {
 
             <button
               onClick={() => { setActiveSection('usuarios'); setSelectedMac(null); }}
-              className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-xs font-mono ${
+              className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-lg text-xs font-mono ${
                 activeSection === 'usuarios' ? 'text-cyan-400 font-bold' : 'text-slate-400'
               }`}
             >
@@ -845,7 +827,7 @@ function ScadaAppContent() {
 
             <button
               onClick={() => { setActiveSection('fota'); setSelectedMac(null); }}
-              className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-xs font-mono ${
+              className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-lg text-xs font-mono ${
                 activeSection === 'fota' ? 'text-cyan-400 font-bold' : 'text-slate-400'
               }`}
             >
@@ -855,7 +837,7 @@ function ScadaAppContent() {
 
             <button
               onClick={() => { setActiveSection('auditoria'); setSelectedMac(null); }}
-              className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-xs font-mono ${
+              className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-lg text-xs font-mono ${
                 activeSection === 'auditoria' ? 'text-cyan-400 font-bold' : 'text-slate-400'
               }`}
             >
