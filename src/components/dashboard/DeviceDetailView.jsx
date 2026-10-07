@@ -28,8 +28,7 @@ import {
   Send, 
   Sparkles, 
   Lock, 
-  Power, 
-  ShieldCheck 
+  Power 
 } from 'lucide-react';
 
 export default function DeviceDetailView({ 
@@ -132,7 +131,7 @@ export default function DeviceDetailView({
     setConfirmModal({
       isOpen: true,
       title: 'Iniciar Ciclo de Esterilización',
-      description: `¿Confirmas el inicio del protocolo a ${spTemp}°C durante ${tCiclo} minutos? Asegúrate de que la puerta esté enclavada herméticamente.`,
+      description: `¿Confirmas el inicio del protocolo a ${spTemp}°C durante ${tCiclo} minutos?`,
       actionType: 'START',
       onConfirm: () => sendCommand(device.mac, { cmd: 'INICIAR_CICLO' })
     });
@@ -142,7 +141,7 @@ export default function DeviceDetailView({
     setConfirmModal({
       isOpen: true,
       title: '¡PARO DE EMERGENCIA EN CÁMARA!',
-      description: 'Esta orden cortará inmediatamente la alimentación de las resistencias calefactoras y abrirá el escape de vapor. El ciclo quedará invalidado.',
+      description: 'Esta orden cortará las resistencias calefactoras y abrirá el escape de vapor.',
       actionType: 'STOP',
       onConfirm: () => sendCommand(device.mac, { cmd: 'ABORTAR_CICLO' })
     });
@@ -152,7 +151,7 @@ export default function DeviceDetailView({
     setConfirmModal({
       isOpen: true,
       title: 'Restablecer Código de Alarma',
-      description: '¿Confirmas que la causa de la anomalía ha sido inspeccionada y resuelta en la cámara?',
+      description: '¿Confirmas que la causa de la anomalía ha sido inspeccionada en la cámara?',
       actionType: 'RESET',
       onConfirm: () => sendCommand(device.mac, { cmd: 'RESET_ALARMA' })
     });
@@ -160,7 +159,7 @@ export default function DeviceDetailView({
 
   const handleTransmitNVS = (e) => {
     e.preventDefault();
-    if (!canEditHardware) return alert('Permiso denegado: solo personal técnico autorizado.');
+    if (!canEditHardware) return alert('Permiso denegado.');
     const payload = {
       sp_temp: Number(spTemp),
       t_ciclo: Number(tCiclo),
@@ -174,7 +173,7 @@ export default function DeviceDetailView({
     };
 
     sendCommand(device.mac, payload);
-    setNvsMsg(`⚡ Parámetros enviados a ${device.mac} y almacenados en la nube.`);
+    setNvsMsg(`⚡ Parámetros enviados a ${device.mac}.`);
     setTimeout(() => setNvsMsg(''), 4000);
   };
 
