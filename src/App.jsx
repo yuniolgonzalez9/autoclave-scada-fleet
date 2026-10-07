@@ -36,6 +36,49 @@ import {
   User as UserIcon
 } from 'lucide-react';
 
+// =========================================================================
+// ESCUDO PROTECTOR ANTI-PANTALLA NEGRA (REACT ERROR BOUNDARY)
+// Evita que la pantalla se apague si un sensor manda un dato inesperado
+// =========================================================================
+class AppErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error('[SCADA ERROR DETECTADO]', error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-6 font-mono">
+          <div className="max-w-lg w-full p-6 bg-slate-900 border border-rose-500 rounded-2xl shadow-2xl space-y-4">
+            <h2 className="text-rose-400 font-bold text-sm flex items-center gap-2">
+              ⚠️ EXCEPCIÓN DE RENDERIZADO CAPTURADA
+            </h2>
+            <p className="text-xs text-slate-300">
+              Se evitó que la pantalla se fuera a oscuras. Detalle del error:
+            </p>
+            <pre className="p-3 bg-black/60 text-rose-300 text-[11px] rounded-lg overflow-x-auto border border-rose-950">
+              {this.state.error?.toString()}
+            </pre>
+            <button
+              onClick={() => { localStorage.clear(); window.location.href = window.location.pathname; }}
+              className="w-full py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-lg"
+            >
+              Restablecer Caché y Recargar
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function ScadaAppContent() {
   const { user, profile, loading, pendingRequests, logout } = useAuth();
   const { fleet, mqttConnected, sendDeviceCommand } = useMqttFleet();
@@ -64,7 +107,7 @@ function ScadaAppContent() {
     initAudioUnlock();
   }, []);
 
-  // Modal de Diagnóstico de Recursos Cloud para Superadmin ('hivemq' | 'supabase' | null)
+  // Modal de Diagnóstico de Recursos Cloud para Superadmin
   const [cloudDiagType, setCloudDiagType] = useState(null);
 
   // GESTIÓN DE TERMINAL DEDICADA & PERSISTENCIA
@@ -224,15 +267,15 @@ function ScadaAppContent() {
   // Vigilante de Sirena Industrial
   useEffect(() => {
     let hasCriticalAlarm = false;
-    Object.keys(fleet).forEach((mac) => {
+    Object.keys(fleet || {}).forEach((mac) => {
       const dev = fleet[mac];
-      if (dev?.datos?.alarma_cod && dev?.datos?.alarma_cod > 0) {
+      if (dev?.datos?.alarma_cod && Number(dev?.datos?.alarma_cod) > 0) {
         hasCriticalAlarm = true;
         sendCriticalAlarmWithButtons({
           mac,
           alias: dev?.meta?.alias || mac,
-          temp: dev?.datos?.temp_camara || 0,
-          pres: dev?.datos?.presion || 0,
+          temp: Number(dev?.datos?.temp_camara) || 0,
+          pres: Number(dev?.datos?.presion) || 0,
           fase: dev?.datos?.fase || 'CRÍTICA',
           errorMsg: dev?.datos?.alarma_msg || 'Alarma en cámara'
         });
@@ -283,12 +326,13 @@ function ScadaAppContent() {
     }
   };
 
-  const macKeys = Object.keys(fleet);
+  const macKeys = Object.keys(fleet || {});
 
   // Aislamiento Multi-Tenant
   const allowedDevices = macKeys
     .map((k) => fleet[k])
     .filter((dev) => {
+      if (!dev) return false;
       if (isAdmin) return true;
 
       const userHospital = (profile?.departamento || '').toLowerCase().trim();
@@ -333,7 +377,7 @@ function ScadaAppContent() {
           cfg: { sp_temp: 121.0, t_ciclo: 2, ciclos: 0, lim_mant: 200 }
         },
         esquema: null,
-        meta: { alias: `AUTOCLAVE [${inspectingMacToUse.slice(-4)}]`, cliente: 'Conectando a la red...', modelo: 'Clase B' },
+        meta: { alias: `AUTOCLAVE [${(inspectingMacToUse || '').slice(-4)}]`, cliente: 'Conectando a la red...', modelo: 'Clase B' },
         f0Score: 0.0,
         history: []
       })
@@ -389,12 +433,9 @@ function ScadaAppContent() {
           </div>
         )}
 
-        {/* =========================================================================
-            HEADER INSTITUCIONAL CON DIAGNÓSTICO EN CLIC (SUPERADMIN)
-           ========================================================================= */}
+        {/* HEADER INSTITUCIONAL */}
         <header className="speedtest-laser-header border-b border-cyan-500/20 bg-slate-950/80 backdrop-blur-md px-3 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between sticky top-0 z-40 w-full">
           
-          {/* Bloque Izquierdo */}
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <div className="p-1.5 sm:p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 shrink-0">
               <Activity className="w-5 h-5 sm:w-6 sm:h-6 animate-pulse" />
@@ -414,7 +455,6 @@ function ScadaAppContent() {
             </div>
           </div>
 
-          {/* Bloque Derecho */}
           <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0 ml-2">
             
             {kioskMac && (
@@ -424,11 +464,11 @@ function ScadaAppContent() {
                 title="Desanclar y volver a la flota completa"
               >
                 <Unlock className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">DESANCLAR [{kioskMac.slice(-4)}]</span>
+                <span className="hidden sm:inline">DESANCLAR [{(kioskMac || '').slice(-4)}]</span>
               </button>
             )}
 
-            {/* 1. Indicador MQTT (CLICKEABLE PARA SUPERADMIN: ABRE DIAGNÓSTICO) */}
+            {/* 1. Indicador MQTT */}
             <ClinicalTooltip
               title="Broker MQTT (HiveMQ Cloud)"
               description={isAdmin ? "⚡ Click para abrir la Consola de Recursos y Latencia MQTT." : "Transmisión bidireccional continua por WebSockets (puerto seguro 8884)."}
@@ -451,7 +491,7 @@ function ScadaAppContent() {
               </button>
             </ClinicalTooltip>
 
-            {/* 2. Indicador Supabase Cloud (CLICKEABLE PARA SUPERADMIN: ABRE INVENTARIO DE TABLAS) */}
+            {/* 2. Indicador Supabase Cloud */}
             <ClinicalTooltip
               title="Base de Datos Supabase Cloud"
               description={isAdmin ? "⚡ Click para abrir el Inventario de Registros, Tablas y Latencia DB." : "Canal central de persistencia Postgres en tiempo real para sesiones."}
@@ -686,10 +726,17 @@ function ScadaAppContent() {
                         </div>
                       ) : (
                         filteredDevices.map((dev) => {
-                          const dDev = dev.datos || {};
+                          const dDev = dev?.datos || {};
                           const health = getDeviceHealthData(dev);
                           const cCount = dDev?.cfg?.ciclos || dev?.meta?.ciclosCompletados || 0;
                           const cLim = dDev?.cfg?.lim_mant || dev?.meta?.limiteMantenimiento || 200;
+
+                          // BLINDAJE NUMÉRICO: Evita colapsos de toFixed() si el dato llega como texto
+                          const numTemp = Number(dDev?.temp_camara);
+                          const displayTemp = !isNaN(numTemp) ? numTemp.toFixed(1) : '25.0';
+
+                          const numPres = Number(dDev?.presion);
+                          const displayPres = !isNaN(numPres) ? numPres.toFixed(2) : '0.00';
 
                           return (
                             <div
@@ -701,7 +748,7 @@ function ScadaAppContent() {
                               <div>
                                 <div className="flex justify-between items-start mb-3">
                                   <div>
-                                    <h3 className="font-bold text-sm text-white">{dev.meta?.alias || `AUTOCLAVE [${dev.mac.slice(-4)}]`}</h3>
+                                    <h3 className="font-bold text-sm text-white">{dev.meta?.alias || `AUTOCLAVE [${(dev.mac || '').slice(-4)}]`}</h3>
                                     <p className="text-[11px] text-slate-400 font-mono">{dev.meta?.cliente || 'Hospital Central'} • {dev.mac}</p>
                                     {dev.meta?.usuario_asignado && (
                                       <span className="text-[9px] text-purple-300 font-mono block">
@@ -728,22 +775,22 @@ function ScadaAppContent() {
                                 <div className="grid grid-cols-2 gap-2 my-3">
                                   <div className="p-2.5 rounded-xl glass-cell text-center w-full">
                                     <span className="text-[10px] font-mono text-cyan-400 block">TEMPERATURA</span>
-                                    <span className="text-xl font-bold font-mono text-white">{(dDev.temp_camara || 25).toFixed(1)}°C</span>
+                                    <span className="text-xl font-bold font-mono text-white">{displayTemp}°C</span>
                                   </div>
 
                                   <div className="p-2.5 rounded-xl glass-cell text-center w-full">
                                     <span className="text-[10px] font-mono text-pink-400 block">PRESIÓN</span>
-                                    <span className="text-xl font-bold font-mono text-white">{(dDev.presion || 0).toFixed(2)}b</span>
+                                    <span className="text-xl font-bold font-mono text-white">{displayPres}b</span>
                                   </div>
                                 </div>
 
                                 <div className="space-y-1 mb-3">
                                   <div className="flex justify-between text-[10px] font-mono text-slate-400">
                                     <span>Odómetro: {cCount}/{cLim} ciclos</span>
-                                    <span>{Math.round((cCount / cLim) * 100)}%</span>
+                                    <span>{cLim > 0 ? Math.round((cCount / cLim) * 100) : 0}%</span>
                                   </div>
                                   <div className="w-full bg-slate-800/80 rounded-full h-1.5 overflow-hidden">
-                                    <div className="bg-emerald-400 h-full" style={{ width: `${Math.min(100, (cCount / cLim) * 100)}%` }}></div>
+                                    <div className="bg-emerald-400 h-full" style={{ width: `${cLim > 0 ? Math.min(100, (cCount / cLim) * 100) : 0}%` }}></div>
                                   </div>
                                 </div>
                               </div>
@@ -876,15 +923,17 @@ function ScadaAppContent() {
           </div>
         )}
 
-        {/* MODAL DE DIAGNÓSTICO CLOUD (HIVEMQ / SUPABASE) PARA SUPERADMIN */}
-        <CloudDiagnosticsModal
-          isOpen={Boolean(cloudDiagType)}
-          onClose={() => setCloudDiagType(null)}
-          type={cloudDiagType || 'hivemq'}
-          fleet={fleet}
-          mqttConnected={mqttConnected}
-          supabaseConnected={supabaseConnected}
-        />
+        {/* MODAL DE DIAGNÓSTICO CLOUD */}
+        {Boolean(cloudDiagType) && (
+          <CloudDiagnosticsModal
+            isOpen={true}
+            onClose={() => setCloudDiagType(null)}
+            type={cloudDiagType || 'hivemq'}
+            fleet={fleet}
+            mqttConnected={mqttConnected}
+            supabaseConnected={supabaseConnected}
+          />
+        )}
 
         {/* Menú Contextual (Clic Secundario) */}
         <ContextMenu
@@ -905,7 +954,7 @@ function ScadaAppContent() {
           onOpenQR={(dev) => setQrModalDevice(dev)}
         />
 
-        {/* Modal de Asignación a Cliente / Usuario */}
+        {/* Modal de Asignación */}
         <DeviceAssignmentModal
           isOpen={assignModal.isOpen}
           onClose={() => setAssignModal({ isOpen: false, device: null })}
@@ -925,7 +974,7 @@ function ScadaAppContent() {
           operatorName={profile?.nombre || user?.email}
         />
 
-        {/* Modal de Personal & Aprobaciones Rápidas (Campana) */}
+        {/* Modal de Personal & Aprobaciones */}
         <UserManagementModal 
           isOpen={showAdminModal} 
           onClose={() => setShowAdminModal(false)} 
@@ -937,8 +986,10 @@ function ScadaAppContent() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <ScadaAppContent />
-    </AuthProvider>
+    <AppErrorBoundary>
+      <AuthProvider>
+        <ScadaAppContent />
+      </AuthProvider>
+    </AppErrorBoundary>
   );
 }
