@@ -4,11 +4,6 @@ const BROKER_URL = 'wss://d15a5980139147d99bb9e2ad3825e62e.s1.eu.hivemq.cloud:88
 const MQTT_USER = 'admin_autoclave';
 const MQTT_PASS = '24331973';
 
-// =========================================================================
-// MULTIPLEXOR MULTI-PESTAÑA (LEADER ELECTION VIA BROADCASTCHANNEL)
-// Comparte 1 SOLA conexión real a HiveMQ entre todas las pestañas abiertas
-// =========================================================================
-
 export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
   const tabId = 'TAB_' + Math.random().toString(36).substring(2, 9);
   const CHANNEL_NAME = 'scada_hivemq_mesh_v2';
@@ -70,8 +65,6 @@ export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
         const mac = parts[1];
         const channel = parts[2];
         const isRetained = Boolean(packet && packet.retain);
-
-        if (!mac || !channel) return;
 
         const packetData = { mac, channel, payload, topic, isRetained };
 
@@ -143,14 +136,12 @@ export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
         broadcast.postMessage({ type: 'LEADER_CLOSING', leaderId: tabId });
       }
     });
-
   } else {
     electAsLeader();
   }
 
   const sendCommand = (mac, cmdObject, forceRetain = null) => {
-    if (!mac) return;
-    const cleanMac = mac.toUpperCase();
+    const cleanMac = (mac || '').toUpperCase().replace(/[:\-]/g, '');
     const topic = `autoclave_med_2026/${cleanMac}/config`;
     const isInstantTrigger = Boolean(cmdObject.cmd);
     const shouldRetain = forceRetain !== null ? forceRetain : !isInstantTrigger;
