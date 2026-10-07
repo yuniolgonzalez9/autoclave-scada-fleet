@@ -8,7 +8,7 @@ export function useMqttFleet() {
   const [mqttConnected, setMqttConnected] = useState(false);
   const sendCommandRef = useRef(null);
 
-  // 1. Cargar la flota registrada en Supabase
+  // 1. Cargar la flota registrada en Supabase con MACs normalizadas
   useEffect(() => {
     const loadRegisteredDevices = async () => {
       try {
@@ -61,43 +61,13 @@ export function useMqttFleet() {
   useEffect(() => {
     const { client, sendCommand } = connectMqttFleet(
       ({ mac, channel, payload, isRetained }) => {
-        if (!mac) return;
         const cleanMac = mac.toUpperCase().replace(/[:\-]/g, '');
-
-        // GUARDAR REPORTE FINAL DE CICLO EN SUPABASE DE FORMA SEGURA (SIN .catch)
-        if (channel === 'reporte_paquete' && payload) {
-          const ciclosAcum = payload.ciclos_acumulados || payload.ciclos || 0;
-
-          supabase.from('reportes_autoclaves').upsert({
-            session_id: payload.session_id || `SES-${cleanMac}-${Date.now()}`,
-            mac: cleanMac,
-            alias: payload.alias || cleanMac,
-            cliente: payload.cliente || 'Hospital Central',
-            modelo: payload.modelo || 'Clase B',
-            programa: payload.programa || '134°C INSTRUMENTAL',
-            hora_encendido: payload.hora_encendido || '00:00:00',
-            inicio_ciclo: payload.inicio_ciclo || payload.hora_encendido || '00:00:00',
-            hora_apagado: payload.hora_apagado || '00:00:00',
-            duracion_total_seg: payload.duracion_total_seg || 0,
-            ciclos_acumulados: ciclosAcum,
-            limite_mantenimiento: payload.limite_mantenimiento || 200,
-            temp_max: parseFloat(payload.temp_max) || 0,
-            pres_max: parseFloat(payload.pres_max) || 0,
-            conteo_alarmas: payload.conteo_alarmas || 0,
-            diagnostico_principal: payload.diagnostico_principal || 'CICLO CONFORME',
-            fase_final: payload.fase_final || 'FINALIZADO',
-            ciclos_detalle: payload.ciclos_detalle || payload.fases_desglose || [],
-            eventos: payload.eventos || []
-          }, { onConflict: 'session_id' }).then(({ error }) => {
-            if (error) console.warn('[SUPABASE REPORTE ERROR]', error);
-          });
-        }
 
         setFleet((prevFleet) => {
           const currentDev = prevFleet[cleanMac] || {
             mac: cleanMac,
             lastSeen: 0,
-            datos: { cfg: { ciclos: 0, lim_mant: 200 } },
+            datos: {},
             esquema: null,
             meta: { alias: `AUTOCLAVE [${cleanMac.slice(-4)}]`, cliente: 'Hospital', modelo: 'Clase B' },
             f0Score: 0.0,
@@ -110,18 +80,11 @@ export function useMqttFleet() {
             lastSeen: isFreshStream ? Date.now() : (currentDev.lastSeen || 0)
           };
 
-          // TELEMETRÍA EN VIVO
-          if (channel === 'telemetria' && payload) {
-            updated.datos = {
-              ...(currentDev.datos || {}),
-              ...payload,
-              cfg: {
-                ...((currentDev.datos && currentDev.datos.cfg) || {}),
-                ...((payload && payload.cfg) || {})
-              }
-            };
+          // TELEMETRÍA EN VIVO (PINES FÍSICOS REALES)
+          if (channel === 'telemetria') {
+            updated.datos = payload;
 
-            const currentTemp = payload.temp_camara ?? 25.0;
+            const currentTemp = payload.temp_camara || 25.0;
             if (payload.fase === 'ESTERILIZANDO') {
               updated.f0Score = accumulateF0(currentDev.f0Score || 0, currentTemp, 2);
             } else if (payload.fase === 'ESPERA' || payload.fase === 'APAGADO') {
@@ -132,28 +95,53 @@ export function useMqttFleet() {
             const newPoint = {
               time: nowTime,
               temperature: currentTemp,
-              pressure: payload.presion ?? 0.0
+              pressure: payload.presion || 0.0
             };
             const newHistory = [...(currentDev.history || []), newPoint];
             if (newHistory.length > 30) newHistory.shift();
             updated.history = newHistory;
           }
 
-          if (channel === 'esquema' && payload) {
+          if (channel === 'esquema') {
             updated.esquema = payload;
-            if (payload.modelo && updated.meta?.modelo === 'Clase B') {
+            if (payload.modelo && updated.meta.modelo === 'Clase B') {
               updated.meta.modelo = payload.modelo;
             }
           }
 
-          if (channel === 'meta' && payload) {
+          if (channel === 'meta') {
             updated.meta = Object.assign(updated.meta || {}, payload, { mac: cleanMac });
           }
 
-          if (channel === 'reporte_paquete' && payload) {
+          // GUARDAR REPORTE FINAL EN SUPABASE (USANDO .then EN LUGAR DE .catch)
+          if (channel === 'reporte_paquete') {
             const ciclosAcum = payload.ciclos_acumulados || payload.ciclos || 0;
             if (!updated.datos.cfg) updated.datos.cfg = {};
             updated.datos.cfg.ciclos = ciclosAcum;
+
+            supabase.from('reportes_autoclaves').upsert({
+              session_id: payload.session_id || `SES-${cleanMac}-${Date.now()}`,
+              mac: cleanMac,
+              alias: updated.meta?.alias || cleanMac,
+              cliente: updated.meta?.cliente || 'Hospital Central',
+              modelo: updated.meta?.modelo || 'Clase B',
+              programa: payload.programa || '134°C INSTRUMENTAL',
+              hora_encendido: payload.hora_encendido || '00:00:00',
+              inicio_ciclo: payload.inicio_ciclo || payload.hora_encendido || '00:00:00',
+              hora_apagado: payload.hora_apagado || '00:00:00',
+              duracion_total_seg: payload.duracion_total_seg || 0,
+              ciclos_acumulados: ciclosAcum,
+              limite_mantenimiento: payload.limite_mantenimiento || 200,
+              temp_max: parseFloat(payload.temp_max) || 0,
+              pres_max: parseFloat(payload.pres_max) || 0,
+              conteo_alarmas: payload.conteo_alarmas || 0,
+              diagnostico_principal: payload.diagnostico_principal || 'CICLO CONFORME',
+              fase_final: payload.fase_final || 'FINALIZADO',
+              ciclos_detalle: payload.ciclos_detalle || payload.fases_desglose || [],
+              eventos: payload.eventos || []
+            }, { onConflict: 'session_id' }).then(({ error }) => {
+              if (error) console.warn('[SUPABASE] Fallo guardado de paquete:', error);
+            });
           }
 
           return { ...prevFleet, [cleanMac]: updated };
@@ -170,11 +158,11 @@ export function useMqttFleet() {
   }, []);
 
   const sendDeviceCommand = (mac, cmd) => {
-    if (!mac) return;
     const cleanMac = mac.toUpperCase().replace(/[:\-]/g, '');
     if (sendCommandRef.current) {
       sendCommandRef.current(cleanMac, cmd);
 
+      // Reflejo optimista instantáneo
       setFleet((prev) => {
         const dev = prev[cleanMac];
         if (!dev) return prev;
@@ -199,13 +187,13 @@ export function useMqttFleet() {
         };
       });
 
-      // Actualizar en Supabase de forma segura (con .then en vez de .catch)
+      // Persistencia en Supabase con .then() seguro
       if (!cmd.cmd) {
         supabase.from('asignaciones_equipos').update({
           config_deseada: cmd,
           updated_at: new Date().toISOString()
         }).eq('mac', cleanMac).then(({ error }) => {
-          if (error) console.warn('[SUPABASE UPDATE CONFIG ERROR]', error);
+          if (error) console.warn('[SUPABASE] Error guardando config:', error);
         });
       }
     }
