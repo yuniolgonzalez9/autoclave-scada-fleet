@@ -20,16 +20,16 @@ import {
   Wrench, 
   QrCode, 
   CheckCircle2, 
-  AlertTriangle,
-  ChevronLeft,
-  Pin,
-  PinOff,
-  Eye,
-  Send,
-  Sparkles,
-  Lock,
-  Power,
-  ShieldCheck
+  AlertTriangle, 
+  ChevronLeft, 
+  Pin, 
+  PinOff, 
+  Eye, 
+  Send, 
+  Sparkles, 
+  Lock, 
+  Power, 
+  ShieldCheck 
 } from 'lucide-react';
 
 export default function DeviceDetailView({ 
@@ -37,9 +37,9 @@ export default function DeviceDetailView({
   onBack, 
   sendCommand, 
   operatorName, 
-  userRole,
-  isKioskMode,
-  onToggleKiosk
+  userRole, 
+  isKioskMode, 
+  onToggleKiosk 
 }) {
   const [activeTab, setActiveTab] = useState(() => localStorage.getItem('scada_detail_tab') || 'sensores');
   const [showQRModal, setShowQRModal] = useState(false);
@@ -117,7 +117,7 @@ export default function DeviceDetailView({
     setTCiclo(4);
     setPMax(2.65);
     setPurgaOk(true);
-    if (device?.mac) sendCommand(device.mac, { sp_temp: 134.0, t_ciclo: 4, p_max: 2.65, purga_ok: true, hab: true });
+    sendCommand(device.mac, { sp_temp: 134.0, t_ciclo: 4, p_max: 2.65, purga_ok: true, hab: true });
   };
 
   const applyPreset121 = () => {
@@ -125,16 +125,16 @@ export default function DeviceDetailView({
     setTCiclo(15);
     setPMax(2.40);
     setPurgaOk(true);
-    if (device?.mac) sendCommand(device.mac, { sp_temp: 121.0, t_ciclo: 15, p_max: 2.40, purga_ok: true, hab: true });
+    sendCommand(device.mac, { sp_temp: 121.0, t_ciclo: 15, p_max: 2.40, purga_ok: true, hab: true });
   };
 
   const requestStartCycle = () => {
     setConfirmModal({
       isOpen: true,
       title: 'Iniciar Ciclo de Esterilización',
-      description: `¿Confirmas el inicio del protocolo térmico a ${spTemp}°C durante ${tCiclo} minutos? Asegúrate de que la puerta esté enclavada herméticamente.`,
+      description: `¿Confirmas el inicio del protocolo a ${spTemp}°C durante ${tCiclo} minutos? Asegúrate de que la puerta esté enclavada herméticamente.`,
       actionType: 'START',
-      onConfirm: () => { if (device?.mac) sendCommand(device.mac, { cmd: 'INICIAR_CICLO' }); }
+      onConfirm: () => sendCommand(device.mac, { cmd: 'INICIAR_CICLO' })
     });
   };
 
@@ -144,7 +144,7 @@ export default function DeviceDetailView({
       title: '¡PARO DE EMERGENCIA EN CÁMARA!',
       description: 'Esta orden cortará inmediatamente la alimentación de las resistencias calefactoras y abrirá el escape de vapor. El ciclo quedará invalidado.',
       actionType: 'STOP',
-      onConfirm: () => { if (device?.mac) sendCommand(device.mac, { cmd: 'ABORTAR_CICLO' }); }
+      onConfirm: () => sendCommand(device.mac, { cmd: 'ABORTAR_CICLO' })
     });
   };
 
@@ -154,14 +154,13 @@ export default function DeviceDetailView({
       title: 'Restablecer Código de Alarma',
       description: '¿Confirmas que la causa de la anomalía ha sido inspeccionada y resuelta en la cámara?',
       actionType: 'RESET',
-      onConfirm: () => { if (device?.mac) sendCommand(device.mac, { cmd: 'RESET_ALARMA' }); }
+      onConfirm: () => sendCommand(device.mac, { cmd: 'RESET_ALARMA' })
     });
   };
 
   const handleTransmitNVS = (e) => {
     e.preventDefault();
     if (!canEditHardware) return alert('Permiso denegado: solo personal técnico autorizado.');
-    if (!device?.mac) return;
     const payload = {
       sp_temp: Number(spTemp),
       t_ciclo: Number(tCiclo),
@@ -180,14 +179,11 @@ export default function DeviceDetailView({
   };
 
   const handleToggleHardware = (key, currentState) => {
-    if (!device?.mac) return;
     const nextState = !currentState;
     sendCommand(device.mac, { [key]: nextState });
   };
 
-  // Protegido contra undefined en device.mac
-  const deviceMacSafe = device?.mac || '';
-  const [alias, setAlias] = useState(device?.meta?.alias || `AUTOCLAVE [${deviceMacSafe.slice(-4)}]`);
+  const [alias, setAlias] = useState(device?.meta?.alias || `AUTOCLAVE [${device?.mac ? device.mac.slice(-4) : '----'}]`);
   const [cliente, setCliente] = useState(device?.meta?.cliente || 'Hospital Metropolitano');
   const [modelo, setModelo] = useState(device?.meta?.modelo || 'Quirúrgico Clase B');
   const [guardandoFicha, setGuardandoFicha] = useState(false);
@@ -197,13 +193,12 @@ export default function DeviceDetailView({
   const [maintTecnico, setMaintTecnico] = useState('');
   const [maintNotas, setMaintNotas] = useState('');
 
-  const ciclos = cfg?.ciclos || device?.meta?.ciclosCompletados || 0;
-  const limite = cfg?.lim_mant || device?.meta?.limiteMantenimiento || 200;
-  const pctMant = Math.min(100, Math.round((ciclos / limite) * 100));
+  const ciclos = Number(cfg.ciclos || device?.meta?.ciclosCompletados || 0);
+  const limite = Number(cfg.lim_mant || device?.meta?.limiteMantenimiento || 200);
+  const pctMant = Math.min(100, Math.round((ciclos / (limite || 1)) * 100));
 
   const handleGuardarFicha = async (e) => {
     e.preventDefault();
-    if (!device?.mac) return;
     setGuardandoFicha(true);
     try {
       const metaPayload = {
@@ -225,7 +220,6 @@ export default function DeviceDetailView({
 
   const handleGuardarMantenimiento = async (e) => {
     e.preventDefault();
-    if (!device?.mac) return;
     try {
       await supabase.from('mantenimientos_equipos').insert([{
         mac: device.mac,
@@ -242,9 +236,12 @@ export default function DeviceDetailView({
     }
   };
 
+  const tempNum = parseFloat(d.temp_camara || 25);
+  const presNum = parseFloat(d.presion || 0);
+  const f0Num = parseFloat(device?.f0Score || 0);
+
   return (
     <div className="flex flex-col gap-4 w-full">
-      {/* Cabecera */}
       <div className="ultra-glass p-4 rounded-2xl border border-cyan-500/30 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
         <div className="flex items-center gap-3">
           {!isKioskMode && (
@@ -266,7 +263,7 @@ export default function DeviceDetailView({
                 </span>
               )}
             </div>
-            <p className="text-xs text-cyan-300 font-mono">MAC: {deviceMacSafe} • {cliente} • Setpoint: {spTemp}°C</p>
+            <p className="text-xs text-cyan-300 font-mono">MAC: {device?.mac || '----'} • {cliente} • Setpoint: {spTemp}°C</p>
           </div>
         </div>
 
@@ -309,7 +306,6 @@ export default function DeviceDetailView({
         </div>
       </div>
 
-      {/* Pestañas de Navegación del Equipo */}
       <div className="flex gap-2 overflow-x-auto pb-1 border-b border-slate-800">
         <button
           onClick={() => setActiveTab('sensores')}
@@ -370,14 +366,13 @@ export default function DeviceDetailView({
         )}
       </div>
 
-      {/* PESTAÑA 1: SENSORES */}
       {activeTab === 'sensores' && (
         <div className="space-y-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <ClinicalTooltip title={CLINICAL_HELP.temp_camara.title} description={CLINICAL_HELP.temp_camara.desc} badge={CLINICAL_HELP.temp_camara.badge}>
               <div className="ultra-glass p-3.5 rounded-xl border border-cyan-500/30 w-full cursor-help">
                 <span className="text-[10px] font-mono text-cyan-400 block mb-1">TEMPERATURA CÁMARA</span>
-                <p className="text-2xl font-bold font-mono text-white">{(d?.temp_camara ?? 25.0).toFixed(1)} °C</p>
+                <p className="text-2xl font-bold font-mono text-white">{isNaN(tempNum) ? '25.0' : tempNum.toFixed(1)} °C</p>
                 <span className="text-[10px] text-slate-400 font-mono">Setpoint: {spTemp}°C</span>
               </div>
             </ClinicalTooltip>
@@ -385,7 +380,7 @@ export default function DeviceDetailView({
             <ClinicalTooltip title={CLINICAL_HELP.presion_camara.title} description={CLINICAL_HELP.presion_camara.desc} badge={CLINICAL_HELP.presion_camara.badge}>
               <div className="ultra-glass p-3.5 rounded-xl border border-pink-500/30 w-full cursor-help">
                 <span className="text-[10px] font-mono text-pink-400 block mb-1">PRESIÓN VAPOR</span>
-                <p className="text-2xl font-bold font-mono text-white">{(d?.presion ?? 0.0).toFixed(2)} bar</p>
+                <p className="text-2xl font-bold font-mono text-white">{isNaN(presNum) ? '0.00' : presNum.toFixed(2)} bar</p>
                 <span className="text-[10px] text-slate-400 font-mono">Límite: {pMax}b</span>
               </div>
             </ClinicalTooltip>
@@ -393,7 +388,7 @@ export default function DeviceDetailView({
             <ClinicalTooltip title={CLINICAL_HELP.letalidad_f0.title} description={CLINICAL_HELP.letalidad_f0.desc} badge={CLINICAL_HELP.letalidad_f0.badge}>
               <div className="ultra-glass p-3.5 rounded-xl border border-emerald-500/30 w-full cursor-help">
                 <span className="text-[10px] font-mono text-emerald-400 block mb-1">LETALIDAD (F0)</span>
-                <p className="text-2xl font-bold font-mono text-emerald-300">{(device?.f0Score ?? 0.0).toFixed(1)} min</p>
+                <p className="text-2xl font-bold font-mono text-emerald-300">{isNaN(f0Num) ? '0.0' : f0Num.toFixed(1)} min</p>
                 <span className="text-[10px] text-emerald-400/80 font-mono">ISO 17665</span>
               </div>
             </ClinicalTooltip>
@@ -402,12 +397,11 @@ export default function DeviceDetailView({
               <div className="ultra-glass p-3.5 rounded-xl border border-amber-500/30 w-full cursor-help">
                 <span className="text-[10px] font-mono text-amber-400 block mb-1">FASE ACTUAL</span>
                 <p className="text-lg font-bold font-mono text-white truncate">{d?.fase || 'ESPERA'}</p>
-                <span className="text-[10px] text-slate-400 font-mono">Restante: {Math.floor((d?.seg_restantes || 0)/60)}:{(d?.seg_restantes || 0)%60}</span>
+                <span className="text-[10px] text-slate-400 font-mono">Restante: {Math.floor((Number(d?.seg_restantes || 0))/60)}:{(Number(d?.seg_restantes || 0))%60}</span>
               </div>
             </ClinicalTooltip>
           </div>
 
-          {/* Accionamiento de Salidas */}
           <div className="ultra-glass p-4 rounded-xl border border-slate-800 space-y-2">
             <span className="text-xs font-mono font-bold text-cyan-300 block mb-2 uppercase">
               Accionamiento de Salidas & Actuadores (Hardware en Vivo):
@@ -451,7 +445,6 @@ export default function DeviceDetailView({
             </div>
           </div>
 
-          {/* Botones de Control */}
           <div className="flex gap-2.5">
             <ClinicalTooltip title={CLINICAL_HELP.btn_iniciar_ciclo.title} description={CLINICAL_HELP.btn_iniciar_ciclo.desc} badge={CLINICAL_HELP.btn_iniciar_ciclo.badge}>
               <button
@@ -490,14 +483,13 @@ export default function DeviceDetailView({
         </div>
       )}
 
-      {/* PESTAÑA: HISTORIAL */}
       {activeTab === 'historial' && tieneReportes && (
         <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 space-y-4">
           <div className="flex justify-between items-center border-b border-cyan-500/20 pb-3">
             <div>
               <h3 className="text-sm font-bold text-white font-mono flex items-center gap-2">
                 <History className="w-4 h-4 text-cyan-400" />
-                Historial de Ciclos en la Nube [{deviceMacSafe}]
+                Historial de Ciclos en la Nube [{device?.mac || '----'}]
               </h3>
               <p className="text-[11px] text-slate-400 font-mono mt-0.5">
                 Paquetes clínicos auditados de este equipo en Supabase Cloud
@@ -568,7 +560,6 @@ export default function DeviceDetailView({
         </div>
       )}
 
-      {/* PESTAÑA: NVS */}
       {activeTab === 'nvs' && canEditHardware && (
         <form onSubmit={handleTransmitNVS} className="ultra-glass p-5 md:p-6 rounded-2xl border border-cyan-500/30 space-y-5">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-cyan-500/20 pb-3">
@@ -731,7 +722,6 @@ export default function DeviceDetailView({
         </form>
       )}
 
-      {/* PESTAÑA: FICHA CLIENTE */}
       {activeTab === 'ficha' && canEditHardware && (
         <form onSubmit={handleGuardarFicha} className="ultra-glass p-6 rounded-2xl border border-cyan-500/30 space-y-4 max-w-xl">
           <h3 className="text-sm font-bold text-white font-mono flex items-center gap-2">
@@ -782,7 +772,6 @@ export default function DeviceDetailView({
         </form>
       )}
 
-      {/* PESTAÑA: MANTENIMIENTO */}
       {activeTab === 'mantenimiento' && canEditHardware && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 space-y-3">
@@ -814,7 +803,7 @@ export default function DeviceDetailView({
               >
                 <button
                   type="button"
-                  onClick={() => { if (device?.mac) sendCommand(device.mac, { cmd: 'RESET_ODOMETRO' }); }}
+                  onClick={() => sendCommand(device?.mac, { cmd: 'RESET_ODOMETRO' })}
                   className="w-full mt-2 py-2 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 rounded-lg text-xs font-bold"
                 >
                   🔄 Reiniciar Odómetro a Cero
@@ -857,7 +846,6 @@ export default function DeviceDetailView({
         </div>
       )}
 
-      {/* Modales */}
       <SurgicalQRLabel
         isOpen={showQRModal}
         onClose={() => setShowQRModal(false)}
