@@ -22,24 +22,25 @@ import {
   Flame, 
   FileText, 
   Rocket, 
-  Building2, 
+  Building2,
   ChevronRight, 
   Volume2, 
-  VolumeX, 
-  Bell, 
-  Clock, 
-  Pin, 
-  PinOff, 
-  Unlock, 
-  Shield, 
-  Database, 
-  User as UserIcon 
+  VolumeX,
+  Bell,
+  Clock,
+  Pin,
+  PinOff,
+  Unlock,
+  Shield,
+  Database,
+  User as UserIcon
 } from 'lucide-react';
 
 function ScadaAppContent() {
   const { user, profile, loading, pendingRequests, logout } = useAuth();
   const { fleet, mqttConnected, sendDeviceCommand } = useMqttFleet();
 
+  // Auditoría en vivo de conexión con Supabase Cloud
   const [supabaseConnected, setSupabaseConnected] = useState(true);
   useEffect(() => {
     const checkSupabase = async () => {
@@ -63,53 +64,55 @@ function ScadaAppContent() {
     initAudioUnlock();
   }, []);
 
+  // Modal de Diagnóstico de Recursos Cloud para Superadmin ('hivemq' | 'supabase' | null)
   const [cloudDiagType, setCloudDiagType] = useState(null);
 
+  // GESTIÓN DE TERMINAL DEDICADA & PERSISTENCIA
   const [kioskMac, setKioskMac] = useState(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const directKiosk = urlParams.get('kiosk');
     if (directKiosk) return directKiosk.toUpperCase().replace(/[:\-]/g, '');
-    return sessionStorage.getItem('scada_tab_kiosk_mac') || null;
+    return localStorage.getItem('scada_kiosk_mac') || null;
   });
 
   const [selectedMac, setSelectedMac] = useState(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const directMac = urlParams.get('mac') || urlParams.get('kiosk');
     if (directMac) return directMac.toUpperCase().replace(/[:\-]/g, '');
-    if (sessionStorage.getItem('scada_tab_kiosk_mac')) return sessionStorage.getItem('scada_tab_kiosk_mac');
-    return sessionStorage.getItem('scada_tab_selected_mac') || null;
+    if (localStorage.getItem('scada_kiosk_mac')) return localStorage.getItem('scada_kiosk_mac');
+    return localStorage.getItem('scada_selected_mac') || null;
   });
 
   const [activeSection, setActiveSection] = useState(() => {
     const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('mac') || urlParams.get('kiosk') || sessionStorage.getItem('scada_tab_kiosk_mac')) {
+    if (urlParams.get('mac') || urlParams.get('kiosk') || localStorage.getItem('scada_kiosk_mac')) {
       return 'detalle';
     }
-    return sessionStorage.getItem('scada_tab_active_section') || 'flota';
+    return localStorage.getItem('scada_active_section') || 'flota';
   });
 
-  const [healthFilter, setHealthFilter] = useState(() => sessionStorage.getItem('scada_tab_health_filter') || 'ALL');
+  const [healthFilter, setHealthFilter] = useState(() => localStorage.getItem('scada_health_filter') || 'ALL');
 
   useEffect(() => {
     if (!kioskMac) {
-      sessionStorage.setItem('scada_tab_active_section', activeSection);
+      localStorage.setItem('scada_active_section', activeSection);
     }
   }, [activeSection, kioskMac]);
 
   useEffect(() => {
     if (!kioskMac) {
-      if (selectedMac) sessionStorage.setItem('scada_tab_selected_mac', selectedMac);
-      else sessionStorage.removeItem('scada_tab_selected_mac');
+      if (selectedMac) localStorage.setItem('scada_selected_mac', selectedMac);
+      else localStorage.removeItem('scada_selected_mac');
     }
   }, [selectedMac, kioskMac]);
 
   useEffect(() => {
-    sessionStorage.setItem('scada_tab_health_filter', healthFilter);
+    localStorage.setItem('scada_health_filter', healthFilter);
   }, [healthFilter]);
 
   const toggleKioskMode = (macToKiosk = null) => {
     if (kioskMac) {
-      sessionStorage.removeItem('scada_tab_kiosk_mac');
+      localStorage.removeItem('scada_kiosk_mac');
       setKioskMac(null);
       if (window.location.search.includes('mac=') || window.location.search.includes('kiosk=')) {
         window.history.replaceState({}, '', window.location.pathname);
@@ -119,7 +122,7 @@ function ScadaAppContent() {
     } else {
       const target = (macToKiosk || selectedMac || '').toUpperCase().replace(/[:\-]/g, '');
       if (target) {
-        sessionStorage.setItem('scada_tab_kiosk_mac', target);
+        localStorage.setItem('scada_kiosk_mac', target);
         setKioskMac(target);
         setSelectedMac(target);
         setActiveSection('detalle');
@@ -144,12 +147,14 @@ function ScadaAppContent() {
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [sirenActive, setSirenActive] = useState(false);
 
+  // Reloj de latido a 1000ms
   const [currentTime, setCurrentTime] = useState(Date.now());
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
 
+  // Temporizador de Inactividad (15 min)
   const [showTimeoutModal, setShowTimeoutModal] = useState(false);
   const [countdown, setCountdown] = useState(60);
   const idleTimerRef = useRef(null);
@@ -207,7 +212,8 @@ function ScadaAppContent() {
   useEffect(() => {
     const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'];
     const handleActivity = () => resetIdleTimer();
-    events.forEach((evt) => window.addEventListener(evt, handleActivity));
+    events.forEach((evt) => window.removeEventListener(evt, handleActivity));
+    events.forEach((evt) => window.addEventListener(evt, handleActivity, { passive: true }));
     resetIdleTimer();
     return () => {
       events.forEach((evt) => window.removeEventListener(evt, handleActivity));
@@ -215,6 +221,7 @@ function ScadaAppContent() {
     };
   }, [user]);
 
+  // Vigilante de Sirena Industrial
   useEffect(() => {
     let hasCriticalAlarm = false;
     Object.keys(fleet).forEach((mac) => {
@@ -224,8 +231,8 @@ function ScadaAppContent() {
         sendCriticalAlarmWithButtons({
           mac,
           alias: dev?.meta?.alias || mac,
-          temp: parseFloat(dev?.datos?.temp_camara || 0),
-          pres: parseFloat(dev?.datos?.presion || 0),
+          temp: dev?.datos?.temp_camara || 0,
+          pres: dev?.datos?.presion || 0,
           fase: dev?.datos?.fase || 'CRÍTICA',
           errorMsg: dev?.datos?.alarma_msg || 'Alarma en cámara'
         });
@@ -278,6 +285,7 @@ function ScadaAppContent() {
 
   const macKeys = Object.keys(fleet);
 
+  // Aislamiento Multi-Tenant
   const allowedDevices = macKeys
     .map((k) => fleet[k])
     .filter((dev) => {
@@ -381,8 +389,12 @@ function ScadaAppContent() {
           </div>
         )}
 
-        {/* Header Institucional */}
+        {/* =========================================================================
+            HEADER INSTITUCIONAL CON DIAGNÓSTICO EN CLIC (SUPERADMIN)
+           ========================================================================= */}
         <header className="speedtest-laser-header border-b border-cyan-500/20 bg-slate-950/80 backdrop-blur-md px-3 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between sticky top-0 z-40 w-full">
+          
+          {/* Bloque Izquierdo */}
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <div className="p-1.5 sm:p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 shrink-0">
               <Activity className="w-5 h-5 sm:w-6 sm:h-6 animate-pulse" />
@@ -402,7 +414,9 @@ function ScadaAppContent() {
             </div>
           </div>
 
+          {/* Bloque Derecho */}
           <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0 ml-2">
+            
             {kioskMac && (
               <button
                 onClick={() => toggleKioskMode(null)}
@@ -414,6 +428,7 @@ function ScadaAppContent() {
               </button>
             )}
 
+            {/* 1. Indicador MQTT (CLICKEABLE PARA SUPERADMIN: ABRE DIAGNÓSTICO) */}
             <ClinicalTooltip
               title="Broker MQTT (HiveMQ Cloud)"
               description={isAdmin ? "⚡ Click para abrir la Consola de Recursos y Latencia MQTT." : "Transmisión bidireccional continua por WebSockets (puerto seguro 8884)."}
@@ -436,6 +451,7 @@ function ScadaAppContent() {
               </button>
             </ClinicalTooltip>
 
+            {/* 2. Indicador Supabase Cloud (CLICKEABLE PARA SUPERADMIN: ABRE INVENTARIO DE TABLAS) */}
             <ClinicalTooltip
               title="Base de Datos Supabase Cloud"
               description={isAdmin ? "⚡ Click para abrir el Inventario de Registros, Tablas y Latencia DB." : "Canal central de persistencia Postgres en tiempo real para sesiones."}
@@ -458,6 +474,7 @@ function ScadaAppContent() {
               </button>
             </ClinicalTooltip>
 
+            {/* 3. Chip del Usuario */}
             {user && (
               <ClinicalTooltip
                 title={displayName}
@@ -502,6 +519,7 @@ function ScadaAppContent() {
               </ClinicalTooltip>
             )}
 
+            {/* Notificaciones */}
             {user && isAdmin && (
               <button
                 onClick={() => setShowAdminModal(true)}
@@ -517,6 +535,7 @@ function ScadaAppContent() {
               </button>
             )}
 
+            {/* Engranaje */}
             {user && (
               <div className="shrink-0">
                 <GearMenu
@@ -581,7 +600,7 @@ function ScadaAppContent() {
           </div>
         )}
 
-        {/* Contenido Principal con Blindaje en Conversiones Numéricas */}
+        {/* Contenido Principal */}
         {!user ? (
           <main className="flex-1 flex items-center justify-center p-4 android-view-transition">
             <LoginModal />
@@ -669,12 +688,8 @@ function ScadaAppContent() {
                         filteredDevices.map((dev) => {
                           const dDev = dev.datos || {};
                           const health = getDeviceHealthData(dev);
-                          const cCount = Number(dDev?.cfg?.ciclos || dev?.meta?.ciclosCompletados || 0);
-                          const cLim = Number(dDev?.cfg?.lim_mant || dev?.meta?.limiteMantenimiento || 200);
-
-                          // Conversión segura para evitar errores si llegan valores en string
-                          const tempNum = parseFloat(dDev.temp_camara || 25);
-                          const presNum = parseFloat(dDev.presion || 0);
+                          const cCount = dDev?.cfg?.ciclos || dev?.meta?.ciclosCompletados || 0;
+                          const cLim = dDev?.cfg?.lim_mant || dev?.meta?.limiteMantenimiento || 200;
 
                           return (
                             <div
@@ -713,26 +728,22 @@ function ScadaAppContent() {
                                 <div className="grid grid-cols-2 gap-2 my-3">
                                   <div className="p-2.5 rounded-xl glass-cell text-center w-full">
                                     <span className="text-[10px] font-mono text-cyan-400 block">TEMPERATURA</span>
-                                    <span className="text-xl font-bold font-mono text-white">
-                                      {isNaN(tempNum) ? '25.0' : tempNum.toFixed(1)}°C
-                                    </span>
+                                    <span className="text-xl font-bold font-mono text-white">{(dDev.temp_camara || 25).toFixed(1)}°C</span>
                                   </div>
 
                                   <div className="p-2.5 rounded-xl glass-cell text-center w-full">
                                     <span className="text-[10px] font-mono text-pink-400 block">PRESIÓN</span>
-                                    <span className="text-xl font-bold font-mono text-white">
-                                      {isNaN(presNum) ? '0.00' : presNum.toFixed(2)}b
-                                    </span>
+                                    <span className="text-xl font-bold font-mono text-white">{(dDev.presion || 0).toFixed(2)}b</span>
                                   </div>
                                 </div>
 
                                 <div className="space-y-1 mb-3">
                                   <div className="flex justify-between text-[10px] font-mono text-slate-400">
                                     <span>Odómetro: {cCount}/{cLim} ciclos</span>
-                                    <span>{Math.round((cCount / (cLim || 1)) * 100)}%</span>
+                                    <span>{Math.round((cCount / cLim) * 100)}%</span>
                                   </div>
                                   <div className="w-full bg-slate-800/80 rounded-full h-1.5 overflow-hidden">
-                                    <div className="bg-emerald-400 h-full" style={{ width: `${Math.min(100, (cCount / (cLim || 1)) * 100)}%` }}></div>
+                                    <div className="bg-emerald-400 h-full" style={{ width: `${Math.min(100, (cCount / cLim) * 100)}%` }}></div>
                                   </div>
                                 </div>
                               </div>
@@ -758,7 +769,7 @@ function ScadaAppContent() {
                   />
                 )}
 
-                {/* SECCIÓN USUARIOS */}
+                {/* SECCIÓN DEDICADA: USUARIOS & PERMISOS */}
                 {activeSection === 'usuarios' && (
                   <UserManagementView
                     fleet={fleet}
@@ -865,7 +876,7 @@ function ScadaAppContent() {
           </div>
         )}
 
-        {/* Diagnóstico Cloud en Cabecera */}
+        {/* MODAL DE DIAGNÓSTICO CLOUD (HIVEMQ / SUPABASE) PARA SUPERADMIN */}
         <CloudDiagnosticsModal
           isOpen={Boolean(cloudDiagType)}
           onClose={() => setCloudDiagType(null)}
@@ -875,7 +886,7 @@ function ScadaAppContent() {
           supabaseConnected={supabaseConnected}
         />
 
-        {/* Menú Contextual */}
+        {/* Menú Contextual (Clic Secundario) */}
         <ContextMenu
           isOpen={contextMenu.isOpen}
           position={contextMenu.position}
@@ -894,7 +905,7 @@ function ScadaAppContent() {
           onOpenQR={(dev) => setQrModalDevice(dev)}
         />
 
-        {/* Modal de Asignación */}
+        {/* Modal de Asignación a Cliente / Usuario */}
         <DeviceAssignmentModal
           isOpen={assignModal.isOpen}
           onClose={() => setAssignModal({ isOpen: false, device: null })}
@@ -914,7 +925,7 @@ function ScadaAppContent() {
           operatorName={profile?.nombre || user?.email}
         />
 
-        {/* Modal de Personal & Aprobaciones */}
+        {/* Modal de Personal & Aprobaciones Rápidas (Campana) */}
         <UserManagementModal 
           isOpen={showAdminModal} 
           onClose={() => setShowAdminModal(false)} 
