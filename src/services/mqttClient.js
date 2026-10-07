@@ -41,16 +41,11 @@ export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
     mqttClient.on('connect', () => {
       if (onStatusChange) onStatusChange(true);
 
-      // Suscripciones operativas
       mqttClient.subscribe('autoclave_med_2026/+/telemetria');
       mqttClient.subscribe('autoclave_med_2026/+/esquema');
       mqttClient.subscribe('autoclave_med_2026/+/meta');
       mqttClient.subscribe('autoclave_med_2026/+/reporte_paquete');
       mqttClient.subscribe('autoclave_med_2026/+/alerta_critica');
-
-      // NUEVOS CANALES: Diagnóstico I2C y Perfil de Hardware JSON
-      mqttClient.subscribe('autoclave_med_2026/+/i2c_report');
-      mqttClient.subscribe('autoclave_med_2026/+/hw_profile');
 
       if (broadcast) {
         broadcast.postMessage({ type: 'STATUS_UPDATE', status: true });
@@ -75,6 +70,8 @@ export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
         const mac = parts[1];
         const channel = parts[2];
         const isRetained = Boolean(packet && packet.retain);
+
+        if (!mac || !channel) return;
 
         const packetData = { mac, channel, payload, topic, isRetained };
 
@@ -152,6 +149,7 @@ export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
   }
 
   const sendCommand = (mac, cmdObject, forceRetain = null) => {
+    if (!mac) return;
     const cleanMac = mac.toUpperCase();
     const topic = `autoclave_med_2026/${cleanMac}/config`;
     const isInstantTrigger = Boolean(cmdObject.cmd);
