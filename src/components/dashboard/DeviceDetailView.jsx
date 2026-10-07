@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import SterilizationChart from '../graphics/SterilizationChart';
 import SurgicalQRLabel from '../labels/SurgicalQRLabel';
 import SessionDetailModal from '../reports/SessionDetailModal';
@@ -34,8 +34,7 @@ import {
   Search,
   FileJson,
   RefreshCw,
-  Check,
-  Download
+  Check
 } from 'lucide-react';
 
 export default function DeviceDetailView({ 
@@ -47,11 +46,42 @@ export default function DeviceDetailView({
   isKioskMode,
   onToggleKiosk
 }) {
+  // 1. Estados Principales
   const [activeTab, setActiveTab] = useState(() => localStorage.getItem('scada_detail_tab') || 'sensores');
   const [showQRModal, setShowQRModal] = useState(false);
   const [nvsMsg, setNvsMsg] = useState('');
 
-  // Modal de Confirmación de Seguridad
+  // 2. Datos del Dispositivo Seguros
+  const d = device?.datos || {};
+  const cfg = d?.cfg || {};
+  const hwProf = device?.hwProfile || {};
+
+  // 3. Ficha del Equipo (Declaradas arriba para evitar errores de referencia)
+  const [alias, setAlias] = useState(device?.meta?.alias || `AUTOCLAVE [${(device?.mac || '').slice(-4)}]`);
+  const [cliente, setCliente] = useState(device?.meta?.cliente || 'Hospital Metropolitano');
+  const [modelo, setModelo] = useState(device?.meta?.modelo || 'Quirúrgico Clase B');
+  const [guardandoFicha, setGuardandoFicha] = useState(false);
+
+  // 4. Parámetros NVS
+  const [spTemp, setSpTemp] = useState(cfg.sp_temp ?? 121.0);
+  const [tCiclo, setTCiclo] = useState(cfg.t_ciclo ?? 2);
+  const [purgaOk, setPurgaOk] = useState(cfg.purga_ok ?? true);
+  const [pMax, setPMax] = useState(cfg.p_max ?? 2.60);
+  const [limMant, setLimMant] = useState(cfg.lim_mant ?? 200);
+  const [sndOk, setSndOk] = useState(cfg.snd_ok ?? true);
+
+  // 5. Mapeo Dinámico de Hardware (GPIOs)
+  const [pinMotor, setPinMotor] = useState(hwProf.pin_motor ?? 2);
+  const [pinCalentador, setPinCalentador] = useState(hwProf.pin_calentador ?? 4);
+  const [pinVacio, setPinVacio] = useState(hwProf.pin_vacio ?? 5);
+
+  // 6. Editor JSON
+  const [showJsonEditor, setShowJsonEditor] = useState(false);
+  const [jsonContent, setJsonContent] = useState('');
+  const [jsonError, setJsonError] = useState('');
+  const [scanningI2c, setScanningI2c] = useState(false);
+
+  // Modal de Confirmación
   const [confirmModal, setConfirmModal] = useState({
     isOpen: false,
     title: '',
@@ -65,20 +95,70 @@ export default function DeviceDetailView({
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [inspectedSession, setInspectedSession] = useState(null);
 
+  // Mantenimiento
+  const [maintFecha, setMaintFecha] = useState('');
+  const [maintTipo, setMaintTipo] = useState('PREVENTIVO_GENERAL');
+  const [maintTecnico, setMaintTecnico] = useState('');
+  const [maintNotas, setMaintNotas] = useState('');
+
   const canEditHardware = userRole && !userRole.toLowerCase().includes('operador') && !userRole.toLowerCase().includes('cliente');
   const tieneReportes = device?.esquema?.tiene_reportes !== false && device?.datos?.tipo !== 'sin_reportes';
-
-  const d = device?.datos || {};
-  const cfg = d?.cfg || {};
-  const hwProf = device?.hwProfile || {};
 
   const isMotorActive = (d.motor !== undefined) ? Boolean(d.motor) : Boolean(cfg.mot_ok);
   const isVacioActive = (d.vacio !== undefined) ? Boolean(d.vacio) : Boolean(cfg.vacio_ok);
   const isHabActive = cfg.hab !== false;
 
+  const ciclos = cfg.ciclos || device?.meta?.ciclosCompletados || 0;
+  const limite = cfg.lim_mant || device?.meta?.limiteMantenimiento || 200;
+  const pctMant = Math.min(100, Math.round((ciclos / limite) * 100));
+
   useEffect(() => {
     localStorage.setItem('scada_detail_tab', activeTab);
   }, [activeTab]);
+
+  // Sincronizar parámetros entrantes de forma segura (sin bucles infinitos)
+  useEffect(() => {
+    if (cfg.sp_temp !== undefined) setSpTemp(cfg.sp_temp);
+    if (cfg.t_ciclo !== undefined) setTCiclo(cfg.t_ciclo);
+    if (cfg.purga_ok !== undefined) setPurgaOk(cfg.purga_ok);
+    if (cfg.p_max !== undefined) setPMax(cfg.p_max);
+    if (cfg.lim_mant !== undefined) setLimMant(cfg.lim_mant);
+    if (cfg.snd_ok !== undefined) setSndOk(cfg.snd_ok);
+  }, [cfg.sp_temp, cfg.t_ciclo, cfg.purga_ok, cfg.p_max, cfg.lim_mant, cfg.snd_ok]);
+
+  useEffect(() => {
+    if (hwProf.pin_motor !== undefined) setPinMotor(hwProf.pin_motor);
+    if (hwProf.pin_calentador !== undefined) setPinCalentador(hwProf.pin_calentador);
+    if (hwProf.pin_vacio !== undefined) setPinVacio(hwProf.pin_vacio);
+  }, [hwProf.pin_motor, hwProf.pin_calentador, hwProf.pin_vacio]);
+
+  // Actualizar el texto del JSON solo cuando cambien los valores de los inputs
+  useEffect(() => {
+    const currentProfile = {
+      perfil_version: "v2.0-HAL",
+      dispositivo: {
+        mac: device?.mac || '',
+        alias: alias
+      },
+      salidas_gpios: {
+        pin_motor: Number(pinMotor),
+        pin_calentador: Number(pinCalentador),
+        pin_vacio: Number(pinVacio)
+      },
+      ciclo_parametros: {
+        sp_temp: Number(spTemp),
+        t_ciclo: Number(tCiclo),
+        hab: Boolean(isHabActive),
+        purga_ok: Boolean(purgaOk)
+      },
+      limites_seguridad: {
+        p_max: Number(pMax),
+        lim_mant: Number(limMant),
+        snd_ok: Boolean(sndOk)
+      }
+    };
+    setJsonContent(JSON.stringify(currentProfile, null, 2));
+  }, [pinMotor, pinCalentador, pinVacio, spTemp, tCiclo, isHabActive, purgaOk, pMax, limMant, sndOk, alias, device?.mac]);
 
   const fetchMacLogs = async () => {
     if (!device?.mac || !tieneReportes) return;
@@ -104,68 +184,6 @@ export default function DeviceDetailView({
       fetchMacLogs();
     }
   }, [activeTab, device?.mac]);
-
-  // Parámetros NVS
-  const [spTemp, setSpTemp] = useState(cfg.sp_temp ?? 121.0);
-  const [tCiclo, setTCiclo] = useState(cfg.t_ciclo ?? 2);
-  const [purgaOk, setPurgaOk] = useState(cfg.purga_ok ?? true);
-  const [pMax, setPMax] = useState(cfg.p_max ?? 2.60);
-  const [limMant, setLimMant] = useState(cfg.lim_mant ?? 200);
-  const [sndOk, setSndOk] = useState(cfg.snd_ok ?? true);
-
-  // NUEVO: Mapeo de Pines Dinámicos (GPIOs)
-  const [pinMotor, setPinMotor] = useState(hwProf.pin_motor ?? 2);
-  const [pinCalentador, setPinCalentador] = useState(hwProf.pin_calentador ?? 4);
-  const [pinVacio, setPinVacio] = useState(hwProf.pin_vacio ?? 5);
-
-  // NUEVO: Editor JSON Android-Style
-  const [showJsonEditor, setShowJsonEditor] = useState(false);
-  const [jsonContent, setJsonContent] = useState('');
-  const [jsonError, setJsonError] = useState('');
-
-  // NUEVO: Estado del Escáner I2C
-  const [scanningI2c, setScanningI2c] = useState(false);
-
-  useEffect(() => {
-    if (cfg.sp_temp !== undefined) setSpTemp(cfg.sp_temp);
-    if (cfg.t_ciclo !== undefined) setTCiclo(cfg.t_ciclo);
-    if (cfg.purga_ok !== undefined) setPurgaOk(cfg.purga_ok);
-    if (cfg.p_max !== undefined) setPMax(cfg.p_max);
-    if (cfg.lim_mant !== undefined) setLimMant(cfg.lim_mant);
-    if (cfg.snd_ok !== undefined) setSndOk(cfg.snd_ok);
-
-    if (hwProf.pin_motor !== undefined) setPinMotor(hwProf.pin_motor);
-    if (hwProf.pin_calentador !== undefined) setPinCalentador(hwProf.pin_calentador);
-    if (hwProf.pin_vacio !== undefined) setPinVacio(hwProf.pin_vacio);
-  }, [cfg, hwProf]);
-
-  // Generar representación JSON sincronizada
-  useEffect(() => {
-    const currentProfile = {
-      perfil_version: "v2.0-HAL",
-      dispositivo: {
-        mac: device.mac,
-        alias: alias
-      },
-      salidas_gpios: {
-        pin_motor: Number(pinMotor),
-        pin_calentador: Number(pinCalentador),
-        pin_vacio: Number(pinVacio)
-      },
-      ciclo_parametros: {
-        sp_temp: Number(spTemp),
-        t_ciclo: Number(tCiclo),
-        hab: Boolean(isHabActive),
-        purga_ok: Boolean(purgaOk)
-      },
-      limites_seguridad: {
-        p_max: Number(pMax),
-        lim_mant: Number(limMant),
-        snd_ok: Boolean(sndOk)
-      }
-    };
-    setJsonContent(JSON.stringify(currentProfile, null, 2));
-  }, [pinMotor, pinCalentador, pinVacio, spTemp, tCiclo, isHabActive, purgaOk, pMax, limMant, sndOk]);
 
   const applyPreset134 = () => {
     setSpTemp(134.0);
@@ -213,7 +231,6 @@ export default function DeviceDetailView({
     });
   };
 
-  // TRANSMISIÓN DUAL: SUPABASE CLOUD (AUDITORÍA) + ESP32 (HIVEMQ)
   const handleTransmitNVS = async (e) => {
     e.preventDefault();
     if (!canEditHardware) return alert('Permiso denegado: solo personal técnico autorizado.');
@@ -258,10 +275,13 @@ export default function DeviceDetailView({
         pin_calentador: Number(pinCalentador),
         pin_vacio: Number(pinVacio)
       };
-      fullJsonProfile = JSON.parse(jsonContent);
+      try {
+        fullJsonProfile = JSON.parse(jsonContent);
+      } catch {
+        fullJsonProfile = payloadMqtt;
+      }
     }
 
-    // 1. Guardar primero en Supabase Cloud (Persistencia y Trazabilidad)
     try {
       await supabase.from('perfiles_hardware').upsert({
         mac: device.mac,
@@ -275,10 +295,9 @@ export default function DeviceDetailView({
       console.warn('[SUPABASE PERFIL ERROR]', err);
     }
 
-    // 2. Transmitir por HiveMQ al microcontrolador ESP32
     sendCommand(device.mac, payloadMqtt);
 
-    setNvsMsg(`⚡ Perfil guardado en Supabase y transmitido a Flash NVS de ${device.mac}.`);
+    setNvsMsg(`⚡ Perfil guardado en Supabase y grabado en NVS Flash de ${device.mac}.`);
     setTimeout(() => setNvsMsg(''), 4500);
   };
 
@@ -287,26 +306,11 @@ export default function DeviceDetailView({
     sendCommand(device.mac, { [key]: nextState });
   };
 
-  // DISPARAR ESCANEO I2C EN TIEMPO REAL
   const handleTriggerI2CScan = () => {
     setScanningI2c(true);
     sendCommand(device.mac, { cmd: 'SCAN_I2C' });
     setTimeout(() => setScanningI2c(false), 3000);
   };
-
-  const [alias, setAlias] = useState(device?.meta?.alias || `AUTOCLAVE [${device.mac.slice(-4)}]`);
-  const [cliente, setCliente] = useState(device?.meta?.cliente || 'Hospital Metropolitano');
-  const [modelo, setModelo] = useState(device?.meta?.modelo || 'Quirúrgico Clase B');
-  const [guardandoFicha, setGuardandoFicha] = useState(false);
-
-  const [maintFecha, setMaintFecha] = useState('');
-  const [maintTipo, setMaintTipo] = useState('PREVENTIVO_GENERAL');
-  const [maintTecnico, setMaintTecnico] = useState('');
-  const [maintNotas, setMaintNotas] = useState('');
-
-  const ciclos = cfg.ciclos || device?.meta?.ciclosCompletados || 0;
-  const limite = cfg.lim_mant || device?.meta?.limiteMantenimiento || 200;
-  const pctMant = Math.min(100, Math.round((ciclos / limite) * 100));
 
   const handleGuardarFicha = async (e) => {
     e.preventDefault();
@@ -347,8 +351,11 @@ export default function DeviceDetailView({
     }
   };
 
-  // Dispositivos I2C detectados
   const i2cDevices = device?.i2cReport?.dispositivos || device?.i2cReport?.perifericos || device?.i2cReport?.encontrados || [];
+
+  if (!device || !device.mac) {
+    return <div className="p-6 text-white font-mono">Cargando datos del autoclave...</div>;
+  }
 
   return (
     <div className="flex flex-col gap-4 w-full">
@@ -676,7 +683,7 @@ export default function DeviceDetailView({
         </div>
       )}
 
-      {/* PESTAÑA 3: NVS + PERFIL DINÁMICO JSON (ANDROID-STYLE) */}
+      {/* PESTAÑA 3: NVS + PERFIL DINÁMICO */}
       {activeTab === 'nvs' && canEditHardware && (
         <form onSubmit={handleTransmitNVS} className="ultra-glass p-5 md:p-6 rounded-2xl border border-cyan-500/30 space-y-5">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-cyan-500/20 pb-3">
@@ -734,7 +741,6 @@ export default function DeviceDetailView({
             </div>
           )}
 
-          {/* EDITOR JSON DINÁMICO (MODO ANDROID SYSTEM MANIFEST) */}
           {showJsonEditor ? (
             <div className="p-4 bg-slate-950 rounded-xl border border-cyan-500/40 space-y-2">
               <div className="flex justify-between items-center text-xs font-mono text-cyan-300">
@@ -742,7 +748,7 @@ export default function DeviceDetailView({
                   <FileJson className="w-4 h-4 text-cyan-400" />
                   Archivo de Perfil JSON Activo (hw_profile.json)
                 </span>
-                <span className="text-[10px] text-slate-400">Edición Directa para el ESP32</span>
+                <span className="text-[10px] text-slate-400">Edición Directa</span>
               </div>
               <textarea
                 rows={12}
@@ -751,9 +757,6 @@ export default function DeviceDetailView({
                 className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 font-mono text-xs text-cyan-200 focus:outline-none focus:border-cyan-400 leading-relaxed"
                 placeholder="Estructura del archivo JSON..."
               />
-              <p className="text-[10px] text-slate-400 font-mono">
-                💡 Este archivo se guarda en Supabase Cloud y se descarga en la memoria Flash (LittleFS) del microcontrolador.
-              </p>
             </div>
           ) : (
             <>
@@ -871,7 +874,7 @@ export default function DeviceDetailView({
                 </div>
               </div>
 
-              {/* SECCIÓN 3: MAPEO DINÁMICO DE HARDWARE (GPIOS & HAL) */}
+              {/* SECCIÓN 3: MAPEO DINÁMICO DE HARDWARE */}
               <div>
                 <span className="text-xs font-mono text-cyan-400 font-bold block mb-3 uppercase tracking-wider flex items-center gap-1.5">
                   <Cpu className="w-4 h-4 text-cyan-400" />
@@ -1064,7 +1067,7 @@ export default function DeviceDetailView({
             </form>
           </div>
 
-          {/* DIAGNÓSTICO Y ESCANEO I2C PLUG & PLAY */}
+          {/* DIAGNÓSTICO Y ESCANEO I2C */}
           <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 space-y-3">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-cyan-500/20 pb-3">
               <div>
@@ -1122,7 +1125,7 @@ export default function DeviceDetailView({
         </div>
       )}
 
-      {/* Modal de Etiquetas QR */}
+      {/* Modales */}
       <SurgicalQRLabel
         isOpen={showQRModal}
         onClose={() => setShowQRModal(false)}
@@ -1130,14 +1133,12 @@ export default function DeviceDetailView({
         operatorName={operatorName}
       />
 
-      {/* Visor Forense de la Sesión */}
       <SessionDetailModal
         isOpen={inspectedSession !== null}
         onClose={() => setInspectedSession(null)}
         session={inspectedSession}
       />
 
-      {/* Modal de Doble Confirmación y Firma Operativa */}
       <ActionConfirmModal
         isOpen={confirmModal.isOpen}
         onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
