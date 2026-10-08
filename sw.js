@@ -1,39 +1,20 @@
 // =========================================================================
-// SCADA AUTOCLAVE // SERVICE WORKER (NETWORK-FIRST & AUTO-PURGA DE CACHÉ)
+// BIOFLEET OS // SERVICE WORKER EMPRESARIAL (VITE REACT SAFE)
 // =========================================================================
-const CACHE_VERSION = 'scada-cache-v26-enterprise';
-
-const ASSETS_TO_CACHE = [
-  './',
-  './index.html',
-  './style.css',
-  './style.css?v=26',
-  './app.js',
-  './app.js?v=26',
-  './manifest.json',
-  './icon.png'
-];
+const CACHE_NAME = 'biofleet-cache-v2-enterprise';
 
 // 1. Instalación inmediata sin esperas
 self.addEventListener('install', (event) => {
   self.skipWaiting();
-  event.waitUntil(
-    caches.open(CACHE_VERSION).then((cache) => {
-      return cache.addAll(ASSETS_TO_CACHE).catch((err) => {
-        console.warn('[SW] Aviso precaching:', err);
-      });
-    })
-  );
 });
 
-// 2. Activación: Purga obligatoria de cachés viejas (elimina v25 y anteriores)
+// 2. Activación: Purga obligatoria de cachés viejas (limpia versiones antiguas)
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
       return Promise.all(
         keys.map((key) => {
-          if (key !== CACHE_VERSION) {
-            console.log('[SW] Purgando caché obsoleta antigua:', key);
+          if (key !== CACHE_NAME) {
             return caches.delete(key);
           }
         })
@@ -42,13 +23,13 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// 3. Estrategia Network-First: Siempre consulta la red en caliente primero
+// 3. Estrategia Segura Network-First
 self.addEventListener('fetch', (event) => {
-  // Ignorar peticiones a Supabase, HiveMQ o APIs externas en tiempo real
+  // Ignorar peticiones externas, WebSockets, Supabase o HiveMQ para no bloquear la telemetría
   if (
     event.request.url.includes('supabase.co') ||
     event.request.url.includes('hivemq.cloud') ||
-    event.request.url.includes('formsubmit.co') ||
+    event.request.url.includes('api.telegram.org') ||
     event.request.method !== 'GET'
   ) {
     return;
@@ -59,15 +40,17 @@ self.addEventListener('fetch', (event) => {
       .then((networkResponse) => {
         if (networkResponse && networkResponse.status === 200) {
           const responseToCache = networkResponse.clone();
-          caches.open(CACHE_VERSION).then((cache) => {
+          caches.open(CACHE_NAME).then((cache) => {
             cache.put(event.request, responseToCache);
           });
         }
         return networkResponse;
       })
-      .catch(() => {
-        // Si no hay red en absoluto, servir desde caché local
-        return caches.match(event.request);
+      .catch(async () => {
+        // Si no hay red, buscar en caché; si no existe, devolver respuesta vacía segura para NO romper el navegador
+        const cachedResponse = await caches.match(event.request);
+        if (cachedResponse) return cachedResponse;
+        return new Response('Modo fuera de línea', { status: 503, statusText: 'Offline' });
       })
   );
 });
