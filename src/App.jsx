@@ -13,6 +13,7 @@ import ClinicalTooltip from './components/common/ClinicalTooltip';
 import ContextMenu from './components/common/ContextMenu';
 import DeviceAssignmentModal from './components/admin/DeviceAssignmentModal';
 import SurgicalQRLabel from './components/labels/SurgicalQRLabel';
+import { CLINICAL_HELP } from './utils/clinicalDictionary';
 import { useMqttFleet } from './hooks/useMqttFleet';
 import { startIndustrialSiren, stopIndustrialSiren, initAudioUnlock } from './services/audioAlarm';
 import { sendCriticalAlarmWithButtons } from './services/telegram';
@@ -40,7 +41,7 @@ function ScadaAppContent() {
   const { user, profile, loading, pendingRequests, logout } = useAuth();
   const { fleet, mqttConnected, sendDeviceCommand } = useMqttFleet();
 
-  // Auditoría en vivo de conexión con Supabase Cloud (select('*') evita errores HTTP 400)
+  // Auditoría en vivo de conexión con Supabase Cloud
   const [supabaseConnected, setSupabaseConnected] = useState(true);
   useEffect(() => {
     const checkSupabase = async () => {
@@ -64,10 +65,8 @@ function ScadaAppContent() {
     initAudioUnlock();
   }, []);
 
-  // Modal de diagnóstico para Superadmin ('hivemq' | 'supabase' | null)
   const [cloudDiagType, setCloudDiagType] = useState(null);
 
-  // Modo Kiosco y Persistencia por pestaña (sessionStorage)
   const [kioskMac, setKioskMac] = useState(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const directKiosk = urlParams.get('kiosk');
@@ -355,7 +354,7 @@ function ScadaAppContent() {
   return (
     <div className="min-h-screen w-full relative pb-20 md:pb-6 flex flex-col overflow-x-hidden">
       
-      {/* CAPA DE FONDO FIJA VISIBLE (z-0) */}
+      {/* Fondo fijo visible */}
       <div 
         id="scada-background"
         className="fixed inset-0 z-0 pointer-events-none bg-cover bg-center bg-no-repeat transition-[background-image] duration-500"
@@ -387,7 +386,7 @@ function ScadaAppContent() {
           </div>
         )}
 
-        {/* Header Institucional */}
+        {/* Header */}
         <header className="speedtest-laser-header border-b border-cyan-500/20 bg-slate-950/80 backdrop-blur-md px-3 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between sticky top-0 z-40 w-full">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <div className="p-1.5 sm:p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 shrink-0">
@@ -409,7 +408,6 @@ function ScadaAppContent() {
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0 ml-2">
-            
             {kioskMac && (
               <button
                 onClick={() => toggleKioskMode(null)}
@@ -421,7 +419,7 @@ function ScadaAppContent() {
               </button>
             )}
 
-            {/* Indicador MQTT */}
+            {/* MQTT */}
             <ClinicalTooltip
               title="Broker MQTT (HiveMQ Cloud)"
               description={isAdmin ? "⚡ Click para abrir la Consola de Recursos y Latencia MQTT." : "Transmisión bidireccional continua por WebSockets (puerto seguro 8884)."}
@@ -444,7 +442,7 @@ function ScadaAppContent() {
               </button>
             </ClinicalTooltip>
 
-            {/* Indicador Supabase Cloud */}
+            {/* Supabase */}
             <ClinicalTooltip
               title="Base de Datos Supabase Cloud"
               description={isAdmin ? "⚡ Click para abrir el Inventario de Registros, Tablas y Latencia DB." : "Canal central de persistencia Postgres en tiempo real para sesiones."}
@@ -467,7 +465,7 @@ function ScadaAppContent() {
               </button>
             </ClinicalTooltip>
 
-            {/* Chip del Usuario con Ficha al Cursor */}
+            {/* Chip Usuario */}
             {user && (
               <ClinicalTooltip
                 title={displayName}
@@ -547,49 +545,63 @@ function ScadaAppContent() {
           </div>
         </header>
 
-        {/* Dock Superior en PC */}
+        {/* Dock PC */}
         {user && !kioskMac && !isOperator && (
           <div className="hidden md:flex items-center gap-2 px-6 py-2 bg-slate-950/60 border-b border-cyan-500/10">
-            <button
-              onClick={() => { setActiveSection('flota'); setSelectedMac(null); }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
-                activeSection === 'flota' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              ⚡ Flota en Vivo ({allowedDevices.length})
-            </button>
-            <button
-              onClick={() => { setActiveSection('gestion'); setSelectedMac(null); }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
-                activeSection === 'gestion' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              🏢 Gestión Flota
-            </button>
-            <button
-              onClick={() => { setActiveSection('usuarios'); setSelectedMac(null); }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
-                activeSection === 'usuarios' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              🛡️ Usuarios & Permisos
-            </button>
-            <button
-              onClick={() => { setActiveSection('fota'); setSelectedMac(null); }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
-                activeSection === 'fota' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              🚀 FOTA Hub
-            </button>
-            <button
-              onClick={() => { setActiveSection('auditoria'); setSelectedMac(null); }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
-                activeSection === 'auditoria' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              📋 Auditoría Supabase
-            </button>
+            <ClinicalTooltip title={CLINICAL_HELP.nav_flota.title} description={CLINICAL_HELP.nav_flota.desc} badge={CLINICAL_HELP.nav_flota.badge}>
+              <button
+                onClick={() => { setActiveSection('flota'); setSelectedMac(null); }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
+                  activeSection === 'flota' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                ⚡ Flota en Vivo ({allowedDevices.length})
+              </button>
+            </ClinicalTooltip>
+
+            <ClinicalTooltip title={CLINICAL_HELP.nav_gestion.title} description={CLINICAL_HELP.nav_gestion.desc} badge={CLINICAL_HELP.nav_gestion.badge}>
+              <button
+                onClick={() => { setActiveSection('gestion'); setSelectedMac(null); }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
+                  activeSection === 'gestion' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                🏢 Gestión Flota
+              </button>
+            </ClinicalTooltip>
+
+            <ClinicalTooltip title={CLINICAL_HELP.nav_usuarios.title} description={CLINICAL_HELP.nav_usuarios.desc} badge={CLINICAL_HELP.nav_usuarios.badge}>
+              <button
+                onClick={() => { setActiveSection('usuarios'); setSelectedMac(null); }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
+                  activeSection === 'usuarios' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                🛡️ Usuarios & Permisos
+              </button>
+            </ClinicalTooltip>
+
+            <ClinicalTooltip title={CLINICAL_HELP.nav_fota.title} description={CLINICAL_HELP.nav_fota.desc} badge={CLINICAL_HELP.nav_fota.badge}>
+              <button
+                onClick={() => { setActiveSection('fota'); setSelectedMac(null); }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
+                  activeSection === 'fota' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                🚀 FOTA Hub
+              </button>
+            </ClinicalTooltip>
+
+            <ClinicalTooltip title={CLINICAL_HELP.nav_auditoria.title} description={CLINICAL_HELP.nav_auditoria.desc} badge={CLINICAL_HELP.nav_auditoria.badge}>
+              <button
+                onClick={() => { setActiveSection('auditoria'); setSelectedMac(null); }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
+                  activeSection === 'auditoria' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                📋 Auditoría Supabase
+              </button>
+            </ClinicalTooltip>
           </div>
         )}
 
@@ -661,14 +673,16 @@ function ScadaAppContent() {
                           </button>
                         </ClinicalTooltip>
 
-                        <button
-                          onClick={() => setHealthFilter('ALL')}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
-                            healthFilter === 'ALL' ? 'bg-cyan-500 text-slate-950 border-cyan-400 shadow-md' : 'bg-slate-900/80 border-slate-700 text-slate-300'
-                          }`}
-                        >
-                          🌐 TODOS ({allowedDevices.length})
-                        </button>
+                        <ClinicalTooltip title={CLINICAL_HELP.filter_all.title} description={CLINICAL_HELP.filter_all.desc} badge={CLINICAL_HELP.filter_all.badge}>
+                          <button
+                            onClick={() => setHealthFilter('ALL')}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
+                              healthFilter === 'ALL' ? 'bg-cyan-500 text-slate-950 border-cyan-400 shadow-md' : 'bg-slate-900/80 border-slate-700 text-slate-300'
+                            }`}
+                          >
+                            🌐 TODOS ({allowedDevices.length})
+                          </button>
+                        </ClinicalTooltip>
                       </div>
                     </div>
 
@@ -737,21 +751,25 @@ function ScadaAppContent() {
                                   </div>
                                 </div>
 
-                                <div className="space-y-1 mb-3">
-                                  <div className="flex justify-between text-[10px] font-mono text-slate-400">
-                                    <span>Odómetro: {cCount}/{cLim} ciclos</span>
-                                    <span>{Math.round((cCount / (cLim || 1)) * 100)}%</span>
+                                <ClinicalTooltip title={CLINICAL_HELP.card_odometro.title} description={CLINICAL_HELP.card_odometro.desc} badge="VIDA ÚTIL">
+                                  <div className="space-y-1 mb-3 w-full">
+                                    <div className="flex justify-between text-[10px] font-mono text-slate-400">
+                                      <span>Odómetro: {cCount}/{cLim} ciclos</span>
+                                      <span>{Math.round((cCount / (cLim || 1)) * 100)}%</span>
+                                    </div>
+                                    <div className="w-full bg-slate-800/80 rounded-full h-1.5 overflow-hidden">
+                                      <div className="bg-emerald-400 h-full" style={{ width: `${Math.min(100, (cCount / (cLim || 1)) * 100)}%` }}></div>
+                                    </div>
                                   </div>
-                                  <div className="w-full bg-slate-800/80 rounded-full h-1.5 overflow-hidden">
-                                    <div className="bg-emerald-400 h-full" style={{ width: `${Math.min(100, (cCount / (cLim || 1)) * 100)}%` }}></div>
-                                  </div>
-                                </div>
+                                </ClinicalTooltip>
                               </div>
 
-                              <div className="pt-3 border-t border-white/10 flex items-center justify-between text-xs font-mono text-cyan-400 font-bold">
-                                <span>CONTROL TOTAL / CLIC DERECHO</span>
-                                <ChevronRight className="w-4 h-4" />
-                              </div>
+                              <ClinicalTooltip title={CLINICAL_HELP.card_control_total.title} description={CLINICAL_HELP.card_control_total.desc} badge="ENTRAR">
+                                <div className="pt-3 border-t border-white/10 flex items-center justify-between text-xs font-mono text-cyan-400 font-bold w-full">
+                                  <span>ENTRAR A CONTROL TOTAL</span>
+                                  <ChevronRight className="w-4 h-4" />
+                                </div>
+                              </ClinicalTooltip>
                             </div>
                           );
                         })
@@ -760,7 +778,7 @@ function ScadaAppContent() {
                   </div>
                 )}
 
-                {/* SECCIÓN GESTIÓN FLOTA */}
+                {/* GESTIÓN FLOTA */}
                 {activeSection === 'gestion' && (
                   <FleetManagementView
                     fleet={fleet}
@@ -769,7 +787,7 @@ function ScadaAppContent() {
                   />
                 )}
 
-                {/* SECCIÓN USUARIOS */}
+                {/* USUARIOS */}
                 {activeSection === 'usuarios' && (
                   <UserManagementView
                     fleet={fleet}
@@ -777,12 +795,12 @@ function ScadaAppContent() {
                   />
                 )}
 
-                {/* SECCIÓN FOTA */}
+                {/* FOTA */}
                 {activeSection === 'fota' && (
                   <FotaHubView fleet={fleet} sendCommand={sendDeviceCommand} />
                 )}
 
-                {/* SECCIÓN AUDITORÍA */}
+                {/* AUDITORÍA */}
                 {activeSection === 'auditoria' && (
                   <ClinicalAuditView />
                 )}
@@ -792,7 +810,7 @@ function ScadaAppContent() {
           </main>
         )}
 
-        {/* BARRA INFERIOR PARA TELÉFONOS */}
+        {/* BARRA INFERIOR CELULAR */}
         {user && !kioskMac && (
           <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-slate-950/90 border-t border-cyan-500/30 backdrop-blur-xl flex items-center justify-around z-50 px-2">
             <button
@@ -847,7 +865,7 @@ function ScadaAppContent() {
           </nav>
         )}
 
-        {/* Modal de Inactividad */}
+        {/* Modal Inactividad */}
         {showTimeoutModal && (
           <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
             <div className="ultra-glass border-2 border-amber-500 p-6 rounded-2xl max-w-sm w-full text-center space-y-4 shadow-[0_0_30px_rgba(245,158,11,0.3)]">
@@ -876,7 +894,7 @@ function ScadaAppContent() {
           </div>
         )}
 
-        {/* Diagnóstico Cloud en Cabecera */}
+        {/* Diagnóstico Cloud */}
         <CloudDiagnosticsModal
           isOpen={Boolean(cloudDiagType)}
           onClose={() => setCloudDiagType(null)}
@@ -925,7 +943,7 @@ function ScadaAppContent() {
           operatorName={profile?.nombre || user?.email}
         />
 
-        {/* Modal de Personal & Aprobaciones */}
+        {/* Modal Campana */}
         <UserManagementModal 
           isOpen={showAdminModal} 
           onClose={() => setShowAdminModal(false)} 
