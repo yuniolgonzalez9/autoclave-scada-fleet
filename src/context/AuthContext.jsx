@@ -11,6 +11,7 @@ export const AuthProvider = ({ children }) => {
   const [pendingRequests, setPendingRequests] = useState([]);
   const [recoveryRequests, setRecoveryRequests] = useState([]);
 
+  // Cargar solicitudes de registro y recuperación
   const loadPendingRequests = async () => {
     try {
       const { data: pendings } = await supabase
@@ -19,15 +20,16 @@ export const AuthProvider = ({ children }) => {
         .eq('estado', 'PENDIENTE');
       if (pendings) setPendingRequests(pendings);
 
+      // Consulta protegida usando created_at (evita error HTTP 400)
       const { data: recoveries } = await supabase
         .from('auditoria_accesos')
         .select('*')
         .eq('evento', 'SOLICITUD_RECUPERACION_PENDIENTE')
-        .order('fecha_hora', { ascending: false })
+        .order('created_at', { ascending: false })
         .limit(10);
       if (recoveries) setRecoveryRequests(recoveries);
     } catch (e) {
-      console.warn('Error cargando solicitudes:', e);
+      console.warn('Carga de solicitudes:', e);
     }
   };
 
@@ -48,7 +50,7 @@ export const AuthProvider = ({ children }) => {
     setLoading(false);
   }, []);
 
-  // INICIO DE SESIÓN CON TU CONTRASEÑA OFICIAL 24331973
+  // 1. INICIAR SESIÓN REAL
   const loginWithCredentials = async (userOrEmail, password) => {
     const cleanId = userOrEmail.trim().toLowerCase();
     const cleanPass = password.trim();
@@ -61,10 +63,11 @@ export const AuthProvider = ({ children }) => {
       const masterUser = {
         id: 'usr_superadmin_01',
         usuario: 'superadmin',
+        user: 'superadmin',
         nombre: 'Francisco Gonzalez',
         email: 'yuniol0220@gmail.com',
-        rol: 'Super Administrador (Director Biomédico)',
-        departamento: 'Ingeniería Biomédica & Mantenimiento',
+        rol: 'SUPERADMIN',
+        departamento: 'Dirección Biomédica Central',
         estado: 'ACTIVO'
       };
       localStorage.setItem('biofleet_enterprise_session', JSON.stringify(masterUser));
@@ -74,55 +77,68 @@ export const AuthProvider = ({ children }) => {
       return masterUser;
     }
 
+    // Consulta flexible en usuarios_scada
     const { data: users, error } = await supabase
       .from('usuarios_scada')
-      .select('*')
-      .or(`usuario.ilike.${cleanId},email.ilike.${cleanId}`);
+      .select('*');
 
     if (error || !users || users.length === 0) {
-      throw new Error('Credenciales incorrectas: El usuario o correo no existe.');
+      throw new Error('El usuario o correo no existe en el registro central.');
     }
 
-    const matchedUser = users[0];
-    const userPass = matchedUser.password || matchedUser.clave || matchedUser.password_acceso;
+    const matchedUser = users.find(u => {
+      const uname = (u.user || u.usuario || '').toLowerCase();
+      const umail = (u.email || '').toLowerCase();
+      return uname === cleanId || umail === cleanId;
+    });
 
+    if (!matchedUser) {
+      throw new Error('Credenciales incorrectas.');
+    }
+
+    const userPass = matchedUser.pass || matchedUser.password || matchedUser.clave;
     if (userPass !== cleanPass) {
-      throw new Error('Contraseña incorrecta. Verifique sus credenciales.');
+      throw new Error('Contraseña incorrecta.');
     }
 
     const userState = (matchedUser.estado || 'ACTIVO').toUpperCase();
     if (userState === 'PENDIENTE') {
-      throw new Error('ESTADO_PENDIENTE: Su solicitud de acceso aún está en revisión por el Super Administrador.');
+      throw new Error('ESTADO_PENDIENTE: Su solicitud de acceso aún está en revisión.');
     }
-    if (userState === 'INACTIVO' || userState === 'DESACTIVADO' || userState === 'RECHAZADO') {
-      throw new Error('ESTADO_INACTIVO: Acceso Desactivado / No Autorizado. Comuníquese con Francisco Gonzalez.');
+    if (userState === 'INACTIVO' || userState === 'SUSPENDIDO') {
+      throw new Error('ESTADO_INACTIVO: Acceso Desactivado / No Autorizado.');
     }
 
-    localStorage.setItem('biofleet_enterprise_session', JSON.stringify(matchedUser));
-    setUser(matchedUser);
-    setProfile(matchedUser);
+    const sessionObj = {
+      ...matchedUser,
+      usuario: matchedUser.user || matchedUser.usuario,
+      user: matchedUser.user || matchedUser.usuario
+    };
 
-    if (matchedUser.rol?.toLowerCase().includes('admin') || matchedUser.rol?.toLowerCase().includes('director')) {
+    localStorage.setItem('biofleet_enterprise_session', JSON.stringify(sessionObj));
+    setUser(sessionObj);
+    setProfile(sessionObj);
+
+    if (sessionObj.rol?.toLowerCase().includes('admin') || sessionObj.rol?.toLowerCase().includes('director')) {
       await loadPendingRequests();
     }
 
-    return matchedUser;
+    return sessionObj;
   };
 
+  // 2. RECUPERACIÓN DE CONTRASEÑA
   const requestPasswordRecovery = async (emailInput) => {
     const cleanEmail = emailInput.trim().toLowerCase();
 
     if (cleanEmail === 'yuniol0220@gmail.com' || cleanEmail === 'yuniolgonzalez9@gmail.com') {
       await sendTelegramAlert(
-        `🛡️ <b>RECUPERACIÓN MAESTRA SOLICITADA</b>\n\n` +
+        `🛡️ <b>RECUPERACIÓN MAESTRA</b>\n\n` +
         `👤 <b>Usuario:</b> Francisco Gonzalez (Superadmin)\n` +
-        `📧 <b>Correo:</b> ${cleanEmail}\n` +
-        `🔑 <b>Clave Maestra Activa:</b> <code>24331973</code>\n` +
-        `⏰ <b>Fecha:</b> ${new Date().toLocaleString()}`
+        `🔑 <b>Clave Maestra:</b> <code>24331973</code>`
       );
       return {
         isMaster: true,
-        message: 'Credencial Maestra detectada. Su clave de contingencia ha sido enviada a su canal oficial de Telegram.'
+        message: 'Credencial Maestra detectada. El PIN ha sido enviado a su canal de Telegram.'
       };
     }
 
@@ -133,13 +149,11 @@ export const AuthProvider = ({ children }) => {
 
     if (!users || users.length === 0) {
       await sendTelegramAlert(
-        `🚨 <b>ALERTA DE SEGURIDAD - POSIBLE INTRUSIÓN</b>\n\n` +
-        `⚠️ Intento de recuperación con correo <b>NO REGISTRADO</b>: <code>${cleanEmail}</code>\n` +
-        `⏰ <b>Fecha:</b> ${new Date().toLocaleString()}`
+        `🚨 <b>ALERTA DE SEGURIDAD</b>\n\nIntento de recuperación con correo no registrado: <code>${cleanEmail}</code>`
       );
       return {
         isMaster: false,
-        message: 'Si el correo existe en el registro hospitalario, se ha notificado a la Administración para validar su identidad.'
+        message: 'Si el correo existe en la base clínica, se ha notificado a la Administración.'
       };
     }
 
@@ -147,56 +161,48 @@ export const AuthProvider = ({ children }) => {
 
     try {
       await supabase.from('auditoria_accesos').insert([{
-        usuario_email: targetUser.email,
+        usuario: targetUser.user || targetUser.usuario,
         evento: 'SOLICITUD_RECUPERACION_PENDIENTE',
-        fecha_hora: new Date().toISOString()
+        created_at: new Date().toISOString()
       }]);
     } catch (e) {}
 
     await sendTelegramAlert(
-      `🔔 <b>SOLICITUD DE RECUPERACIÓN DE ACCESO</b>\n\n` +
-      `👤 <b>Personal:</b> ${targetUser.nombre || 'Sin nombre'}\n` +
-      `🆔 <b>Usuario:</b> <code>${targetUser.usuario}</code>\n` +
-      `📧 <b>Correo:</b> ${targetUser.email}\n` +
-      `🔑 <b>Clave Actual:</b> <code>${targetUser.password}</code>\n` +
-      `⏰ <b>Fecha:</b> ${new Date().toLocaleString()}`
+      `🔔 <b>SOLICITUD DE RECUPERACIÓN</b>\n\n` +
+      `👤 <b>Personal:</b> ${targetUser.nombre || targetUser.user}\n` +
+      `🆔 <b>Usuario:</b> <code>${targetUser.user || targetUser.usuario}</code>\n` +
+      `🔑 <b>Clave:</b> <code>${targetUser.pass || targetUser.password}</code>`
     );
 
     await loadPendingRequests();
 
     return {
       isMaster: false,
-      message: 'Solicitud enviada a la Dirección Biomédica. El Administrador ha recibido la alerta.'
+      message: 'Solicitud enviada a la Dirección Biomédica.'
     };
   };
 
   const resetUserPassword = async (userId, newTempPassword) => {
     const { error } = await supabase
       .from('usuarios_scada')
-      .update({ password: newTempPassword.trim() })
+      .update({ pass: newTempPassword.trim(), password: newTempPassword.trim() })
       .eq('id', userId);
 
     if (error) throw error;
   };
 
   const requestUserAccess = async ({ usuario, nombre_completo, email, departamento, password }) => {
-    const { data: existing } = await supabase
-      .from('usuarios_scada')
-      .select('usuario, email')
-      .or(`usuario.ilike.${usuario.trim()},email.ilike.${email.trim()}`);
-
-    if (existing && existing.length > 0) {
-      throw new Error('El nombre de usuario o correo ya está registrado.');
-    }
-
+    const cleanUser = usuario.trim().toLowerCase();
     const { data, error } = await supabase
       .from('usuarios_scada')
       .insert([{
-        usuario: usuario.trim().toLowerCase(),
+        user: cleanUser,
+        usuario: cleanUser,
         nombre: nombre_completo.trim(),
         email: email.trim().toLowerCase(),
-        departamento: departamento || 'Central de Esterilización (CEYE/RUMED)',
-        rol: 'Operador en Espera',
+        departamento: departamento || 'Central de Esterilización',
+        rol: 'OPERADOR',
+        pass: password.trim(),
         password: password.trim(),
         estado: 'PENDIENTE'
       }])
@@ -205,11 +211,9 @@ export const AuthProvider = ({ children }) => {
     if (error) throw new Error(error.message);
 
     await sendTelegramAlert(
-      `🆕 <b>NUEVA SOLICITUD DE ACCESO AL SCADA</b>\n\n` +
+      `🆕 <b>NUEVA SOLICITUD DE ACCESO</b>\n\n` +
       `👤 <b>Nombre:</b> ${nombre_completo}\n` +
-      `🆔 <b>Usuario:</b> <code>${usuario}</code>\n` +
-      `📧 <b>Correo:</b> ${email}\n` +
-      `🏢 <b>Área:</b> ${departamento}`
+      `🆔 <b>Usuario:</b> <code>${cleanUser}</code>`
     );
 
     return data;
@@ -230,6 +234,7 @@ export const AuthProvider = ({ children }) => {
 
   const logout = () => {
     localStorage.removeItem('biofleet_enterprise_session');
+    sessionStorage.clear();
     setUser(null);
     setProfile(null);
   };
