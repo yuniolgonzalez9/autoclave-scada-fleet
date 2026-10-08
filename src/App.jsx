@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import LoginModal from './components/auth/LoginModal';
 import UserManagementModal from './components/admin/UserManagementModal';
 import UserManagementView from './components/admin/UserManagementView';
+import CloudDiagnosticsModal from './components/admin/CloudDiagnosticsModal';
 import DeviceDetailView from './components/dashboard/DeviceDetailView';
 import ClinicalAuditView from './components/reports/ClinicalAuditView';
 import FotaHubView from './components/fota/FotaHubView';
@@ -21,25 +22,25 @@ import {
   Flame, 
   FileText, 
   Rocket, 
-  Building2,
+  Building2, 
   ChevronRight, 
   Volume2, 
-  VolumeX,
-  Bell,
-  Clock,
-  Pin,
-  PinOff,
-  Unlock,
-  Shield,
-  Database,
-  User as UserIcon
+  VolumeX, 
+  Bell, 
+  Clock, 
+  Pin, 
+  PinOff, 
+  Unlock, 
+  Shield, 
+  Database, 
+  User as UserIcon 
 } from 'lucide-react';
 
 function ScadaAppContent() {
   const { user, profile, loading, pendingRequests, logout } = useAuth();
   const { fleet, mqttConnected, sendDeviceCommand } = useMqttFleet();
 
-  // Auditoría en vivo de conexión con Supabase Cloud
+  // Diagnóstico en vivo de conexión con Supabase Cloud
   const [supabaseConnected, setSupabaseConnected] = useState(true);
   useEffect(() => {
     const checkSupabase = async () => {
@@ -63,10 +64,10 @@ function ScadaAppContent() {
     initAudioUnlock();
   }, []);
 
-  // =========================================================================
-  // BLINDAJE 1: AISLAMIENTO DE PESTAÑAS (SESSIONSTORAGE EN VEZ DE LOCALSTORAGE)
-  // Cada pestaña o ventana puede anclar un autoclave diferente sin colisiones
-  // =========================================================================
+  // Modal de diagnóstico para Superadmin
+  const [cloudDiagType, setCloudDiagType] = useState(null);
+
+  // Modo Kiosco y Persistencia por pestaña (sessionStorage)
   const [kioskMac, setKioskMac] = useState(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const directKiosk = urlParams.get('kiosk');
@@ -109,7 +110,6 @@ function ScadaAppContent() {
     sessionStorage.setItem('scada_tab_health_filter', healthFilter);
   }, [healthFilter]);
 
-  // Alternar el anclaje de terminal de forma independiente por pestaña
   const toggleKioskMode = (macToKiosk = null) => {
     if (kioskMac) {
       sessionStorage.removeItem('scada_tab_kiosk_mac');
@@ -129,22 +129,6 @@ function ScadaAppContent() {
       }
     }
   };
-
-  // =========================================================================
-  // BLINDAJE 2: CIERRE DE SESIÓN SINCRONIZADO CROSS-TAB (SEGURIDAD HOSPITALARIA)
-  // Si sales en una pestaña, todas las pestañas se cierran en el acto
-  // =========================================================================
-  useEffect(() => {
-    const handleStorageChange = (e) => {
-      if (e.key === 'biofleet_enterprise_session' && !e.newValue) {
-        // La sesión fue cerrada en otra pestaña -> cerrar aquí inmediatamente
-        sessionStorage.clear();
-        window.location.reload();
-      }
-    };
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
 
   const [contextMenu, setContextMenu] = useState({ isOpen: false, position: { x: 0, y: 0 }, device: null });
   const [assignModal, setAssignModal] = useState({ isOpen: false, device: null });
@@ -169,7 +153,6 @@ function ScadaAppContent() {
     return () => clearInterval(timer);
   }, []);
 
-  // Temporizador de Inactividad (15 min)
   const [showTimeoutModal, setShowTimeoutModal] = useState(false);
   const [countdown, setCountdown] = useState(60);
   const idleTimerRef = useRef(null);
@@ -246,8 +229,8 @@ function ScadaAppContent() {
         sendCriticalAlarmWithButtons({
           mac,
           alias: dev?.meta?.alias || mac,
-          temp: dev?.datos?.temp_camara || 0,
-          pres: dev?.datos?.presion || 0,
+          temp: parseFloat(dev?.datos?.temp_camara || 0),
+          pres: parseFloat(dev?.datos?.presion || 0),
           fase: dev?.datos?.fase || 'CRÍTICA',
           errorMsg: dev?.datos?.alarma_msg || 'Alarma en cámara'
         });
@@ -427,6 +410,7 @@ function ScadaAppContent() {
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0 ml-2">
+            
             {kioskMac && (
               <button
                 onClick={() => toggleKioskMode(null)}
@@ -438,43 +422,53 @@ function ScadaAppContent() {
               </button>
             )}
 
-            {/* 1. Indicador MQTT */}
+            {/* Indicador MQTT */}
             <ClinicalTooltip
               title="Broker MQTT (HiveMQ Cloud)"
-              description="Transmisión bidireccional continua por WebSockets (puerto seguro 8884) para telemetría de actuadores."
+              description={isAdmin ? "⚡ Click para abrir la Consola de Recursos y Latencia MQTT." : "Transmisión bidireccional continua por WebSockets (puerto seguro 8884)."}
               badge="WSS 8884"
-              shortcut="EN TIEMPO REAL"
+              shortcut={isAdmin ? "CLICK PARA AUDITAR" : "EN TIEMPO REAL"}
               position="bottom"
             >
-              <span className={`inline-flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-full text-[10px] font-mono font-bold border cursor-help ${
-                mqttConnected 
-                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' 
-                  : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
-              }`}>
+              <button
+                onClick={() => { if (isAdmin) setCloudDiagType('hivemq'); }}
+                className={`inline-flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-full text-[10px] font-mono font-bold border transition-all ${
+                  isAdmin ? 'cursor-pointer hover:scale-105 active:scale-95' : 'cursor-help'
+                } ${
+                  mqttConnected 
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20' 
+                    : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                }`}
+              >
                 <span className={`w-2 h-2 rounded-full shrink-0 ${mqttConnected ? 'bg-emerald-400 animate-ping' : 'bg-rose-400'}`}></span>
                 <span className="hidden sm:inline">{mqttConnected ? 'HIVEMQ 8884' : 'OFFLINE'}</span>
-              </span>
+              </button>
             </ClinicalTooltip>
 
-            {/* 2. Indicador Supabase Cloud */}
+            {/* Indicador Supabase Cloud */}
             <ClinicalTooltip
               title="Base de Datos Supabase Cloud"
-              description="Canal central de persistencia Postgres en tiempo real para sesiones, trazabilidad y control de personal."
+              description={isAdmin ? "⚡ Click para abrir el Inventario de Registros, Tablas y Latencia DB." : "Canal central de persistencia Postgres en tiempo real para sesiones."}
               badge="POSTGRES REST"
-              shortcut="EN LÍNEA"
+              shortcut={isAdmin ? "CLICK PARA AUDITAR" : "EN LÍNEA"}
               position="bottom"
             >
-              <span className={`inline-flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-full text-[10px] font-mono font-bold border cursor-help ${
-                supabaseConnected 
-                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' 
-                  : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
-              }`}>
+              <button
+                onClick={() => { if (isAdmin) setCloudDiagType('supabase'); }}
+                className={`inline-flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-full text-[10px] font-mono font-bold border transition-all ${
+                  isAdmin ? 'cursor-pointer hover:scale-105 active:scale-95' : 'cursor-help'
+                } ${
+                  supabaseConnected 
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20' 
+                    : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                }`}
+              >
                 <span className={`w-2 h-2 rounded-full shrink-0 ${supabaseConnected ? 'bg-emerald-400 animate-ping' : 'bg-rose-400'}`}></span>
                 <span className="hidden sm:inline">{supabaseConnected ? 'SUPABASE NUBE' : 'SIN RED'}</span>
-              </span>
+              </button>
             </ClinicalTooltip>
 
-            {/* 3. Chip del Usuario con Ficha al Cursor */}
+            {/* Chip del Usuario con Ficha al Cursor */}
             {user && (
               <ClinicalTooltip
                 title={displayName}
@@ -600,7 +594,7 @@ function ScadaAppContent() {
           </div>
         )}
 
-        {/* Contenido Principal con Transición Fluida */}
+        {/* Contenido Principal con Blindaje Numérico */}
         {!user ? (
           <main className="flex-1 flex items-center justify-center p-4 android-view-transition">
             <LoginModal />
@@ -688,8 +682,11 @@ function ScadaAppContent() {
                         filteredDevices.map((dev) => {
                           const dDev = dev.datos || {};
                           const health = getDeviceHealthData(dev);
-                          const cCount = dDev?.cfg?.ciclos || dev?.meta?.ciclosCompletados || 0;
-                          const cLim = dDev?.cfg?.lim_mant || dev?.meta?.limiteMantenimiento || 200;
+                          const cCount = Number(dDev?.cfg?.ciclos || dev?.meta?.ciclosCompletados || 0);
+                          const cLim = Number(dDev?.cfg?.lim_mant || dev?.meta?.limiteMantenimiento || 200);
+
+                          const tempNum = parseFloat(dDev.temp_camara || 25);
+                          const presNum = parseFloat(dDev.presion || 0);
 
                           return (
                             <div
@@ -728,22 +725,26 @@ function ScadaAppContent() {
                                 <div className="grid grid-cols-2 gap-2 my-3">
                                   <div className="p-2.5 rounded-xl glass-cell text-center w-full">
                                     <span className="text-[10px] font-mono text-cyan-400 block">TEMPERATURA</span>
-                                    <span className="text-xl font-bold font-mono text-white">{(dDev.temp_camara || 25).toFixed(1)}°C</span>
+                                    <span className="text-xl font-bold font-mono text-white">
+                                      {isNaN(tempNum) ? '25.0' : tempNum.toFixed(1)}°C
+                                    </span>
                                   </div>
 
                                   <div className="p-2.5 rounded-xl glass-cell text-center w-full">
                                     <span className="text-[10px] font-mono text-pink-400 block">PRESIÓN</span>
-                                    <span className="text-xl font-bold font-mono text-white">{(dDev.presion || 0).toFixed(2)}b</span>
+                                    <span className="text-xl font-bold font-mono text-white">
+                                      {isNaN(presNum) ? '0.00' : presNum.toFixed(2)}b
+                                    </span>
                                   </div>
                                 </div>
 
                                 <div className="space-y-1 mb-3">
                                   <div className="flex justify-between text-[10px] font-mono text-slate-400">
                                     <span>Odómetro: {cCount}/{cLim} ciclos</span>
-                                    <span>{Math.round((cCount / cLim) * 100)}%</span>
+                                    <span>{Math.round((cCount / (cLim || 1)) * 100)}%</span>
                                   </div>
                                   <div className="w-full bg-slate-800/80 rounded-full h-1.5 overflow-hidden">
-                                    <div className="bg-emerald-400 h-full" style={{ width: `${Math.min(100, (cCount / cLim) * 100)}%` }}></div>
+                                    <div className="bg-emerald-400 h-full" style={{ width: `${Math.min(100, (cCount / (cLim || 1)) * 100)}%` }}></div>
                                   </div>
                                 </div>
                               </div>
@@ -769,7 +770,7 @@ function ScadaAppContent() {
                   />
                 )}
 
-                {/* SECCIÓN DEDICADA: USUARIOS & PERMISOS */}
+                {/* SECCIÓN USUARIOS */}
                 {activeSection === 'usuarios' && (
                   <UserManagementView
                     fleet={fleet}
@@ -876,7 +877,17 @@ function ScadaAppContent() {
           </div>
         )}
 
-        {/* Menú Contextual (Clic Secundario) */}
+        {/* Diagnóstico Cloud en Cabecera */}
+        <CloudDiagnosticsModal
+          isOpen={Boolean(cloudDiagType)}
+          onClose={() => setCloudDiagType(null)}
+          type={cloudDiagType || 'hivemq'}
+          fleet={fleet}
+          mqttConnected={mqttConnected}
+          supabaseConnected={supabaseConnected}
+        />
+
+        {/* Menú Contextual */}
         <ContextMenu
           isOpen={contextMenu.isOpen}
           position={contextMenu.position}
@@ -895,7 +906,7 @@ function ScadaAppContent() {
           onOpenQR={(dev) => setQrModalDevice(dev)}
         />
 
-        {/* Modal de Asignación a Cliente / Usuario */}
+        {/* Modal de Asignación */}
         <DeviceAssignmentModal
           isOpen={assignModal.isOpen}
           onClose={() => setAssignModal({ isOpen: false, device: null })}
@@ -915,7 +926,7 @@ function ScadaAppContent() {
           operatorName={profile?.nombre || user?.email}
         />
 
-        {/* Modal de Personal & Aprobaciones Rápidas (Campana) */}
+        {/* Modal de Personal & Aprobaciones */}
         <UserManagementModal 
           isOpen={showAdminModal} 
           onClose={() => setShowAdminModal(false)} 
