@@ -40,12 +40,12 @@ function ScadaAppContent() {
   const { user, profile, loading, pendingRequests, logout } = useAuth();
   const { fleet, mqttConnected, sendDeviceCommand } = useMqttFleet();
 
-  // Diagnóstico en vivo de conexión con Supabase Cloud
+  // Auditoría en vivo de conexión con Supabase Cloud (select('*') evita errores HTTP 400)
   const [supabaseConnected, setSupabaseConnected] = useState(true);
   useEffect(() => {
     const checkSupabase = async () => {
       try {
-        const { error } = await supabase.from('usuarios_scada').select('user').limit(1);
+        const { error } = await supabase.from('usuarios_scada').select('*').limit(1);
         setSupabaseConnected(!error && navigator.onLine);
       } catch (e) {
         setSupabaseConnected(false);
@@ -64,7 +64,7 @@ function ScadaAppContent() {
     initAudioUnlock();
   }, []);
 
-  // Modal de diagnóstico para Superadmin
+  // Modal de diagnóstico para Superadmin ('hivemq' | 'supabase' | null)
   const [cloudDiagType, setCloudDiagType] = useState(null);
 
   // Modo Kiosco y Persistencia por pestaña (sessionStorage)
@@ -283,7 +283,7 @@ function ScadaAppContent() {
 
   const macKeys = Object.keys(fleet);
 
-  // Aislamiento Multi-Tenant Hospitalario
+  // Aislamiento Multi-Tenant
   const allowedDevices = macKeys
     .map((k) => fleet[k])
     .filter((dev) => {
@@ -318,7 +318,6 @@ function ScadaAppContent() {
     return true;
   });
 
-  // Seguro anti-pantalla en blanco
   const inspectingMacToUse = kioskMac || selectedMac;
   const inspectingDevice = inspectingMacToUse 
     ? (fleet[inspectingMacToUse] || {
@@ -594,7 +593,7 @@ function ScadaAppContent() {
           </div>
         )}
 
-        {/* Contenido Principal con Blindaje Numérico */}
+        {/* Contenido Principal */}
         {!user ? (
           <main className="flex-1 flex items-center justify-center p-4 android-view-transition">
             <LoginModal />
@@ -629,7 +628,7 @@ function ScadaAppContent() {
                       </div>
 
                       <div className="flex gap-2 overflow-x-auto w-full sm:w-auto pb-1">
-                        <ClinicalTooltip title="Filtro En Línea" description="Autoclaves transmitiendo en los últimos 4 segundos." badge="0-4s">
+                        <ClinicalTooltip title={CLINICAL_HELP.filter_online.title} description={CLINICAL_HELP.filter_online.desc} badge={CLINICAL_HELP.filter_online.badge}>
                           <button
                             onClick={() => setHealthFilter('ONLINE')}
                             className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
@@ -640,7 +639,7 @@ function ScadaAppContent() {
                           </button>
                         </ClinicalTooltip>
 
-                        <ClinicalTooltip title="Filtro Latencia" description="Autoclaves con retraso de 4 a 8 segundos." badge="4-8s">
+                        <ClinicalTooltip title={CLINICAL_HELP.filter_latency.title} description={CLINICAL_HELP.filter_latency.desc} badge={CLINICAL_HELP.filter_latency.badge}>
                           <button
                             onClick={() => setHealthFilter('LATENCY')}
                             className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
@@ -651,7 +650,7 @@ function ScadaAppContent() {
                           </button>
                         </ClinicalTooltip>
 
-                        <ClinicalTooltip title="Filtro Desconectados" description="Autoclaves sin señal por más de 8 segundos." badge=">8s">
+                        <ClinicalTooltip title={CLINICAL_HELP.filter_offline.title} description={CLINICAL_HELP.filter_offline.desc} badge={CLINICAL_HELP.filter_offline.badge}>
                           <button
                             onClick={() => setHealthFilter('OFFLINE')}
                             className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
