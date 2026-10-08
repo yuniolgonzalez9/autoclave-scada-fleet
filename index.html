@@ -5,19 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover" />
     <title>BIOFLEET OS™ // Enterprise SCADA Biomédico</title>
     
-    <!-- Metadatos de Aplicación Móvil Nativa (PWA Standalone) -->
+    <!-- Metadatos de Aplicación Móvil -->
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="BioFleet OS" />
     <meta name="theme-color" content="#030712" />
-    <meta name="description" content="Sistema Centralizado de Telemetría Biomédica, Trazabilidad Quirúrgica y Supervisión Hospitalaria" />
     
-    <!-- Favicon e Icono de Aplicación -->
-    <link rel="icon" type="image/png" href="/icon.png" />
-    <link rel="apple-touch-icon" href="/icon.png" />
+    <!-- Favicon SVG Nativo Incrustado (Cero errores 404 garantizado) -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2300f3ff' stroke-width='2'><path d='M22 12h-4l-3 9L9 3l-3 9H2'/></svg>" />
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2300f3ff' stroke-width='2'><path d='M22 12h-4l-3 9L9 3l-3 9H2'/></svg>" />
     
-    <!-- Tipografías de Grado Clínico Hospitalario -->
+    <!-- Tipografías Clínicas -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -25,5 +24,16 @@
   <body class="bg-[#030712] text-slate-100 min-h-screen antialiased overflow-x-hidden selection:bg-cyan-500/30 selection:text-cyan-300">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+
+    <!-- Limpiador de Service Workers obsoletos (Evita que intercepten con error) -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+          for (var i = 0; i < registrations.length; i++) {
+            registrations[i].unregister();
+          }
+        });
+      }
+    </script>
   </body>
 </html>
