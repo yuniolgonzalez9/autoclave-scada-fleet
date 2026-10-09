@@ -51,7 +51,7 @@ export default function DeviceDetailView({
   const [showQRModal, setShowQRModal] = useState(false);
   const [nvsMsg, setNvsMsg] = useState('');
 
-  // Identificación del tipo
+  // Identificación del tipo de máquina
   const tipoEquipo = (
     device?.meta?.config_deseada?.tipo || 
     device?.meta?.tipo || 
@@ -63,7 +63,7 @@ export default function DeviceDetailView({
   const isPlc = tipoEquipo === 'UNIVERSAL_PLC' || tipoEquipo === 'PLC_GENERICO';
   const isAutoclave = !isVehicle && !isPlc;
 
-  // Modal de Confirmación
+  // Modal de Confirmación Operativa
   const [confirmModal, setConfirmModal] = useState({
     isOpen: false,
     title: '',
@@ -81,14 +81,37 @@ export default function DeviceDetailView({
   const [chipsDetectados, setChipsDetectados] = useState([]);
   const [halMsg, setHalMsg] = useState('');
 
-  // Mapeador Completo de Nombres y Roles para 8 Salidas y 8 Entradas
+  // Mapeador Completo: Nombres y Roles para 8 Salidas y 8 Entradas
   const [rolesReles, setRolesReles] = useState({
-    R1: 'CALENTADOR', R2: 'BOMBA_VACIO', R3: 'MOTOR_AGITADOR', R4: 'PURGA_VAPOR',
+    R1: isVehicle ? 'IGNICION_ON' : 'CALENTADOR',
+    R2: isVehicle ? 'STARTER_MOTOR' : 'BOMBA_VACIO',
+    R3: isVehicle ? 'INMOVILIZADOR' : 'MOTOR_AGITADOR',
+    R4: isVehicle ? 'SIRENA_LUCES' : 'PURGA_VAPOR',
     R5: 'MANUAL', R6: 'MANUAL', R7: 'MANUAL', R8: 'MANUAL'
   });
+
   const [nombresReles, setNombresReles] = useState({
-    R1: 'Calentador Vapor', R2: 'Bomba de Vacío', R3: 'Motor Agitador', R4: 'Válvula Purga',
-    R5: 'Salida Aux 5', R6: 'Salida Aux 6', R7: 'Salida Aux 7', R8: 'Salida Aux 8'
+    R1: isVehicle ? 'Contacto Ignición' : 'Calentador Vapor',
+    R2: isVehicle ? 'Motor de Arranque (Start)' : 'Bomba de Vacío',
+    R3: isVehicle ? 'Corte Combustible' : 'Motor Agitador',
+    R4: isVehicle ? 'Sirena / Luces' : 'Válvula de Purga',
+    R5: 'Salida 5', R6: 'Salida 6', R7: 'Salida 7', R8: 'Salida 8'
+  });
+
+  const [rolesEntradas, setRolesEntradas] = useState({
+    IN1: isVehicle ? 'SENSOR_FRENO' : 'SENSOR_PUERTA',
+    IN2: isVehicle ? 'ALTERNADOR_D' : 'PRESOSTATO',
+    IN3: isVehicle ? 'PUERTA_CABINA' : 'NIVEL_AGUA',
+    IN4: 'PARO_EMERGENCIA',
+    IN5: 'LIBRE', IN6: 'LIBRE', IN7: 'LIBRE', IN8: 'LIBRE'
+  });
+
+  const [nombresEntradas, setNombresEntradas] = useState({
+    IN1: isVehicle ? 'Pedal de Freno' : 'Microswitch Puerta',
+    IN2: isVehicle ? 'Alternador D+ 14V' : 'Presóstato Mecánico',
+    IN3: isVehicle ? 'Puerta Conductor' : 'Sonda Nivel de Agua',
+    IN4: 'Pulsador Paro',
+    IN5: 'Entrada 5', IN6: 'Entrada 6', IN7: 'Entrada 7', IN8: 'Entrada 8'
   });
 
   const canEditHardware = userRole && !userRole.toLowerCase().includes('operador') && !userRole.toLowerCase().includes('cliente');
@@ -106,12 +129,12 @@ export default function DeviceDetailView({
   const pctMant = Math.min(100, Math.round((ciclos / (limite || 1)) * 100));
   const alertaActiva = pctMant >= alertaPct;
 
-  // Escuchar el reporte I2C real que emite el ESP32
+  // Escuchar el reporte I2C físico que emite el ESP32
   useEffect(() => {
     if (device?.i2cReport && device.i2cReport.chips) {
       setChipsDetectados(device.i2cReport.chips);
       setScanningI2C(false);
-      setHalMsg(`¡Reporte físico recibido! ${device.i2cReport.total || device.i2cReport.chips.length} chips detectados en bus I2C.`);
+      setHalMsg(`¡Reporte físico recibido! ${device.i2cReport.total || device.i2cReport.chips.length} chips detectados en hardware.`);
 
       // Guardar auditoría real en Supabase 'diagnosticos_i2c'
       supabase.from('diagnosticos_i2c').insert({
@@ -158,12 +181,12 @@ export default function DeviceDetailView({
   const [pMax, setPMax] = useState(cfg.p_max ?? 2.60);
   const [limMant, setLimMant] = useState(cfg.lim_mant ?? 200);
 
-  // ACCIONES CON CONFIRMACIÓN
+  // ACCIONES OPERATIVAS CON CONFIRMACIÓN
   const requestStartCycle = () => {
     setConfirmModal({
       isOpen: true,
       title: 'Iniciar Ciclo de Esterilización',
-      description: `¿Confirmas el inicio del protocolo térmico a ${spTemp}°C durante ${tCiclo} minutos?`,
+      description: `¿Confirmas el inicio del protocolo térmico a ${spTemp}°C durante ${tCiclo} minutos? Se energizarán los calefactores.`,
       actionType: 'START',
       onConfirm: () => sendCommand(device.mac, { cmd: 'INICIAR_CICLO' })
     });
@@ -173,7 +196,7 @@ export default function DeviceDetailView({
     setConfirmModal({
       isOpen: true,
       title: '¡PARO DE EMERGENCIA!',
-      description: 'Corte inmediato de calentadores y despresurización.',
+      description: 'Corte inmediato de calentadores y despresurización de cámara.',
       actionType: 'STOP',
       onConfirm: () => sendCommand(device.mac, { cmd: 'ABORTAR_CICLO' })
     });
@@ -183,7 +206,7 @@ export default function DeviceDetailView({
     setConfirmModal({
       isOpen: true,
       title: 'Restablecer Código de Alarma',
-      description: '¿Confirmas que la causa de la alarma ha sido resuelta?',
+      description: '¿Confirmas que la causa de la anomalía ha sido inspeccionada y resuelta?',
       actionType: 'RESET',
       onConfirm: () => sendCommand(device.mac, { cmd: 'RESET_ALARMA' })
     });
@@ -193,7 +216,7 @@ export default function DeviceDetailView({
     setConfirmModal({
       isOpen: true,
       title: '⚡ Iniciar Arranque Remoto',
-      description: `¿Confirmas la activación de la ignición y arranque del motor?`,
+      description: `¿Confirmas la activación de ignición y disparo del starter para ${alias}?`,
       actionType: 'START',
       onConfirm: () => sendCommand(device.mac, { cmd: 'START_VEHICLE' })
     });
@@ -203,7 +226,7 @@ export default function DeviceDetailView({
     setConfirmModal({
       isOpen: true,
       title: '🛑 Corte de Motor / Inmovilizador',
-      description: `¿Confirmas cortar la ignición inmediatamente?`,
+      description: `¿Confirmas apagar inmediatamente la ignición de ${alias}?`,
       actionType: 'STOP',
       onConfirm: () => sendCommand(device.mac, { cmd: 'STOP_VEHICLE' })
     });
@@ -228,11 +251,13 @@ export default function DeviceDetailView({
       lim_mant: Number(limMant),
       alerta_pct: Number(alertaPct),
       roles_reles: rolesReles,
-      nombres_reles: nombresReles
+      nombres_reles: nombresReles,
+      roles_entradas: rolesEntradas,
+      nombres_entradas: nombresEntradas
     };
 
     sendCommand(device.mac, payload);
-    setHalMsg('⚡ Mapeo enviado al ESP32 (Grabado en LittleFS & NVS)');
+    setHalMsg('⚡ Programación grabada en Flash LittleFS & NVS del ESP32.');
 
     try {
       await supabase.from('asignaciones_equipos').update({
@@ -479,7 +504,6 @@ export default function DeviceDetailView({
                 </div>
               </div>
 
-              {/* Mando de Control Vehicular */}
               <div className="ultra-glass p-4 rounded-xl border border-amber-500/30 space-y-3">
                 <span className="text-xs font-bold text-amber-300 block uppercase">
                   Mando de Control Remoto de Vehículo:
@@ -518,7 +542,7 @@ export default function DeviceDetailView({
             </div>
           )}
 
-          {/* MODO B: UNIVERSAL_PLC (CONTROL DE RELÉS Y ENTRADAS DIRECTAS) */}
+          {/* MODO B: UNIVERSAL_PLC */}
           {isPlc && (
             <div className="space-y-4">
               <div className="ultra-glass p-4 rounded-xl border border-purple-500/30 space-y-3">
@@ -545,7 +569,6 @@ export default function DeviceDetailView({
                 </div>
               </div>
 
-              {/* Entradas Digitales */}
               <div className="ultra-glass p-4 rounded-xl border border-slate-800 space-y-3">
                 <span className="text-xs font-bold text-cyan-300 block uppercase">
                   Lectura en Vivo de las 8 Entradas Optoacopladas (NPN/PNP):
@@ -553,7 +576,7 @@ export default function DeviceDetailView({
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {[1, 2, 3, 4, 5, 6, 7, 8].map(inNum => (
                     <div key={inNum} className="p-2.5 bg-slate-950 rounded-lg border border-slate-800 flex justify-between items-center">
-                      <span className="text-slate-300">IN{inNum}</span>
+                      <span className="text-slate-300">IN{inNum}: {nombresEntradas[`IN${inNum}`] || 'Entrada'}</span>
                       <span className={`font-bold px-2 py-0.5 rounded text-[10px] ${
                         entradasPlc[`IN${inNum}`] ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-slate-900 text-slate-500'
                       }`}>
@@ -566,7 +589,7 @@ export default function DeviceDetailView({
             </div>
           )}
 
-          {/* MODO C: AUTOCLAVE CLÍNICO (ESTERILIZACIÓN REAL CON INICIAR CICLO) */}
+          {/* MODO C: AUTOCLAVE CLÍNICO (ESTERILIZACIÓN CON INICIAR CICLO) */}
           {isAutoclave && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -595,7 +618,6 @@ export default function DeviceDetailView({
                 </div>
               </div>
 
-              {/* Botones de Control de Autoclave con Acción Real */}
               <div className="flex gap-2.5">
                 <button
                   onClick={requestStartCycle}
@@ -631,17 +653,17 @@ export default function DeviceDetailView({
         </div>
       )}
 
-      {/* PESTAÑA: ESCÁNER I2C REAL & PROGRAMACIÓN DE CERO DE PINES */}
+      {/* PESTAÑA: ESCÁNER I2C REAL & PROGRAMACIÓN INTEGRAL DE PINES */}
       {activeTab === 'hal_scanner' && canEditHardware && (
         <div className="ultra-glass p-5 rounded-2xl border border-amber-500/30 space-y-4 font-mono text-xs">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-amber-500/20 pb-3">
             <div>
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
                 <Cpu className="w-4 h-4 text-amber-400" />
-                Escáner I2C en Vivo & Programación Integral de Salidas/Entradas
+                Escáner I2C en Vivo & Programación Integral de Salidas y Entradas
               </h3>
               <p className="text-[11px] text-slate-400 mt-0.5">
-                Configura cada pin como si programaras el microcontrolador desde cero.
+                Programa y bautiza cada pin desde cero. Al desplegar se graba en la Flash LittleFS del microcontrolador.
               </p>
             </div>
 
@@ -662,7 +684,7 @@ export default function DeviceDetailView({
             </div>
           )}
 
-          {/* Chips Detectados por el Escaneo Real */}
+          {/* Chips Detectados Físicamente */}
           {chipsDetectados.length > 0 && (
             <div className="p-3.5 bg-slate-900/90 rounded-xl border border-amber-500/30 space-y-2">
               <span className="text-amber-400 font-bold block uppercase tracking-wider text-[11px]">
@@ -683,7 +705,7 @@ export default function DeviceDetailView({
           {/* Programación de las 8 Salidas */}
           <div className="p-4 bg-slate-900/90 rounded-xl border border-slate-800 space-y-3">
             <span className="text-cyan-400 font-bold block uppercase tracking-wider text-[11px]">
-              Programación de Salidas (Relés 1 a 8):
+              1. Programación de Salidas (Relés 1 a 8):
             </span>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               {[1, 2, 3, 4, 5, 6, 7, 8].map(num => (
@@ -729,6 +751,50 @@ export default function DeviceDetailView({
             </div>
           </div>
 
+          {/* Programación de las 8 Entradas */}
+          <div className="p-4 bg-slate-900/90 rounded-xl border border-slate-800 space-y-3">
+            <span className="text-emerald-400 font-bold block uppercase tracking-wider text-[11px]">
+              2. Programación de Entradas Optoacopladas (IN1 a IN8):
+            </span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {[1, 2, 3, 4, 5, 6, 7, 8].map(num => (
+                <div key={num} className="p-2.5 bg-slate-950 rounded-lg border border-slate-800 space-y-1.5">
+                  <div className="flex justify-between items-center">
+                    <span className="text-white font-bold text-xs">Entrada IN{num}:</span>
+                    <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
+                      entradasPlc[`IN${num}`] ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-900 text-slate-500'
+                    }`}>
+                      {entradasPlc[`IN${num}`] ? 'CERRADA (1)' : 'ABIERTA (0)'}
+                    </span>
+                  </div>
+
+                  <input
+                    type="text"
+                    value={nombresEntradas[`IN${num}`] || ''}
+                    onChange={(e) => setNombresEntradas(prev => ({ ...prev, [`IN${num}`]: e.target.value }))}
+                    placeholder="Nombre del sensor..."
+                    className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white text-[11px]"
+                  />
+
+                  <select
+                    value={rolesEntradas[`IN${num}`] || 'LIBRE'}
+                    onChange={(e) => setRolesEntradas(prev => ({ ...prev, [`IN${num}`]: e.target.value }))}
+                    className="w-full bg-slate-900 text-emerald-300 border border-slate-700 rounded px-2 py-1 text-[11px]"
+                  >
+                    <option value="SENSOR_PUERTA">🚪 Sensor Fin de Carrera Puerta</option>
+                    <option value="PRESOSTATO">🎚️ Presóstato de Seguridad</option>
+                    <option value="NIVEL_AGUA">💧 Sensor de Nivel de Agua</option>
+                    <option value="SENSOR_FRENO">🛑 Switch Pedal de Freno</option>
+                    <option value="ALTERNADOR_D">⚡ D+ Alternador 14V</option>
+                    <option value="PUERTA_CABINA">🚗 Puerta de Cabina / Chofer</option>
+                    <option value="PARO_EMERGENCIA">🚨 Pulsador Paro de Emergencia</option>
+                    <option value="LIBRE">⚪ Entrada Libre / Genérica</option>
+                  </select>
+                </div>
+              ))}
+            </div>
+          </div>
+
           <button
             onClick={handleDeployHalMap}
             className="w-full py-3.5 bg-gradient-to-r from-amber-500 via-emerald-500 to-teal-500 hover:opacity-90 text-slate-950 font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20"
@@ -739,7 +805,7 @@ export default function DeviceDetailView({
         </div>
       )}
 
-      {/* PESTAÑA: MANTENIMIENTO CON SELECTOR DE ALERTA DEL 10% AL 100% */}
+      {/* PESTAÑA: MANTENIMIENTO CON SLIDER DEL 10% AL 100% */}
       {activeTab === 'mantenimiento' && canEditHardware && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 font-mono text-xs">
           <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 space-y-4">
@@ -765,7 +831,7 @@ export default function DeviceDetailView({
                 Uso actual: <strong className={alertaActiva ? 'text-amber-400' : 'text-emerald-400'}>{pctMant}%</strong> del ciclo de vida.
               </p>
 
-              {/* SELECTOR CONFIGURABLE DE ALERTA (10% AL 100%) */}
+              {/* SLIDER CONFIGURABLE DE ALERTA (10% AL 100%) */}
               <div className="pt-2 border-t border-slate-800 space-y-2">
                 <label className="text-slate-300 flex justify-between">
                   <span>Disparar Alerta Preventiva en:</span>
