@@ -704,10 +704,11 @@ function ScadaAppContent() {
                             dev.meta?.config_deseada?.tipo || 
                             dev.meta?.tipo || 
                             dev.datos?.tipo || 
-                            (dev.meta?.modelo?.toUpperCase().includes('STARIA') || dev.meta?.modelo?.toUpperCase().includes('H-1') ? 'VEHICULO' : 'AUTOCLAVE')
+                            'AUTOCLAVE'
                           ).toUpperCase();
 
-                          const isVehicle = devTipo === 'VEHICULO';
+                          const isVeh = devTipo === 'VEHICULO';
+                          const isPlc = devTipo === 'UNIVERSAL_PLC' || devTipo === 'PLC_GENERICO';
 
                           const cCount = Number(dDev?.cfg?.ciclos || dev?.meta?.ciclosCompletados || 0);
                           const cLim = Number(dDev?.cfg?.lim_mant || dev?.meta?.limiteMantenimiento || 200);
@@ -728,11 +729,13 @@ function ScadaAppContent() {
                                     <div className="flex items-center gap-1.5">
                                       <h3 className="font-bold text-sm text-white">{dev.meta?.alias || `EQUIPO [${dev.mac.slice(-4)}]`}</h3>
                                       <span className={`px-1.5 py-0.2 rounded text-[9px] font-mono font-bold border flex items-center gap-1 ${
-                                        isVehicle 
+                                        isVeh 
                                           ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' 
+                                          : isPlc
+                                          ? 'bg-purple-500/20 text-purple-300 border-purple-500/40'
                                           : 'bg-cyan-500/20 text-cyan-300 border-cyan-400'
                                       }`}>
-                                        {isVehicle ? <Car className="w-2.5 h-2.5" /> : <Activity className="w-2.5 h-2.5" />}
+                                        {isVeh ? <Car className="w-2.5 h-2.5" /> : isPlc ? <Cpu className="w-2.5 h-2.5" /> : <Activity className="w-2.5 h-2.5" />}
                                         {devTipo}
                                       </span>
                                     </div>
@@ -759,8 +762,8 @@ function ScadaAppContent() {
                                   </div>
                                 </div>
 
-                                {/* MÉTRICAS ADAPTATIVAS SEGÚN EL TIPO DE DISPOSITIVO */}
-                                {isVehicle ? (
+                                {/* TARJETAS ADAPTATIVAS SEGÚN EL TIPO REAL */}
+                                {isVeh ? (
                                   <>
                                     <div className="grid grid-cols-2 gap-2 my-3">
                                       <div className="p-2.5 rounded-xl glass-cell text-center w-full">
@@ -779,14 +782,36 @@ function ScadaAppContent() {
                                     </div>
 
                                     <div className="flex justify-between items-center text-[10px] font-mono p-1.5 bg-slate-900/60 rounded-lg border border-slate-800 mb-3">
-                                      <span className="text-slate-400">Ignición ACC:</span>
+                                      <span className="text-slate-400">Ignición:</span>
                                       <span className={dDev.reles?.R1 ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
                                         {dDev.reles?.R1 ? '🟢 ON' : '⚪ OFF'}
                                       </span>
                                       <span className="text-slate-400 ml-2">Alternador:</span>
                                       <span className={dDev.entradas?.IN2 ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
-                                        {dDev.entradas?.IN2 ? '🟢 D+ CARGA' : '⚪ PARADO'}
+                                        {dDev.entradas?.IN2 ? '🟢 14V CARGA' : '⚪ PARADO'}
                                       </span>
+                                    </div>
+                                  </>
+                                ) : isPlc ? (
+                                  <>
+                                    <div className="grid grid-cols-2 gap-2 my-3 font-mono">
+                                      <div className="p-2.5 rounded-xl glass-cell text-center w-full">
+                                        <span className="text-[10px] text-cyan-400 block">RELÉS ACTIVOS</span>
+                                        <span className="text-xl font-bold text-white">
+                                          {Object.values(dDev.reles || {}).filter(Boolean).length} / 8
+                                        </span>
+                                      </div>
+
+                                      <div className="p-2.5 rounded-xl glass-cell text-center w-full">
+                                        <span className="text-[10px] text-emerald-400 block">ENTRADAS ON</span>
+                                        <span className="text-xl font-bold text-white">
+                                          {Object.values(dDev.entradas || {}).filter(Boolean).length} / 8
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    <div className="p-1.5 bg-slate-900/60 rounded-lg border border-slate-800 text-[10px] font-mono text-center text-slate-400 mb-3">
+                                      SOFT-PLC DETERMINISTA • RJ45 EN LÍNEA
                                     </div>
                                   </>
                                 ) : (
@@ -824,7 +849,7 @@ function ScadaAppContent() {
 
                               <ClinicalTooltip title={CLINICAL_HELP.card_control_total.title} description={CLINICAL_HELP.card_control_total.desc} badge="ENTRAR">
                                 <div className="pt-3 border-t border-white/10 flex items-center justify-between text-xs font-mono text-cyan-400 font-bold w-full">
-                                  <span>ENTRAR A CONTROL TOTAL</span>
+                                  <span>ENTRAR A CABINA DE CONTROL</span>
                                   <ChevronRight className="w-4 h-4" />
                                 </div>
                               </ClinicalTooltip>
@@ -981,14 +1006,17 @@ function ScadaAppContent() {
           onOpenQR={(dev) => setQrModalDevice(dev)}
         />
 
-        {/* Modal de Asignación */}
+        {/* Modal de Asignación con sendCommand CONECTADO */}
         <DeviceAssignmentModal
           isOpen={assignModal.isOpen}
           onClose={() => setAssignModal({ isOpen: false, device: null })}
           device={assignModal.device}
+          sendCommand={sendDeviceCommand}
           onAssignmentUpdated={(updatedMeta) => {
             if (fleet[updatedMeta.mac]) {
               fleet[updatedMeta.mac].meta = Object.assign(fleet[updatedMeta.mac].meta || {}, updatedMeta);
+              if (!fleet[updatedMeta.mac].datos) fleet[updatedMeta.mac].datos = {};
+              fleet[updatedMeta.mac].datos.tipo = updatedMeta.config_deseada?.tipo || updatedMeta.tipo;
             }
           }}
         />
