@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../../services/supabase';
 import { 
   Building2, 
@@ -16,8 +16,8 @@ import {
   Sparkles
 } from 'lucide-react';
 
-// CATÁLOGO MAESTRO DE RESPALDO DIRECTO (81 MODELOS REALES GARANTIZADOS)
-const CATALOGO_LOCAL = {
+// CATÁLOGO MAESTRO EMBEBIDO DE 81 MODELOS REALES (CARGA INSTANTÁNEA SIN FALLOS)
+const CATALOGO_MAESTRO = {
   VEHICULO: {
     HYUNDAI: ['Staria Ambulancia / Van', 'Starex / H-1 / Grand Starex', 'Porter II / H-100 Taller', 'Tucson', 'Santa Fe', 'Elantra', 'Accent', 'Sonata'],
     KIA: ['Carnival / Sedona Traslado', 'Bongo III Utilitario', 'Sportage', 'Sorento', 'K5 / Optima', 'Cerato / Forte', 'Rio / K2', 'Mohave'],
@@ -52,15 +52,6 @@ const CATALOGO_LOCAL = {
     PARAMOUNT_BED: ['Qualitas Plus', 'A5 Series'],
     GENERICO: ['Cama Eléctrica 3 Motores', 'Cama UCI 5 Motores (Trendelenburg)']
   },
-  TERMODESINFECTADORA: {
-    STERIS: ['Reliance 400 / 444', 'Reliance 500', 'Reliance Vision'],
-    GETINGE: ['Getinge WD15 Claro', 'Getinge WD46 Turbo', 'Getinge WD8668 Pasamuros']
-  },
-  PLANTA_ELECTRICA: {
-    CATERPILLAR: ['CAT Serie C (C9, C15, C18)'],
-    CUMMINS: ['Serie QSK', 'Onan Commercial QuietConnect'],
-    GENERICO: ['Controlador ATS Diésel Universal']
-  },
   PLC_GENERICO: {
     HANKERILA: ['HKL-EA8 (8 Relés / 8 Entradas / ADS1115)', 'HKL-EA16 Industrial'],
     GENERICO: ['Tablero Soft-PLC Universal 8 I/O', 'Controlador Cuarto Frío / Cadena de Frío']
@@ -82,27 +73,27 @@ export default function FleetManagementView({ fleet, sendCommand, onSelectDevice
 
   const macList = Object.keys(fleet);
 
-  // Derivación directa del catálogo (Sin bloqueos de red ni RLS)
-  const tiposDisponibles = Object.keys(CATALOGO_LOCAL);
-  const marcasDisponibles = Object.keys(CATALOGO_LOCAL[tipo] || {});
-  const modelosDisponibles = (CATALOGO_LOCAL[tipo] && CATALOGO_LOCAL[tipo][marca]) || [];
+  // Derivación de opciones del catálogo
+  const tiposDisponibles = Object.keys(CATALOGO_MAESTRO);
+  const marcasDisponibles = Object.keys(CATALOGO_MAESTRO[tipo] || {});
+  const modelosDisponibles = (CATALOGO_MAESTRO[tipo] && CATALOGO_MAESTRO[tipo][marca]) || [];
 
   const handleTipoChange = (newTipo) => {
     setTipo(newTipo);
-    const primerasMarcas = Object.keys(CATALOGO_LOCAL[newTipo] || {});
+    const primerasMarcas = Object.keys(CATALOGO_MAESTRO[newTipo] || {});
     const primeraMarca = primerasMarcas[0] || '';
     setMarca(primeraMarca);
-    const primerosModelos = (CATALOGO_LOCAL[newTipo] && CATALOGO_LOCAL[newTipo][primeraMarca]) || [];
+    const primerosModelos = (CATALOGO_MAESTRO[newTipo] && CATALOGO_MAESTRO[newTipo][primeraMarca]) || [];
     setModelo(primerosModelos[0] || '');
   };
 
   const handleMarcaChange = (newMarca) => {
     setMarca(newMarca);
-    const modelos = (CATALOGO_LOCAL[tipo] && CATALOGO_LOCAL[tipo][newMarca]) || [];
+    const modelos = (CATALOGO_MAESTRO[tipo] && CATALOGO_MAESTRO[tipo][newMarca]) || [];
     setModelo(modelos[0] || '');
   };
 
-  // Al hacer clic en un equipo de la lista
+  // Al seleccionar un equipo de la lista
   const handleSelectToEdit = (deviceMac) => {
     setSelectedMacForTest(deviceMac);
     const dev = fleet[deviceMac];
@@ -121,7 +112,7 @@ export default function FleetManagementView({ fleet, sendCommand, onSelectDevice
     setStarterMs(cfg.starter_ms || 1200);
   };
 
-  // GUARDAR Y RECONFIGURAR
+  // Guardar configuración completa y propagar al ESP32
   const handleSaveDevice = async (e) => {
     e.preventDefault();
     const cleanMac = mac.trim().toUpperCase().replace(/[:\-]/g, '');
@@ -147,10 +138,10 @@ export default function FleetManagementView({ fleet, sendCommand, onSelectDevice
     };
 
     try {
-      // 1. Guardar en Supabase asignaciones_equipos
+      // 1. Guardar en Supabase
       await supabase.from('asignaciones_equipos').upsert(metaPayload, { onConflict: 'mac' });
 
-      // 2. Orden de Reconfiguración Dinámica al ESP32 por MQTT
+      // 2. Orden de Reconfiguración Dinámica al ESP32 por MQTT (LittleFS)
       sendCommand(cleanMac, {
         cmd: 'APPLY_HAL_MAP',
         tipo,
@@ -159,10 +150,10 @@ export default function FleetManagementView({ fleet, sendCommand, onSelectDevice
         starter_ms: Number(starterMs)
       });
 
-      // 3. Orden de metadatos
+      // 3. Orden de actualización de metadatos
       sendCommand(cleanMac, { cmd: 'SET_META', ...metaPayload });
 
-      // 4. Actualización forzada en memoria local
+      // 4. Actualización forzada en memoria local de la Web
       if (fleet[cleanMac]) {
         fleet[cleanMac].meta = Object.assign(fleet[cleanMac].meta || {}, metaPayload);
         if (!fleet[cleanMac].datos) fleet[cleanMac].datos = {};
@@ -179,14 +170,19 @@ export default function FleetManagementView({ fleet, sendCommand, onSelectDevice
 
   // Pruebas físicas en directo
   const testRelay = (canal, val) => {
-    if (!selectedMacForTest) return alert('Selecciona un equipo de la lista');
+    if (!selectedMacForTest) return alert('Selecciona un equipo de la lista primero');
     sendCommand(selectedMacForTest, { cmd: 'SET_RELAY', canal, val });
   };
 
   const testPulseStarter = () => {
-    if (!selectedMacForTest) return alert('Selecciona un equipo de la lista');
+    if (!selectedMacForTest) return alert('Selecciona un equipo de la lista primero');
     testRelay(2, true);
     setTimeout(() => testRelay(2, false), starterMs);
+  };
+
+  const testResetAlarm = () => {
+    if (!selectedMacForTest) return alert('Selecciona un equipo de la lista primero');
+    sendCommand(selectedMacForTest, { cmd: 'RESET_ALARMA' });
   };
 
   return (
@@ -198,7 +194,7 @@ export default function FleetManagementView({ fleet, sendCommand, onSelectDevice
             Centro Maestro de Asignación & Configuración de Flota
           </h2>
           <p className="text-xs text-slate-300 mt-0.5 font-sans">
-            Define la identidad y comportamiento de cada ESP32 (Vehículo, Autoclave, Cama o PLC). El hardware reconfigurará su Flash y adaptará la pantalla en tiempo real.
+            Configura la identidad y comportamiento de cada ESP32 (Vehículo, Autoclave, Cama o PLC). El hardware reconfigura su Flash y adapta la cabina en tiempo real.
           </p>
         </div>
       </div>
@@ -217,7 +213,7 @@ export default function FleetManagementView({ fleet, sendCommand, onSelectDevice
           <div className="flex justify-between items-center border-b border-cyan-500/20 pb-2">
             <h3 className="text-sm font-bold text-white flex items-center gap-2">
               <Cpu className="w-4 h-4 text-cyan-400" />
-              {selectedMacForTest ? `Configurar Equipo [${selectedMacForTest}]` : '+ Registrar Nuevo Dispositivo'}
+              {selectedMacForTest ? `Configurar Hardware [${selectedMacForTest}]` : '+ Registrar y Asignar Equipo'}
             </h3>
             <span className={`px-2 py-0.5 rounded text-[10px] font-bold border flex items-center gap-1 ${
               tipo === 'VEHICULO' ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' : 'bg-cyan-500/20 text-cyan-300 border-cyan-400'
@@ -239,7 +235,7 @@ export default function FleetManagementView({ fleet, sendCommand, onSelectDevice
             />
           </div>
 
-          {/* SELECTORES DE TIPO, MARCA Y MODELO (100% OPERATIVOS) */}
+          {/* SELECTORES DE TIPO, MARCA Y MODELO (CARGA INMEDIATA GARANTIZADA) */}
           <div className="p-3.5 bg-slate-950/90 rounded-xl border border-cyan-500/40 space-y-3">
             <span className="text-cyan-400 font-bold block text-[11px] uppercase tracking-wider flex items-center gap-1.5">
               <Sparkles className="w-3.5 h-3.5 text-amber-400" />
@@ -265,7 +261,7 @@ export default function FleetManagementView({ fleet, sendCommand, onSelectDevice
                 <select
                   value={marca}
                   onChange={(e) => handleMarcaChange(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white focus:outline-none focus:border-cyan-400"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white focus:outline-none"
                 >
                   {marcasDisponibles.map((m) => (
                     <option key={m} value={m}>{m.replace('_', ' ')}</option>
@@ -278,7 +274,7 @@ export default function FleetManagementView({ fleet, sendCommand, onSelectDevice
                 <select
                   value={modelo}
                   onChange={(e) => setModelo(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-cyan-200 focus:outline-none focus:border-cyan-400"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-cyan-200 focus:outline-none"
                 >
                   {modelosDisponibles.map((mod) => (
                     <option key={mod} value={mod}>{mod}</option>
@@ -332,14 +328,14 @@ export default function FleetManagementView({ fleet, sendCommand, onSelectDevice
             disabled={submitting}
             className="w-full py-3 bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:opacity-90 text-white font-bold rounded-xl text-xs shadow-lg shadow-cyan-500/25 uppercase tracking-wider"
           >
-            {submitting ? 'Reconfigurando Flash LittleFS...' : '⚡ APLICAR COMPORTAMIENTO Y GUARDAR EN NUBE'}
+            {submitting ? 'Reconfigurando Microcontrolador...' : '⚡ GUARDAR Y APLICAR COMPORTAMIENTO AL DISPOSITIVO'}
           </button>
 
           {/* PRUEBAS FÍSICAS EN DIRECTO */}
           {selectedMacForTest && (
             <div className="pt-3 border-t border-slate-800 space-y-2">
               <span className="text-[11px] text-amber-300 block font-bold uppercase">
-                Pruebas Físicas [{selectedMacForTest}] ({tipo}):
+                Pruebas Físicas en Directo [{selectedMacForTest}] ({tipo}):
               </span>
               
               {tipo === 'VEHICULO' ? (
@@ -365,7 +361,26 @@ export default function FleetManagementView({ fleet, sendCommand, onSelectDevice
                     className="py-2 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 rounded-lg font-bold flex items-center justify-center gap-1"
                   >
                     <Zap className="w-3.5 h-3.5" />
-                    <span>Starter ms</span>
+                    <span>Pulso Starter</span>
+                  </button>
+                </div>
+              ) : tipo === 'AUTOCLAVE' ? (
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => testRelay(1, true)}
+                    className="w-full py-2 bg-slate-800 hover:bg-slate-700 border border-cyan-500/40 text-cyan-300 rounded-lg flex items-center justify-center gap-1.5 font-bold"
+                  >
+                    <Zap className="w-3.5 h-3.5" />
+                    <span>Probar Relé 1</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={testResetAlarm}
+                    className="w-full py-2 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 rounded-lg flex items-center justify-center gap-1.5 font-bold"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Reset Alarma</span>
                   </button>
                 </div>
               ) : (
@@ -386,16 +401,18 @@ export default function FleetManagementView({ fleet, sendCommand, onSelectDevice
           )}
         </form>
 
-        {/* PANEL DERECHO: EQUIPOS DISPONIBLES EN LA RED */}
+        {/* PANEL DERECHO: EQUIPOS EN LA RED */}
         <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 flex flex-col justify-between">
           <div>
-            <h3 className="text-sm font-bold text-white mb-2">Equipos Encontrados en la Red ({macList.length})</h3>
-            <p className="text-[11px] text-slate-400 mb-3">Toca cualquier equipo para asignarle su máquina o probar relés:</p>
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="text-sm font-bold text-white">Equipos en la Red ({macList.length})</h3>
+            </div>
+            <p className="text-[11px] text-slate-400 mb-3">Toca cualquier equipo para editar su tipo, marca o probar sus relés:</p>
 
             <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
               {macList.length === 0 ? (
                 <div className="p-6 text-center text-slate-400">
-                  Esperando que los equipos transmitan por cable RJ45...
+                  Esperando que los equipos transmitan por RJ45...
                 </div>
               ) : (
                 macList.map((m) => {
@@ -449,7 +466,7 @@ export default function FleetManagementView({ fleet, sendCommand, onSelectDevice
                           type="button"
                           onClick={(e) => { e.stopPropagation(); onSelectDevice(m); }}
                           className="p-1.5 rounded-lg bg-slate-800 text-cyan-300 hover:text-white"
-                          title="Entrar al Dashboard de este equipo"
+                          title="Entrar a Cabina / Dashboard"
                         >
                           <Settings className="w-3.5 h-3.5" />
                         </button>
