@@ -20,24 +20,25 @@ import {
   Wrench, 
   QrCode, 
   CheckCircle2, 
-  AlertTriangle,
-  ChevronLeft,
-  Pin,
-  PinOff,
-  Eye,
-  Send,
-  Sparkles,
-  Lock,
-  Power,
-  ShieldCheck,
-  Car,
-  Key,
-  Cpu,
-  Search,
-  PowerOff,
-  BellRing,
-  ShieldAlert,
-  Layers
+  AlertTriangle, 
+  ChevronLeft, 
+  Pin, 
+  PinOff, 
+  Eye, 
+  Send, 
+  Sparkles, 
+  Lock, 
+  Power, 
+  ShieldCheck, 
+  Car, 
+  Key, 
+  Cpu, 
+  Search, 
+  PowerOff, 
+  BellRing, 
+  ShieldAlert, 
+  Layers,
+  Monitor
 } from 'lucide-react';
 
 export default function DeviceDetailView({ 
@@ -45,14 +46,15 @@ export default function DeviceDetailView({
   onBack, 
   sendCommand, 
   operatorName, 
-  userRole,
-  isKioskMode,
-  onToggleKiosk
+  userRole, 
+  isKioskMode, 
+  onToggleKiosk 
 }) {
   const [activeTab, setActiveTab] = useState(() => localStorage.getItem('scada_detail_tab') || 'sensores');
   const [showQRModal, setShowQRModal] = useState(false);
   const [nvsMsg, setNvsMsg] = useState('');
 
+  // Identificación del tipo de máquina
   const tipoEquipo = (
     device?.meta?.config_deseada?.tipo || 
     device?.meta?.tipo || 
@@ -64,6 +66,7 @@ export default function DeviceDetailView({
   const isPlc = tipoEquipo === 'UNIVERSAL_PLC' || tipoEquipo === 'PLC_GENERICO';
   const isAutoclave = !isVehicle && !isPlc;
 
+  // Modal de Confirmación Operativa
   const [confirmModal, setConfirmModal] = useState({
     isOpen: false,
     title: '',
@@ -76,11 +79,20 @@ export default function DeviceDetailView({
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [inspectedSession, setInspectedSession] = useState(null);
 
-  // Escáner I2C Real y Selección de Chip Activo
+  // Escáner I2C Real y Configuración de Chips
   const [scanningI2C, setScanningI2C] = useState(false);
   const [chipsDetectados, setChipsDetectados] = useState([]);
   const [selectedChipDir, setSelectedChipDir] = useState('0x24');
   const [halMsg, setHalMsg] = useState('');
+
+  // Direcciones y parámetros de hardware I2C
+  const cfgDeseada = device?.meta?.config_deseada || {};
+  const [addrLcd, setAddrLcd] = useState(cfgDeseada.addr_lcd || '0x27');
+  const [lcdCols, setLcdCols] = useState(cfgDeseada.lcd_cols || 16);
+  const [lcdRows, setLcdRows] = useState(cfgDeseada.lcd_rows || 2);
+  const [addrRelays, setAddrRelays] = useState(cfgDeseada.addr_relays || '0x24');
+  const [addrInputs, setAddrInputs] = useState(cfgDeseada.addr_inputs || '0x26');
+  const [addrAdc, setAddrAdc] = useState(cfgDeseada.addr_adc || '0x48');
 
   // Nombres libres y roles para las 8 Salidas
   const [rolesReles, setRolesReles] = useState({
@@ -134,12 +146,12 @@ export default function DeviceDetailView({
   const isBloqueado100 = Boolean(cfg.fuera_servicio || pctMant >= 100);
   const isAlertaActiva = Boolean(cfg.alerta_mantenimiento || pctMant >= alertaPct);
 
-  // Escuchar reporte I2C real emitido por el ESP32
+  // Escuchar reporte I2C físico que emite el ESP32
   useEffect(() => {
     if (device?.i2cReport && device.i2cReport.chips) {
       setChipsDetectados(device.i2cReport.chips);
       setScanningI2C(false);
-      setHalMsg(`¡Reporte físico recibido! ${device.i2cReport.total || device.i2cReport.chips.length} chips detectados en hardware.`);
+      setHalMsg(`¡Reporte físico recibido! ${device.i2cReport.total || device.i2cReport.chips.length} chips detectados en bus I2C.`);
 
       supabase.from('diagnosticos_i2c').insert({
         mac: device.mac,
@@ -182,18 +194,17 @@ export default function DeviceDetailView({
   const [spTemp, setSpTemp] = useState(cfg.sp_temp ?? 121.0);
   const [tCiclo, setTCiclo] = useState(cfg.t_ciclo ?? 2);
   const [pMax, setPMax] = useState(cfg.p_max ?? 2.60);
-  const [limMant, setLimMant] = useState(cfg.lim_mant ?? 200);
 
-  // ACCIONES CON CONFIRMACIÓN Y BLOQUEO AL 100%
+  // ACCIONES OPERATIVAS CON ENCLAVAMIENTO AL 100%
   const requestStartCycle = () => {
     if (isBloqueado100) {
-      alert('⛔ ACCIÓN DENEGADA: El equipo ha alcanzado el 100% del odómetro y se encuentra FUERA DE SERVICIO por seguridad. Requiere mantenimiento preventivo.');
+      alert('⛔ ACCIÓN DENEGADA: El equipo ha alcanzado el 100% de su vida útil y se encuentra FUERA DE SERVICIO por seguridad. Requiere mantenimiento preventivo.');
       return;
     }
     setConfirmModal({
       isOpen: true,
       title: 'Iniciar Ciclo de Esterilización',
-      description: `¿Confirmas el inicio del protocolo térmico a ${spTemp}°C durante ${tCiclo} minutos?`,
+      description: `¿Confirmas el inicio del protocolo térmico a ${spTemp}°C durante ${tCiclo} minutos? Se energizarán las resistencias calefactoras.`,
       actionType: 'START',
       onConfirm: () => sendCommand(device.mac, { cmd: 'INICIAR_CICLO' })
     });
@@ -202,8 +213,8 @@ export default function DeviceDetailView({
   const requestEmergencyStop = () => {
     setConfirmModal({
       isOpen: true,
-      title: '¡PARO DE EMERGENCIA!',
-      description: 'Corte inmediato de calentadores y despresurización.',
+      title: '¡PARO DE EMERGENCIA EN CÁMARA!',
+      description: 'Corte inmediato de calentadores y despresurización de vapor.',
       actionType: 'STOP',
       onConfirm: () => sendCommand(device.mac, { cmd: 'ABORTAR_CICLO' })
     });
@@ -217,7 +228,7 @@ export default function DeviceDetailView({
     setConfirmModal({
       isOpen: true,
       title: 'Restablecer Código de Alarma',
-      description: '¿Confirmas que la anomalía física ha sido resuelta?',
+      description: '¿Confirmas que la anomalía física ha sido inspeccionada y resuelta en la cámara?',
       actionType: 'RESET',
       onConfirm: () => sendCommand(device.mac, { cmd: 'RESET_ALARMA' })
     });
@@ -225,7 +236,7 @@ export default function DeviceDetailView({
 
   const requestStartVehicle = () => {
     if (isBloqueado100) {
-      alert('⛔ VEHÍCULO BLOQUEADO: 100% de horas de servicio alcanzado. Requiere mantenimiento.');
+      alert('⛔ VEHÍCULO BLOQUEADO: 100% de horas de uso alcanzado. Requiere mantenimiento preventivo.');
       return;
     }
     setConfirmModal({
@@ -254,7 +265,7 @@ export default function DeviceDetailView({
     sendCommand(device.mac, { cmd: 'SCAN_HARDWARE' });
   };
 
-  // GUARDAR UMBRAL DE ALERTA (10% AL 100%) INMEDIATAMENTE
+  // GUARDAR UMBRAL DE ALERTA (10% AL 100%) DE FORMA INMEDIATA
   const handleGuardarUmbralAlerta = async () => {
     setSavingAlerta(true);
     const cmdPayload = {
@@ -291,8 +302,8 @@ export default function DeviceDetailView({
     }
   };
 
-  // DESPLEGAR PROGRAMACIÓN COMPLETA DE HARDWARE (LITTLEFS)
-  const handleDeployHalMap = async () => {
+  // DESPLEGAR PROGRAMACIÓN COMPLETA DE HARDWARE CON LCD Y REINICIO OPCIONAL
+  const handleDeployHalMap = async (debeReiniciar = false) => {
     const payload = {
       cmd: 'APPLY_HAL_MAP',
       mac: device.mac,
@@ -302,14 +313,21 @@ export default function DeviceDetailView({
       p_max: Number(pMax),
       lim_mant: Number(limite),
       alerta_pct: Number(alertaPct),
+      addr_lcd: addrLcd,
+      lcd_cols: Number(lcdCols),
+      lcd_rows: Number(lcdRows),
+      addr_relays: addrRelays,
+      addr_inputs: addrInputs,
+      addr_adc: addrAdc,
       roles_reles: rolesReles,
       nombres_reles: nombresReles,
       roles_entradas: rolesEntradas,
-      nombres_entradas: nombresEntradas
+      nombres_entradas: nombresEntradas,
+      reiniciar: Boolean(debeReiniciar)
     };
 
     sendCommand(device.mac, payload);
-    setHalMsg('⚡ Programación de pines grabada en Flash LittleFS & NVS del ESP32.');
+    setHalMsg(debeReiniciar ? '🔄 Orden de reinicio enviada para aplicar pantalla LCD limpia...' : '⚡ Programación de pines grabada en Flash LittleFS & NVS.');
 
     try {
       await supabase.from('asignaciones_equipos').update({
@@ -320,7 +338,7 @@ export default function DeviceDetailView({
       console.warn(e);
     }
 
-    setTimeout(() => setHalMsg(''), 4000);
+    setTimeout(() => setHalMsg(''), 4500);
   };
 
   const handleToggleManualRelay = (canal, currentState) => {
@@ -381,20 +399,21 @@ export default function DeviceDetailView({
   };
 
   return (
-    <div className="flex flex-col gap-4 w-full">
+    <div className="flex flex-col gap-4 w-full font-mono text-xs">
+      
       {/* BANNER ROJO DE BLOQUEO CRÍTICO AL 100% */}
       {isBloqueado100 && (
-        <div className="bg-rose-600/90 border-2 border-rose-400 p-3.5 rounded-2xl text-white font-mono flex items-center justify-between shadow-2xl animate-pulse">
+        <div className="bg-rose-600/90 border-2 border-rose-400 p-3.5 rounded-2xl text-white flex items-center justify-between shadow-2xl animate-pulse">
           <div className="flex items-center gap-2.5">
             <ShieldAlert className="w-6 h-6 text-yellow-300 shrink-0" />
             <div>
               <p className="font-bold text-sm tracking-wider">🚨 EQUIPO FUERA DE SERVICIO // BLOQUEO POR MANTENIMIENTO ALCANZADO (100%)</p>
-              <p className="text-[11px] text-rose-200">El equipo ha cumplido su cuota máxima ({ciclos}/{limite} ciclos). Todas las salidas han sido desactivadas por seguridad hospitalaria.</p>
+              <p className="text-[11px] text-rose-200">El equipo ha cumplido su cuota máxima ({ciclos}/{limite} ciclos). Las salidas han sido desactivadas por seguridad.</p>
             </div>
           </div>
           <button
             onClick={() => sendCommand(device.mac, { cmd: 'RESET_ODOMETRO' })}
-            className="px-3 py-1.5 bg-white text-rose-700 hover:bg-slate-100 font-bold text-xs rounded-xl shadow-lg shrink-0"
+            className="px-3 py-1.5 bg-white text-rose-700 hover:bg-slate-100 font-bold text-xs rounded-xl shadow-lg shrink-0 font-sans"
           >
             Reactivar Equipo (Reset Odómetro)
           </button>
@@ -407,7 +426,7 @@ export default function DeviceDetailView({
           {!isKioskMode && (
             <button
               onClick={onBack}
-              className="p-2 rounded-xl bg-slate-900 border border-slate-700 text-slate-300 hover:text-white flex items-center gap-1 text-xs font-mono"
+              className="p-2 rounded-xl bg-slate-900 border border-slate-700 text-slate-300 hover:text-white flex items-center gap-1 text-xs"
             >
               <ChevronLeft className="w-4 h-4" />
               <span>Flota</span>
@@ -417,7 +436,7 @@ export default function DeviceDetailView({
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-lg font-bold text-white tracking-wide">{alias.toUpperCase()}</h2>
-              <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border flex items-center gap-1 ${
+              <span className={`px-2 py-0.5 rounded text-[10px] font-bold border flex items-center gap-1 ${
                 isVehicle ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' : 
                 isPlc ? 'bg-purple-500/20 text-purple-300 border-purple-500/40' :
                 'bg-cyan-500/20 text-cyan-300 border-cyan-400'
@@ -427,16 +446,16 @@ export default function DeviceDetailView({
               </span>
 
               {isBloqueado100 ? (
-                <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-rose-500/20 text-rose-300 border border-rose-500 font-bold">
+                <span className="px-2 py-0.5 rounded text-[10px] bg-rose-500/20 text-rose-300 border border-rose-500 font-bold">
                   ⛔ FUERA DE SERVICIO (100%)
                 </span>
               ) : isAlertaActiva ? (
-                <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-amber-500/20 text-amber-300 border border-amber-500 font-bold flex items-center gap-1">
+                <span className="px-2 py-0.5 rounded text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500 font-bold flex items-center gap-1">
                   <BellRing className="w-3 h-3" /> PRE-AVISO MANTENIMIENTO ({pctMant}%)
                 </span>
               ) : null}
             </div>
-            <p className="text-xs text-cyan-300 font-mono">
+            <p className="text-xs text-cyan-300">
               MAC: {device.mac} • {cliente} • {modelo}
             </p>
           </div>
@@ -451,7 +470,7 @@ export default function DeviceDetailView({
           >
             <button
               onClick={onToggleKiosk}
-              className={`px-3 py-1.5 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 border transition-all ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition-all ${
                 isKioskMode 
                   ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30' 
                   : 'bg-slate-900 border-slate-700 text-slate-300 hover:border-cyan-400'
@@ -476,7 +495,7 @@ export default function DeviceDetailView({
       <div className="flex gap-2 overflow-x-auto pb-1 border-b border-slate-800">
         <button
           onClick={() => setActiveTab('sensores')}
-          className={`py-2 px-3.5 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 whitespace-nowrap transition-all ${
+          className={`py-2 px-3.5 rounded-xl text-xs font-bold flex items-center gap-1.5 whitespace-nowrap transition-all ${
             activeTab === 'sensores' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white bg-slate-900/60'
           }`}
         >
@@ -487,7 +506,7 @@ export default function DeviceDetailView({
         {canEditHardware && (
           <button
             onClick={() => setActiveTab('hal_scanner')}
-            className={`py-2 px-3.5 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 whitespace-nowrap transition-all ${
+            className={`py-2 px-3.5 rounded-xl text-xs font-bold flex items-center gap-1.5 whitespace-nowrap transition-all ${
               activeTab === 'hal_scanner' ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/30' : 'text-amber-400 hover:text-white bg-slate-900/60'
             }`}
           >
@@ -499,7 +518,7 @@ export default function DeviceDetailView({
         {canEditHardware && isAutoclave && (
           <button
             onClick={() => setActiveTab('nvs')}
-            className={`py-2 px-3.5 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 whitespace-nowrap transition-all ${
+            className={`py-2 px-3.5 rounded-xl text-xs font-bold flex items-center gap-1.5 whitespace-nowrap transition-all ${
               activeTab === 'nvs' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white bg-slate-900/60'
             }`}
           >
@@ -511,7 +530,7 @@ export default function DeviceDetailView({
         {tieneReportes && (
           <button
             onClick={() => setActiveTab('historial')}
-            className={`py-2 px-3.5 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 whitespace-nowrap transition-all ${
+            className={`py-2 px-3.5 rounded-xl text-xs font-bold flex items-center gap-1.5 whitespace-nowrap transition-all ${
               activeTab === 'historial' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white bg-slate-900/60'
             }`}
           >
@@ -524,7 +543,7 @@ export default function DeviceDetailView({
           <>
             <button
               onClick={() => setActiveTab('ficha')}
-              className={`py-2 px-3.5 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 whitespace-nowrap transition-all ${
+              className={`py-2 px-3.5 rounded-xl text-xs font-bold flex items-center gap-1.5 whitespace-nowrap transition-all ${
                 activeTab === 'ficha' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white bg-slate-900/60'
               }`}
             >
@@ -534,7 +553,7 @@ export default function DeviceDetailView({
 
             <button
               onClick={() => setActiveTab('mantenimiento')}
-              className={`py-2 px-3.5 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 whitespace-nowrap transition-all ${
+              className={`py-2 px-3.5 rounded-xl text-xs font-bold flex items-center gap-1.5 whitespace-nowrap transition-all ${
                 activeTab === 'mantenimiento' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white bg-slate-900/60'
               }`}
             >
@@ -547,7 +566,7 @@ export default function DeviceDetailView({
 
       {/* PESTAÑA PRINCIPAL ADAPTATIVA */}
       {activeTab === 'sensores' && (
-        <div className="space-y-4 font-mono text-xs">
+        <div className="space-y-4">
           
           {/* MODO A: VEHÍCULO */}
           {isVehicle && (
@@ -733,17 +752,17 @@ export default function DeviceDetailView({
         </div>
       )}
 
-      {/* PESTAÑA: ESCÁNER I2C REAL & PROGRAMACIÓN DE CADA CHIP Y PIN */}
+      {/* PESTAÑA: ESCÁNER I2C REAL & CONFIGURACIÓN DE CHIPS CON ADOPCIÓN LCD */}
       {activeTab === 'hal_scanner' && canEditHardware && (
-        <div className="ultra-glass p-5 rounded-2xl border border-amber-500/30 space-y-4 font-mono text-xs">
+        <div className="ultra-glass p-5 rounded-2xl border border-amber-500/30 space-y-4">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-amber-500/20 pb-3">
             <div>
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
                 <Cpu className="w-4 h-4 text-amber-400" />
-                Escáner I2C en Vivo & Programación Integral de Salidas y Entradas
+                Escáner I2C en Vivo & Configuración Integral de Chips Físicos
               </h3>
               <p className="text-[11px] text-slate-400 mt-0.5">
-                Toca cualquier chip detectado físicamente para bautizar y programar sus canales.
+                Toca cualquier chip detectado físicamente para configurarlo como Pantalla LCD (16x2 o 20x4), Relés o Entradas.
               </p>
             </div>
 
@@ -753,7 +772,7 @@ export default function DeviceDetailView({
               className="py-2 px-3.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl flex items-center gap-1.5 shadow-lg shadow-amber-500/20"
             >
               <Search className={`w-3.5 h-3.5 ${scanningI2C ? 'animate-spin' : ''}`} />
-              <span>{scanningI2C ? 'Escaneando Hardware Físico...' : '🔍 Escanear Bus I2C en Vivo'}</span>
+              <span>{scanningI2C ? 'Barrido Físico en Marcha...' : '🔍 Escanear Bus I2C en Vivo'}</span>
             </button>
           </div>
 
@@ -766,31 +785,113 @@ export default function DeviceDetailView({
 
           {/* CHIPS FÍSICOS DETECTADOS SELECCIONABLES */}
           {chipsDetectados.length > 0 && (
-            <div className="p-3.5 bg-slate-900/90 rounded-xl border border-amber-500/30 space-y-2">
-              <span className="text-amber-400 font-bold block uppercase tracking-wider text-[11px]">
-                Chips Detectados en Vivo (Haz clic en un chip para editar sus canales):
-              </span>
+            <div className="p-4 bg-slate-950/90 rounded-xl border border-amber-500/40 space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-amber-400 font-bold uppercase text-[11px] flex items-center gap-1.5">
+                  <Cpu className="w-4 h-4" />
+                  Chips I2C Físicos Detectados ({chipsDetectados.length}):
+                </span>
+                <span className="text-[10px] text-slate-400">Toca un chip para editar su comportamiento</span>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 {chipsDetectados.map(c => (
                   <div 
                     key={c.dir} 
                     onClick={() => setSelectedChipDir(c.dir)}
-                    className={`p-2.5 rounded-lg border cursor-pointer transition-all ${
+                    className={`p-3 rounded-xl border cursor-pointer transition-all ${
                       selectedChipDir === c.dir 
-                        ? 'bg-amber-950/60 border-amber-400 shadow-md shadow-amber-500/20' 
-                        : 'bg-slate-950 border-slate-800 hover:border-slate-700'
+                        ? 'bg-amber-950/60 border-amber-400 shadow-lg shadow-amber-500/20' 
+                        : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
                     }`}
                   >
                     <div className="flex justify-between items-center">
-                      <span className="text-amber-400 font-bold text-xs">{c.dir}</span>
+                      <span className="text-amber-400 font-bold text-sm">{c.dir}</span>
                       <span className="text-[9px] px-1.5 py-0.2 rounded bg-slate-800 text-cyan-300 font-bold">
-                        {selectedChipDir === c.dir ? 'SELECCIONADO' : 'VER CANALES'}
+                        {selectedChipDir === c.dir ? 'CONFIGURANDO' : 'SELECCIONAR'}
                       </span>
                     </div>
-                    <p className="text-white text-[11px] font-sans font-semibold mt-0.5">{c.tipo}</p>
-                    <p className="text-[10px] text-slate-400">{c.desc}</p>
+                    <p className="text-white text-xs font-semibold mt-1 font-sans">{c.desc || c.tipo}</p>
                   </div>
                 ))}
+              </div>
+
+              {/* CONFIGURADOR DEL CHIP SELECCIONADO (CON OPCIÓN DE LCD 16x2 / 20x4) */}
+              <div className="p-3.5 bg-slate-900/90 rounded-xl border border-slate-800 space-y-3">
+                <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+                  <span className="text-cyan-300 font-bold">
+                    Configurando Chip Físico en Dirección: <strong className="text-amber-400 text-sm">{selectedChipDir}</strong>
+                  </span>
+                  <span className="text-[10px] text-slate-400">Asigna la función que este chip ejecutará</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-slate-300 block mb-1">Función que cumplirá este Chip</label>
+                    <select
+                      value={
+                        selectedChipDir === addrLcd ? 'PANTALLA_LCD' :
+                        selectedChipDir === addrRelays ? 'SALIDAS_RELES' :
+                        selectedChipDir === addrInputs ? 'ENTRADAS_DIGITALES' :
+                        selectedChipDir === addrAdc ? 'ADC_ANALOGICO' : 'PANTALLA_LCD'
+                      }
+                      onChange={(e) => {
+                        const rol = e.target.value;
+                        if (rol === 'PANTALLA_LCD') setAddrLcd(selectedChipDir);
+                        else if (rol === 'SALIDAS_RELES') setAddrRelays(selectedChipDir);
+                        else if (rol === 'ENTRADAS_DIGITALES') setAddrInputs(selectedChipDir);
+                        else if (rol === 'ADC_ANALOGICO') setAddrAdc(selectedChipDir);
+                      }}
+                      className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-cyan-300 font-bold"
+                    >
+                      <option value="PANTALLA_LCD">🖥️ Pantalla LCD Alfanumérica (16x2 o 20x4)</option>
+                      <option value="SALIDAS_RELES">⚡ Expansor 8 Relés de Potencia (Salidas)</option>
+                      <option value="ENTRADAS_DIGITALES">📥 Expansor 8 Entradas Optocopladas</option>
+                      <option value="ADC_ANALOGICO">📊 Conversor ADC Analógico (0-10V / 4-20mA)</option>
+                    </select>
+                  </div>
+
+                  {/* Geometría de Pantalla LCD */}
+                  <div>
+                    <label className="text-slate-300 block mb-1">Tamaño / Geometría de Pantalla LCD</label>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => { setAddrLcd(selectedChipDir); setLcdCols(16); setLcdRows(2); }}
+                        className={`flex-1 py-2 rounded-lg font-bold border transition-all ${
+                          addrLcd === selectedChipDir && lcdCols === 16 ? 'bg-amber-500 text-slate-950 border-amber-400' : 'bg-slate-950 text-slate-300 border-slate-700'
+                        }`}
+                      >
+                        16x2 Estándar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setAddrLcd(selectedChipDir); setLcdCols(20); setLcdRows(4); }}
+                        className={`flex-1 py-2 rounded-lg font-bold border transition-all ${
+                          addrLcd === selectedChipDir && lcdCols === 20 ? 'bg-amber-500 text-slate-950 border-amber-400' : 'bg-slate-950 text-slate-300 border-slate-700'
+                        }`}
+                      >
+                        20x4 Grande
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-2 flex justify-between items-center text-[11px] border-t border-slate-800">
+                  <span className="text-slate-400">¿Deseas reiniciar el microcontrolador para limpiar el bus I2C y encender la LCD?</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (confirm(`¿Confirmas configurar la LCD en ${selectedChipDir} (${lcdCols}x${lcdRows}) y reiniciar la placa?`)) {
+                        handleDeployHalMap(true);
+                      }
+                    }}
+                    className="px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 rounded-lg font-bold flex items-center gap-1.5"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Guardar y Reiniciar Placa</span>
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -799,7 +900,7 @@ export default function DeviceDetailView({
           <div className="p-4 bg-slate-900/90 rounded-xl border border-slate-800 space-y-3">
             <span className="text-cyan-400 font-bold block uppercase tracking-wider text-[11px] flex items-center gap-2">
               <Layers className="w-4 h-4" />
-              1. Programación de Salidas (Relés 1 a 8 - Chip 0x24):
+              1. Programación de Salidas (Relés 1 a 8 - Chip {addrRelays}):
             </span>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               {[1, 2, 3, 4, 5, 6, 7, 8].map(num => (
@@ -849,7 +950,7 @@ export default function DeviceDetailView({
           <div className="p-4 bg-slate-900/90 rounded-xl border border-slate-800 space-y-3">
             <span className="text-emerald-400 font-bold block uppercase tracking-wider text-[11px] flex items-center gap-2">
               <Layers className="w-4 h-4" />
-              2. Programación de Entradas Optoacopladas (IN1 a IN8 - Chip 0x26):
+              2. Programación de Entradas Optoacopladas (IN1 a IN8 - Chip {addrInputs}):
             </span>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               {[1, 2, 3, 4, 5, 6, 7, 8].map(num => (
@@ -891,7 +992,7 @@ export default function DeviceDetailView({
           </div>
 
           <button
-            onClick={handleDeployHalMap}
+            onClick={() => handleDeployHalMap(false)}
             className="w-full py-3.5 bg-gradient-to-r from-amber-500 via-emerald-500 to-teal-500 hover:opacity-90 text-slate-950 font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20"
           >
             <Send className="w-4 h-4" />
@@ -902,7 +1003,7 @@ export default function DeviceDetailView({
 
       {/* PESTAÑA: MANTENIMIENTO CON SLIDER DEL 10% AL 100% Y GUARDADO REAL */}
       {activeTab === 'mantenimiento' && canEditHardware && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 font-mono text-xs">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 space-y-4">
             <h3 className="text-sm font-bold text-white flex items-center gap-2">
               <Wrench className="w-4 h-4 text-cyan-400" />
@@ -1012,7 +1113,7 @@ export default function DeviceDetailView({
 
       {/* PESTAÑA: AJUSTES NVS */}
       {activeTab === 'nvs' && canEditHardware && isAutoclave && (
-        <form onSubmit={(e) => { e.preventDefault(); handleDeployHalMap(); }} className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 space-y-4 font-mono text-xs">
+        <form onSubmit={(e) => { e.preventDefault(); handleDeployHalMap(false); }} className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 space-y-4">
           <h3 className="text-sm font-bold text-white flex items-center gap-2 border-b border-cyan-500/20 pb-2">
             <Sliders className="w-4 h-4 text-cyan-400" />
             Parámetros Operacionales NVS Flash
@@ -1065,20 +1166,20 @@ export default function DeviceDetailView({
       {activeTab === 'historial' && tieneReportes && (
         <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 space-y-4">
           <div className="flex justify-between items-center border-b border-cyan-500/20 pb-3">
-            <h3 className="text-sm font-bold text-white font-mono flex items-center gap-2">
+            <h3 className="text-sm font-bold text-white flex items-center gap-2">
               <History className="w-4 h-4 text-cyan-400" />
               Historial de Ciclos en la Nube [{device.mac}]
             </h3>
             <button
               onClick={fetchMacLogs}
-              className="px-2.5 py-1 bg-slate-900 border border-slate-700 text-xs text-slate-300 rounded-lg font-mono hover:text-white"
+              className="px-2.5 py-1 bg-slate-900 border border-slate-700 text-xs text-slate-300 rounded-lg hover:text-white"
             >
               🔄 Recargar
             </button>
           </div>
 
           <div className="rounded-xl border border-slate-800 overflow-x-auto">
-            <table className="w-full text-left text-xs font-mono">
+            <table className="w-full text-left text-xs">
               <thead className="bg-slate-900 text-cyan-400 border-b border-slate-800">
                 <tr>
                   <th className="p-3">FECHA</th>
@@ -1116,7 +1217,7 @@ export default function DeviceDetailView({
 
       {/* PESTAÑA: FICHA CLIENTE */}
       {activeTab === 'ficha' && canEditHardware && (
-        <form onSubmit={handleGuardarFicha} className="ultra-glass p-6 rounded-2xl border border-cyan-500/30 space-y-4 max-w-xl font-mono text-xs">
+        <form onSubmit={handleGuardarFicha} className="ultra-glass p-6 rounded-2xl border border-cyan-500/30 space-y-4 max-w-xl">
           <h3 className="text-sm font-bold text-white flex items-center gap-2">
             <Building2 className="w-4 h-4 text-cyan-400" />
             Ficha del Equipo & Asignación
