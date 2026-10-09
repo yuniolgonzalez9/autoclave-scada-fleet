@@ -34,7 +34,10 @@ import {
   Unlock, 
   Shield, 
   Database, 
-  User as UserIcon 
+  User as UserIcon,
+  Car,
+  Key,
+  Cpu
 } from 'lucide-react';
 
 function ScadaAppContent() {
@@ -330,7 +333,7 @@ function ScadaAppContent() {
           cfg: { sp_temp: 121.0, t_ciclo: 2, ciclos: 0, lim_mant: 200 }
         },
         esquema: null,
-        meta: { alias: `AUTOCLAVE [${inspectingMacToUse.slice(-4)}]`, cliente: 'Conectando a la red...', modelo: 'Clase B' },
+        meta: { alias: `EQUIPO [${inspectingMacToUse.slice(-4)}]`, cliente: 'Conectando a la red...', modelo: 'Universal' },
         f0Score: 0.0,
         history: []
       })
@@ -402,7 +405,7 @@ function ScadaAppContent() {
                 </span>
               </div>
               <p className="text-[10px] text-slate-400 font-mono hidden sm:block truncate">
-                Supervisión de Flota Biomédica & Trama Dinámica ESP32
+                Supervisión de Flota Biomédica, Vehicular & PLC Industrial
               </p>
             </div>
           </div>
@@ -625,7 +628,7 @@ function ScadaAppContent() {
               />
             ) : (
               <>
-                {/* SECCIÓN FLOTA */}
+                {/* SECCIÓN FLOTA ADAPTATIVA */}
                 {activeSection === 'flota' && (
                   <div className="space-y-4">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
@@ -635,7 +638,7 @@ function ScadaAppContent() {
                           Monitor de Flota ({allowedDevices.length})
                         </h2>
                         <p className="text-[10px] text-slate-400 font-mono mt-0.5">
-                          👉 Haz <strong>clic derecho</strong> en cualquier autoclave para ver el menú contextual de opciones.
+                          👉 Haz <strong>clic derecho</strong> en cualquier equipo para opciones rápidas.
                         </p>
                       </div>
 
@@ -689,12 +692,23 @@ function ScadaAppContent() {
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       {filteredDevices.length === 0 ? (
                         <div className="col-span-full ultra-glass p-8 rounded-2xl text-center text-slate-400 font-mono text-xs">
-                          No hay autoclaves en el estado [{healthFilter}].
+                          No hay equipos registrados en el estado [{healthFilter}].
                         </div>
                       ) : (
                         filteredDevices.map((dev) => {
                           const dDev = dev.datos || {};
                           const health = getDeviceHealthData(dev);
+
+                          // Tipo Dinámico
+                          const devTipo = (
+                            dev.meta?.config_deseada?.tipo || 
+                            dev.meta?.tipo || 
+                            dev.datos?.tipo || 
+                            (dev.meta?.modelo?.toUpperCase().includes('STARIA') || dev.meta?.modelo?.toUpperCase().includes('H-1') ? 'VEHICULO' : 'AUTOCLAVE')
+                          ).toUpperCase();
+
+                          const isVehicle = devTipo === 'VEHICULO';
+
                           const cCount = Number(dDev?.cfg?.ciclos || dev?.meta?.ciclosCompletados || 0);
                           const cLim = Number(dDev?.cfg?.lim_mant || dev?.meta?.limiteMantenimiento || 200);
 
@@ -711,8 +725,18 @@ function ScadaAppContent() {
                               <div>
                                 <div className="flex justify-between items-start mb-3">
                                   <div>
-                                    <h3 className="font-bold text-sm text-white">{dev.meta?.alias || `AUTOCLAVE [${dev.mac.slice(-4)}]`}</h3>
-                                    <p className="text-[11px] text-slate-400 font-mono">{dev.meta?.cliente || 'Hospital Central'} • {dev.mac}</p>
+                                    <div className="flex items-center gap-1.5">
+                                      <h3 className="font-bold text-sm text-white">{dev.meta?.alias || `EQUIPO [${dev.mac.slice(-4)}]`}</h3>
+                                      <span className={`px-1.5 py-0.2 rounded text-[9px] font-mono font-bold border flex items-center gap-1 ${
+                                        isVehicle 
+                                          ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' 
+                                          : 'bg-cyan-500/20 text-cyan-300 border-cyan-400'
+                                      }`}>
+                                        {isVehicle ? <Car className="w-2.5 h-2.5" /> : <Activity className="w-2.5 h-2.5" />}
+                                        {devTipo}
+                                      </span>
+                                    </div>
+                                    <p className="text-[11px] text-slate-400 font-mono mt-0.5">{dev.meta?.cliente || 'Cliente'} • {dev.mac}</p>
                                     {dev.meta?.usuario_asignado && (
                                       <span className="text-[9px] text-purple-300 font-mono block">
                                         👤 Asignado a: {dev.meta.usuario_asignado}
@@ -735,33 +759,67 @@ function ScadaAppContent() {
                                   </div>
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-2 my-3">
-                                  <div className="p-2.5 rounded-xl glass-cell text-center w-full">
-                                    <span className="text-[10px] font-mono text-cyan-400 block">TEMPERATURA</span>
-                                    <span className="text-xl font-bold font-mono text-white">
-                                      {isNaN(tempNum) ? '25.0' : tempNum.toFixed(1)}°C
-                                    </span>
-                                  </div>
+                                {/* MÉTRICAS ADAPTATIVAS SEGÚN EL TIPO DE DISPOSITIVO */}
+                                {isVehicle ? (
+                                  <>
+                                    <div className="grid grid-cols-2 gap-2 my-3">
+                                      <div className="p-2.5 rounded-xl glass-cell text-center w-full">
+                                        <span className="text-[10px] font-mono text-emerald-400 block">BATERÍA 12V</span>
+                                        <span className="text-xl font-bold font-mono text-emerald-300">
+                                          {(dDev.bateria_v || 12.6).toFixed(1)} V
+                                        </span>
+                                      </div>
 
-                                  <div className="p-2.5 rounded-xl glass-cell text-center w-full">
-                                    <span className="text-[10px] font-mono text-pink-400 block">PRESIÓN</span>
-                                    <span className="text-xl font-bold font-mono text-white">
-                                      {isNaN(presNum) ? '0.00' : presNum.toFixed(2)}b
-                                    </span>
-                                  </div>
-                                </div>
+                                      <div className="p-2.5 rounded-xl glass-cell text-center w-full">
+                                        <span className="text-[10px] font-mono text-amber-400 block">ESTADO MOTOR</span>
+                                        <span className="text-sm font-bold font-mono text-white truncate block mt-1">
+                                          {dDev.fase || 'APAGADO'}
+                                        </span>
+                                      </div>
+                                    </div>
 
-                                <ClinicalTooltip title={CLINICAL_HELP.card_odometro.title} description={CLINICAL_HELP.card_odometro.desc} badge="VIDA ÚTIL">
-                                  <div className="space-y-1 mb-3 w-full">
-                                    <div className="flex justify-between text-[10px] font-mono text-slate-400">
-                                      <span>Odómetro: {cCount}/{cLim} ciclos</span>
-                                      <span>{Math.round((cCount / (cLim || 1)) * 100)}%</span>
+                                    <div className="flex justify-between items-center text-[10px] font-mono p-1.5 bg-slate-900/60 rounded-lg border border-slate-800 mb-3">
+                                      <span className="text-slate-400">Ignición ACC:</span>
+                                      <span className={dDev.reles?.R1 ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
+                                        {dDev.reles?.R1 ? '🟢 ON' : '⚪ OFF'}
+                                      </span>
+                                      <span className="text-slate-400 ml-2">Alternador:</span>
+                                      <span className={dDev.entradas?.IN2 ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
+                                        {dDev.entradas?.IN2 ? '🟢 D+ CARGA' : '⚪ PARADO'}
+                                      </span>
                                     </div>
-                                    <div className="w-full bg-slate-800/80 rounded-full h-1.5 overflow-hidden">
-                                      <div className="bg-emerald-400 h-full" style={{ width: `${Math.min(100, (cCount / (cLim || 1)) * 100)}%` }}></div>
+                                  </>
+                                ) : (
+                                  <>
+                                    <div className="grid grid-cols-2 gap-2 my-3">
+                                      <div className="p-2.5 rounded-xl glass-cell text-center w-full">
+                                        <span className="text-[10px] font-mono text-cyan-400 block">TEMPERATURA</span>
+                                        <span className="text-xl font-bold font-mono text-white">
+                                          {isNaN(tempNum) ? '25.0' : tempNum.toFixed(1)}°C
+                                        </span>
+                                      </div>
+
+                                      <div className="p-2.5 rounded-xl glass-cell text-center w-full">
+                                        <span className="text-[10px] font-mono text-pink-400 block">PRESIÓN</span>
+                                        <span className="text-xl font-bold font-mono text-white">
+                                          {isNaN(presNum) ? '0.00' : presNum.toFixed(2)}b
+                                        </span>
+                                      </div>
                                     </div>
-                                  </div>
-                                </ClinicalTooltip>
+
+                                    <ClinicalTooltip title={CLINICAL_HELP.card_odometro.title} description={CLINICAL_HELP.card_odometro.desc} badge="VIDA ÚTIL">
+                                      <div className="space-y-1 mb-3 w-full">
+                                        <div className="flex justify-between text-[10px] font-mono text-slate-400">
+                                          <span>Odómetro: {cCount}/{cLim} ciclos</span>
+                                          <span>{Math.round((cCount / (cLim || 1)) * 100)}%</span>
+                                        </div>
+                                        <div className="w-full bg-slate-800/80 rounded-full h-1.5 overflow-hidden">
+                                          <div className="bg-emerald-400 h-full" style={{ width: `${Math.min(100, (cCount / (cLim || 1)) * 100)}%` }}></div>
+                                        </div>
+                                      </div>
+                                    </ClinicalTooltip>
+                                  </>
+                                )}
                               </div>
 
                               <ClinicalTooltip title={CLINICAL_HELP.card_control_total.title} description={CLINICAL_HELP.card_control_total.desc} badge="ENTRAR">
