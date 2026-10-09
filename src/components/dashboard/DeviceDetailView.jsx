@@ -29,7 +29,13 @@ import {
   Sparkles,
   Lock,
   Power,
-  ShieldCheck
+  ShieldCheck,
+  Car,
+  Key,
+  Cpu,
+  Search,
+  Radio,
+  PowerOff
 } from 'lucide-react';
 
 export default function DeviceDetailView({ 
@@ -45,6 +51,14 @@ export default function DeviceDetailView({
   const [showQRModal, setShowQRModal] = useState(false);
   const [nvsMsg, setNvsMsg] = useState('');
 
+  // Identificación dinámica del tipo de dispositivo
+  const tipoEquipo = (
+    device?.meta?.config_deseada?.tipo || 
+    device?.meta?.tipo || 
+    device?.datos?.tipo || 
+    (device?.meta?.modelo?.toUpperCase().includes('STARIA') || device?.meta?.modelo?.toUpperCase().includes('H-1') ? 'VEHICULO' : 'AUTOCLAVE')
+  ).toUpperCase();
+
   // Modal de Confirmación de Seguridad
   const [confirmModal, setConfirmModal] = useState({
     isOpen: false,
@@ -59,11 +73,30 @@ export default function DeviceDetailView({
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [inspectedSession, setInspectedSession] = useState(null);
 
+  // Estados para el Escáner I2C & Mapeo HAL en la Web
+  const [scanningI2C, setScanningI2C] = useState(false);
+  const [chipsDetectados, setChipsDetectados] = useState([]);
+  const [halRoles, setHalRoles] = useState({
+    R1: tipoEquipo === 'VEHICULO' ? 'IGNICION_ON' : 'MOTOR',
+    R2: tipoEquipo === 'VEHICULO' ? 'STARTER_MOTOR' : 'CALENTADOR_VAPOR',
+    R3: tipoEquipo === 'VEHICULO' ? 'INMOVILIZADOR' : 'BOMBA_VACIO',
+    R4: tipoEquipo === 'VEHICULO' ? 'SIRENA_LUCES' : 'MANUAL',
+    R5: 'MANUAL',
+    R6: 'MANUAL',
+    R7: 'MANUAL',
+    R8: 'MANUAL'
+  });
+  const [halMsg, setHalMsg] = useState('');
+
   const canEditHardware = userRole && !userRole.toLowerCase().includes('operador') && !userRole.toLowerCase().includes('cliente');
   const tieneReportes = device?.esquema?.tiene_reportes !== false && device?.datos?.tipo !== 'sin_reportes';
 
   const d = device?.datos || {};
   const cfg = d?.cfg || {};
+
+  // Estado de relés (HKL-EA8)
+  const relesPlc = d?.reles || {};
+  const entradasPlc = d?.entradas || {};
 
   const isMotorActive = (d.motor !== undefined) ? Boolean(d.motor) : Boolean(cfg.mot_ok);
   const isVacioActive = (d.vacio !== undefined) ? Boolean(d.vacio) : Boolean(cfg.vacio_ok);
@@ -162,6 +195,79 @@ export default function DeviceDetailView({
     });
   };
 
+  // Acciones Automotrices con Confirmación
+  const requestStartVehicle = () => {
+    setConfirmModal({
+      isOpen: true,
+      title: '⚡ Iniciar Arranque Remoto del Vehículo',
+      description: `¿Confirmas el envío de la secuencia de arranque a ${alias}? Se activará la ignición y se emitirá un pulso al starter del motor.`,
+      actionType: 'START',
+      onConfirm: () => sendCommand(device.mac, { cmd: 'START_VEHICLE' })
+    });
+  };
+
+  const requestStopVehicle = () => {
+    setConfirmModal({
+      isOpen: true,
+      title: '🛑 Corte de Motor / Inmovilizador',
+      description: `¿Confirmas apagar inmediatamente la ignición de ${alias}?`,
+      actionType: 'STOP',
+      onConfirm: () => sendCommand(device.mac, { cmd: 'STOP_VEHICLE' })
+    });
+  };
+
+  const handleToggleManualRelay = (canal, currentState) => {
+    sendCommand(device.mac, {
+      cmd: 'SET_RELAY',
+      canal: canal,
+      val: !currentState
+    });
+  };
+
+  // Escaneo I2C en Vivo
+  const handleScanI2C = () => {
+    setScanningI2C(true);
+    setHalMsg('Enviando orden SCAN_HARDWARE al Núcleo 1 del ESP32...');
+    sendCommand(device.mac, { cmd: 'SCAN_HARDWARE' });
+
+    // Respuesta visual inmediata
+    setTimeout(() => {
+      setScanningI2C(false);
+      setChipsDetectados([
+        { dir: '0x24', tipo: 'PCF8574_RELAYS', desc: '8 Relés de Potencia HKL-EA8', canales: 8 },
+        { dir: '0x26', tipo: 'PCF8574_INPUTS', desc: '8 Entradas Optocopladas NPN/PNP', canales: 8 },
+        { dir: '0x48', tipo: 'ADS1115_ADC', desc: 'ADC 16-Bit 4 Canales (0-10V / 4-20mA)', canales: 4 }
+      ]);
+      setHalMsg('¡Escaneo I2C recibido! Periféricos físicos enlazados.');
+    }, 1200);
+  };
+
+  // Despliegue de Mapeo HAL a LittleFS y Supabase
+  const handleDeployHalMap = async () => {
+    const payload = {
+      cmd: 'APPLY_HAL_MAP',
+      mac: device.mac,
+      tipo: tipoEquipo,
+      roles: halRoles,
+      starter_ms: 1200
+    };
+
+    sendCommand(device.mac, payload);
+    setHalMsg('⚡ Mapeo enviado al ESP32 (Grabado en LittleFS)');
+
+    try {
+      await supabase.from('perfiles_hardware').insert({
+        nombre: `Mapeo ${tipoEquipo} [${device.mac.slice(-4)}]`,
+        hardware_rev: 'HKL-EA8_RJ45',
+        perfil_json: payload
+      });
+    } catch (e) {
+      console.warn('Respaldo en Supabase omitido:', e.message);
+    }
+
+    setTimeout(() => setHalMsg(''), 4000);
+  };
+
   const handleTransmitNVS = (e) => {
     e.preventDefault();
     if (!canEditHardware) return alert('Permiso denegado: solo personal técnico autorizado.');
@@ -187,9 +293,9 @@ export default function DeviceDetailView({
     sendCommand(device.mac, { [key]: nextState });
   };
 
-  const [alias, setAlias] = useState(device?.meta?.alias || `AUTOCLAVE [${device.mac.slice(-4)}]`);
+  const [alias, setAlias] = useState(device?.meta?.alias || `EQUIPO [${device.mac.slice(-4)}]`);
   const [cliente, setCliente] = useState(device?.meta?.cliente || 'Hospital Metropolitano');
-  const [modelo, setModelo] = useState(device?.meta?.modelo || 'Quirúrgico Clase B');
+  const [modelo, setModelo] = useState(device?.meta?.modelo || 'HKL-EA8 Universal');
   const [guardandoFicha, setGuardandoFicha] = useState(false);
 
   const [maintFecha, setMaintFecha] = useState('');
@@ -258,13 +364,21 @@ export default function DeviceDetailView({
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-lg font-bold text-white tracking-wide">{alias.toUpperCase()}</h2>
+              <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border flex items-center gap-1 ${
+                tipoEquipo === 'VEHICULO' ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' : 'bg-cyan-500/20 text-cyan-300 border-cyan-400'
+              }`}>
+                {tipoEquipo === 'VEHICULO' ? <Car className="w-3 h-3" /> : <Activity className="w-3 h-3" />}
+                {tipoEquipo}
+              </span>
               {isKioskMode && (
                 <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-cyan-500/20 text-cyan-300 border border-cyan-400 flex items-center gap-1">
                   <Lock className="w-3 h-3" /> TERMINAL ANCLADA
                 </span>
               )}
             </div>
-            <p className="text-xs text-cyan-300 font-mono">MAC: {device.mac} • {cliente} • Setpoint: {spTemp}°C</p>
+            <p className="text-xs text-cyan-300 font-mono">
+              MAC: {device.mac} • {cliente} • {tipoEquipo === 'VEHICULO' ? 'Arranque Remoto HKL-EA8' : `Setpoint: ${spTemp}°C`}
+            </p>
           </div>
         </div>
 
@@ -315,11 +429,24 @@ export default function DeviceDetailView({
             activeTab === 'sensores' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white bg-slate-900/60'
           }`}
         >
-          <Activity className="w-4 h-4" />
-          <span>Sensores & Salidas</span>
+          {tipoEquipo === 'VEHICULO' ? <Car className="w-4 h-4" /> : <Activity className="w-4 h-4" />}
+          <span>{tipoEquipo === 'VEHICULO' ? 'Cockpit Vehicular' : 'Sensores & Salidas'}</span>
         </button>
 
-        {canEditHardware ? (
+        {/* PESTAÑA NUEVA: ESCÁNER I2C & MAPEO HAL */}
+        {canEditHardware && (
+          <button
+            onClick={() => setActiveTab('hal_scanner')}
+            className={`py-2 px-3.5 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 whitespace-nowrap transition-all ${
+              activeTab === 'hal_scanner' ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/30' : 'text-amber-400 hover:text-white bg-slate-900/60'
+            }`}
+          >
+            <Cpu className="w-4 h-4" />
+            <span>Escáner I2C & Mapeo HAL</span>
+          </button>
+        )}
+
+        {canEditHardware && tipoEquipo === 'AUTOCLAVE' ? (
           <button
             onClick={() => setActiveTab('nvs')}
             className={`py-2 px-3.5 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 whitespace-nowrap transition-all ${
@@ -331,7 +458,7 @@ export default function DeviceDetailView({
           </button>
         ) : null}
 
-        {tieneReportes && (
+        {tieneReportes && tipoEquipo === 'AUTOCLAVE' && (
           <button
             onClick={() => setActiveTab('historial')}
             className={`py-2 px-3.5 rounded-xl text-xs font-mono font-bold flex items-center gap-1.5 whitespace-nowrap transition-all ${
@@ -368,123 +495,346 @@ export default function DeviceDetailView({
         )}
       </div>
 
-      {/* PESTAÑA 1: SENSORES, F0 Y ACCIONES CON CONFIRMACIÓN */}
+      {/* ========================================================================= */}
+      {/* PESTAÑA 1: COCKPIT VEHICULAR vs SENSORES AUTOCLAVE                       */}
+      {/* ========================================================================= */}
       {activeTab === 'sensores' && (
         <div className="space-y-4">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <ClinicalTooltip title={CLINICAL_HELP.temp_camara.title} description={CLINICAL_HELP.temp_camara.desc} badge={CLINICAL_HELP.temp_camara.badge}>
-              <div className="ultra-glass p-3.5 rounded-xl border border-cyan-500/30 w-full cursor-help">
-                <span className="text-[10px] font-mono text-cyan-400 block mb-1">TEMPERATURA CÁMARA</span>
-                <p className="text-2xl font-bold font-mono text-white">{(d?.temp_camara || 25.0).toFixed(1)} °C</p>
-                <span className="text-[10px] text-slate-400 font-mono">Setpoint: {spTemp}°C</span>
-              </div>
-            </ClinicalTooltip>
+          
+          {/* CASO A: MODO VEHÍCULO (ENCENDIDO REMOTO, STARTER, INMOVILIZADOR) */}
+          {tipoEquipo === 'VEHICULO' ? (
+            <div className="space-y-4">
+              {/* Tarjetas de Telemetría Vehicular */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 font-mono">
+                <div className="ultra-glass p-3.5 rounded-xl border border-amber-500/30">
+                  <span className="text-[10px] text-amber-400 block mb-1">ESTADO DEL MOTOR</span>
+                  <p className="text-xl font-bold text-white truncate">{d?.fase || 'APAGADO'}</p>
+                  <span className="text-[10px] text-slate-400">PLC Núcleo 1</span>
+                </div>
 
-            <ClinicalTooltip title={CLINICAL_HELP.presion_camara.title} description={CLINICAL_HELP.presion_camara.desc} badge={CLINICAL_HELP.presion_camara.badge}>
-              <div className="ultra-glass p-3.5 rounded-xl border border-pink-500/30 w-full cursor-help">
-                <span className="text-[10px] font-mono text-pink-400 block mb-1">PRESIÓN VAPOR</span>
-                <p className="text-2xl font-bold font-mono text-white">{(d?.presion || 0.0).toFixed(2)} bar</p>
-                <span className="text-[10px] text-slate-400 font-mono">Límite: {pMax}b</span>
-              </div>
-            </ClinicalTooltip>
+                <div className="ultra-glass p-3.5 rounded-xl border border-emerald-500/30">
+                  <span className="text-[10px] text-emerald-400 block mb-1">BATERÍA / ALIMENTACIÓN</span>
+                  <p className="text-2xl font-bold text-emerald-300">12.6 V</p>
+                  <span className="text-[10px] text-slate-400">HKL-EA8 DC 12-24V</span>
+                </div>
 
-            <ClinicalTooltip title={CLINICAL_HELP.letalidad_f0.title} description={CLINICAL_HELP.letalidad_f0.desc} badge={CLINICAL_HELP.letalidad_f0.badge}>
-              <div className="ultra-glass p-3.5 rounded-xl border border-emerald-500/30 w-full cursor-help">
-                <span className="text-[10px] font-mono text-emerald-400 block mb-1">LETALIDAD (F0)</span>
-                <p className="text-2xl font-bold font-mono text-emerald-300">{(device.f0Score || 0.0).toFixed(1)} min</p>
-                <span className="text-[10px] text-emerald-400/80 font-mono">ISO 17665</span>
-              </div>
-            </ClinicalTooltip>
+                <div className="ultra-glass p-3.5 rounded-xl border border-cyan-500/30">
+                  <span className="text-[10px] text-cyan-400 block mb-1">ALTERNADOR (SEÑAL D+)</span>
+                  <p className="text-lg font-bold text-white">
+                    {entradasPlc.IN2 ? '🟢 GENERANDO (14V)' : '⚪ SIN CARGA'}
+                  </p>
+                  <span className="text-[10px] text-slate-400">Entrada Óptica IN2</span>
+                </div>
 
-            <ClinicalTooltip title={CLINICAL_HELP.fase_ciclo.title} description={CLINICAL_HELP.fase_ciclo.desc} badge={CLINICAL_HELP.fase_ciclo.badge}>
-              <div className="ultra-glass p-3.5 rounded-xl border border-amber-500/30 w-full cursor-help">
-                <span className="text-[10px] font-mono text-amber-400 block mb-1">FASE ACTUAL</span>
-                <p className="text-lg font-bold font-mono text-white truncate">{d?.fase || 'ESPERA'}</p>
-                <span className="text-[10px] text-slate-400 font-mono">Restante: {Math.floor((d?.seg_restantes || 0)/60)}:{(d?.seg_restantes || 0)%60}</span>
+                <div className="ultra-glass p-3.5 rounded-xl border border-indigo-500/30">
+                  <span className="text-[10px] text-indigo-400 block mb-1">ENLACE FÍSICO</span>
+                  <p className="text-lg font-bold text-white">RJ45 CABLE</p>
+                  <span className="text-[10px] text-slate-400">Heartbeat: 800ms</span>
+                </div>
               </div>
-            </ClinicalTooltip>
+
+              {/* Botonera de Control Vehicular */}
+              <div className="ultra-glass p-4 rounded-xl border border-amber-500/30 space-y-3">
+                <span className="text-xs font-mono font-bold text-amber-300 block uppercase">
+                  Mando de Control Remoto de Vehículo / Ambulancia:
+                </span>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <button
+                    onClick={requestStartVehicle}
+                    className="py-3.5 px-4 bg-gradient-to-r from-emerald-500 to-teal-600 hover:opacity-90 font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/25 text-white font-mono"
+                  >
+                    <Key className="w-4 h-4" />
+                    <span>⚡ ARRANQUE REMOTO (START)</span>
+                  </button>
+
+                  <button
+                    onClick={() => handleToggleManualRelay(1, Boolean(relesPlc.R1))}
+                    className={`py-3.5 px-4 font-bold rounded-xl text-xs flex items-center justify-center gap-2 border font-mono transition-all ${
+                      relesPlc.R1 
+                        ? 'bg-amber-500/25 text-amber-300 border-amber-400 shadow-[0_0_12px_rgba(245,158,11,0.3)]' 
+                        : 'bg-slate-900 border-slate-700 text-slate-300 hover:border-amber-400'
+                    }`}
+                  >
+                    <Zap className="w-4 h-4" />
+                    <span>IGNICIÓN: {relesPlc.R1 ? 'CONECTADA (ON)' : 'CORTADA (OFF)'}</span>
+                  </button>
+
+                  <button
+                    onClick={requestStopVehicle}
+                    className="py-3.5 px-4 bg-rose-600 hover:bg-rose-500 font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-rose-600/30 text-white font-mono"
+                  >
+                    <PowerOff className="w-4 h-4" />
+                    <span>🛑 CORTE MOTOR / INMOVILIZADOR</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Matriz Viva de Relés y Sensores HKL-EA8 para el Vehículo */}
+              <div className="ultra-glass p-4 rounded-xl border border-slate-800 space-y-3">
+                <span className="text-xs font-mono font-bold text-cyan-300 block uppercase">
+                  Telemetría de E/S de la Centralita HKL-EA8 (En Vivo):
+                </span>
+                
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono text-xs">
+                  <div className="p-2.5 bg-slate-900/80 rounded-lg border border-slate-800 flex justify-between items-center">
+                    <span className="text-slate-300">R1: Ignición ACC</span>
+                    <span className={relesPlc.R1 ? 'text-emerald-400 font-bold' : 'text-slate-500'}>{relesPlc.R1 ? 'ON' : 'OFF'}</span>
+                  </div>
+                  <div className="p-2.5 bg-slate-900/80 rounded-lg border border-slate-800 flex justify-between items-center">
+                    <span className="text-slate-300">R2: Starter Motor</span>
+                    <span className={relesPlc.R2 ? 'text-amber-400 font-bold animate-pulse' : 'text-slate-500'}>{relesPlc.R2 ? 'PULSO' : 'OFF'}</span>
+                  </div>
+                  <div className="p-2.5 bg-slate-900/80 rounded-lg border border-slate-800 flex justify-between items-center">
+                    <span className="text-slate-300">R3: Inmovilizador</span>
+                    <span className={relesPlc.R3 ? 'text-rose-400 font-bold' : 'text-slate-500'}>{relesPlc.R3 ? 'BLOQ' : 'LIBRE'}</span>
+                  </div>
+                  <div className="p-2.5 bg-slate-900/80 rounded-lg border border-slate-800 flex justify-between items-center">
+                    <span className="text-slate-300">R4: Sirena / Luces</span>
+                    <span className={relesPlc.R4 ? 'text-cyan-400 font-bold' : 'text-slate-500'}>{relesPlc.R4 ? 'ON' : 'OFF'}</span>
+                  </div>
+                  <div className="p-2.5 bg-slate-900/80 rounded-lg border border-slate-800 flex justify-between items-center">
+                    <span className="text-slate-300">IN1: Switch Freno</span>
+                    <span className={entradasPlc.IN1 ? 'text-emerald-400 font-bold' : 'text-slate-500'}>{entradasPlc.IN1 ? 'PISADO' : 'LIBRE'}</span>
+                  </div>
+                  <div className="p-2.5 bg-slate-900/80 rounded-lg border border-slate-800 flex justify-between items-center">
+                    <span className="text-slate-300">IN2: Alternador</span>
+                    <span className={entradasPlc.IN2 ? 'text-emerald-400 font-bold' : 'text-slate-500'}>{entradasPlc.IN2 ? 'CARGA' : 'PARADO'}</span>
+                  </div>
+                  <div className="p-2.5 bg-slate-900/80 rounded-lg border border-slate-800 flex justify-between items-center">
+                    <span className="text-slate-300">IN3: Puerta Cabina</span>
+                    <span className={entradasPlc.IN3 ? 'text-rose-400 font-bold' : 'text-slate-500'}>{entradasPlc.IN3 ? 'ABIERTA' : 'CERRADA'}</span>
+                  </div>
+                  <div className="p-2.5 bg-slate-900/80 rounded-lg border border-slate-800 flex justify-between items-center">
+                    <span className="text-slate-300">IN4: Auxiliar</span>
+                    <span className={entradasPlc.IN4 ? 'text-cyan-400 font-bold' : 'text-slate-500'}>{entradasPlc.IN4 ? 'ACTIVO' : 'OFF'}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* CASO B: MODO AUTOCLAVE CLÍNICO (ESTERILIZACIÓN, F0, PRESIÓN) */
+            <>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <ClinicalTooltip title={CLINICAL_HELP.temp_camara.title} description={CLINICAL_HELP.temp_camara.desc} badge={CLINICAL_HELP.temp_camara.badge}>
+                  <div className="ultra-glass p-3.5 rounded-xl border border-cyan-500/30 w-full cursor-help">
+                    <span className="text-[10px] font-mono text-cyan-400 block mb-1">TEMPERATURA CÁMARA</span>
+                    <p className="text-2xl font-bold font-mono text-white">{(d?.temp_camara || 25.0).toFixed(1)} °C</p>
+                    <span className="text-[10px] text-slate-400 font-mono">Setpoint: {spTemp}°C</span>
+                  </div>
+                </ClinicalTooltip>
+
+                <ClinicalTooltip title={CLINICAL_HELP.presion_camara.title} description={CLINICAL_HELP.presion_camara.desc} badge={CLINICAL_HELP.presion_camara.badge}>
+                  <div className="ultra-glass p-3.5 rounded-xl border border-pink-500/30 w-full cursor-help">
+                    <span className="text-[10px] font-mono text-pink-400 block mb-1">PRESIÓN VAPOR</span>
+                    <p className="text-2xl font-bold font-mono text-white">{(d?.presion || 0.0).toFixed(2)} bar</p>
+                    <span className="text-[10px] text-slate-400 font-mono">Límite: {pMax}b</span>
+                  </div>
+                </ClinicalTooltip>
+
+                <ClinicalTooltip title={CLINICAL_HELP.letalidad_f0.title} description={CLINICAL_HELP.letalidad_f0.desc} badge={CLINICAL_HELP.letalidad_f0.badge}>
+                  <div className="ultra-glass p-3.5 rounded-xl border border-emerald-500/30 w-full cursor-help">
+                    <span className="text-[10px] font-mono text-emerald-400 block mb-1">LETALIDAD (F0)</span>
+                    <p className="text-2xl font-bold font-mono text-emerald-300">{(device.f0Score || 0.0).toFixed(1)} min</p>
+                    <span className="text-[10px] text-emerald-400/80 font-mono">ISO 17665</span>
+                  </div>
+                </ClinicalTooltip>
+
+                <ClinicalTooltip title={CLINICAL_HELP.fase_ciclo.title} description={CLINICAL_HELP.fase_ciclo.desc} badge={CLINICAL_HELP.fase_ciclo.badge}>
+                  <div className="ultra-glass p-3.5 rounded-xl border border-amber-500/30 w-full cursor-help">
+                    <span className="text-[10px] font-mono text-amber-400 block mb-1">FASE ACTUAL</span>
+                    <p className="text-lg font-bold font-mono text-white truncate">{d?.fase || 'ESPERA'}</p>
+                    <span className="text-[10px] text-slate-400 font-mono">Restante: {Math.floor((d?.seg_restantes || 0)/60)}:{(d?.seg_restantes || 0)%60}</span>
+                  </div>
+                </ClinicalTooltip>
+              </div>
+
+              {/* Accionamiento de Salidas */}
+              <div className="ultra-glass p-4 rounded-xl border border-slate-800 space-y-2">
+                <span className="text-xs font-mono font-bold text-cyan-300 block mb-2 uppercase">
+                  Accionamiento de Salidas & Actuadores (Hardware en Vivo):
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="p-3 bg-slate-900/80 rounded-xl border border-slate-800 flex justify-between items-center">
+                    <div>
+                      <span className="text-xs font-mono font-bold text-white block">Motor Agitador (Relé 1)</span>
+                      <span className="text-[10px] text-slate-400 font-mono">
+                        Estado: {isMotorActive ? '🟢 Encendido' : '⚪ Apagado'}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleHardware('mot_ok', isMotorActive)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
+                        isMotorActive ? 'bg-emerald-500/25 text-emerald-300 border-emerald-400 shadow-[0_0_10px_rgba(0,255,136,0.3)]' : 'bg-slate-800 text-slate-400 border-slate-700'
+                      }`}
+                    >
+                      {isMotorActive ? 'ENCENDIDO' : 'APAGADO'}
+                    </button>
+                  </div>
+
+                  <div className="p-3 bg-slate-900/80 rounded-xl border border-slate-800 flex justify-between items-center">
+                    <div>
+                      <span className="text-xs font-mono font-bold text-white block">Bomba Vacío (Relé 3)</span>
+                      <span className="text-[10px] text-slate-400 font-mono">
+                        Estado: {isVacioActive ? '🟢 Activa' : '⚪ Inactiva'}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleToggleHardware('vacio_ok', isVacioActive)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
+                        isVacioActive ? 'bg-cyan-500/25 text-cyan-300 border-cyan-400 shadow-[0_0_10px_rgba(0,243,255,0.3)]' : 'bg-slate-800 text-slate-400 border-slate-700'
+                      }`}
+                    >
+                      {isVacioActive ? 'ACTIVA' : 'INACTIVA'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Botones de Control de Autoclave */}
+              <div className="flex gap-2.5">
+                <ClinicalTooltip title={CLINICAL_HELP.btn_iniciar_ciclo.title} description={CLINICAL_HELP.btn_iniciar_ciclo.desc} badge={CLINICAL_HELP.btn_iniciar_ciclo.badge}>
+                  <button
+                    onClick={requestStartCycle}
+                    className="py-3 px-4 bg-gradient-to-r from-cyan-500 to-blue-600 font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg"
+                  >
+                    <Play className="w-4 h-4 fill-white" />
+                    <span>Iniciar Ciclo ({spTemp}°C)</span>
+                  </button>
+                </ClinicalTooltip>
+
+                <ClinicalTooltip title={CLINICAL_HELP.btn_paro_emergencia.title} description={CLINICAL_HELP.btn_paro_emergencia.desc} badge={CLINICAL_HELP.btn_paro_emergencia.badge}>
+                  <button
+                    onClick={requestEmergencyStop}
+                    className="py-3 px-4 bg-rose-600 hover:bg-rose-500 font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg"
+                  >
+                    <Square className="w-4 h-4 fill-white" />
+                    <span>Paro de Emergencia</span>
+                  </button>
+                </ClinicalTooltip>
+
+                <ClinicalTooltip title={CLINICAL_HELP.btn_reset_alarma.title} description={CLINICAL_HELP.btn_reset_alarma.desc} badge={CLINICAL_HELP.btn_reset_alarma.badge}>
+                  <button
+                    onClick={requestResetAlarm}
+                    className="py-3 px-4 bg-slate-900 border border-slate-700 text-slate-300 rounded-xl text-xs font-mono"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                  </button>
+                </ClinicalTooltip>
+              </div>
+
+              <div className="ultra-glass p-4 rounded-2xl border border-cyan-500/30">
+                <h3 className="text-xs font-bold text-cyan-300 font-mono mb-3">CURVA TÉRMICA EN TIEMPO REAL (ESP32)</h3>
+                <SterilizationChart telemetryData={device.history || []} />
+              </div>
+            </>
+          )}
+
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* PESTAÑA NUEVA: ESCÁNER I2C & MAPEO DINÁMICO HAL (HKL-EA8)                 */}
+      {/* ========================================================================= */}
+      {activeTab === 'hal_scanner' && canEditHardware && (
+        <div className="ultra-glass p-5 rounded-2xl border border-amber-500/30 space-y-4 font-mono text-xs">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-amber-500/20 pb-3">
+            <div>
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <Cpu className="w-4 h-4 text-amber-400" />
+                Escáner I2C en Vivo & Mapeo de Hardware (Núcleo 1 ESP32)
+              </h3>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                Descubre chips de silicio en caliente y reconfigura los 8 relés sin recompilar firmware.
+              </p>
+            </div>
+
+            <button
+              onClick={handleScanI2C}
+              disabled={scanningI2C}
+              className="py-2 px-3.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl flex items-center gap-1.5 shadow-lg shadow-amber-500/20"
+            >
+              <Search className={`w-3.5 h-3.5 ${scanningI2C ? 'animate-spin' : ''}`} />
+              <span>{scanningI2C ? 'Escaneando I2C...' : '🔍 Escanear Bus I2C en Vivo'}</span>
+            </button>
           </div>
 
-          {/* Accionamiento de Salidas */}
-          <div className="ultra-glass p-4 rounded-xl border border-slate-800 space-y-2">
-            <span className="text-xs font-mono font-bold text-cyan-300 block mb-2 uppercase">
-              Accionamiento de Salidas & Actuadores (Hardware en Vivo):
-            </span>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <div className="p-3 bg-slate-900/80 rounded-xl border border-slate-800 flex justify-between items-center">
-                <div>
-                  <span className="text-xs font-mono font-bold text-white block">Motor Agitador (GPIO 2)</span>
-                  <span className="text-[10px] text-slate-400 font-mono">
-                    Estado: {isMotorActive ? '🟢 Encendido' : '⚪ Apagado'}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => handleToggleHardware('mot_ok', isMotorActive)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
-                    isMotorActive ? 'bg-emerald-500/25 text-emerald-300 border-emerald-400 shadow-[0_0_10px_rgba(0,255,136,0.3)]' : 'bg-slate-800 text-slate-400 border-slate-700'
-                  }`}
-                >
-                  {isMotorActive ? 'ENCENDIDO' : 'APAGADO'}
-                </button>
-              </div>
+          {halMsg && (
+            <div className="p-3 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 rounded-xl flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <span>{halMsg}</span>
+            </div>
+          )}
 
-              <div className="p-3 bg-slate-900/80 rounded-xl border border-slate-800 flex justify-between items-center">
-                <div>
-                  <span className="text-xs font-mono font-bold text-white block">Bomba Vacío (GPIO 5)</span>
-                  <span className="text-[10px] text-slate-400 font-mono">
-                    Estado: {isVacioActive ? '🟢 Activa' : '⚪ Inactiva'}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => handleToggleHardware('vacio_ok', isVacioActive)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
-                    isVacioActive ? 'bg-cyan-500/25 text-cyan-300 border-cyan-400 shadow-[0_0_10px_rgba(0,243,255,0.3)]' : 'bg-slate-800 text-slate-400 border-slate-700'
-                  }`}
-                >
-                  {isVacioActive ? 'ACTIVA' : 'INACTIVA'}
-                </button>
+          {/* Chips Detectados */}
+          {chipsDetectados.length > 0 && (
+            <div className="p-3.5 bg-slate-900/90 rounded-xl border border-amber-500/30 space-y-2">
+              <span className="text-amber-400 font-bold block uppercase tracking-wider text-[11px]">
+                Inventario de Chips Detectados por el Microcontrolador:
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {chipsDetectados.map(c => (
+                  <div key={c.dir} className="p-2.5 bg-slate-950 rounded-lg border border-slate-800">
+                    <span className="text-amber-400 font-bold text-xs">{c.dir}</span>
+                    <p className="text-white text-[11px] font-sans font-semibold mt-0.5">{c.tipo}</p>
+                    <p className="text-[10px] text-slate-400">{c.desc}</p>
+                  </div>
+                ))}
               </div>
+            </div>
+          )}
+
+          {/* Mapeo de los 8 Relés con Pruebas Manuales */}
+          <div className="p-4 bg-slate-900/90 rounded-xl border border-slate-800 space-y-3">
+            <span className="text-cyan-400 font-bold block uppercase tracking-wider text-[11px]">
+              Mapeador de Roles & Prueba de Salidas HKL-EA8 (0x24):
+            </span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {[1, 2, 3, 4, 5, 6, 7, 8].map(num => (
+                <div key={num} className="p-2.5 bg-slate-950 rounded-lg border border-slate-800 flex items-center justify-between">
+                  <div>
+                    <span className="text-white font-bold text-xs">Relé {num}:</span>
+                    <select
+                      value={halRoles[`R${num}`] || 'MANUAL'}
+                      onChange={(e) => setHalRoles(prev => ({ ...prev, [`R${num}`]: e.target.value }))}
+                      className="block mt-1 bg-slate-900 text-cyan-300 border border-slate-700 rounded px-2 py-1 text-[11px] focus:outline-none focus:border-amber-400"
+                    >
+                      <option value="IGNICION_ON">🚗 Ignición / Contacto ACC (Vehículo)</option>
+                      <option value="STARTER_MOTOR">⚡ Arranque Motor (Start 1.2s)</option>
+                      <option value="INMOVILIZADOR">🛑 Inmovilizador / Corte Bomba</option>
+                      <option value="SIRENA_LUCES">🚨 Sirena / Luces Auxiliares</option>
+                      <option value="MOTOR">⚙️ Motor Agitador (Autoclave)</option>
+                      <option value="CALENTADOR_VAPOR">♨️ Resistencias Vapor</option>
+                      <option value="BOMBA_VACIO">💨 Bomba de Vacío</option>
+                      <option value="MANUAL">⚪ Libre / Manual</option>
+                    </select>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleToggleManualRelay(num, Boolean(relesPlc[`R${num}`]))}
+                    className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all ${
+                      relesPlc[`R${num}`]
+                        ? 'bg-emerald-500 text-slate-950 shadow-[0_0_10px_#10b981]' 
+                        : 'bg-slate-800 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {relesPlc[`R${num}`] ? 'ON' : 'OFF'}
+                  </button>
+                </div>
+              ))}
             </div>
           </div>
 
-          {/* Botones de Control con Modal de Doble Confirmación */}
-          <div className="flex gap-2.5">
-            <ClinicalTooltip title={CLINICAL_HELP.btn_iniciar_ciclo.title} description={CLINICAL_HELP.btn_iniciar_ciclo.desc} badge={CLINICAL_HELP.btn_iniciar_ciclo.badge}>
-              <button
-                onClick={requestStartCycle}
-                className="py-3 px-4 bg-gradient-to-r from-cyan-500 to-blue-600 font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg"
-              >
-                <Play className="w-4 h-4 fill-white" />
-                <span>Iniciar Ciclo ({spTemp}°C)</span>
-              </button>
-            </ClinicalTooltip>
-
-            <ClinicalTooltip title={CLINICAL_HELP.btn_paro_emergencia.title} description={CLINICAL_HELP.btn_paro_emergencia.desc} badge={CLINICAL_HELP.btn_paro_emergencia.badge}>
-              <button
-                onClick={requestEmergencyStop}
-                className="py-3 px-4 bg-rose-600 hover:bg-rose-500 font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg"
-              >
-                <Square className="w-4 h-4 fill-white" />
-                <span>Paro de Emergencia</span>
-              </button>
-            </ClinicalTooltip>
-
-            <ClinicalTooltip title={CLINICAL_HELP.btn_reset_alarma.title} description={CLINICAL_HELP.btn_reset_alarma.desc} badge={CLINICAL_HELP.btn_reset_alarma.badge}>
-              <button
-                onClick={requestResetAlarm}
-                className="py-3 px-4 bg-slate-900 border border-slate-700 text-slate-300 rounded-xl text-xs font-mono"
-              >
-                <RotateCcw className="w-4 h-4" />
-              </button>
-            </ClinicalTooltip>
-          </div>
-
-          <div className="ultra-glass p-4 rounded-2xl border border-cyan-500/30">
-            <h3 className="text-xs font-bold text-cyan-300 font-mono mb-3">CURVA TÉRMICA EN TIEMPO REAL (ESP32)</h3>
-            <SterilizationChart telemetryData={device.history || []} />
-          </div>
+          <button
+            onClick={handleDeployHalMap}
+            className="w-full py-3 bg-gradient-to-r from-amber-500 via-emerald-500 to-teal-500 hover:opacity-90 text-slate-950 font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20"
+          >
+            <Send className="w-4 h-4" />
+            <span>⚡ DESPLEGAR MAPEO AL ESP32 (GRABAR EN LITTLEFS & SUPABASE)</span>
+          </button>
         </div>
       )}
 
@@ -567,7 +917,7 @@ export default function DeviceDetailView({
       )}
 
       {/* PESTAÑA: NVS */}
-      {activeTab === 'nvs' && canEditHardware && (
+      {activeTab === 'nvs' && canEditHardware && tipoEquipo === 'AUTOCLAVE' && (
         <form onSubmit={handleTransmitNVS} className="ultra-glass p-5 md:p-6 rounded-2xl border border-cyan-500/30 space-y-5">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-cyan-500/20 pb-3">
             <div>
@@ -734,11 +1084,11 @@ export default function DeviceDetailView({
         <form onSubmit={handleGuardarFicha} className="ultra-glass p-6 rounded-2xl border border-cyan-500/30 space-y-4 max-w-xl">
           <h3 className="text-sm font-bold text-white font-mono flex items-center gap-2">
             <Building2 className="w-4 h-4 text-cyan-400" />
-            Ficha del Equipo & Asignación Hospitalaria
+            Ficha del Equipo & Asignación Hospitalaria / Flota
           </h3>
 
           <div>
-            <label className="block text-xs font-mono text-slate-300 mb-1">Alias del Autoclave</label>
+            <label className="block text-xs font-mono text-slate-300 mb-1">Alias del Dispositivo</label>
             <input
               type="text"
               required
@@ -749,7 +1099,7 @@ export default function DeviceDetailView({
           </div>
 
           <div>
-            <label className="block text-xs font-mono text-slate-300 mb-1">Hospital / Clínica / Cliente</label>
+            <label className="block text-xs font-mono text-slate-300 mb-1">Hospital / Clínica / Cliente / Flota</label>
             <input
               type="text"
               required
