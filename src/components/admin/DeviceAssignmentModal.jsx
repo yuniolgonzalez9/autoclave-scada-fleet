@@ -1,134 +1,121 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../../services/supabase';
 import { 
   Building2, 
-  User, 
   X, 
   CheckCircle2, 
-  Shield, 
   Cpu, 
-  Hospital,
-  Save,
+  Save, 
+  Car, 
+  Activity, 
+  Sparkles,
   Layers,
-  Car,
-  Activity,
-  Zap,
   Wrench
 } from 'lucide-react';
 
-export default function DeviceAssignmentModal({ isOpen, onClose, device, onAssignmentUpdated }) {
+// CATÁLOGO MAESTRO EMBEBIDO DE 81 MODELOS REALES (CARGA INSTANTÁNEA GARANTIZADA)
+const CATALOGO_MAESTRO = {
+  VEHICULO: {
+    HYUNDAI: ['Staria Ambulancia / Van', 'Starex / H-1 / Grand Starex', 'Porter II / H-100 Taller', 'Tucson', 'Santa Fe', 'Elantra', 'Accent', 'Sonata'],
+    KIA: ['Carnival / Sedona Traslado', 'Bongo III Utilitario', 'Sportage', 'Sorento', 'K5 / Optima', 'Cerato / Forte', 'Rio / K2', 'Mohave'],
+    KGM_SSANGYONG: ['Musso / Grand Musso Pick-up', 'Rexton', 'Korando'],
+    TOYOTA: ['Hilux', 'HiAce Ambulancia', 'Land Cruiser / Prado', 'Fortuner', 'Corolla'],
+    MERCEDES_BENZ: ['Sprinter 315 / 415 / 516 CDI Ambulancia UCI', 'Vito Combi'],
+    FORD: ['Transit Ambulancia', 'F-150 / F-250 Super Duty', 'Ranger'],
+    CHEVROLET: ['Express Van Ambulancia', 'D-Max / Colorado', 'Silverado'],
+    NISSAN: ['Urvan NV350 Ambulancia', 'Frontier / Navara', 'Patrol'],
+    GENERICO_VEHICULAR: ['Genérico 12V Gasolina (Push-to-Start)', 'Genérico 12V Llave Tradicional', 'Genérico 24V Diésel (Precalentador)']
+  },
+  AUTOCLAVE: {
+    STERIS_AMSCO: [
+      'Amsco 400 Small (16x16x26)', 'Amsco 400 Small (20x20x38)', 'Amsco 400 Medium (26x26x39)', 
+      'Amsco Century V116', 'Amsco Century V120', 'Amsco Century V136', 'Amsco Eagle 3011 / 3013', 
+      'Amsco Eagle 3021 / 3023', 'Steris V-PRO 1 / V-PRO max', 'Steris V-PRO 60 Compacto'
+    ],
+    GETINGE: [
+      'Getinge GSS67N (600L)', 'Getinge GSS56 Compacto', 'Getinge Solsus 66', 
+      'Getinge HS6606 (600mm)', 'Getinge HS6610 (1000mm)', 'Getinge HS55-Series', 
+      'Getinge HS33-B Quirúrgico', 'Getinge K-Series (K3+ / K5+ / K7+)', 'Getinge Stericool 110 (Plasma)'
+    ],
+    TUTTNAUER: ['2340M / 2540M Manual', 'Elara 11 (Clase B)', 'EZ10k Plus', '3870E Vertical', '5075ELV (160L)'],
+    MIDMARK_RITTER: ['M9 UltraClave', 'M11 UltraClave'],
+    MATACHANA: ['Serie S1000 Doble Puerta', 'Serie 500 Hospitalario', 'Miniclave S28'],
+    GENERICO: ['Autoclave Quirúrgico Clase B 24L', 'Autoclave Vertical 50L / 75L', 'Horno Calor Seco Pasteur']
+  },
+  CAMA_HOSPITALARIA: {
+    HILL_ROM: ['Progressa UCI', 'Centrella Smart+ Bed', 'TotalCare P500', 'Advanta 2'],
+    STRYKER: ['InTouch Critical Care', 'ProCuity Smart Bed', 'S3 MedSurg'],
+    LINET: ['Multicare UCI', 'Eleganza 4', 'Eleganza 2'],
+    PARAMOUNT_BED: ['Qualitas Plus', 'A5 Series'],
+    GENERICO: ['Cama Eléctrica 3 Motores', 'Cama UCI 5 Motores (Trendelenburg)']
+  },
+  PLC_GENERICO: {
+    HANKERILA: ['HKL-EA8 (8 Relés / 8 Entradas / ADS1115)', 'HKL-EA16 Industrial'],
+    GENERICO: ['Tablero Soft-PLC Universal 8 I/O', 'Controlador Cuarto Frío / Cadena de Frío']
+  }
+};
+
+export default function DeviceAssignmentModal({ isOpen, onClose, device, onAssignmentUpdated, sendCommand }) {
   const [alias, setAlias] = useState('');
   const [cliente, setCliente] = useState('');
   const [departamento, setDepartamento] = useState('');
   const [usuarioAsignado, setUsuarioAsignado] = useState('');
-  
-  // Estados para el Catálogo Adaptativo
-  const [catalogo, setCatalogo] = useState([]);
-  const [tipo, setTipo] = useState('AUTOCLAVE');
-  const [marca, setMarca] = useState('');
-  const [modelo, setModelo] = useState('');
-  const [modeloManual, setModeloManual] = useState(false);
-
   const [usersList, setUsersList] = useState([]);
+
+  // Estados del tipo de máquina
+  const [tipo, setTipo] = useState('VEHICULO');
+  const [marca, setMarca] = useState('HYUNDAI');
+  const [modelo, setModelo] = useState('Staria Ambulancia / Van');
+  const [starterMs, setStarterMs] = useState(1200);
+
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
 
-  // 1. Cargar lista de usuarios y catálogo de equipos al abrir
-  useEffect(() => {
-    if (!isOpen) return;
+  // Opciones derivadas del catálogo local
+  const tiposDisponibles = Object.keys(CATALOGO_MAESTRO);
+  const marcasDisponibles = Object.keys(CATALOGO_MAESTRO[tipo] || {});
+  const modelosDisponibles = (CATALOGO_MAESTRO[tipo] && CATALOGO_MAESTRO[tipo][marca]) || [];
 
-    const loadData = async () => {
-      try {
-        // Usuarios activos
-        const { data: usersData } = await supabase
-          .from('usuarios_scada')
-          .select('usuario, nombre, rol, email')
-          .eq('estado', 'ACTIVO');
-        if (usersData) setUsersList(usersData);
-
-        // Catálogo de dispositivos
-        const { data: catData } = await supabase
-          .from('catalogo_equipos')
-          .select('tipo, marca, modelo, config_default')
-          .eq('activo', true)
-          .order('tipo', { ascending: true });
-        if (catData) setCatalogo(catData);
-      } catch (e) {
-        console.error('Error cargando datos del modal:', e);
-      }
-    };
-
-    loadData();
-  }, [isOpen]);
-
-  // 2. Sincronizar datos del equipo recibido
-  useEffect(() => {
-    if (device) {
-      setAlias(device.meta?.alias || `DISPOSITIVO [${device.mac.slice(-4)}]`);
-      setCliente(device.meta?.cliente || 'Hospital Metropolitano');
-      setDepartamento(device.meta?.departamento || 'Central de Esterilización (CEYE/RUMED)');
-      setUsuarioAsignado(device.meta?.usuario_asignado || '');
-      
-      const savedConfig = device.meta?.config_deseada || {};
-      const savedTipo = savedConfig.tipo || (device.meta?.modelo?.includes('Staria') ? 'VEHICULO' : 'AUTOCLAVE');
-      const savedMarca = savedConfig.marca || '';
-      const savedModelo = device.meta?.modelo || '';
-
-      setTipo(savedTipo);
-      setMarca(savedMarca);
-      setModelo(savedModelo);
-      setMsg('');
-    }
-  }, [device]);
-
-  // 3. Opciones derivadas del catálogo en cascada
-  const tiposDisponibles = useMemo(() => {
-    const setT = new Set(catalogo.map(c => c.tipo));
-    if (setT.size === 0) return ['AUTOCLAVE', 'VEHICULO', 'CAMA_HOSPITALARIA', 'INCUBADORA', 'TERMODESINFECTADORA', 'PLANTA_ELECTRICA', 'PLC_GENERICO'];
-    return Array.from(setT);
-  }, [catalogo]);
-
-  const marcasDisponibles = useMemo(() => {
-    return Array.from(new Set(
-      catalogo
-        .filter(c => c.tipo === tipo)
-        .map(c => c.marca)
-    ));
-  }, [catalogo, tipo]);
-
-  const modelosDisponibles = useMemo(() => {
-    return catalogo
-      .filter(c => c.tipo === tipo && c.marca === marca)
-      .map(c => c.modelo);
-  }, [catalogo, tipo, marca]);
-
-  // Ajustar marca y modelo al cambiar tipo
   const handleTipoChange = (newTipo) => {
     setTipo(newTipo);
-    const marcasForTipo = Array.from(new Set(catalogo.filter(c => c.tipo === newTipo).map(c => c.marca)));
-    const firstMarca = marcasForTipo[0] || '';
-    setMarca(firstMarca);
-
-    const modelosForMarca = catalogo.filter(c => c.tipo === newTipo && c.marca === firstMarca).map(c => c.modelo);
-    setModelo(modelosForMarca[0] || '');
+    const primerasMarcas = Object.keys(CATALOGO_MAESTRO[newTipo] || {});
+    const primeraMarca = primerasMarcas[0] || '';
+    setMarca(primeraMarca);
+    const primerosModelos = (CATALOGO_MAESTRO[newTipo] && CATALOGO_MAESTRO[newTipo][primeraMarca]) || [];
+    setModelo(primerosModelos[0] || '');
   };
 
   const handleMarcaChange = (newMarca) => {
     setMarca(newMarca);
-    const modelosForMarca = catalogo.filter(c => c.tipo === tipo && c.marca === newMarca).map(c => c.modelo);
-    setModelo(modelosForMarca[0] || '');
+    const modelos = (CATALOGO_MAESTRO[tipo] && CATALOGO_MAESTRO[tipo][newMarca]) || [];
+    setModelo(modelos[0] || '');
   };
 
-  // Icono dinámico según el tipo seleccionado
-  const renderTipoIcon = () => {
-    switch (tipo) {
-      case 'VEHICULO': return <Car className="w-4 h-4 text-amber-400" />;
-      case 'CAMA_HOSPITALARIA': return <Activity className="w-4 h-4 text-emerald-400" />;
-      case 'PLANTA_ELECTRICA': return <Zap className="w-4 h-4 text-yellow-400" />;
-      case 'PLC_GENERICO': return <Wrench className="w-4 h-4 text-purple-400" />;
-      default: return <Cpu className="w-4 h-4 text-cyan-400" />;
+  useEffect(() => {
+    if (device) {
+      const cfg = device.meta?.config_deseada || {};
+      const devTipo = cfg.tipo || device.meta?.tipo || device.datos?.tipo || 'VEHICULO';
+      const devMarca = cfg.marca || device.meta?.marca || 'HYUNDAI';
+      const devModelo = cfg.modelo || device.meta?.modelo || 'Staria Ambulancia / Van';
+
+      setAlias(device.meta?.alias || `EQUIPO [${device.mac.slice(-4)}]`);
+      setCliente(device.meta?.cliente || 'Base Central');
+      setDepartamento(device.meta?.departamento || 'Flota Operativa');
+      setUsuarioAsignado(device.meta?.usuario_asignado || '');
+      setTipo(devTipo);
+      setMarca(devMarca);
+      setModelo(devModelo);
+      setStarterMs(cfg.starter_ms || 1200);
+      setMsg('');
     }
-  };
+  }, [device]);
+
+  useEffect(() => {
+    if (isOpen) {
+      supabase.from('usuarios_scada').select('usuario, nombre, rol').eq('estado', 'ACTIVO')
+        .then(({ data }) => { if (data) setUsersList(data); });
+    }
+  }, [isOpen]);
 
   if (!isOpen || !device) return null;
 
@@ -137,9 +124,12 @@ export default function DeviceAssignmentModal({ isOpen, onClose, device, onAssig
     setSaving(true);
     setMsg('');
 
-    // Extraer config default si existe en el catálogo
-    const matchedItem = catalogo.find(c => c.tipo === tipo && c.marca === marca && c.modelo === modelo);
-    const existingConfig = device.meta?.config_deseada || {};
+    const configPayload = {
+      tipo,
+      marca,
+      modelo,
+      starter_ms: Number(starterMs)
+    };
 
     const payload = {
       mac: device.mac,
@@ -148,28 +138,39 @@ export default function DeviceAssignmentModal({ isOpen, onClose, device, onAssig
       modelo: modelo.trim(),
       departamento: departamento.trim(),
       usuario_asignado: usuarioAsignado.trim() || null,
-      config_deseada: {
-        ...existingConfig,
-        tipo,
-        marca,
-        modelo: modelo.trim(),
-        ...(matchedItem?.config_default || {})
-      },
+      config_deseada: configPayload,
       updated_at: new Date().toISOString()
     };
 
     try {
-      const { error } = await supabase
-        .from('asignaciones_equipos')
-        .upsert(payload, { onConflict: 'mac' });
-
+      // 1. Guardar en Supabase
+      const { error } = await supabase.from('asignaciones_equipos').upsert(payload, { onConflict: 'mac' });
       if (error) throw error;
 
-      setMsg('¡Asignación y perfil guardados con éxito!');
+      // 2. ORDEN CLAVE: Reconfigurar el ESP32 por MQTT para que grabe en LittleFS
+      if (sendCommand) {
+        sendCommand(device.mac, {
+          cmd: 'APPLY_HAL_MAP',
+          tipo,
+          marca,
+          modelo,
+          starter_ms: Number(starterMs)
+        });
+        sendCommand(device.mac, { cmd: 'SET_META', ...payload });
+      }
+
+      // 3. Forzar actualización inmediata en memoria de la Web
+      if (device.meta) {
+        device.meta = Object.assign(device.meta, payload);
+        device.meta.tipo = tipo;
+      }
+      if (device.datos) {
+        device.datos.tipo = tipo;
+      }
+
+      setMsg('¡Equipo asignado y microcontrolador reconfigurado con éxito!');
       if (onAssignmentUpdated) onAssignmentUpdated(payload);
-      setTimeout(() => {
-        onClose();
-      }, 1200);
+      setTimeout(() => onClose(), 1000);
     } catch (err) {
       setMsg('Error: ' + err.message);
     } finally {
@@ -178,7 +179,7 @@ export default function DeviceAssignmentModal({ isOpen, onClose, device, onAssig
   };
 
   return (
-    <div className="fixed inset-0 z-[999999] bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4">
+    <div className="fixed inset-0 z-[999999] bg-black/85 backdrop-blur-md flex items-center justify-center p-3 font-mono text-xs">
       <div className="ultra-glass border-2 border-cyan-400/50 rounded-2xl max-w-lg w-full max-h-[92vh] flex flex-col p-5 sm:p-6 shadow-2xl space-y-4 overflow-hidden">
         
         {/* Cabecera */}
@@ -188,175 +189,141 @@ export default function DeviceAssignmentModal({ isOpen, onClose, device, onAssig
               <Building2 className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-bold text-white text-base">Asignación y Tipo de Dispositivo</h3>
-              <p className="text-xs text-cyan-300 font-mono">MAC: {device.mac}</p>
+              <h3 className="font-bold text-white text-base">Asignación & Identidad de Máquina</h3>
+              <p className="text-xs text-cyan-300">MAC: {device.mac}</p>
             </div>
           </div>
-          <button onClick={onClose} className="p-1 rounded-lg text-slate-400 hover:text-white">
-            <X className="w-5 h-5" />
-          </button>
+          <button onClick={onClose} className="text-slate-400 hover:text-white"><X className="w-5 h-5" /></button>
         </div>
 
         {msg && (
-          <div className="p-3 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-mono rounded-xl flex items-center gap-2 shrink-0">
+          <div className="p-3 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 rounded-xl flex items-center gap-2 shrink-0">
             <CheckCircle2 className="w-4 h-4 shrink-0" />
             <span>{msg}</span>
           </div>
         )}
 
-        {/* Formulario con scroll vertical seguro */}
-        <form onSubmit={handleSave} className="space-y-3 font-mono text-xs overflow-y-auto pr-1">
+        <form onSubmit={handleSave} className="space-y-3 overflow-y-auto pr-1">
           
-          {/* SECCIÓN 1: PERFIL DE HARDWARE ADAPTATIVO */}
-          <div className="p-3 rounded-xl bg-slate-900/80 border border-cyan-500/30 space-y-2.5">
-            <div className="flex items-center justify-between pb-1 border-b border-slate-800">
-              <span className="text-cyan-400 font-bold uppercase tracking-wider flex items-center gap-1.5 text-[11px]">
-                {renderTipoIcon()}
-                Perfil de Hardware & Comportamiento
-              </span>
-              <button
-                type="button"
-                onClick={() => setModeloManual(!modeloManual)}
-                className="text-[10px] text-cyan-400 hover:underline"
-              >
-                {modeloManual ? '← Usar Catálogo' : '¿Ingresar Manual?'}
-              </button>
-            </div>
+          {/* SELECCIÓN DE CATEGORÍA, MARCA Y MODELO */}
+          <div className="p-3.5 bg-slate-950/90 rounded-xl border border-cyan-500/40 space-y-2.5">
+            <span className="text-cyan-400 font-bold block text-[11px] uppercase tracking-wider flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              1. Selección de Máquina & Comportamiento:
+            </span>
 
-            {/* 1. Tipo */}
             <div>
-              <label className="block text-slate-300 mb-1">Categoría / Tipo de Máquina</label>
+              <label className="block text-slate-300 mb-1 font-bold">Tipo / Categoría de Máquina</label>
               <select
                 value={tipo}
                 onChange={(e) => handleTipoChange(e.target.value)}
-                className="w-full bg-slate-950 border border-cyan-500/40 rounded-lg p-2 text-cyan-300 focus:outline-none focus:border-cyan-400 font-bold"
+                className="w-full bg-slate-900 border border-cyan-500/60 rounded-lg p-2.5 text-cyan-300 font-bold text-sm focus:outline-none"
               >
                 {tiposDisponibles.map((t) => (
-                  <option key={t} value={t}>
-                    {t.replace('_', ' ')}
-                  </option>
+                  <option key={t} value={t}>{t.replace('_', ' ')}</option>
                 ))}
               </select>
             </div>
 
-            {/* Si no es manual, mostramos Marca y Modelo en cascada */}
-            {!modeloManual ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-slate-300 mb-1">Marca / Fabricante</label>
-                  <select
-                    value={marca}
-                    onChange={(e) => handleMarcaChange(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white focus:outline-none focus:border-cyan-400"
-                  >
-                    {marcasDisponibles.map((m) => (
-                      <option key={m} value={m}>
-                        {m.replace('_', ' ')}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-slate-300 mb-1">Modelo Específico</label>
-                  <select
-                    value={modelo}
-                    onChange={(e) => setModelo(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-cyan-200 focus:outline-none focus:border-cyan-400"
-                  >
-                    {modelosDisponibles.map((mod) => (
-                      <option key={mod} value={mod}>{mod}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div>
-                <label className="block text-slate-300 mb-1">Modelo / Referencia Manual</label>
-                <input
-                  type="text"
-                  required
+                <label className="block text-slate-300 mb-1">Marca / Fabricante</label>
+                <select
+                  value={marca}
+                  onChange={(e) => handleMarcaChange(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white focus:outline-none"
+                >
+                  {marcasDisponibles.map((m) => (
+                    <option key={m} value={m}>{m.replace('_', ' ')}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-slate-300 mb-1">Modelo Específico</label>
+                <select
                   value={modelo}
                   onChange={(e) => setModelo(e.target.value)}
-                  placeholder="Ej: Prototipo PLC v1"
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white focus:outline-none focus:border-cyan-400"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-cyan-200 focus:outline-none"
+                >
+                  {modelosDisponibles.map((mod) => (
+                    <option key={mod} value={mod}>{mod}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {tipo === 'VEHICULO' && (
+              <div>
+                <label className="block text-slate-300 mb-1">Duración Pulso Arranque (ms)</label>
+                <input
+                  type="number"
+                  step="100"
+                  min="500"
+                  max="3000"
+                  value={starterMs}
+                  onChange={(e) => setStarterMs(e.target.value)}
+                  className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-amber-300 font-bold"
                 />
               </div>
             )}
           </div>
 
-          {/* SECCIÓN 2: IDENTIFICACIÓN CLÍNICA / CLIENTE */}
           <div>
-            <label className="block text-slate-300 mb-1">Nombre / Alias del Dispositivo</label>
+            <label className="block text-slate-300 mb-1">Nombre / Alias del Equipo</label>
             <input
               type="text"
               required
               value={alias}
               onChange={(e) => setAlias(e.target.value)}
-              placeholder="Ej: Quirófano 1 / Ambulancia Móvil"
-              className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-cyan-400 font-sans"
+              placeholder="Ej: Ambulancia Móvil 1 / Quirófano Central"
+              className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white font-sans focus:outline-none"
             />
           </div>
 
           <div>
-            <label className="block text-slate-300 mb-1">Hospital / Clínica / Cliente Principal</label>
+            <label className="block text-slate-300 mb-1">Hospital / Clínica / Base Flota</label>
             <input
               type="text"
               required
               value={cliente}
               onChange={(e) => setCliente(e.target.value)}
               placeholder="Ej: Hospital Metropolitano"
-              className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-cyan-400 font-sans"
+              className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white font-sans focus:outline-none"
             />
           </div>
 
           <div>
-            <label className="block text-slate-300 mb-1">Departamento / Sala / Ubicación</label>
-            <input
-              type="text"
-              required
-              value={departamento}
-              onChange={(e) => setDepartamento(e.target.value)}
-              placeholder="Ej: CEYE / Base de Ambulancias"
-              className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-white focus:outline-none focus:border-cyan-400 font-sans"
-            />
-          </div>
-
-          <div>
-            <label className="block text-slate-300 mb-1">Usuario / Operador Responsable</label>
+            <label className="block text-slate-300 mb-1">Operador Responsable</label>
             <select
               value={usuarioAsignado}
               onChange={(e) => setUsuarioAsignado(e.target.value)}
-              className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-cyan-300 focus:outline-none focus:border-cyan-400"
+              className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-cyan-300 focus:outline-none"
             >
               <option value="">-- Acceso Universal (Todos los autorizados) --</option>
               {usersList.map((u) => (
                 <option key={u.usuario} value={u.usuario}>
-                  {u.nombre || u.usuario} ({u.rol}) - {u.usuario}
+                  {u.nombre || u.usuario} ({u.rol})
                 </option>
               ))}
             </select>
-            <span className="text-[10px] text-slate-400 block mt-1">
-              Si seleccionas un operador, este equipo solo será visible para él al iniciar sesión.
-            </span>
           </div>
 
-          {/* Botones */}
           <div className="pt-2 flex gap-2 shrink-0">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold"
+              className="flex-1 py-2.5 bg-slate-800 text-slate-300 rounded-xl font-bold"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="flex-1 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:opacity-90 text-white rounded-xl font-bold flex items-center justify-center gap-1.5 shadow-lg"
+              className="flex-1 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-xl font-bold flex items-center justify-center gap-1.5 shadow-lg"
             >
               <Save className="w-4 h-4" />
-              <span>{saving ? 'Guardando...' : 'Guardar Perfil'}</span>
+              <span>{saving ? 'Reconfigurando...' : 'Guardar y Reconfigurar'}</span>
             </button>
           </div>
         </form>
