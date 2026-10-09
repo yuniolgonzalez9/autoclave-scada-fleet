@@ -25,6 +25,9 @@ export function useMqttFleet() {
               const devMac = rawMac.toUpperCase().replace(/[:\-]/g, '');
               
               if (devMac && !initialFleet[devMac]) {
+                const configDeseada = item.config_deseada || {};
+                const tipoCalculado = configDeseada.tipo || item.tipo || (item.modelo?.toUpperCase().includes('STARIA') ? 'VEHICULO' : 'AUTOCLAVE');
+
                 initialFleet[devMac] = {
                   mac: devMac,
                   lastSeen: 0,
@@ -35,11 +38,21 @@ export function useMqttFleet() {
                     calentador: false,
                     vacio: false,
                     fase: 'APAGADO',
+                    tipo: tipoCalculado,
                     seg_restantes: 0,
-                    cfg: { ciclos: Number(item.ciclos || 0), lim_mant: Number(item.limite || 200) }
+                    reles: { R1: 0, R2: 0, R3: 0, R4: 0, R5: 0, R6: 0, R7: 0, R8: 0 },
+                    entradas: { IN1: 0, IN2: 0, IN3: 0, IN4: 0, IN5: 0, IN6: 0, IN7: 0, IN8: 0 },
+                    cfg: { 
+                      ciclos: Number(item.ciclos || 0), 
+                      lim_mant: Number(item.limite || 200),
+                      sp_temp: configDeseada.sp_temp || 121.0,
+                      t_ciclo: configDeseada.t_ciclo || 2
+                    }
                   },
                   esquema: null,
-                  meta: { ...item, mac: devMac },
+                  i2cReport: null,
+                  hwProfile: null,
+                  meta: { ...item, mac: devMac, tipo: tipoCalculado },
                   f0Score: 0.0,
                   history: []
                 };
@@ -70,7 +83,9 @@ export function useMqttFleet() {
             lastSeen: 0,
             datos: {},
             esquema: null,
-            meta: { alias: `AUTOCLAVE [${cleanMac.slice(-4)}]`, cliente: 'Hospital', modelo: 'Clase B' },
+            i2cReport: null,
+            hwProfile: null,
+            meta: { alias: `EQUIPO [${cleanMac.slice(-4)}]`, cliente: 'Hospital', modelo: 'Universal' },
             f0Score: 0.0,
             history: []
           };
@@ -81,8 +96,13 @@ export function useMqttFleet() {
             lastSeen: isFreshStream ? Date.now() : (currentDev.lastSeen || 0)
           };
 
+          // TELEMETRÍA EN VIVO (HKL-EA8 Y AUTOCLAVE)
           if (channel === 'telemetria') {
-            updated.datos = payload || {};
+            updated.datos = {
+              ...(currentDev.datos || {}),
+              ...(payload || {})
+            };
+
             const currentTemp = parseFloat(payload?.temp_camara || 25.0);
             
             if (payload?.fase === 'ESTERILIZANDO') {
@@ -102,6 +122,16 @@ export function useMqttFleet() {
             updated.history = newHistory;
           }
 
+          // ESCÁNER I2C EN TIEMPO REAL
+          if (channel === 'i2c_report' || channel === 'hardware_scan') {
+            updated.i2cReport = payload;
+          }
+
+          // PERFIL DE HARDWARE LITTLEFS
+          if (channel === 'hw_profile') {
+            updated.hwProfile = payload;
+          }
+
           if (channel === 'esquema') {
             updated.esquema = payload;
           }
@@ -110,7 +140,7 @@ export function useMqttFleet() {
             updated.meta = Object.assign(updated.meta || {}, payload, { mac: cleanMac });
           }
 
-          // GUARDADO ASÍNCRONO SIN .CATCH (UTILIZA TRY/CATCH ESTRICTO)
+          // GUARDADO ASÍNCRONO DE REPORTES CLÍNICOS
           if (channel === 'reporte_paquete') {
             const ciclosAcum = Number(payload?.ciclos_acumulados || payload?.ciclos || 0);
             if (!updated.datos.cfg) updated.datos.cfg = {};
@@ -155,6 +185,7 @@ export function useMqttFleet() {
     return () => { if (client) client.end(); };
   }, []);
 
+  // 3. ENVÍO DE COMANDOS CON ACTUALIZACIÓN OPTIMISTA Y RESPALDO CLOUD
   const sendDeviceCommand = (mac, cmd) => {
     const cleanMac = (mac || '').toUpperCase().replace(/[:\-]/g, '');
     if (!cleanMac) return;
@@ -168,6 +199,7 @@ export function useMqttFleet() {
         const newDatos = { ...dev.datos };
         const newCfg = { ...(dev.datos?.cfg || {}) };
 
+        // A. Actualizaciones de Relés y Autoclave
         if (cmd.mot_ok !== undefined) {
           newDatos.motor = Boolean(cmd.mot_ok);
           newCfg.mot_ok = Boolean(cmd.mot_ok);
@@ -180,25 +212,52 @@ export function useMqttFleet() {
         if (cmd.sp_temp !== undefined) newCfg.sp_temp = Number(cmd.sp_temp);
         if (cmd.t_ciclo !== undefined) newCfg.t_ciclo = Number(cmd.t_ciclo);
 
+        // B. Actualizaciones directas de Relés Individuales (SET_RELAY)
+        if (cmd.cmd === 'SET_RELAY' && cmd.canal) {
+          const currentReles = { ...(dev.datos?.reles || {}) };
+          currentReles[`R${cmd.canal}`] = cmd.val ? 1 : 0;
+          newDatos.reles = currentReles;
+        }
+
+        // C. Actualizaciones directas para Vehículos (START / STOP)
+        if (cmd.cmd === 'START_VEHICLE') {
+          newDatos.fase = 'ARRANCANDO';
+          const currentReles = { ...(dev.datos?.reles || {}) };
+          currentReles.R1 = 1; // Ignición ON
+          currentReles.R2 = 1; // Starter ON
+          newDatos.reles = currentReles;
+        } else if (cmd.cmd === 'STOP_VEHICLE') {
+          newDatos.fase = 'APAGADO';
+          const currentReles = { ...(dev.datos?.reles || {}) };
+          currentReles.R1 = 0;
+          currentReles.R2 = 0;
+          newDatos.reles = currentReles;
+        }
+
         return {
           ...prev,
           [cleanMac]: { ...dev, datos: { ...newDatos, cfg: newCfg } }
         };
       });
 
-      // Guardado seguro en Supabase sin .catch()
-      if (!cmd.cmd) {
-        (async () => {
-          try {
+      // Respaldar en Supabase asignaciones_equipos
+      (async () => {
+        try {
+          if (!cmd.cmd) {
             await supabase.from('asignaciones_equipos').update({
               config_deseada: cmd,
               updated_at: new Date().toISOString()
             }).eq('mac', cleanMac);
-          } catch (e) {
-            console.warn('[SUPABASE] Error guardando config:', e);
+          } else if (cmd.cmd === 'APPLY_HAL_MAP') {
+            await supabase.from('asignaciones_equipos').update({
+              config_deseada: cmd,
+              updated_at: new Date().toISOString()
+            }).eq('mac', cleanMac);
           }
-        })();
-      }
+        } catch (e) {
+          console.warn('[SUPABASE] Error sincronizando config_deseada:', e);
+        }
+      })();
     }
   };
 
