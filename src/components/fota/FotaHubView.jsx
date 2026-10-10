@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import ClinicalTooltip from '../common/ClinicalTooltip';
 import { CLINICAL_HELP } from '../../utils/clinicalDictionary';
 import { supabase } from '../../services/supabase';
+import { desplegarPerfilJsonFota } from '../../services/fotaJsonService';
 import { 
   Rocket, 
   Upload, 
@@ -11,89 +12,42 @@ import {
   FileCode, 
   Layers, 
   Send, 
-  Plus, 
-  Trash2, 
-  Play, 
-  Clock, 
-  ShieldCheck, 
-  Sliders, 
-  Cpu, 
-  Check, 
-  X,
-  Code,
+  Server, 
   Sparkles,
-  ArrowRight
+  Check, 
+  X
 } from 'lucide-react';
 
 export default function FotaHubView({ fleet, sendCommand }) {
-  const [fotaMode, setFotaMode] = useState('STUDIO'); // 'STUDIO', 'JSON_HAL', 'BIN'
+  const [fotaMode, setFotaMode] = useState('JSON'); // 'JSON' o 'BIN'
   
-  // Parámetros Binario
-  const [fotaVersion, setFotaVersion] = useState('v7.0');
+  // Parámetros Binario C++
+  const [fotaVersion, setFotaVersion] = useState('v8.0');
   const [fotaUrl, setFotaUrl] = useState('https://raw.githubusercontent.com/yuniolgonzalez9/autoclave-scada-fleet/main/firmwares/firmware.bin');
   
-  // Parámetros JSON HAL
-  const [rawJsonText, setRawJsonText] = useState('{\n  "nombre": "Perfil Base",\n  "tipo": "VEHICULO"\n}');
-
-  // =========================================================================
-  // ESTADOS DEL "PLC LOGIC STUDIO" (CONSTRUCTOR DE PASOS ELÁSTICOS)
-  // =========================================================================
-  const [recetaNombre, setRecetaNombre] = useState('Secuencia de Control Principal');
-  const [nivelAvanzado, setNivelAvanzado] = useState('VEHICULAR');
-  const [sensorParoGlobal, setSensorParoGlobal] = useState('IN4');
-
-  const [pasos, setPasos] = useState([
-    {
-      id: 1,
-      nombre: 'Activación de Contacto',
-      tipo_transicion: 'INMEDIATO', // 'INMEDIATO', 'TEMPORIZADO', 'CONDICIONAL'
-      tiempo_ms: 0,
-      acciones_encender: ['R1'],
-      acciones_apagar: [],
-      condicion_sensor: 'IN2',
-      condicion_valor: 1,
-      condicion_timeout_ms: 3000
+  // Parámetros JSON (Supabase Storage + LittleFS)
+  const [perfilNombre, setPerfilNombre] = useState('Manifiesto_Industrial_Base');
+  const [tipoEquipo, setTipoEquipo] = useState('UNIVERSAL_PLC');
+  const [jsonText, setJsonText] = useState(JSON.stringify({
+    version: "2.0",
+    dispositivo: "HKL-EA8 Universal",
+    tipo: "UNIVERSAL_PLC",
+    seguridad: {
+      paro_emergencia: "IN4",
+      corte_automatico: true
     },
-    {
-      id: 2,
-      nombre: 'Espera Presurización Inyectores',
-      tipo_transicion: 'TEMPORIZADO',
-      tiempo_ms: 1500,
-      acciones_encender: [],
-      acciones_apagar: [],
-      condicion_sensor: 'IN2',
-      condicion_valor: 1,
-      condicion_timeout_ms: 3000
-    },
-    {
-      id: 3,
-      nombre: 'Pulso de Arranque (Starter)',
-      tipo_transicion: 'TEMPORIZADO',
-      tiempo_ms: 1200,
-      acciones_encender: ['R2'],
-      acciones_apagar: ['R2'],
-      condicion_sensor: 'IN2',
-      condicion_valor: 1,
-      condicion_timeout_ms: 3000
-    },
-    {
-      id: 4,
-      nombre: 'Verificación Alternador 14V',
-      tipo_transicion: 'CONDICIONAL',
-      tiempo_ms: 0,
-      acciones_encender: ['R4'],
-      acciones_apagar: [],
-      condicion_sensor: 'IN2',
-      condicion_valor: 1,
-      condicion_timeout_ms: 3000
+    variables: {
+      temperatura: { tipo: "float", unidad: "°C", adc_canal: 0 },
+      presion: { tipo: "float", unidad: "bar", adc_canal: 1 },
+      bateria: { tipo: "float", unidad: "V", adc_canal: 2 }
     }
-  ]);
+  }, null, 2));
 
   const [selectedTargets, setSelectedTargets] = useState({});
   const [filterOnline, setFilterOnline] = useState('ONLINE');
   const [transmitting, setTransmitting] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
-  const [ackResultado, setAckResultado] = useState(null);
+  const [jsonError, setJsonError] = useState('');
 
   const macList = Object.keys(fleet);
   const filteredMacs = macList.filter((mac) => {
@@ -110,470 +64,252 @@ export default function FotaHubView({ fleet, sendCommand }) {
     setSelectedTargets(nextState);
   };
 
-  // Cargar Plantillas según el nivel deseado
-  const aplicarPlantillaNivel = (nivel) => {
-    setNivelAvanzado(nivel);
-    if (nivel === 'BASICO') {
-      setRecetaNombre('Control de Relés Directo');
-      setPasos([
-        { id: 1, nombre: 'Activar Relé 1 Inmediato', tipo_transicion: 'INMEDIATO', tiempo_ms: 0, acciones_encender: ['R1'], acciones_apagar: [] },
-        { id: 2, nombre: 'Activar Relé 2 con Pulso 2s', tipo_transicion: 'TEMPORIZADO', tiempo_ms: 2000, acciones_encender: ['R2'], acciones_apagar: ['R2'] }
-      ]);
-    } else if (nivel === 'VEHICULAR') {
-      setRecetaNombre('Secuencia Arranque Ambulancia');
-      setPasos([
-        { id: 1, nombre: 'Contacto Ignición ACC', tipo_transicion: 'INMEDIATO', tiempo_ms: 0, acciones_encender: ['R1'], acciones_apagar: [] },
-        { id: 2, nombre: 'Carga Bomba Combustible', tipo_transicion: 'TEMPORIZADO', tiempo_ms: 1500, acciones_encender: [], acciones_apagar: [] },
-        { id: 3, nombre: 'Pulso Starter Motor', tipo_transicion: 'TEMPORIZADO', tiempo_ms: 1200, acciones_encender: ['R2'], acciones_apagar: ['R2'] },
-        { id: 4, nombre: 'Confirmación Alternador D+', tipo_transicion: 'CONDICIONAL', tiempo_ms: 0, acciones_encender: ['R4'], acciones_apagar: [], condicion_sensor: 'IN2', condicion_valor: 1, condicion_timeout_ms: 3000 }
-      ]);
-    } else if (nivel === 'AUTOCLAVE') {
-      setRecetaNombre('Ciclo Clínico Esterilización');
-      setPasos([
-        { id: 1, nombre: 'Comprobar Puerta Cerrada', tipo_transicion: 'CONDICIONAL', tiempo_ms: 0, acciones_encender: [], acciones_apagar: [], condicion_sensor: 'IN1', condicion_valor: 1, condicion_timeout_ms: 5000 },
-        { id: 2, nombre: 'Encender Calentador', tipo_transicion: 'INMEDIATO', tiempo_ms: 0, acciones_encender: ['R1', 'R3'], acciones_apagar: [] },
-        { id: 3, nombre: 'Meseta Esterilizada', tipo_transicion: 'TEMPORIZADO', tiempo_ms: 120000, acciones_encender: ['R1'], acciones_apagar: [] },
-        { id: 4, nombre: 'Despresurización & Purga', tipo_transicion: 'INMEDIATO', tiempo_ms: 0, acciones_encender: ['R4'], acciones_apagar: ['R1'] }
-      ]);
+  const handleJsonChange = (val) => {
+    setJsonText(val);
+    try {
+      JSON.parse(val);
+      setJsonError('');
+    } catch (e) {
+      setJsonError('Sintaxis JSON no válida: ' + e.message);
     }
   };
 
-  const handleAddPaso = () => {
-    const nextId = pasos.length + 1;
-    setPasos([...pasos, {
-      id: nextId,
-      nombre: `Paso ${nextId}`,
-      tipo_transicion: 'INMEDIATO',
-      tiempo_ms: 1000,
-      acciones_encender: [],
-      acciones_apagar: [],
-      condicion_sensor: 'IN1',
-      condicion_valor: 1,
-      condicion_timeout_ms: 3000
-    }]);
-  };
-
-  const handleRemovePaso = (idx) => {
-    setPasos(pasos.filter((_, i) => i !== idx));
-  };
-
-  // Compilar el objeto JSON final
-  const compilarJsonReceta = () => {
-    return {
-      nombre_receta: recetaNombre,
-      nivel: nivelAvanzado,
-      enclavamiento_paro: sensorParoGlobal,
-      total_pasos: pasos.length,
-      pasos: pasos.map((p, i) => ({
-        paso: i + 1,
-        nombre: p.nombre,
-        tipo_transicion: p.tipo_transicion,
-        ...(p.tipo_transicion === 'TEMPORIZADO' ? { tiempo_ms: Number(p.tiempo_ms) } : {}),
-        ...(p.tipo_transicion === 'CONDICIONAL' ? {
-          condicion: {
-            sensor: p.condicion_sensor,
-            valor: Number(p.condicion_valor),
-            timeout_ms: Number(p.condicion_timeout_ms)
-          }
-        } : {}),
-        acciones_encender: p.acciones_encender,
-        acciones_apagar: p.acciones_apagar
-      }))
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      handleJsonChange(event.target.result);
+      setPerfilNombre(file.name.replace('.json', ''));
     };
+    reader.readAsText(file);
   };
 
-  // Escuchar si algún equipo seleccionado responde con su ACK por MQTT
-  useEffect(() => {
-    Object.keys(selectedTargets).forEach(mac => {
-      if (selectedTargets[mac] && fleet[mac]?.logicaAck) {
-        setAckResultado(fleet[mac].logicaAck);
-      }
-    });
-  }, [fleet, selectedTargets]);
-
-  // TRANSMITIR LÓGICA AL HARDWARE
-  const handleTransmitirLogica = () => {
+  // Despliegue de Binario .BIN
+  const handleExecuteFotaBin = () => {
     const targets = filteredMacs.filter((mac) => selectedTargets[mac]);
     if (targets.length === 0) {
-      alert('Debes seleccionar al menos un equipo destino de la lista derecha.');
+      alert('Debes seleccionar al menos un equipo destino.');
       return;
     }
 
-    const compiledJson = compilarJsonReceta();
-    if (!confirm(`¿Confirmas transmitir esta lógica (${pasos.length} pasos) hacia ${targets.length} equipo(s)?`)) return;
+    if (!confirm(`¿Confirmas la transmisión de firmware binario hacia ${targets.length} equipo(s)?`)) return;
 
     setTransmitting(true);
-    setStatusMsg(`Compilando y transmitiendo orden a ${targets.length} equipo(s)...`);
-    setAckResultado(null);
+    setStatusMsg(`Transmitiendo orden FOTA (.BIN) hacia ${targets.length} equipo(s)...`);
 
     targets.forEach((mac) => {
       sendCommand(mac, {
-        cmd: 'APPLY_LOGICA_SECUENCIA',
-        receta: compiledJson
+        cmd: 'TRIGGER_FOTA',
+        url: fotaUrl,
+        version: fotaVersion
       });
     });
 
     setTimeout(() => {
       setTransmitting(false);
-      setStatusMsg(`Orden transmitida. Esperando confirmación de almacenamiento en Flash LittleFS...`);
-    }, 1200);
+      setStatusMsg(`¡Orden FOTA (.BIN) transmitida con éxito vía MQTT!`);
+    }, 2000);
+  };
+
+  // Despliegue de Manifiesto JSON a Supabase Storage y LittleFS
+  const handleExecuteFotaJson = async () => {
+    if (jsonError) {
+      alert('Corrige los errores de sintaxis del JSON antes de desplegar.');
+      return;
+    }
+
+    const targets = filteredMacs.filter((mac) => selectedTargets[mac]);
+    if (targets.length === 0) {
+      alert('Debes seleccionar al menos un equipo destino.');
+      return;
+    }
+
+    let parsedJson;
+    try {
+      parsedJson = JSON.parse(jsonText);
+    } catch (e) {
+      alert('Error en JSON: ' + e.message);
+      return;
+    }
+
+    if (!confirm(`¿Confirmas subir este manifiesto a Supabase Storage y desplegarlo en LittleFS para ${targets.length} equipo(s)?`)) {
+      return;
+    }
+
+    setTransmitting(true);
+    setStatusMsg(`Subiendo archivo a Supabase Storage...`);
+
+    try {
+      for (const mac of targets) {
+        const result = await desplegarPerfilJsonFota({
+          mac,
+          perfilNombre,
+          tipo: tipoEquipo,
+          jsonObject: parsedJson,
+          sendCommand
+        });
+
+        if (!result.success) throw new Error(result.error);
+      }
+
+      setStatusMsg(`¡Manifiesto subido a Supabase Storage y transmitido a Flash LittleFS en ${targets.length} equipo(s)!`);
+    } catch (err) {
+      setStatusMsg(`Error durante el despliegue: ${err.message}`);
+    } finally {
+      setTransmitting(false);
+    }
   };
 
   return (
     <div className="space-y-4 font-mono text-xs">
       
-      {/* Cabecera y Selector de Modo FOTA */}
+      {/* Cabecera */}
       <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
         <div>
           <h2 className="text-lg font-bold text-white flex items-center gap-2">
             <Rocket className="w-5 h-5 text-cyan-400" />
-            FOTA & Automation Logic Studio
+            FOTA Cloud Hub Enterprise
           </h2>
           <p className="text-xs text-slate-300 mt-0.5 font-sans">
-            Programación visual de secuencias elásticas paso a paso, perfiles HAL y firmware binario
+            Despliegue y actualización remota de software binario (.BIN) y manifiestos de configuración (.JSON LittleFS)
           </p>
         </div>
 
-        {/* Pestañas Principales */}
+        {/* Selector de Modo */}
         <div className="flex gap-1.5 p-1 bg-slate-950 border border-slate-700 rounded-xl font-bold">
           <button
-            onClick={() => setFotaMode('STUDIO')}
+            onClick={() => setFotaMode('JSON')}
             className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all ${
-              fotaMode === 'STUDIO' ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/30' : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <Cpu className="w-3.5 h-3.5" />
-            <span>⚡ PLC Logic Studio</span>
-          </button>
-
-          <button
-            onClick={() => setFotaMode('JSON_HAL')}
-            className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all ${
-              fotaMode === 'JSON_HAL' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
+              fotaMode === 'JSON' 
+                ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/30' 
+                : 'text-slate-400 hover:text-white'
             }`}
           >
             <FileCode className="w-3.5 h-3.5" />
-            <span>Perfil HAL (.JSON)</span>
+            <span>Manifiestos (.JSON LittleFS)</span>
           </button>
-
+          
           <button
             onClick={() => setFotaMode('BIN')}
             className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all ${
-              fotaMode === 'BIN' ? 'bg-indigo-500 text-white shadow-md shadow-indigo-500/30' : 'text-slate-400 hover:text-white'
+              fotaMode === 'BIN' 
+                ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' 
+                : 'text-slate-400 hover:text-white'
             }`}
           >
             <Layers className="w-3.5 h-3.5" />
-            <span>Firmware (.BIN)</span>
+            <span>Firmware Núcleo (.BIN)</span>
           </button>
         </div>
       </div>
 
       {statusMsg && (
-        <div className="p-3.5 rounded-xl bg-cyan-500/15 border border-cyan-500/40 text-cyan-300 flex items-center gap-2">
+        <div className="p-3.5 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 flex items-center gap-2">
           <CheckCircle2 className="w-4 h-4 shrink-0" />
           <span>{statusMsg}</span>
         </div>
       )}
 
-      {/* CONFIRMACIÓN REAL ACK RECIBIDA DEL ESP32 */}
-      {ackResultado && (
-        <div className="p-3.5 rounded-xl bg-emerald-500/20 border-2 border-emerald-400 text-emerald-300 flex items-center justify-between shadow-xl">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-            <div>
-              <p className="font-bold text-white text-xs">¡CONFIRMACIÓN DE HARDWARE RECIBIDA (ACK OK)!</p>
-              <p className="text-[11px] text-emerald-200">
-                El microcontrolador validó la receta <strong>"{ackResultado.receta}"</strong> y grabó {ackResultado.pasos || pasos.length} pasos ({ackResultado.bytes || 840} bytes) en su Flash LittleFS.
-              </p>
-            </div>
-          </div>
-          <span className="px-2.5 py-1 rounded bg-emerald-500 text-slate-950 font-bold text-[10px]">
-            LITTLEFS GRABADO
-          </span>
-        </div>
-      )}
-
-      {/* CUERPO DEL STUDIO */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         
-        {/* PANEL IZQUIERDO: CONSTRUCTOR DE PASOS (2 COLUMNAS) */}
-        <div className="lg:col-span-2 space-y-4">
+        {/* PANEL IZQUIERDO: CONFIGURADOR DEL PAQUETE */}
+        <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 space-y-4">
           
-          {fotaMode === 'STUDIO' ? (
-            <div className="ultra-glass p-5 rounded-2xl border border-amber-500/30 space-y-4">
-              
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-amber-500/20 pb-3">
-                <div>
-                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                    <Sliders className="w-4 h-4 text-amber-400" />
-                    Editor de Secuencias & Pasos Elásticos
-                  </h3>
-                  <p className="text-[11px] text-slate-400 mt-0.5">
-                    Define acciones inmediatas, esperas en milisegundos o condiciones por sensor.
-                  </p>
-                </div>
-
-                {/* Plantillas Rápidas */}
-                <div className="flex gap-1 p-1 bg-slate-900 border border-slate-700 rounded-lg">
-                  <button
-                    onClick={() => aplicarPlantillaNivel('BASICO')}
-                    className={`px-2 py-1 rounded text-[10px] font-bold ${nivelAvanzado === 'BASICO' ? 'bg-amber-400 text-slate-950' : 'text-slate-400'}`}
-                  >
-                    Básico
-                  </button>
-                  <button
-                    onClick={() => aplicarPlantillaNivel('VEHICULAR')}
-                    className={`px-2 py-1 rounded text-[10px] font-bold ${nivelAvanzado === 'VEHICULAR' ? 'bg-amber-400 text-slate-950' : 'text-slate-400'}`}
-                  >
-                    Vehicular
-                  </button>
-                  <button
-                    onClick={() => aplicarPlantillaNivel('AUTOCLAVE')}
-                    className={`px-2 py-1 rounded text-[10px] font-bold ${nivelAvanzado === 'AUTOCLAVE' ? 'bg-amber-400 text-slate-950' : 'text-slate-400'}`}
-                  >
-                    Autoclave
-                  </button>
-                </div>
+          {fotaMode === 'JSON' ? (
+            /* MODO MANIFIESTO JSON A SUPABASE STORAGE Y LITTLEFS */
+            <>
+              <div className="flex justify-between items-center border-b border-cyan-500/20 pb-2">
+                <h3 className="text-sm font-bold text-amber-300 flex items-center gap-2">
+                  <FileCode className="w-4 h-4 text-amber-400" />
+                  Editor de Manifiesto (.JSON LittleFS)
+                </h3>
+                <label className="cursor-pointer px-2.5 py-1 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-cyan-300 rounded-lg text-[11px] font-bold flex items-center gap-1">
+                  <Upload className="w-3 h-3" />
+                  <span>Cargar .json</span>
+                  <input type="file" accept=".json" onChange={handleFileUpload} className="hidden" />
+                </label>
               </div>
 
-              {/* Parámetros Generales */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>
-                  <label className="text-slate-300 block mb-1">Nombre de la Secuencia / Receta</label>
+                  <label className="block text-slate-300 mb-1">Nombre del Archivo / Perfil</label>
                   <input
                     type="text"
-                    value={recetaNombre}
-                    onChange={(e) => setRecetaNombre(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-white font-bold focus:outline-none focus:border-amber-400"
+                    value={perfilNombre}
+                    onChange={(e) => setPerfilNombre(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-amber-400 font-bold"
                   />
                 </div>
 
                 <div>
-                  <label className="text-slate-300 block mb-1">Enclavamiento Global (Paro Inmediato)</label>
+                  <label className="block text-slate-300 mb-1">Categoría</label>
                   <select
-                    value={sensorParoGlobal}
-                    onChange={(e) => setSensorParoGlobal(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-amber-300 font-bold"
+                    value={tipoEquipo}
+                    onChange={(e) => setTipoEquipo(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-amber-300 focus:outline-none focus:border-amber-400 font-bold"
                   >
-                    <option value="IN4">Entrada IN4 (Seta de Emergencia)</option>
-                    <option value="IN1">Entrada IN1 (Microswitch Puerta)</option>
-                    <option value="SIN_PARO">Sin Enclavamiento Dedicado</option>
+                    <option value="UNIVERSAL_PLC">⚙️ PLC INDUSTRIAL / GENERAL</option>
+                    <option value="VEHICULO">🚗 VEHÍCULO / FLOTA</option>
+                    <option value="AUTOCLAVE">♨️ AUTOCLAVE CLÍNICO</option>
+                    <option value="CAMA_HOSPITALARIA">🛏️ CAMA HOSPITALARIA</option>
                   </select>
                 </div>
               </div>
 
-              {/* LISTA DE PASOS */}
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-cyan-400 font-bold uppercase text-[11px]">
-                    Cadena de Pasos ({pasos.length} pasos):
-                  </span>
-                  <button
-                    type="button"
-                    onClick={handleAddPaso}
-                    className="px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 rounded-lg font-bold flex items-center gap-1"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Agregar Paso</span>
-                  </button>
-                </div>
-
-                <div className="space-y-2.5 max-h-[460px] overflow-y-auto pr-1">
-                  {pasos.map((p, idx) => (
-                    <div key={p.id || idx} className="p-3 bg-slate-950/80 rounded-xl border border-slate-800 space-y-2.5">
-                      <div className="flex justify-between items-center">
-                        <div className="flex items-center gap-2">
-                          <span className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center justify-center font-bold text-[10px]">
-                            {idx + 1}
-                          </span>
-                          <input
-                            type="text"
-                            value={p.nombre}
-                            onChange={(e) => {
-                              const next = [...pasos];
-                              next[idx].nombre = e.target.value;
-                              setPasos(next);
-                            }}
-                            className="bg-transparent border-b border-slate-700 text-white font-bold text-xs focus:outline-none focus:border-cyan-400"
-                          />
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <select
-                            value={p.tipo_transicion}
-                            onChange={(e) => {
-                              const next = [...pasos];
-                              next[idx].tipo_transicion = e.target.value;
-                              setPasos(next);
-                            }}
-                            className="bg-slate-900 border border-slate-700 rounded px-2 py-0.5 text-cyan-300 text-[10px]"
-                          >
-                            <option value="INMEDIATO">⚡ Inmediato (Sin Espera)</option>
-                            <option value="TEMPORIZADO">⏱️ Temporizado (Espera ms)</option>
-                            <option value="CONDICIONAL">🔍 Condicional (Espera Sensor)</option>
-                          </select>
-
-                          {pasos.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => handleRemovePaso(idx)}
-                              className="text-slate-500 hover:text-rose-400 p-1"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Configuración según transición */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-2 bg-slate-900/60 rounded-lg border border-slate-800/80">
-                        {p.tipo_transicion === 'TEMPORIZADO' && (
-                          <div className="sm:col-span-2 flex items-center gap-2">
-                            <span className="text-slate-400">Tiempo de Espera:</span>
-                            <input
-                              type="number"
-                              step="100"
-                              value={p.tiempo_ms}
-                              onChange={(e) => {
-                                const next = [...pasos];
-                                next[idx].tiempo_ms = Number(e.target.value);
-                                setPasos(next);
-                              }}
-                              className="w-28 bg-slate-950 border border-slate-700 rounded px-2 py-0.5 text-amber-300 font-bold"
-                            />
-                            <span className="text-slate-400">ms ({p.tiempo_ms / 1000} segundos)</span>
-                          </div>
-                        )}
-
-                        {p.tipo_transicion === 'CONDICIONAL' && (
-                          <div className="sm:col-span-2 grid grid-cols-3 gap-2">
-                            <div>
-                              <span className="text-slate-400 block text-[9px]">Sensor a Esperar</span>
-                              <select
-                                value={p.condicion_sensor}
-                                onChange={(e) => {
-                                  const next = [...pasos];
-                                  next[idx].condicion_sensor = e.target.value;
-                                  setPasos(next);
-                                }}
-                                className="w-full bg-slate-950 border border-slate-700 rounded p-1 text-white text-[10px]"
-                              >
-                                {[1, 2, 3, 4, 5, 6, 7, 8].map(n => <option key={n} value={`IN${n}`}>Entrada IN{n}</option>)}
-                              </select>
-                            </div>
-                            <div>
-                              <span className="text-slate-400 block text-[9px]">Valor Esperado</span>
-                              <select
-                                value={p.condicion_valor}
-                                onChange={(e) => {
-                                  const next = [...pasos];
-                                  next[idx].condicion_valor = Number(e.target.value);
-                                  setPasos(next);
-                                }}
-                                className="w-full bg-slate-950 border border-slate-700 rounded p-1 text-emerald-400 text-[10px] font-bold"
-                              >
-                                <option value={1}>1 (Cerrado / Activo)</option>
-                                <option value={0}>0 (Abierto / Desactivado)</option>
-                              </select>
-                            </div>
-                            <div>
-                              <span className="text-slate-400 block text-[9px]">Timeout Límite</span>
-                              <input
-                                type="number"
-                                step="500"
-                                value={p.condicion_timeout_ms}
-                                onChange={(e) => {
-                                  const next = [...pasos];
-                                  next[idx].condicion_timeout_ms = Number(e.target.value);
-                                  setPasos(next);
-                                }}
-                                className="w-full bg-slate-950 border border-slate-700 rounded p-1 text-amber-300 text-[10px]"
-                              />
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Botones de Relés */}
-                        <div>
-                          <span className="text-slate-400 block text-[10px] mb-1">Encender Relés en este paso:</span>
-                          <div className="flex flex-wrap gap-1">
-                            {[1, 2, 3, 4, 5, 6, 7, 8].map(num => {
-                              const key = `R${num}`;
-                              const activo = p.acciones_encender.includes(key);
-                              return (
-                                <button
-                                  key={num}
-                                  type="button"
-                                  onClick={() => {
-                                    const next = [...pasos];
-                                    if (activo) next[idx].acciones_encender = p.acciones_encender.filter(x => x !== key);
-                                    else next[idx].acciones_encender = [...p.acciones_encender, key];
-                                    setPasos(next);
-                                  }}
-                                  className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-all ${
-                                    activo ? 'bg-emerald-500 text-slate-950 border-emerald-400' : 'bg-slate-950 text-slate-400 border-slate-800'
-                                  }`}
-                                >
-                                  R{num}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-
-                        <div>
-                          <span className="text-slate-400 block text-[10px] mb-1">Apagar Relés en este paso:</span>
-                          <div className="flex flex-wrap gap-1">
-                            {[1, 2, 3, 4, 5, 6, 7, 8].map(num => {
-                              const key = `R${num}`;
-                              const activo = p.acciones_apagar.includes(key);
-                              return (
-                                <button
-                                  key={num}
-                                  type="button"
-                                  onClick={() => {
-                                    const next = [...pasos];
-                                    if (activo) next[idx].acciones_apagar = p.acciones_apagar.filter(x => x !== key);
-                                    else next[idx].acciones_apagar = [...p.acciones_apagar, key];
-                                    setPasos(next);
-                                  }}
-                                  className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-all ${
-                                    activo ? 'bg-rose-500 text-white border-rose-400' : 'bg-slate-950 text-slate-400 border-slate-800'
-                                  }`}
-                                >
-                                  R{num}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+              <div>
+                <label className="block text-slate-300 mb-1 flex justify-between">
+                  <span>Estructura JSON (Se graba en LittleFS vía Supabase Storage):</span>
+                  {jsonError && <span className="text-rose-400 font-bold">{jsonError}</span>}
+                </label>
+                <textarea
+                  rows={14}
+                  value={jsonText}
+                  onChange={(e) => handleJsonChange(e.target.value)}
+                  className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-cyan-300 font-mono text-[11px] leading-relaxed focus:outline-none focus:border-cyan-400"
+                  spellCheck="false"
+                />
               </div>
 
-            </div>
-          ) : fotaMode === 'JSON_HAL' ? (
-            <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 space-y-4">
-              <h3 className="text-sm font-bold text-cyan-300">Editor Raw de Perfil HAL (.JSON)</h3>
-              <textarea
-                rows={16}
-                value={rawJsonText}
-                onChange={(e) => setRawJsonText(e.target.value)}
-                className="w-full p-3 bg-slate-950 border border-slate-800 rounded-xl text-cyan-300 font-mono text-[11px] leading-relaxed focus:outline-none"
-              />
-            </div>
+              <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800 text-slate-400 text-[10px] space-y-1">
+                <p>🔹 Este archivo se almacena en el bucket <strong>'firmwares'</strong> de Supabase Storage.</p>
+                <p>🔹 El microcontrolador descarga el archivo por HTTPS y lo graba en su partición interna Flash.</p>
+              </div>
+            </>
           ) : (
-            <div className="ultra-glass p-5 rounded-2xl border border-indigo-500/30 space-y-4">
-              <h3 className="text-sm font-bold text-white">Parámetros del Binario C++ (.BIN)</h3>
-              <input
-                type="text"
-                value={fotaUrl}
-                onChange={(e) => setFotaUrl(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white"
-              />
-            </div>
+            /* MODO BINARIO C++ */
+            <>
+              <h3 className="text-sm font-bold text-white flex items-center gap-2 border-b border-cyan-500/20 pb-2">
+                <Layers className="w-4 h-4 text-cyan-400" />
+                Parámetros del Firmware Binario (.BIN)
+              </h3>
+
+              <div>
+                <label className="block text-xs text-slate-300 mb-1">Versión del Núcleo</label>
+                <input
+                  type="text"
+                  value={fotaVersion}
+                  onChange={(e) => setFotaVersion(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-cyan-400"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs text-slate-300 mb-1">URL Pública del Binario (.BIN)</label>
+                <input
+                  type="text"
+                  value={fotaUrl}
+                  onChange={(e) => setFotaUrl(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-cyan-400"
+                />
+              </div>
+
+              <div className="p-4 rounded-xl border border-dashed border-slate-700 bg-slate-950/40 text-center">
+                <Upload className="w-6 h-6 text-cyan-400 mx-auto mb-2" />
+                <p className="text-xs text-slate-300 font-sans font-semibold">Binario C++ con Doble Partición OTA</p>
+                <p className="text-[10px] text-slate-500 mt-1">El ESP32 validará la integridad antes de reiniciar y cuenta con rollback seguro si falla.</p>
+              </div>
+            </>
           )}
 
         </div>
@@ -582,17 +318,25 @@ export default function FotaHubView({ fleet, sendCommand }) {
         <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 space-y-4 flex flex-col justify-between">
           <div>
             <div className="flex justify-between items-center mb-3">
-              <h3 className="text-sm font-bold text-white">Equipos Destino ({filteredMacs.length})</h3>
+              <h3 className="text-sm font-bold text-white">
+                Equipos Destino ({filteredMacs.length})
+              </h3>
               <div className="flex gap-1.5">
                 <button
+                  onClick={() => setFilterOnline('ALL')}
+                  className={`px-2 py-1 rounded text-[10px] ${filterOnline === 'ALL' ? 'bg-cyan-500 text-slate-950 font-bold' : 'bg-slate-900 text-slate-400'}`}
+                >
+                  TODOS
+                </button>
+                <button
                   onClick={() => setFilterOnline('ONLINE')}
-                  className={`px-2 py-0.5 rounded text-[10px] font-bold ${filterOnline === 'ONLINE' ? 'bg-emerald-500 text-slate-950' : 'bg-slate-900 text-slate-400'}`}
+                  className={`px-2 py-1 rounded text-[10px] ${filterOnline === 'ONLINE' ? 'bg-emerald-500 text-slate-950 font-bold' : 'bg-slate-900 text-slate-400'}`}
                 >
                   ONLINE
                 </button>
                 <button
                   onClick={toggleSelectAll}
-                  className="px-2 py-0.5 bg-amber-500/20 text-amber-300 rounded text-[10px] font-bold"
+                  className="px-2 py-1 bg-amber-500/20 text-amber-300 rounded text-[10px] font-bold"
                 >
                   Invertir
                 </button>
@@ -601,18 +345,21 @@ export default function FotaHubView({ fleet, sendCommand }) {
 
             <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
               {filteredMacs.length === 0 ? (
-                <div className="p-4 text-center text-slate-400">No hay equipos en línea.</div>
+                <div className="p-4 text-center text-slate-400">
+                  No hay equipos disponibles para este filtro.
+                </div>
               ) : (
                 filteredMacs.map((mac) => {
                   const dev = fleet[mac];
                   const isOnline = Date.now() - (dev?.lastSeen || 0) < 18000;
                   const checked = !!selectedTargets[mac];
+                  const devTipo = dev?.meta?.tipo || 'UNIVERSAL_PLC';
 
                   return (
                     <label
                       key={mac}
                       className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
-                        checked ? 'bg-amber-950/40 border-amber-400' : 'bg-slate-900/60 border-slate-800'
+                        checked ? 'bg-cyan-950/40 border-cyan-400' : 'bg-slate-900/60 border-slate-800'
                       }`}
                     >
                       <div className="flex items-center gap-3">
@@ -620,11 +367,16 @@ export default function FotaHubView({ fleet, sendCommand }) {
                           type="checkbox"
                           checked={checked}
                           onChange={(e) => setSelectedTargets({ ...selectedTargets, [mac]: e.target.checked })}
-                          className="w-4 h-4 accent-amber-400"
+                          className="w-4 h-4 accent-cyan-400"
                         />
                         <div>
-                          <p className="text-xs font-bold text-white">{dev?.meta?.alias || `EQUIPO [${mac.slice(-4)}]`}</p>
-                          <p className="text-[10px] text-slate-400">MAC: {mac}</p>
+                          <p className="text-xs font-bold text-white flex items-center gap-1.5">
+                            {dev?.meta?.alias || `EQUIPO [${mac.slice(-4)}]`}
+                            <span className="text-[9px] px-1 rounded bg-slate-800 text-cyan-300">
+                              {devTipo}
+                            </span>
+                          </p>
+                          <p className="text-[10px] text-slate-400">MAC: {mac} • FW: {dev?.esquema?.fw || 'v8.0'}</p>
                         </div>
                       </div>
 
@@ -640,45 +392,50 @@ export default function FotaHubView({ fleet, sendCommand }) {
             </div>
           </div>
 
-          {/* BOTÓN TRANSMISOR */}
+          {/* BOTÓN MAESTRO DE ACCIÓN */}
           <div>
-            {fotaMode === 'STUDIO' ? (
+            {fotaMode === 'JSON' ? (
               <button
-                onClick={handleTransmitirLogica}
-                disabled={transmitting}
+                onClick={handleExecuteFotaJson}
+                disabled={transmitting || Boolean(jsonError)}
                 className="w-full py-3.5 bg-gradient-to-r from-amber-500 via-emerald-500 to-teal-500 hover:opacity-90 text-slate-950 font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-500/25 disabled:opacity-50"
               >
                 {transmitting ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Validando en Microcontrolador...</span>
+                    <span>Subiendo a Supabase Storage y Transmitiendo...</span>
                   </>
                 ) : (
                   <>
                     <Send className="w-4 h-4" />
-                    <span>⚡ TRANSMITIR Y VALIDAR EN PLC</span>
+                    <span>⚡ SUBIR A SUPABASE STORAGE Y DESPLEGAR A LITTLEFS</span>
                   </>
                 )}
               </button>
-            ) : fotaMode === 'JSON_HAL' ? (
-              <button
-                onClick={() => alert('Usa el studio visual para compilar.')}
-                className="w-full py-3 bg-cyan-600 text-white font-bold rounded-xl"
-              >
-                Desplegar Archivo HAL
-              </button>
             ) : (
-              <button
-                onClick={() => sendCommand('ALL', { cmd: 'TRIGGER_FOTA', url: fotaUrl })}
-                className="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl"
-              >
-                Transmitir Binario (.BIN)
-              </button>
+              <ClinicalTooltip title={CLINICAL_HELP.btn_fota_trigger.title} description={CLINICAL_HELP.btn_fota_trigger.desc} badge={CLINICAL_HELP.btn_fota_trigger.badge}>
+                <button
+                  onClick={handleExecuteFotaBin}
+                  disabled={transmitting}
+                  className="w-full py-3.5 bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:opacity-90 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/25 disabled:opacity-50"
+                >
+                  {transmitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Transmitiendo Binario OTA...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Rocket className="w-4 h-4" />
+                      <span>🚀 TRANSMITIR ACTUALIZACIÓN BINARIA (.BIN)</span>
+                    </>
+                  )}
+                </button>
+              </ClinicalTooltip>
             )}
           </div>
 
         </div>
-
       </div>
     </div>
   );
