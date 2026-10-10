@@ -5,8 +5,8 @@ const MQTT_USER = 'admin_autoclave';
 const MQTT_PASS = '24331973';
 
 // =========================================================================
-// MULTIPLEXOR MULTI-PESTAÑA (LEADER ELECTION VIA BROADCASTCHANNEL)
-// Comparte 1 SOLA conexión real a HiveMQ entre todas las pestañas abiertas
+// MULTIPLEXOR INSTANTÁNEO (FAST-ELECTION BROADCASTCHANNEL)
+// Conexión inmediata a HiveMQ sin retrasos artificiales de temporizador
 // =========================================================================
 
 export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
@@ -28,22 +28,21 @@ export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
   const startMqttConnection = () => {
     if (mqttClient) return;
 
-    // ClientID único aleatorio para evitar expulsión en HiveMQ Cloud
-    const clientId = 'SCADA_WEB_' + Math.random().toString(36).substring(2, 10);
+    const clientId = 'SCADA_' + Math.random().toString(36).substring(2, 10);
     
     mqttClient = mqtt.connect(BROKER_URL, {
       clientId,
       username: MQTT_USER,
       password: MQTT_PASS,
       clean: true,
-      keepalive: 15,          // Ping cada 15s: evita que el balanceador corte el socket
-      reschedulePings: true,  // Reinicia contador con cada mensaje entrante
-      connectTimeout: 10000,  // 10s de tolerancia TLS
-      reconnectPeriod: 2000   // Reconexión rápida en 2s
+      keepalive: 15,          // Ping cada 15s para evitar cortes de balanceador
+      reschedulePings: true,
+      connectTimeout: 8000,
+      reconnectPeriod: 2000
     });
 
     mqttClient.on('connect', () => {
-      console.log('[MQTT LEADER] Conectado exitosamente a HiveMQ Cloud 8884');
+      console.log('[MQTT] Conexión instantánea activa con HiveMQ Cloud');
       if (onStatusChange) onStatusChange(true);
 
       // Suscripciones maestras
@@ -55,8 +54,6 @@ export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
       mqttClient.subscribe('autoclave_med_2026/+/i2c_report');
       mqttClient.subscribe('autoclave_med_2026/+/hardware_scan');
       mqttClient.subscribe('autoclave_med_2026/+/hw_profile');
-
-      // CANAL DE CONFIRMACIÓN DEL BLOQUE LÓGICO FOTA
       mqttClient.subscribe('autoclave_med_2026/+/logica/ack');
 
       if (broadcast) {
@@ -65,11 +62,9 @@ export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
     });
 
     mqttClient.on('error', (err) => {
-      console.warn('[MQTT LEADER ERROR]', err?.message || err);
+      console.warn('[MQTT ERROR]', err?.message || err);
       if (err && err.message && err.message.includes('Keepalive timeout')) {
-        try {
-          mqttClient.reconnect();
-        } catch (e) {}
+        try { mqttClient.reconnect(); } catch (e) {}
       }
       if (onStatusChange) onStatusChange(false);
       if (broadcast) broadcast.postMessage({ type: 'STATUS_UPDATE', status: false });
@@ -146,17 +141,18 @@ export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
       }
     };
 
+    // COMPROBACIÓN ULTRA-RÁPIDA (80ms en lugar de 1200ms)
     setTimeout(() => {
-      if (Date.now() - lastLeaderPulse > 1800) {
+      if (Date.now() - lastLeaderPulse > 400) {
+        electAsLeader();
+      }
+    }, 80);
+
+    checkLeaderTimer = setInterval(() => {
+      if (!isLeader && Date.now() - lastLeaderPulse > 2200) {
         electAsLeader();
       }
     }, 1200);
-
-    checkLeaderTimer = setInterval(() => {
-      if (!isLeader && Date.now() - lastLeaderPulse > 2600) {
-        electAsLeader();
-      }
-    }, 1500);
 
     window.addEventListener('beforeunload', () => {
       if (isLeader && broadcast) {
