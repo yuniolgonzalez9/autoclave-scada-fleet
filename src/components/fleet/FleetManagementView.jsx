@@ -3,20 +3,23 @@ import { supabase } from '../../services/supabase';
 import { 
   Building2, 
   Cpu, 
-  RotateCcw, 
   CheckCircle2, 
   Settings,
   Car,
   Activity,
-  Key,
   Zap,
-  Volume2,
   Wrench,
-  Search,
-  Sparkles
+  Sparkles,
+  Layers,
+  Network,
+  Sliders,
+  ShieldAlert,
+  HelpCircle,
+  Plus,
+  Trash2
 } from 'lucide-react';
 
-// CATÁLOGO MAESTRO EMBEBIDO DE 81 MODELOS REALES (CARGA INSTANTÁNEA SIN FALLOS)
+// CATÁLOGO MAESTRO EMBEBIDO DE MÁQUINAS CLÍNICAS Y FLOTA
 const CATALOGO_MAESTRO = {
   VEHICULO: {
     HYUNDAI: ['Staria Ambulancia / Van', 'Starex / H-1 / Grand Starex', 'Porter II / H-100 Taller', 'Tucson', 'Santa Fe', 'Elantra', 'Accent', 'Sonata'],
@@ -58,10 +61,81 @@ const CATALOGO_MAESTRO = {
   }
 };
 
+// PLACAS PRE-FABRICADAS COMERCIALES CON ESQUEMÁTICO CONOCIDO
+const PLACAS_PREFABRICADAS = {
+  HKL_EA8: {
+    nombre: 'Hankerila HKL-EA8 Industrial',
+    desc: 'ESP32 16MB + Ethernet LAN8720 + I2C (0x24 Relés, 0x26 Opto, 0x48 ADC ADS1115)',
+    uplink: 'ETHERNET_LAN8720',
+    sda: 4,
+    scl: 5,
+    reles: 8,
+    entradas: 8,
+    adc: 4
+  },
+  KINCONY_A8: {
+    nombre: 'Kincony KC868-A8 PLC',
+    desc: 'ESP32 + Ethernet LAN8720 + RS485 + 8 Relés Directos + 8 Entradas Opto',
+    uplink: 'ETHERNET_LAN8720',
+    sda: 4,
+    scl: 15,
+    reles: 8,
+    entradas: 8,
+    adc: 4
+  },
+  OLIMEX_EVB: {
+    nombre: 'Olimex ESP32-EVB Gateway',
+    desc: 'ESP32 + Ethernet LAN8720 + 2 Relés 10A + Bus CAN + Ranura MicroSD',
+    uplink: 'ETHERNET_LAN8720',
+    sda: 13,
+    scl: 16,
+    reles: 2,
+    entradas: 2,
+    adc: 2
+  },
+  LILYGO_T_RELAY: {
+    nombre: 'LilyGO T-Relay 8 Canales',
+    desc: 'ESP32 WiFi/BLE + 8 Relés Optoacoplados Directos',
+    uplink: 'WIFI',
+    sda: 21,
+    scl: 22,
+    reles: 8,
+    entradas: 4,
+    adc: 2
+  },
+  GENERIC_DEVKIT: {
+    nombre: 'ESP32 DevKit Genérico / Custom',
+    desc: 'Placa estándar de 30 o 38 pines con conexionado libre de taller',
+    uplink: 'WIFI',
+    sda: 21,
+    scl: 22,
+    reles: 4,
+    entradas: 4,
+    adc: 2
+  }
+};
+
 export default function FleetManagementView({ fleet, sendCommand, onSelectDevice }) {
   const [mac, setMac] = useState('');
   const [alias, setAlias] = useState('');
   const [cliente, setCliente] = useState('');
+
+  // 1. Selección de Modalidad de Hardware
+  const [modoHardware, setModoHardware] = useState('PREFABRICADO'); // 'PREFABRICADO' o 'LIBRE_DIY'
+  const [placaPrefabricada, setPlacaPrefabricada] = useState('HKL_EA8');
+
+  // 2. Parámetros para Modo Libre / Genérico (DIY)
+  const [uplinkLibre, setUplinkLibre] = useState('ETHERNET_LAN8720'); // 'ETHERNET_LAN8720', 'ETHERNET_W5500', 'WIFI'
+  const [pinSda, setPinSda] = useState(21);
+  const [pinScl, setPinScl] = useState(22);
+  const [pinesLibres, setPinesLibres] = useState([
+    { gpio: 2, rol: 'SALIDA_DIGITAL', nombre: 'Relé Principal 1' },
+    { gpio: 4, rol: 'SALIDA_DIGITAL', nombre: 'Relé Principal 2' },
+    { gpio: 15, rol: 'ENTRADA_PULLUP', nombre: 'Sensor de Puerta' },
+    { gpio: 34, rol: 'ADC_ANALOGICO', nombre: 'Transductor Presión 0-3.3V' }
+  ]);
+
+  // 3. Máquina e Identidad
   const [tipo, setTipo] = useState('VEHICULO');
   const [marca, setMarca] = useState('HYUNDAI');
   const [modelo, setModelo] = useState('Staria Ambulancia / Van');
@@ -73,7 +147,7 @@ export default function FleetManagementView({ fleet, sendCommand, onSelectDevice
 
   const macList = Object.keys(fleet);
 
-  // Derivación de opciones del catálogo
+  // Derivación de opciones del catálogo de máquinas
   const tiposDisponibles = Object.keys(CATALOGO_MAESTRO);
   const marcasDisponibles = Object.keys(CATALOGO_MAESTRO[tipo] || {});
   const modelosDisponibles = (CATALOGO_MAESTRO[tipo] && CATALOGO_MAESTRO[tipo][marca]) || [];
@@ -93,26 +167,44 @@ export default function FleetManagementView({ fleet, sendCommand, onSelectDevice
     setModelo(modelos[0] || '');
   };
 
-  // Al seleccionar un equipo de la lista
+  // Cargar equipo de la lista al tocarlo
   const handleSelectToEdit = (deviceMac) => {
     setSelectedMacForTest(deviceMac);
     const dev = fleet[deviceMac];
     const cfg = dev?.meta?.config_deseada || {};
 
+    setMac(deviceMac);
+    setAlias(dev?.meta?.alias || `EQUIPO [${deviceMac.slice(-4)}]`);
+    setCliente(dev?.meta?.cliente || 'Central Hospitalaria');
+
+    // Cargar modo de hardware si existía
+    if (cfg.modo_hardware) setModoHardware(cfg.modo_hardware);
+    if (cfg.placa_prefabricada) setPlacaPrefabricada(cfg.placa_prefabricada);
+    if (cfg.pines_libres) setPinesLibres(cfg.pines_libres);
+
     const devTipo = cfg.tipo || dev?.meta?.tipo || dev?.datos?.tipo || 'VEHICULO';
     const devMarca = cfg.marca || dev?.meta?.marca || 'HYUNDAI';
     const devModelo = cfg.modelo || dev?.meta?.modelo || 'Staria Ambulancia / Van';
 
-    setMac(deviceMac);
-    setAlias(dev?.meta?.alias || `EQUIPO [${deviceMac.slice(-4)}]`);
-    setCliente(dev?.meta?.cliente || 'Base Central');
     setTipo(devTipo);
     setMarca(devMarca);
     setModelo(devModelo);
     setStarterMs(cfg.starter_ms || 1200);
   };
 
-  // Guardar configuración completa y propagar al ESP32
+  // Agregar pin a la lista libre DIY
+  const handleAddPinLibre = () => {
+    setPinesLibres([
+      ...pinesLibres,
+      { gpio: 25, rol: 'SALIDA_DIGITAL', nombre: `Salida GPIO 25` }
+    ]);
+  };
+
+  const handleRemovePinLibre = (index) => {
+    setPinesLibres(pinesLibres.filter((_, i) => i !== index));
+  };
+
+  // GUARDAR PROVISIÓN DE HARDWARE Y PROPAGAR AL ESP32
   const handleSaveDevice = async (e) => {
     e.preventDefault();
     const cleanMac = mac.trim().toUpperCase().replace(/[:\-]/g, '');
@@ -121,7 +213,14 @@ export default function FleetManagementView({ fleet, sendCommand, onSelectDevice
     setSubmitting(true);
     setMsg('');
 
+    // Estructura completa de aprovisionamiento
     const configPayload = {
+      modo_hardware: modoHardware,
+      placa_prefabricada: modoHardware === 'PREFABRICADO' ? placaPrefabricada : null,
+      uplink_red: modoHardware === 'PREFABRICADO' ? PLACAS_PREFABRICADAS[placaPrefabricada]?.uplink : uplinkLibre,
+      i2c_sda: modoHardware === 'PREFABRICADO' ? PLACAS_PREFABRICADAS[placaPrefabricada]?.sda : Number(pinSda),
+      i2c_scl: modoHardware === 'PREFABRICADO' ? PLACAS_PREFABRICADAS[placaPrefabricada]?.scl : Number(pinScl),
+      pines_libres: modoHardware === 'LIBRE_DIY' ? pinesLibres : [],
       tipo,
       marca,
       modelo,
@@ -138,29 +237,26 @@ export default function FleetManagementView({ fleet, sendCommand, onSelectDevice
     };
 
     try {
-      // 1. Guardar en Supabase
+      // 1. Guardar en Supabase asignaciones_equipos
       await supabase.from('asignaciones_equipos').upsert(metaPayload, { onConflict: 'mac' });
 
-      // 2. Orden de Reconfiguración Dinámica al ESP32 por MQTT (LittleFS)
+      // 2. Orden directa de aprovisionamiento de silicio al ESP32 por MQTT
       sendCommand(cleanMac, {
-        cmd: 'APPLY_HAL_MAP',
-        tipo,
-        marca,
-        modelo,
-        starter_ms: Number(starterMs)
+        cmd: 'APPLY_HARDWARE_PROVISION',
+        provision: configPayload
       });
 
-      // 3. Orden de actualización de metadatos
+      // 3. Actualizar metadatos
       sendCommand(cleanMac, { cmd: 'SET_META', ...metaPayload });
 
-      // 4. Actualización forzada en memoria local de la Web
+      // 4. Actualizar memoria local de la web
       if (fleet[cleanMac]) {
         fleet[cleanMac].meta = Object.assign(fleet[cleanMac].meta || {}, metaPayload);
         if (!fleet[cleanMac].datos) fleet[cleanMac].datos = {};
         fleet[cleanMac].datos.tipo = tipo;
       }
 
-      setMsg(`¡[${cleanMac}] configurado con éxito como [${tipo} - ${marca} ${modelo}]!`);
+      setMsg(`¡Hardware [${cleanMac}] aprovisionado con éxito en modo [${modoHardware === 'PREFABRICADO' ? PLACAS_PREFABRICADAS[placaPrefabricada]?.nombre : 'Placa Libre DIY'}]!`);
     } catch (err) {
       setMsg('Error guardando en Supabase: ' + err.message);
     } finally {
@@ -168,33 +264,18 @@ export default function FleetManagementView({ fleet, sendCommand, onSelectDevice
     }
   };
 
-  // Pruebas físicas en directo
-  const testRelay = (canal, val) => {
-    if (!selectedMacForTest) return alert('Selecciona un equipo de la lista primero');
-    sendCommand(selectedMacForTest, { cmd: 'SET_RELAY', canal, val });
-  };
-
-  const testPulseStarter = () => {
-    if (!selectedMacForTest) return alert('Selecciona un equipo de la lista primero');
-    testRelay(2, true);
-    setTimeout(() => testRelay(2, false), starterMs);
-  };
-
-  const testResetAlarm = () => {
-    if (!selectedMacForTest) return alert('Selecciona un equipo de la lista primero');
-    sendCommand(selectedMacForTest, { cmd: 'RESET_ALARMA' });
-  };
-
   return (
     <div className="space-y-4 font-mono text-xs">
+      
+      {/* Cabecera */}
       <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 flex justify-between items-center">
         <div>
           <h2 className="text-lg font-bold text-white flex items-center gap-2">
             <Building2 className="w-5 h-5 text-cyan-400" />
-            Centro Maestro de Asignación & Configuración de Flota
+            Centro de Provisión de Hardware & Gestión de Flota
           </h2>
           <p className="text-xs text-slate-300 mt-0.5 font-sans">
-            Configura la identidad y comportamiento de cada ESP32 (Vehículo, Autoclave, Cama o PLC). El hardware reconfigura su Flash y adapta la cabina en tiempo real.
+            Configura placas comerciales pre-fabricadas (HKL-EA8, Kincony, etc.) o mapea desde cero cualquier ESP32 libre pin a pin antes de operar.
           </p>
         </div>
       </div>
@@ -208,12 +289,12 @@ export default function FleetManagementView({ fleet, sendCommand, onSelectDevice
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         
-        {/* PANEL IZQUIERDO: CONFIGURADOR DIRECTO */}
-        <form onSubmit={handleSaveDevice} className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 space-y-3.5">
+        {/* PANEL IZQUIERDO: FORMULARIO DE APROVISIONAMIENTO MAESTRO */}
+        <form onSubmit={handleSaveDevice} className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 space-y-4">
           <div className="flex justify-between items-center border-b border-cyan-500/20 pb-2">
             <h3 className="text-sm font-bold text-white flex items-center gap-2">
               <Cpu className="w-4 h-4 text-cyan-400" />
-              {selectedMacForTest ? `Configurar Hardware [${selectedMacForTest}]` : '+ Registrar y Asignar Equipo'}
+              {selectedMacForTest ? `Aprovisionar Hardware [${selectedMacForTest}]` : '+ Registrar y Configurar Dispositivo'}
             </h3>
             <span className={`px-2 py-0.5 rounded text-[10px] font-bold border flex items-center gap-1 ${
               tipo === 'VEHICULO' ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' : 'bg-cyan-500/20 text-cyan-300 border-cyan-400'
@@ -224,7 +305,7 @@ export default function FleetManagementView({ fleet, sendCommand, onSelectDevice
           </div>
 
           <div>
-            <label className="block text-slate-300 mb-1">Dirección MAC Física del ESP32</label>
+            <label className="block text-slate-300 mb-1">Dirección MAC Física del Dispositivo</label>
             <input
               type="text"
               required
@@ -235,11 +316,187 @@ export default function FleetManagementView({ fleet, sendCommand, onSelectDevice
             />
           </div>
 
-          {/* SELECTORES DE TIPO, MARCA Y MODELO (CARGA INMEDIATA GARANTIZADA) */}
+          {/* ========================================================================= */}
+          {/* SECCIÓN 1: SELECCIÓN DE MODALIDAD (PRE-FABRICADO vs LIBRE DIY)            */}
+          {/* ========================================================================= */}
+          <div className="p-3.5 bg-slate-950/90 rounded-xl border border-cyan-500/40 space-y-3">
+            <span className="text-cyan-400 font-bold block text-[11px] uppercase tracking-wider flex items-center gap-1.5">
+              <Layers className="w-4 h-4 text-amber-400" />
+              1. Modalidad de Hardware:
+            </span>
+
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setModoHardware('PREFABRICADO')}
+                className={`py-2 px-3 rounded-xl border font-bold text-xs flex flex-col items-center gap-1 transition-all ${
+                  modoHardware === 'PREFABRICADO'
+                    ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400 shadow-lg shadow-cyan-500/20'
+                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                }`}
+              >
+                <Cpu className="w-4 h-4" />
+                <span>Placa Pre-fabricada</span>
+                <span className="text-[9px] font-normal text-slate-400">(HKL-EA8, Kincony, etc.)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setModoHardware('LIBRE_DIY')}
+                className={`py-2 px-3 rounded-xl border font-bold text-xs flex flex-col items-center gap-1 transition-all ${
+                  modoHardware === 'LIBRE_DIY'
+                    ? 'bg-amber-500/20 text-amber-300 border-amber-400 shadow-lg shadow-amber-500/20'
+                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                }`}
+              >
+                <Wrench className="w-4 h-4" />
+                <span>Placa Libre / DIY</span>
+                <span className="text-[9px] font-normal text-slate-400">(Mapeo Pin a Pin de Cero)</span>
+              </button>
+            </div>
+
+            {/* CASO A: SI ES PLACA PRE-FABRICADA */}
+            {modoHardware === 'PREFABRICADO' ? (
+              <div className="space-y-2 pt-1 border-t border-slate-800">
+                <label className="text-slate-300 block mb-1">Modelo de Placa Comercial</label>
+                <select
+                  value={placaPrefabricada}
+                  onChange={(e) => setPlacaPrefabricada(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-cyan-300 font-bold"
+                >
+                  {Object.keys(PLACAS_PREFABRICADAS).map((k) => (
+                    <option key={k} value={k}>{PLACAS_PREFABRICADAS[k].nombre}</option>
+                  ))}
+                </select>
+                <p className="text-[10px] text-slate-400 bg-slate-900/60 p-2 rounded-lg border border-slate-800">
+                  ℹ️ {PLACAS_PREFABRICADAS[placaPrefabricada]?.desc}
+                </p>
+              </div>
+            ) : (
+              /* CASO B: SI ES PLACA LIBRE / DIY */
+              <div className="space-y-3 pt-1 border-t border-slate-800">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <div>
+                    <label className="text-slate-300 block mb-1">Uplink Red</label>
+                    <select
+                      value={uplinkLibre}
+                      onChange={(e) => setUplinkLibre(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-amber-300 text-[11px]"
+                    >
+                      <option value="ETHERNET_LAN8720">Ethernet LAN8720 (RMII)</option>
+                      <option value="ETHERNET_W5500">Ethernet W5500 (SPI)</option>
+                      <option value="WIFI">Conexión WiFi 2.4GHz</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-slate-300 block mb-1">Pin I2C SDA</label>
+                    <input
+                      type="number"
+                      value={pinSda}
+                      onChange={(e) => setPinSda(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-white text-[11px]"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-slate-300 block mb-1">Pin I2C SCL</label>
+                    <input
+                      type="number"
+                      value={pinScl}
+                      onChange={(e) => setPinScl(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-white text-[11px]"
+                    />
+                  </div>
+                </div>
+
+                {/* Asignación Pin por Pin de GPIOs nativos */}
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-amber-400 font-bold text-[10px] uppercase">
+                      Pines GPIO Declarados ({pinesLibres.length}):
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleAddPinLibre}
+                      className="px-2 py-0.5 bg-amber-500/20 text-amber-300 rounded text-[10px] font-bold border border-amber-500/40 flex items-center gap-1"
+                    >
+                      <Plus className="w-3 h-3" />
+                      <span>Agregar Pin</span>
+                    </button>
+                  </div>
+
+                  <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                    {pinesLibres.map((pinItem, idx) => (
+                      <div key={idx} className="p-2 bg-slate-900 rounded-lg border border-slate-800 flex items-center gap-2">
+                        <div className="w-20">
+                          <span className="text-[9px] text-slate-400 block">GPIO</span>
+                          <input
+                            type="number"
+                            value={pinItem.gpio}
+                            onChange={(e) => {
+                              const next = [...pinesLibres];
+                              next[idx].gpio = Number(e.target.value);
+                              setPinesLibres(next);
+                            }}
+                            className="w-full bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-white text-xs"
+                          />
+                        </div>
+
+                        <div className="w-32">
+                          <span className="text-[9px] text-slate-400 block">Rol del Pin</span>
+                          <select
+                            value={pinItem.rol}
+                            onChange={(e) => {
+                              const next = [...pinesLibres];
+                              next[idx].rol = e.target.value;
+                              setPinesLibres(next);
+                            }}
+                            className="w-full bg-slate-950 border border-slate-700 rounded px-1 py-0.5 text-cyan-300 text-[10px]"
+                          >
+                            <option value="SALIDA_DIGITAL">Salida Digital (Relé)</option>
+                            <option value="ENTRADA_PULLUP">Entrada Digital</option>
+                            <option value="ADC_ANALOGICO">Entrada ADC</option>
+                            <option value="PWM_MOTOR">Salida PWM</option>
+                            <option value="ONE_WIRE">Bus 1-Wire</option>
+                          </select>
+                        </div>
+
+                        <div className="flex-1">
+                          <span className="text-[9px] text-slate-400 block">Nombre del Componente</span>
+                          <input
+                            type="text"
+                            value={pinItem.nombre}
+                            onChange={(e) => {
+                              const next = [...pinesLibres];
+                              next[idx].nombre = e.target.value;
+                              setPinesLibres(next);
+                            }}
+                            placeholder="Ej: Electroválvula Llenado"
+                            className="w-full bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-white text-xs"
+                          />
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleRemovePinLibre(idx)}
+                          className="text-slate-500 hover:text-rose-400 p-1 mt-3"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* ========================================================================= */}
+          {/* SECCIÓN 2: IDENTIDAD CLÍNICA / VEHICULAR (TIPO, MARCA Y MODELO)           */}
+          {/* ========================================================================= */}
           <div className="p-3.5 bg-slate-950/90 rounded-xl border border-cyan-500/40 space-y-3">
             <span className="text-cyan-400 font-bold block text-[11px] uppercase tracking-wider flex items-center gap-1.5">
               <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              1. Selección de Máquina & Comportamiento:
+              2. Comportamiento & Perfil de Máquina:
             </span>
 
             <div>
@@ -247,7 +504,7 @@ export default function FleetManagementView({ fleet, sendCommand, onSelectDevice
               <select
                 value={tipo}
                 onChange={(e) => handleTipoChange(e.target.value)}
-                className="w-full bg-slate-900 border border-cyan-500/60 rounded-lg p-2.5 text-cyan-300 focus:outline-none focus:border-cyan-400 font-bold text-sm"
+                className="w-full bg-slate-900 border border-cyan-500/60 rounded-lg p-2 text-cyan-300 font-bold text-xs"
               >
                 {tiposDisponibles.map((t) => (
                   <option key={t} value={t}>{t.replace('_', ' ')}</option>
@@ -261,7 +518,7 @@ export default function FleetManagementView({ fleet, sendCommand, onSelectDevice
                 <select
                   value={marca}
                   onChange={(e) => handleMarcaChange(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white focus:outline-none"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-xs"
                 >
                   {marcasDisponibles.map((m) => (
                     <option key={m} value={m}>{m.replace('_', ' ')}</option>
@@ -274,7 +531,7 @@ export default function FleetManagementView({ fleet, sendCommand, onSelectDevice
                 <select
                   value={modelo}
                   onChange={(e) => setModelo(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-cyan-200 focus:outline-none"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-cyan-200 text-xs"
                 >
                   {modelosDisponibles.map((mod) => (
                     <option key={mod} value={mod}>{mod}</option>
@@ -299,6 +556,7 @@ export default function FleetManagementView({ fleet, sendCommand, onSelectDevice
             )}
           </div>
 
+          {/* DATOS DE SALA / CLIENTE */}
           <div>
             <label className="block text-slate-300 mb-1">Nombre / Alias del Equipo</label>
             <input
@@ -306,7 +564,7 @@ export default function FleetManagementView({ fleet, sendCommand, onSelectDevice
               required
               value={alias}
               onChange={(e) => setAlias(e.target.value)}
-              placeholder="Ej: Ambulancia Móvil 1 / Quirófano A"
+              placeholder="Ej: Ambulancia Staria Móvil 1 / Quirófano A"
               className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-sans focus:outline-none focus:border-cyan-400"
             />
           </div>
@@ -328,91 +586,20 @@ export default function FleetManagementView({ fleet, sendCommand, onSelectDevice
             disabled={submitting}
             className="w-full py-3 bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:opacity-90 text-white font-bold rounded-xl text-xs shadow-lg shadow-cyan-500/25 uppercase tracking-wider"
           >
-            {submitting ? 'Reconfigurando Microcontrolador...' : '⚡ GUARDAR Y APLICAR COMPORTAMIENTO AL DISPOSITIVO'}
+            {submitting ? 'Aprovisionando Silicio en el ESP32...' : '⚡ APROVISIONAR HARDWARE Y APLICAR AL DISPOSITIVO'}
           </button>
-
-          {/* PRUEBAS FÍSICAS EN DIRECTO */}
-          {selectedMacForTest && (
-            <div className="pt-3 border-t border-slate-800 space-y-2">
-              <span className="text-[11px] text-amber-300 block font-bold uppercase">
-                Pruebas Físicas en Directo [{selectedMacForTest}] ({tipo}):
-              </span>
-              
-              {tipo === 'VEHICULO' ? (
-                <div className="grid grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => testRelay(1, true)}
-                    className="py-2 bg-slate-800 hover:bg-slate-700 border border-amber-500/40 text-amber-300 rounded-lg font-bold flex items-center justify-center gap-1"
-                  >
-                    <Key className="w-3.5 h-3.5" />
-                    <span>Ignición ON</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => testRelay(1, false)}
-                    className="py-2 bg-slate-850 hover:bg-slate-800 border border-slate-700 text-slate-400 rounded-lg font-bold"
-                  >
-                    Ignición OFF
-                  </button>
-                  <button
-                    type="button"
-                    onClick={testPulseStarter}
-                    className="py-2 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 rounded-lg font-bold flex items-center justify-center gap-1"
-                  >
-                    <Zap className="w-3.5 h-3.5" />
-                    <span>Pulso Starter</span>
-                  </button>
-                </div>
-              ) : tipo === 'AUTOCLAVE' ? (
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => testRelay(1, true)}
-                    className="w-full py-2 bg-slate-800 hover:bg-slate-700 border border-cyan-500/40 text-cyan-300 rounded-lg flex items-center justify-center gap-1.5 font-bold"
-                  >
-                    <Zap className="w-3.5 h-3.5" />
-                    <span>Probar Relé 1</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={testResetAlarm}
-                    className="w-full py-2 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 rounded-lg flex items-center justify-center gap-1.5 font-bold"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                    <span>Reset Alarma</span>
-                  </button>
-                </div>
-              ) : (
-                <div className="grid grid-cols-4 gap-1.5">
-                  {[1, 2, 3, 4, 5, 6, 7, 8].map(r => (
-                    <button
-                      key={r}
-                      type="button"
-                      onClick={() => testRelay(r, true)}
-                      className="py-1.5 bg-slate-900 border border-slate-700 text-cyan-300 rounded text-[10px] font-bold hover:bg-slate-800"
-                    >
-                      R{r} ON
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
         </form>
 
         {/* PANEL DERECHO: EQUIPOS EN LA RED */}
         <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 flex flex-col justify-between">
           <div>
-            <div className="flex justify-between items-center mb-2">
-              <h3 className="text-sm font-bold text-white">Equipos en la Red ({macList.length})</h3>
-            </div>
-            <p className="text-[11px] text-slate-400 mb-3">Toca cualquier equipo para editar su tipo, marca o probar sus relés:</p>
+            <h3 className="text-sm font-bold text-white mb-2">Equipos Encontrados en la Red ({macList.length})</h3>
+            <p className="text-[11px] text-slate-400 mb-3">Toca cualquier equipo para asignarle su modalidad o abrir su cabina:</p>
 
-            <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
+            <div className="space-y-2 max-h-[520px] overflow-y-auto pr-1">
               {macList.length === 0 ? (
                 <div className="p-6 text-center text-slate-400">
-                  Esperando que los equipos transmitan por RJ45...
+                  Esperando que los equipos transmitan por red...
                 </div>
               ) : (
                 macList.map((m) => {
@@ -427,6 +614,7 @@ export default function FleetManagementView({ fleet, sendCommand, onSelectDevice
                     'VEHICULO'
                   ).toUpperCase();
 
+                  const devModo = dev?.meta?.config_deseada?.modo_hardware || 'PREFABRICADO';
                   const isVeh = devTipo === 'VEHICULO';
 
                   return (
@@ -450,6 +638,9 @@ export default function FleetManagementView({ fleet, sendCommand, onSelectDevice
                             {isVeh ? <Car className="w-2.5 h-2.5" /> : <Activity className="w-2.5 h-2.5" />}
                             {devTipo}
                           </span>
+                          <span className="text-[8px] px-1 py-0.2 rounded bg-slate-800 text-slate-400 font-mono">
+                            {devModo === 'PREFABRICADO' ? 'COMERCIAL' : 'DIY LIBRE'}
+                          </span>
                         </div>
                         <p className="text-[10px] text-slate-400 mt-0.5">
                           {dev?.meta?.cliente || 'Central'} • MAC: {m} • {dev?.meta?.modelo || 'Estándar'}
@@ -466,7 +657,7 @@ export default function FleetManagementView({ fleet, sendCommand, onSelectDevice
                           type="button"
                           onClick={(e) => { e.stopPropagation(); onSelectDevice(m); }}
                           className="p-1.5 rounded-lg bg-slate-800 text-cyan-300 hover:text-white"
-                          title="Entrar a Cabina / Dashboard"
+                          title="Entrar al Dashboard de este equipo"
                         >
                           <Settings className="w-3.5 h-3.5" />
                         </button>
