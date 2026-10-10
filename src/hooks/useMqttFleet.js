@@ -8,7 +8,7 @@ export function useMqttFleet() {
   const [mqttConnected, setMqttConnected] = useState(false);
   const sendCommandRef = useRef(null);
 
-  // 1. Cargar equipos desde Supabase al arrancar
+  // 1. Cargar equipos registrados desde Supabase al arrancar
   useEffect(() => {
     let isMounted = true;
     const loadRegisteredDevices = async () => {
@@ -26,7 +26,7 @@ export function useMqttFleet() {
               
               if (devMac && !initialFleet[devMac]) {
                 const configDeseada = item.config_deseada || {};
-                const tipoCalculado = configDeseada.tipo || item.tipo || (item.modelo?.toUpperCase().includes('STARIA') ? 'VEHICULO' : 'AUTOCLAVE');
+                const tipoCalculado = configDeseada.tipo || item.tipo || 'AUTOCLAVE';
 
                 initialFleet[devMac] = {
                   mac: devMac,
@@ -45,6 +45,7 @@ export function useMqttFleet() {
                     cfg: { 
                       ciclos: Number(item.ciclos || 0), 
                       lim_mant: Number(item.limite || 200),
+                      alerta_pct: Number(configDeseada.alerta_pct || 80),
                       sp_temp: configDeseada.sp_temp || 121.0,
                       t_ciclo: configDeseada.t_ciclo || 2
                     }
@@ -52,6 +53,7 @@ export function useMqttFleet() {
                   esquema: null,
                   i2cReport: null,
                   hwProfile: null,
+                  logicaAck: null, // Confirmación física de recetas FOTA
                   meta: { ...item, mac: devMac, tipo: tipoCalculado },
                   f0Score: 0.0,
                   history: []
@@ -62,7 +64,7 @@ export function useMqttFleet() {
           });
         }
       } catch (err) {
-        console.warn('[SUPABASE] Carga inicial:', err);
+        console.warn('[SUPABASE] Carga inicial de flota:', err);
       }
     };
 
@@ -70,7 +72,7 @@ export function useMqttFleet() {
     return () => { isMounted = false; };
   }, []);
 
-  // 2. Conexión MQTT
+  // 2. Conexión y escucha MQTT
   useEffect(() => {
     const { client, sendCommand } = connectMqttFleet(
       ({ mac, channel, payload, isRetained }) => {
@@ -85,7 +87,8 @@ export function useMqttFleet() {
             esquema: null,
             i2cReport: null,
             hwProfile: null,
-            meta: { alias: `EQUIPO [${cleanMac.slice(-4)}]`, cliente: 'Hospital', modelo: 'Universal' },
+            logicaAck: null,
+            meta: { alias: `EQUIPO [${cleanMac.slice(-4)}]`, cliente: 'Central', modelo: 'Universal' },
             f0Score: 0.0,
             history: []
           };
@@ -96,7 +99,7 @@ export function useMqttFleet() {
             lastSeen: isFreshStream ? Date.now() : (currentDev.lastSeen || 0)
           };
 
-          // TELEMETRÍA EN VIVO (HKL-EA8 Y AUTOCLAVE)
+          // TELEMETRÍA EN VIVO (HKL-EA8)
           if (channel === 'telemetria') {
             updated.datos = {
               ...(currentDev.datos || {}),
@@ -122,12 +125,20 @@ export function useMqttFleet() {
             updated.history = newHistory;
           }
 
-          // ESCÁNER I2C EN TIEMPO REAL
+          // CAPTURAR EL ACUSE DE RECIBO (ACK) DEL MOTOR DE LÓGICA FOTA
+          if (channel === 'logica') {
+            updated.logicaAck = {
+              ...payload,
+              timestamp: Date.now()
+            };
+          }
+
+          // ESCÁNER I2C FÍSICO
           if (channel === 'i2c_report' || channel === 'hardware_scan') {
             updated.i2cReport = payload;
           }
 
-          // PERFIL DE HARDWARE LITTLEFS
+          // PERFIL DE HARDWARE EN LITTLEFS
           if (channel === 'hw_profile') {
             updated.hwProfile = payload;
           }
@@ -140,7 +151,7 @@ export function useMqttFleet() {
             updated.meta = Object.assign(updated.meta || {}, payload, { mac: cleanMac });
           }
 
-          // GUARDADO ASÍNCRONO DE REPORTES CLÍNICOS
+          // REPORTES DE AUDITORÍA CLÍNICA
           if (channel === 'reporte_paquete') {
             const ciclosAcum = Number(payload?.ciclos_acumulados || payload?.ciclos || 0);
             if (!updated.datos.cfg) updated.datos.cfg = {};
@@ -152,7 +163,7 @@ export function useMqttFleet() {
                   session_id: payload?.session_id || `SES-${cleanMac}-${Date.now()}`,
                   mac: cleanMac,
                   alias: updated.meta?.alias || cleanMac,
-                  cliente: updated.meta?.cliente || 'Hospital Central',
+                  cliente: updated.meta?.cliente || 'Central Hospitalaria',
                   modelo: updated.meta?.modelo || 'Clase B',
                   programa: payload?.programa || '134°C INSTRUMENTAL',
                   hora_encendido: payload?.hora_encendido || '00:00:00',
@@ -170,7 +181,7 @@ export function useMqttFleet() {
                   eventos: payload?.eventos || []
                 }, { onConflict: 'session_id' });
               } catch (e) {
-                console.warn('[SUPABASE] Error guardando paquete:', e);
+                console.warn('[SUPABASE] Error guardando paquete clínico:', e);
               }
             })();
           }
@@ -185,7 +196,7 @@ export function useMqttFleet() {
     return () => { if (client) client.end(); };
   }, []);
 
-  // 3. ENVÍO DE COMANDOS CON ACTUALIZACIÓN OPTIMISTA Y RESPALDO CLOUD
+  // 3. Envío de órdenes y actualización optimista de memoria
   const sendDeviceCommand = (mac, cmd) => {
     const cleanMac = (mac || '').toUpperCase().replace(/[:\-]/g, '');
     if (!cleanMac) return;
@@ -199,7 +210,7 @@ export function useMqttFleet() {
         const newDatos = { ...dev.datos };
         const newCfg = { ...(dev.datos?.cfg || {}) };
 
-        // A. Actualizaciones de Relés y Autoclave
+        // Parámetros de ciclo
         if (cmd.mot_ok !== undefined) {
           newDatos.motor = Boolean(cmd.mot_ok);
           newCfg.mot_ok = Boolean(cmd.mot_ok);
@@ -212,19 +223,19 @@ export function useMqttFleet() {
         if (cmd.sp_temp !== undefined) newCfg.sp_temp = Number(cmd.sp_temp);
         if (cmd.t_ciclo !== undefined) newCfg.t_ciclo = Number(cmd.t_ciclo);
 
-        // B. Actualizaciones directas de Relés Individuales (SET_RELAY)
+        // Conmutación manual de relé (SET_RELAY)
         if (cmd.cmd === 'SET_RELAY' && cmd.canal) {
           const currentReles = { ...(dev.datos?.reles || {}) };
           currentReles[`R${cmd.canal}`] = cmd.val ? 1 : 0;
           newDatos.reles = currentReles;
         }
 
-        // C. Actualizaciones directas para Vehículos (START / STOP)
+        // Acciones vehiculares (START / STOP)
         if (cmd.cmd === 'START_VEHICLE') {
           newDatos.fase = 'ARRANCANDO';
           const currentReles = { ...(dev.datos?.reles || {}) };
-          currentReles.R1 = 1; // Ignición ON
-          currentReles.R2 = 1; // Starter ON
+          currentReles.R1 = 1;
+          currentReles.R2 = 1;
           newDatos.reles = currentReles;
         } else if (cmd.cmd === 'STOP_VEHICLE') {
           newDatos.fase = 'APAGADO';
@@ -234,28 +245,33 @@ export function useMqttFleet() {
           newDatos.reles = currentReles;
         }
 
+        // Si se transmite una nueva lógica secuencial, reiniciar el ACK anterior para esperar el nuevo
+        let nextLogicaAck = dev.logicaAck;
+        if (cmd.cmd === 'APPLY_LOGICA_SECUENCIA') {
+          nextLogicaAck = null;
+        }
+
         return {
           ...prev,
-          [cleanMac]: { ...dev, datos: { ...newDatos, cfg: newCfg } }
+          [cleanMac]: { 
+            ...dev, 
+            datos: { ...newDatos, cfg: newCfg },
+            logicaAck: nextLogicaAck 
+          }
         };
       });
 
-      // Respaldar en Supabase asignaciones_equipos
+      // Sincronización en segundo plano con Supabase asignaciones_equipos
       (async () => {
         try {
-          if (!cmd.cmd) {
-            await supabase.from('asignaciones_equipos').update({
-              config_deseada: cmd,
-              updated_at: new Date().toISOString()
-            }).eq('mac', cleanMac);
-          } else if (cmd.cmd === 'APPLY_HAL_MAP') {
+          if (!cmd.cmd || cmd.cmd === 'APPLY_HAL_MAP' || cmd.cmd === 'SET_ALERTA_MANT') {
             await supabase.from('asignaciones_equipos').update({
               config_deseada: cmd,
               updated_at: new Date().toISOString()
             }).eq('mac', cleanMac);
           }
         } catch (e) {
-          console.warn('[SUPABASE] Error sincronizando config_deseada:', e);
+          console.warn('[SUPABASE] Error actualizando config_deseada:', e);
         }
       })();
     }
