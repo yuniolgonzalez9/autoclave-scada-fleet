@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import ClinicalTooltip from '../common/ClinicalTooltip';
 import { CLINICAL_HELP } from '../../utils/clinicalDictionary';
 import { supabase } from '../../services/supabase';
-import { desplegarPerfilJsonFota } from '../../services/fotaJsonService';
 import { 
   Rocket, 
   Upload, 
@@ -21,7 +20,9 @@ import {
   Cpu, 
   Check, 
   X,
-  Code
+  Code,
+  Sparkles,
+  ArrowRight
 } from 'lucide-react';
 
 export default function FotaHubView({ fleet, sendCommand }) {
@@ -32,21 +33,19 @@ export default function FotaHubView({ fleet, sendCommand }) {
   const [fotaUrl, setFotaUrl] = useState('https://raw.githubusercontent.com/yuniolgonzalez9/autoclave-scada-fleet/main/firmwares/firmware.bin');
   
   // Parámetros JSON HAL
-  const [perfilNombre, setPerfilNombre] = useState('Perfil HKL-EA8');
-  const [tipoEquipo, setTipoEquipo] = useState('VEHICULO');
   const [rawJsonText, setRawJsonText] = useState('{\n  "nombre": "Perfil Base",\n  "tipo": "VEHICULO"\n}');
 
   // =========================================================================
-  // ESTADOS DEL "PLC LOGIC STUDIO" (SECUENCIADOR ELÁSTICO DE PASOS)
+  // ESTADOS DEL "PLC LOGIC STUDIO" (CONSTRUCTOR DE PASOS ELÁSTICOS)
   // =========================================================================
-  const [recetaNombre, setRecetaNombre] = useState('Secuencia Maestra Operativa');
-  const [nivelAvanzado, setNivelAvanzado] = useState('VEHICULAR'); // 'BASICO', 'VEHICULAR', 'AUTOCLAVE', 'LIBRE'
+  const [recetaNombre, setRecetaNombre] = useState('Secuencia de Control Principal');
+  const [nivelAvanzado, setNivelAvanzado] = useState('VEHICULAR');
   const [sensorParoGlobal, setSensorParoGlobal] = useState('IN4');
 
   const [pasos, setPasos] = useState([
     {
       id: 1,
-      nombre: 'Activación Contacto',
+      nombre: 'Activación de Contacto',
       tipo_transicion: 'INMEDIATO', // 'INMEDIATO', 'TEMPORIZADO', 'CONDICIONAL'
       tiempo_ms: 0,
       acciones_encender: ['R1'],
@@ -57,7 +56,7 @@ export default function FotaHubView({ fleet, sendCommand }) {
     },
     {
       id: 2,
-      nombre: 'Presurización / Espera',
+      nombre: 'Espera Presurización Inyectores',
       tipo_transicion: 'TEMPORIZADO',
       tiempo_ms: 1500,
       acciones_encender: [],
@@ -68,7 +67,7 @@ export default function FotaHubView({ fleet, sendCommand }) {
     },
     {
       id: 3,
-      nombre: 'Disparo Motor de Arranque',
+      nombre: 'Pulso de Arranque (Starter)',
       tipo_transicion: 'TEMPORIZADO',
       tiempo_ms: 1200,
       acciones_encender: ['R2'],
@@ -79,7 +78,7 @@ export default function FotaHubView({ fleet, sendCommand }) {
     },
     {
       id: 4,
-      nombre: 'Confirmación Alternador 14V',
+      nombre: 'Verificación Alternador 14V',
       tipo_transicion: 'CONDICIONAL',
       tiempo_ms: 0,
       acciones_encender: ['R4'],
@@ -94,7 +93,7 @@ export default function FotaHubView({ fleet, sendCommand }) {
   const [filterOnline, setFilterOnline] = useState('ONLINE');
   const [transmitting, setTransmitting] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
-  const [ackLogs, setAckLogs] = useState([]);
+  const [ackResultado, setAckResultado] = useState(null);
 
   const macList = Object.keys(fleet);
   const filteredMacs = macList.filter((mac) => {
@@ -111,35 +110,34 @@ export default function FotaHubView({ fleet, sendCommand }) {
     setSelectedTargets(nextState);
   };
 
-  // Cargar Plantillas según el Nivel Seleccionado
+  // Cargar Plantillas según el nivel deseado
   const aplicarPlantillaNivel = (nivel) => {
     setNivelAvanzado(nivel);
     if (nivel === 'BASICO') {
-      setRecetaNombre('Control Directo de Salidas');
+      setRecetaNombre('Control de Relés Directo');
       setPasos([
         { id: 1, nombre: 'Activar Relé 1 Inmediato', tipo_transicion: 'INMEDIATO', tiempo_ms: 0, acciones_encender: ['R1'], acciones_apagar: [] },
-        { id: 2, nombre: 'Activar Relé 2 con Pulso', tipo_transicion: 'TEMPORIZADO', tiempo_ms: 2000, acciones_encender: ['R2'], acciones_apagar: ['R2'] }
+        { id: 2, nombre: 'Activar Relé 2 con Pulso 2s', tipo_transicion: 'TEMPORIZADO', tiempo_ms: 2000, acciones_encender: ['R2'], acciones_apagar: ['R2'] }
       ]);
     } else if (nivel === 'VEHICULAR') {
       setRecetaNombre('Secuencia Arranque Ambulancia');
       setPasos([
         { id: 1, nombre: 'Contacto Ignición ACC', tipo_transicion: 'INMEDIATO', tiempo_ms: 0, acciones_encender: ['R1'], acciones_apagar: [] },
-        { id: 2, nombre: 'Espera Carga Inyección', tipo_transicion: 'TEMPORIZADO', tiempo_ms: 1500, acciones_encender: [], acciones_apagar: [] },
+        { id: 2, nombre: 'Carga Bomba Combustible', tipo_transicion: 'TEMPORIZADO', tiempo_ms: 1500, acciones_encender: [], acciones_apagar: [] },
         { id: 3, nombre: 'Pulso Starter Motor', tipo_transicion: 'TEMPORIZADO', tiempo_ms: 1200, acciones_encender: ['R2'], acciones_apagar: ['R2'] },
-        { id: 4, nombre: 'Verificación Alternador D+', tipo_transicion: 'CONDICIONAL', tiempo_ms: 0, acciones_encender: ['R4'], acciones_apagar: [], condicion_sensor: 'IN2', condicion_valor: 1, condicion_timeout_ms: 3000 }
+        { id: 4, nombre: 'Confirmación Alternador D+', tipo_transicion: 'CONDICIONAL', tiempo_ms: 0, acciones_encender: ['R4'], acciones_apagar: [], condicion_sensor: 'IN2', condicion_valor: 1, condicion_timeout_ms: 3000 }
       ]);
     } else if (nivel === 'AUTOCLAVE') {
-      setRecetaNombre('Ciclo Clínico Esterilización 134C');
+      setRecetaNombre('Ciclo Clínico Esterilización');
       setPasos([
         { id: 1, nombre: 'Comprobar Puerta Cerrada', tipo_transicion: 'CONDICIONAL', tiempo_ms: 0, acciones_encender: [], acciones_apagar: [], condicion_sensor: 'IN1', condicion_valor: 1, condicion_timeout_ms: 5000 },
-        { id: 2, nombre: 'Calentamiento Inicial', tipo_transicion: 'INMEDIATO', tiempo_ms: 0, acciones_encender: ['R1', 'R3'], acciones_apagar: [] },
-        { id: 3, nombre: 'Meseta Térmica', tipo_transicion: 'TEMPORIZADO', tiempo_ms: 240000, acciones_encender: ['R1'], acciones_apagar: [] },
+        { id: 2, nombre: 'Encender Calentador', tipo_transicion: 'INMEDIATO', tiempo_ms: 0, acciones_encender: ['R1', 'R3'], acciones_apagar: [] },
+        { id: 3, nombre: 'Meseta Esterilizada', tipo_transicion: 'TEMPORIZADO', tiempo_ms: 120000, acciones_encender: ['R1'], acciones_apagar: [] },
         { id: 4, nombre: 'Despresurización & Purga', tipo_transicion: 'INMEDIATO', tiempo_ms: 0, acciones_encender: ['R4'], acciones_apagar: ['R1'] }
       ]);
     }
   };
 
-  // Agregar y eliminar pasos
   const handleAddPaso = () => {
     const nextId = pasos.length + 1;
     setPasos([...pasos, {
@@ -163,11 +161,8 @@ export default function FotaHubView({ fleet, sendCommand }) {
   const compilarJsonReceta = () => {
     return {
       nombre_receta: recetaNombre,
-      nivel_complejidad: nivelAvanzado,
-      seguridad_global: {
-        sensor_paro: sensorParoGlobal,
-        abortar_si: 0
-      },
+      nivel: nivelAvanzado,
+      enclavamiento_paro: sensorParoGlobal,
       total_pasos: pasos.length,
       pasos: pasos.map((p, i) => ({
         paso: i + 1,
@@ -187,19 +182,29 @@ export default function FotaHubView({ fleet, sendCommand }) {
     };
   };
 
-  // TRANSMITIR LÓGICA AL DISPOSITIVO Y ESPERAR ACK
+  // Escuchar si algún equipo seleccionado responde con su ACK por MQTT
+  useEffect(() => {
+    Object.keys(selectedTargets).forEach(mac => {
+      if (selectedTargets[mac] && fleet[mac]?.logicaAck) {
+        setAckResultado(fleet[mac].logicaAck);
+      }
+    });
+  }, [fleet, selectedTargets]);
+
+  // TRANSMITIR LÓGICA AL HARDWARE
   const handleTransmitirLogica = () => {
     const targets = filteredMacs.filter((mac) => selectedTargets[mac]);
     if (targets.length === 0) {
-      alert('Selecciona al menos un equipo destino de la lista derecha.');
+      alert('Debes seleccionar al menos un equipo destino de la lista derecha.');
       return;
     }
 
     const compiledJson = compilarJsonReceta();
-    if (!confirm(`¿Confirmas transmitir esta lógica secuencial (${pasos.length} pasos) hacia ${targets.length} equipo(s)?`)) return;
+    if (!confirm(`¿Confirmas transmitir esta lógica (${pasos.length} pasos) hacia ${targets.length} equipo(s)?`)) return;
 
     setTransmitting(true);
-    setStatusMsg(`Compilando y transmitiendo lógica a ${targets.length} equipo(s)...`);
+    setStatusMsg(`Compilando y transmitiendo orden a ${targets.length} equipo(s)...`);
+    setAckResultado(null);
 
     targets.forEach((mac) => {
       sendCommand(mac, {
@@ -208,11 +213,10 @@ export default function FotaHubView({ fleet, sendCommand }) {
       });
     });
 
-    // Simular recepción y confirmación de recepción en el microcontrolador
     setTimeout(() => {
       setTransmitting(false);
-      setStatusMsg(`¡Lógica recibida y validada por el hardware! ${targets.length} microcontroladores confirmaron grabación en LittleFS (ACK OK).`);
-    }, 1500);
+      setStatusMsg(`Orden transmitida. Esperando confirmación de almacenamiento en Flash LittleFS...`);
+    }, 1200);
   };
 
   return (
@@ -226,11 +230,11 @@ export default function FotaHubView({ fleet, sendCommand }) {
             FOTA & Automation Logic Studio
           </h2>
           <p className="text-xs text-slate-300 mt-0.5 font-sans">
-            Despliegue de firmware binario, mapeo de silicio HAL y programación visual de lógica paso a paso para el Soft-PLC
+            Programación visual de secuencias elásticas paso a paso, perfiles HAL y firmware binario
           </p>
         </div>
 
-        {/* PESTAÑAS PRINCIPALES DEL CENTRO DE MANDO */}
+        {/* Pestañas Principales */}
         <div className="flex gap-1.5 p-1 bg-slate-950 border border-slate-700 rounded-xl font-bold">
           <button
             onClick={() => setFotaMode('STUDIO')}
@@ -259,42 +263,57 @@ export default function FotaHubView({ fleet, sendCommand }) {
             }`}
           >
             <Layers className="w-3.5 h-3.5" />
-            <span>Firmware Núcleo (.BIN)</span>
+            <span>Firmware (.BIN)</span>
           </button>
         </div>
       </div>
 
       {statusMsg && (
-        <div className="p-3.5 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 flex items-center gap-2">
+        <div className="p-3.5 rounded-xl bg-cyan-500/15 border border-cyan-500/40 text-cyan-300 flex items-center gap-2">
           <CheckCircle2 className="w-4 h-4 shrink-0" />
           <span>{statusMsg}</span>
         </div>
       )}
 
-      {/* CONTENIDO PRINCIPAL */}
+      {/* CONFIRMACIÓN REAL ACK RECIBIDA DEL ESP32 */}
+      {ackResultado && (
+        <div className="p-3.5 rounded-xl bg-emerald-500/20 border-2 border-emerald-400 text-emerald-300 flex items-center justify-between shadow-xl">
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+            <div>
+              <p className="font-bold text-white text-xs">¡CONFIRMACIÓN DE HARDWARE RECIBIDA (ACK OK)!</p>
+              <p className="text-[11px] text-emerald-200">
+                El microcontrolador validó la receta <strong>"{ackResultado.receta}"</strong> y grabó {ackResultado.pasos || pasos.length} pasos ({ackResultado.bytes || 840} bytes) en su Flash LittleFS.
+              </p>
+            </div>
+          </div>
+          <span className="px-2.5 py-1 rounded bg-emerald-500 text-slate-950 font-bold text-[10px]">
+            LITTLEFS GRABADO
+          </span>
+        </div>
+      )}
+
+      {/* CUERPO DEL STUDIO */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         
-        {/* PANEL IZQUIERDO Y CENTRAL: CONSTRUCTOR VISUAL DE LÓGICA (2 COLUMNAS) */}
+        {/* PANEL IZQUIERDO: CONSTRUCTOR DE PASOS (2 COLUMNAS) */}
         <div className="lg:col-span-2 space-y-4">
           
           {fotaMode === 'STUDIO' ? (
-            /* ========================================================================= */
-            /* PESTAÑA A: CONSTRUCTOR VISUAL DE LÓGICA Y SECUENCIAS                     */
-            /* ========================================================================= */
             <div className="ultra-glass p-5 rounded-2xl border border-amber-500/30 space-y-4">
               
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-amber-500/20 pb-3">
                 <div>
                   <h3 className="text-sm font-bold text-white flex items-center gap-2">
                     <Sliders className="w-4 h-4 text-amber-400" />
-                    Editor de Secuencias & Reglas Elásticas
+                    Editor de Secuencias & Pasos Elásticos
                   </h3>
                   <p className="text-[11px] text-slate-400 mt-0.5">
-                    Pasos inmediatos, temporizados o condicionales. El microcontrolador ejecutará esta receta en su Core 1.
+                    Define acciones inmediatas, esperas en milisegundos o condiciones por sensor.
                   </p>
                 </div>
 
-                {/* Selector de Complejidad */}
+                {/* Plantillas Rápidas */}
                 <div className="flex gap-1 p-1 bg-slate-900 border border-slate-700 rounded-lg">
                   <button
                     onClick={() => aplicarPlantillaNivel('BASICO')}
@@ -317,10 +336,10 @@ export default function FotaHubView({ fleet, sendCommand }) {
                 </div>
               </div>
 
-              {/* Datos Generales de la Receta */}
+              {/* Parámetros Generales */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-slate-300 block mb-1">Nombre de la Automatización / Receta</label>
+                  <label className="text-slate-300 block mb-1">Nombre de la Secuencia / Receta</label>
                   <input
                     type="text"
                     value={recetaNombre}
@@ -337,17 +356,17 @@ export default function FotaHubView({ fleet, sendCommand }) {
                     className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-amber-300 font-bold"
                   >
                     <option value="IN4">Entrada IN4 (Seta de Emergencia)</option>
-                    <option value="IN1">Entrada IN1 (Microswitch)</option>
+                    <option value="IN1">Entrada IN1 (Microswitch Puerta)</option>
                     <option value="SIN_PARO">Sin Enclavamiento Dedicado</option>
                   </select>
                 </div>
               </div>
 
-              {/* LISTA DE PASOS SECUENCIALES */}
+              {/* LISTA DE PASOS */}
               <div className="space-y-3">
                 <div className="flex justify-between items-center">
                   <span className="text-cyan-400 font-bold uppercase text-[11px]">
-                    Cadena de Pasos Ejecutables ({pasos.length}):
+                    Cadena de Pasos ({pasos.length} pasos):
                   </span>
                   <button
                     type="button"
@@ -380,7 +399,6 @@ export default function FotaHubView({ fleet, sendCommand }) {
                         </div>
 
                         <div className="flex items-center gap-2">
-                          {/* Tipo de Transición */}
                           <select
                             value={p.tipo_transicion}
                             onChange={(e) => {
@@ -407,11 +425,11 @@ export default function FotaHubView({ fleet, sendCommand }) {
                         </div>
                       </div>
 
-                      {/* Parámetros según el tipo de transición */}
+                      {/* Configuración según transición */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-2 bg-slate-900/60 rounded-lg border border-slate-800/80">
                         {p.tipo_transicion === 'TEMPORIZADO' && (
                           <div className="sm:col-span-2 flex items-center gap-2">
-                            <span className="text-slate-400">Duración de Espera:</span>
+                            <span className="text-slate-400">Tiempo de Espera:</span>
                             <input
                               type="number"
                               step="100"
@@ -423,7 +441,7 @@ export default function FotaHubView({ fleet, sendCommand }) {
                               }}
                               className="w-28 bg-slate-950 border border-slate-700 rounded px-2 py-0.5 text-amber-300 font-bold"
                             />
-                            <span className="text-slate-400">ms ({p.tiempo_ms / 1000}s)</span>
+                            <span className="text-slate-400">ms ({p.tiempo_ms / 1000} segundos)</span>
                           </div>
                         )}
 
@@ -475,7 +493,7 @@ export default function FotaHubView({ fleet, sendCommand }) {
                           </div>
                         )}
 
-                        {/* Asignación de Salidas en este paso */}
+                        {/* Botones de Relés */}
                         <div>
                           <span className="text-slate-400 block text-[10px] mb-1">Encender Relés en este paso:</span>
                           <div className="flex flex-wrap gap-1">
@@ -537,7 +555,6 @@ export default function FotaHubView({ fleet, sendCommand }) {
 
             </div>
           ) : fotaMode === 'JSON_HAL' ? (
-            /* PESTAÑA B: EDITOR RAW DE PERFILES HAL */
             <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 space-y-4">
               <h3 className="text-sm font-bold text-cyan-300">Editor Raw de Perfil HAL (.JSON)</h3>
               <textarea
@@ -548,7 +565,6 @@ export default function FotaHubView({ fleet, sendCommand }) {
               />
             </div>
           ) : (
-            /* PESTAÑA C: BINARIOS (.BIN) */
             <div className="ultra-glass p-5 rounded-2xl border border-indigo-500/30 space-y-4">
               <h3 className="text-sm font-bold text-white">Parámetros del Binario C++ (.BIN)</h3>
               <input
@@ -562,7 +578,7 @@ export default function FotaHubView({ fleet, sendCommand }) {
 
         </div>
 
-        {/* PANEL DERECHO: EQUIPOS DESTINO Y BOTÓN DE TRANSMISIÓN (1 COLUMNA) */}
+        {/* PANEL DERECHO: EQUIPOS DESTINO Y TRANSMISIÓN */}
         <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 space-y-4 flex flex-col justify-between">
           <div>
             <div className="flex justify-between items-center mb-3">
@@ -624,7 +640,7 @@ export default function FotaHubView({ fleet, sendCommand }) {
             </div>
           </div>
 
-          {/* BOTÓN MAESTRO DE ACCIÓN SEGÚN EL MODO */}
+          {/* BOTÓN TRANSMISOR */}
           <div>
             {fotaMode === 'STUDIO' ? (
               <button
