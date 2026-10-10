@@ -8,6 +8,7 @@ import DeviceDetailView from './components/dashboard/DeviceDetailView';
 import ClinicalAuditView from './components/reports/ClinicalAuditView';
 import FotaHubView from './components/fota/FotaHubView';
 import FleetManagementView from './components/fleet/FleetManagementView';
+import AiAutomationStudio from './components/studio/AiAutomationStudio';
 import GearMenu, { WALLPAPERS_LIST } from './components/common/GearMenu';
 import ClinicalTooltip from './components/common/ClinicalTooltip';
 import ContextMenu from './components/common/ContextMenu';
@@ -37,7 +38,9 @@ import {
   User as UserIcon,
   Car,
   Key,
-  Cpu
+  Cpu,
+  Sparkles,
+  Wand2
 } from 'lucide-react';
 
 function ScadaAppContent() {
@@ -548,7 +551,7 @@ function ScadaAppContent() {
           </div>
         </header>
 
-        {/* Dock PC */}
+        {/* DOCK PC CON ACCESO DIRECTO A AI STUDIO */}
         {user && !kioskMac && !isOperator && (
           <div className="hidden md:flex items-center gap-2 px-6 py-2 bg-slate-950/60 border-b border-cyan-500/10">
             <ClinicalTooltip title={CLINICAL_HELP.nav_flota.title} description={CLINICAL_HELP.nav_flota.desc} badge={CLINICAL_HELP.nav_flota.badge}>
@@ -573,6 +576,19 @@ function ScadaAppContent() {
               </button>
             </ClinicalTooltip>
 
+            {/* BOTÓN DIRECTO: ✨ AI STUDIO */}
+            <button
+              onClick={() => { setActiveSection('studio'); setSelectedMac(null); }}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 transition-all ${
+                activeSection === 'studio' 
+                  ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/30' 
+                  : 'text-amber-400 hover:text-white bg-slate-900/60 border border-amber-500/30'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>✨ AI Studio</span>
+            </button>
+
             <ClinicalTooltip title={CLINICAL_HELP.nav_usuarios.title} description={CLINICAL_HELP.nav_usuarios.desc} badge={CLINICAL_HELP.nav_usuarios.badge}>
               <button
                 onClick={() => { setActiveSection('usuarios'); setSelectedMac(null); }}
@@ -580,7 +596,7 @@ function ScadaAppContent() {
                   activeSection === 'usuarios' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
                 }`}
               >
-                🛡️ Usuarios & Permisos
+                🛡️ Personal
               </button>
             </ClinicalTooltip>
 
@@ -628,7 +644,7 @@ function ScadaAppContent() {
               />
             ) : (
               <>
-                {/* SECCIÓN FLOTA ADAPTATIVA */}
+                {/* 1. SECCIÓN FLOTA ADAPTATIVA */}
                 {activeSection === 'flota' && (
                   <div className="space-y-4">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
@@ -699,7 +715,6 @@ function ScadaAppContent() {
                           const dDev = dev.datos || {};
                           const health = getDeviceHealthData(dev);
 
-                          // Tipo Dinámico
                           const devTipo = (
                             dev.meta?.config_deseada?.tipo || 
                             dev.meta?.tipo || 
@@ -762,7 +777,7 @@ function ScadaAppContent() {
                                   </div>
                                 </div>
 
-                                {/* TARJETAS ADAPTATIVAS SEGÚN EL TIPO REAL */}
+                                {/* TARJETAS ADAPTATIVAS */}
                                 {isVeh ? (
                                   <>
                                     <div className="grid grid-cols-2 gap-2 my-3">
@@ -861,7 +876,7 @@ function ScadaAppContent() {
                   </div>
                 )}
 
-                {/* GESTIÓN FLOTA */}
+                {/* 2. GESTIÓN FLOTA */}
                 {activeSection === 'gestion' && (
                   <FleetManagementView
                     fleet={fleet}
@@ -870,7 +885,16 @@ function ScadaAppContent() {
                   />
                 )}
 
-                {/* USUARIOS */}
+                {/* 3. SECCIÓN NUEVA: ✨ AI AUTOMATION STUDIO & WIDGET DESIGNER */}
+                {activeSection === 'studio' && (
+                  <AiAutomationStudio
+                    fleet={fleet}
+                    sendCommand={sendDeviceCommand}
+                    initialDeviceMac={selectedMac}
+                  />
+                )}
+
+                {/* 4. PERSONAL */}
                 {activeSection === 'usuarios' && (
                   <UserManagementView
                     fleet={fleet}
@@ -878,12 +902,12 @@ function ScadaAppContent() {
                   />
                 )}
 
-                {/* FOTA */}
+                {/* 5. FOTA */}
                 {activeSection === 'fota' && (
                   <FotaHubView fleet={fleet} sendCommand={sendDeviceCommand} />
                 )}
 
-                {/* AUDITORÍA */}
+                {/* 6. AUDITORÍA */}
                 {activeSection === 'auditoria' && (
                   <ClinicalAuditView />
                 )}
@@ -893,12 +917,12 @@ function ScadaAppContent() {
           </main>
         )}
 
-        {/* BARRA INFERIOR CELULAR */}
+        {/* BARRA INFERIOR CELULAR CON BOTÓN STUDIO */}
         {user && !kioskMac && (
           <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-slate-950/90 border-t border-cyan-500/30 backdrop-blur-xl flex items-center justify-around z-50 px-2">
             <button
               onClick={() => { setActiveSection('flota'); setSelectedMac(null); }}
-              className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-lg text-xs font-mono ${
+              className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-[10px] font-mono ${
                 activeSection === 'flota' || activeSection === 'detalle' ? 'text-cyan-400 font-bold' : 'text-slate-400'
               }`}
             >
@@ -908,7 +932,7 @@ function ScadaAppContent() {
 
             <button
               onClick={() => { setActiveSection('gestion'); setSelectedMac(null); }}
-              className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-lg text-xs font-mono ${
+              className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-[10px] font-mono ${
                 activeSection === 'gestion' ? 'text-cyan-400 font-bold' : 'text-slate-400'
               }`}
             >
@@ -916,9 +940,20 @@ function ScadaAppContent() {
               <span>Gestión</span>
             </button>
 
+            {/* BOTÓN STUDIO EN CELULAR */}
+            <button
+              onClick={() => { setActiveSection('studio'); setSelectedMac(null); }}
+              className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-[10px] font-mono ${
+                activeSection === 'studio' ? 'text-amber-400 font-bold' : 'text-slate-400'
+              }`}
+            >
+              <Sparkles className="w-5 h-5" />
+              <span>Studio</span>
+            </button>
+
             <button
               onClick={() => { setActiveSection('usuarios'); setSelectedMac(null); }}
-              className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-lg text-xs font-mono ${
+              className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-[10px] font-mono ${
                 activeSection === 'usuarios' ? 'text-cyan-400 font-bold' : 'text-slate-400'
               }`}
             >
@@ -928,22 +963,12 @@ function ScadaAppContent() {
 
             <button
               onClick={() => { setActiveSection('fota'); setSelectedMac(null); }}
-              className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-lg text-xs font-mono ${
+              className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-[10px] font-mono ${
                 activeSection === 'fota' ? 'text-cyan-400 font-bold' : 'text-slate-400'
               }`}
             >
               <Rocket className="w-5 h-5" />
               <span>FOTA</span>
-            </button>
-
-            <button
-              onClick={() => { setActiveSection('auditoria'); setSelectedMac(null); }}
-              className={`flex flex-col items-center gap-1 py-1 px-2.5 rounded-lg text-xs font-mono ${
-                activeSection === 'auditoria' ? 'text-cyan-400 font-bold' : 'text-slate-400'
-              }`}
-            >
-              <FileText className="w-5 h-5" />
-              <span>Auditoría</span>
             </button>
           </nav>
         )}
@@ -951,25 +976,19 @@ function ScadaAppContent() {
         {/* Modal Inactividad */}
         {showTimeoutModal && (
           <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
-            <div className="ultra-glass border-2 border-amber-500 p-6 rounded-2xl max-w-sm w-full text-center space-y-4 shadow-[0_0_30px_rgba(245,158,11,0.3)]">
+            <div className="ultra-glass border-2 border-amber-500 p-6 rounded-2xl max-w-sm w-full text-center space-y-4 shadow-[0_0_30px_rgba(245,158,11,0.3)] font-mono text-xs">
               <div className="inline-flex p-3 rounded-full bg-amber-500/20 text-amber-300 animate-bounce">
                 <Clock className="w-8 h-8" />
               </div>
-              <h3 className="text-base font-bold text-white font-mono uppercase">Sesión por Expirar</h3>
-              <p className="text-xs text-slate-300 leading-relaxed font-mono">
-                Por protocolo de seguridad hospitalaria, tu turno se cerrará en <strong className="text-cyan-300 text-sm">{countdown}s</strong> debido a inactividad.
+              <h3 className="text-base font-bold text-white uppercase">Sesión por Expirar</h3>
+              <p className="text-slate-300 leading-relaxed">
+                Por protocolo de seguridad, tu turno se cerrará en <strong className="text-cyan-300 text-sm">{countdown}s</strong> debido a inactividad.
               </p>
               <div className="flex gap-2 pt-2">
-                <button
-                  onClick={logout}
-                  className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold"
-                >
+                <button onClick={logout} className="flex-1 py-2 bg-slate-800 text-slate-300 rounded-xl font-bold">
                   Cerrar Turno
                 </button>
-                <button
-                  onClick={() => { setShowTimeoutModal(false); resetIdleTimer(); }}
-                  className="flex-1 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:opacity-90 text-white rounded-xl text-xs font-bold shadow-lg"
-                >
+                <button onClick={() => { setShowTimeoutModal(false); resetIdleTimer(); }} className="flex-1 py-2 bg-cyan-600 text-white rounded-xl font-bold shadow-lg">
                   Seguir Conectado
                 </button>
               </div>
@@ -1006,7 +1025,7 @@ function ScadaAppContent() {
           onOpenQR={(dev) => setQrModalDevice(dev)}
         />
 
-        {/* Modal de Asignación con sendCommand CONECTADO */}
+        {/* Modal de Asignación con sendCommand conectado */}
         <DeviceAssignmentModal
           isOpen={assignModal.isOpen}
           onClose={() => setAssignModal({ isOpen: false, device: null })}
@@ -1029,7 +1048,7 @@ function ScadaAppContent() {
           operatorName={profile?.nombre || user?.email}
         />
 
-        {/* Modal Campana */}
+        {/* Modal Personal */}
         <UserManagementModal 
           isOpen={showAdminModal} 
           onClose={() => setShowAdminModal(false)} 
