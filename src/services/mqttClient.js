@@ -28,27 +28,30 @@ export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
   const startMqttConnection = () => {
     if (mqttClient) return;
 
-    const clientId = 'SCADA_LEADER_' + Math.random().toString(36).substring(2, 8);
+    // Generar ClientID único para evitar colisiones en HiveMQ Cloud
+    const clientId = 'SCADA_WEB_' + Math.random().toString(36).substring(2, 10);
+    
     mqttClient = mqtt.connect(BROKER_URL, {
       clientId,
       username: MQTT_USER,
       password: MQTT_PASS,
       clean: true,
-      keepalive: 60,
-      reconnectPeriod: 2500
+      keepalive: 15,          // <-- CLAVE: Ping cada 15s (evita que el proxy de HiveMQ corte a los 60s)
+      reschedulePings: true,  // Reinicia el contador de ping con cada mensaje recibido
+      connectTimeout: 10000,  // 10s de tolerancia de handshake TLS
+      reconnectPeriod: 2000   // Reintento rápido en 2 segundos
     });
 
     mqttClient.on('connect', () => {
+      console.log('[MQTT LEADER] Conectado exitosamente a HiveMQ Cloud 8884');
       if (onStatusChange) onStatusChange(true);
 
-      // Suscripciones maestras en HiveMQ
+      // Suscripciones maestras
       mqttClient.subscribe('autoclave_med_2026/+/telemetria');
       mqttClient.subscribe('autoclave_med_2026/+/esquema');
       mqttClient.subscribe('autoclave_med_2026/+/meta');
       mqttClient.subscribe('autoclave_med_2026/+/reporte_paquete');
       mqttClient.subscribe('autoclave_med_2026/+/alerta_critica');
-      
-      // NUEVAS SUSCRIPCIONES PARA EL ESCÁNER I2C Y HAL DE LA HKL-EA8
       mqttClient.subscribe('autoclave_med_2026/+/i2c_report');
       mqttClient.subscribe('autoclave_med_2026/+/hardware_scan');
       mqttClient.subscribe('autoclave_med_2026/+/hw_profile');
@@ -59,7 +62,18 @@ export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
     });
 
     mqttClient.on('error', (err) => {
-      console.warn('[MQTT LEADER ERROR]', err);
+      console.warn('[MQTT LEADER ERROR]', err?.message || err);
+      // Si ocurre timeout de keepalive, forzar reconexión limpia del socket
+      if (err && err.message && err.message.includes('Keepalive timeout')) {
+        try {
+          mqttClient.reconnect();
+        } catch (e) {}
+      }
+      if (onStatusChange) onStatusChange(false);
+      if (broadcast) broadcast.postMessage({ type: 'STATUS_UPDATE', status: false });
+    });
+
+    mqttClient.on('close', () => {
       if (onStatusChange) onStatusChange(false);
       if (broadcast) broadcast.postMessage({ type: 'STATUS_UPDATE', status: false });
     });
