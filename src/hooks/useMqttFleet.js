@@ -3,12 +3,31 @@ import { connectMqttFleet } from '../services/mqttClient';
 import { accumulateF0 } from '../utils/f0Formulas';
 import { supabase } from '../services/supabase';
 
+const CACHE_KEY = 'biofleet_fleet_cache_v2';
+
 export function useMqttFleet() {
-  const [fleet, setFleet] = useState({});
+  // Carga inicial en 0ms desde la memoria rápida de sesión
+  const [fleet, setFleet] = useState(() => {
+    try {
+      const cached = sessionStorage.getItem(CACHE_KEY);
+      if (cached) return JSON.parse(cached);
+    } catch (e) {}
+    return {};
+  });
+
   const [mqttConnected, setMqttConnected] = useState(false);
   const sendCommandRef = useRef(null);
 
-  // 1. Cargar equipos registrados desde Supabase al arrancar
+  // Persistir en memoria rápida de sesión periódicamente
+  useEffect(() => {
+    try {
+      if (Object.keys(fleet).length > 0) {
+        sessionStorage.setItem(CACHE_KEY, JSON.stringify(fleet));
+      }
+    } catch (e) {}
+  }, [fleet]);
+
+  // 1. Cargar equipos desde Supabase
   useEffect(() => {
     let isMounted = true;
     const loadRegisteredDevices = async () => {
@@ -24,39 +43,41 @@ export function useMqttFleet() {
               const rawMac = item.mac || item.Mac || '';
               const devMac = rawMac.toUpperCase().replace(/[:\-]/g, '');
               
-              if (devMac && !initialFleet[devMac]) {
+              if (devMac) {
                 const configDeseada = item.config_deseada || {};
                 const tipoCalculado = configDeseada.tipo || item.tipo || 'AUTOCLAVE';
+                const existing = initialFleet[devMac] || {};
 
                 initialFleet[devMac] = {
                   mac: devMac,
-                  lastSeen: 0,
+                  // Si ya teníamos lastSeen reciente en caché, lo preservamos para no marcar OFFLINE en F5
+                  lastSeen: existing.lastSeen && (Date.now() - existing.lastSeen < 12000) ? existing.lastSeen : (existing.lastSeen || Date.now() - 2000),
                   datos: {
-                    temp_camara: 25.0,
-                    presion: 0.0,
-                    motor: false,
-                    calentador: false,
-                    vacio: false,
-                    fase: 'APAGADO',
+                    temp_camara: existing.datos?.temp_camara ?? 25.0,
+                    presion: existing.datos?.presion ?? 0.0,
+                    motor: existing.datos?.motor ?? false,
+                    calentador: existing.datos?.calentador ?? false,
+                    vacio: existing.datos?.vacio ?? false,
+                    fase: existing.datos?.fase || 'SINCRONIZANDO...',
                     tipo: tipoCalculado,
-                    seg_restantes: 0,
-                    reles: { R1: 0, R2: 0, R3: 0, R4: 0, R5: 0, R6: 0, R7: 0, R8: 0 },
-                    entradas: { IN1: 0, IN2: 0, IN3: 0, IN4: 0, IN5: 0, IN6: 0, IN7: 0, IN8: 0 },
+                    seg_restantes: existing.datos?.seg_restantes ?? 0,
+                    reles: existing.datos?.reles || { R1: 0, R2: 0, R3: 0, R4: 0, R5: 0, R6: 0, R7: 0, R8: 0 },
+                    entradas: existing.datos?.entradas || { IN1: 0, IN2: 0, IN3: 0, IN4: 0, IN5: 0, IN6: 0, IN7: 0, IN8: 0 },
                     cfg: { 
-                      ciclos: Number(item.ciclos || 0), 
-                      lim_mant: Number(item.limite || 200),
+                      ciclos: Number(item.ciclos || existing.datos?.cfg?.ciclos || 0), 
+                      lim_mant: Number(item.limite || existing.datos?.cfg?.lim_mant || 200),
                       alerta_pct: Number(configDeseada.alerta_pct || 80),
                       sp_temp: configDeseada.sp_temp || 121.0,
                       t_ciclo: configDeseada.t_ciclo || 2
                     }
                   },
-                  esquema: null,
-                  i2cReport: null,
-                  hwProfile: null,
-                  logicaAck: null, // Confirmación física de recetas FOTA
+                  esquema: existing.esquema || null,
+                  i2cReport: existing.i2cReport || null,
+                  hwProfile: existing.hwProfile || null,
+                  logicaAck: existing.logicaAck || null,
                   meta: { ...item, mac: devMac, tipo: tipoCalculado },
-                  f0Score: 0.0,
-                  history: []
+                  f0Score: existing.f0Score || 0.0,
+                  history: existing.history || []
                 };
               }
             });
@@ -64,7 +85,7 @@ export function useMqttFleet() {
           });
         }
       } catch (err) {
-        console.warn('[SUPABASE] Carga inicial de flota:', err);
+        console.warn('[SUPABASE] Carga inicial:', err);
       }
     };
 
@@ -72,7 +93,7 @@ export function useMqttFleet() {
     return () => { isMounted = false; };
   }, []);
 
-  // 2. Conexión y escucha MQTT
+  // 2. Conexión MQTT
   useEffect(() => {
     const { client, sendCommand } = connectMqttFleet(
       ({ mac, channel, payload, isRetained }) => {
@@ -96,10 +117,10 @@ export function useMqttFleet() {
           const isFreshStream = !isRetained;
           const updated = {
             ...currentDev,
-            lastSeen: isFreshStream ? Date.now() : (currentDev.lastSeen || 0)
+            lastSeen: isFreshStream ? Date.now() : (currentDev.lastSeen || Date.now())
           };
 
-          // TELEMETRÍA EN VIVO (HKL-EA8)
+          // TELEMETRÍA EN VIVO (800ms)
           if (channel === 'telemetria') {
             updated.datos = {
               ...(currentDev.datos || {}),
@@ -125,7 +146,7 @@ export function useMqttFleet() {
             updated.history = newHistory;
           }
 
-          // CAPTURAR EL ACUSE DE RECIBO (ACK) DEL MOTOR DE LÓGICA FOTA
+          // ACK FÍSICO DE LÓGICA FOTA
           if (channel === 'logica') {
             updated.logicaAck = {
               ...payload,
@@ -133,12 +154,12 @@ export function useMqttFleet() {
             };
           }
 
-          // ESCÁNER I2C FÍSICO
+          // ESCÁNER I2C REAL
           if (channel === 'i2c_report' || channel === 'hardware_scan') {
             updated.i2cReport = payload;
           }
 
-          // PERFIL DE HARDWARE EN LITTLEFS
+          // PERFIL HARDWARE
           if (channel === 'hw_profile') {
             updated.hwProfile = payload;
           }
@@ -151,7 +172,7 @@ export function useMqttFleet() {
             updated.meta = Object.assign(updated.meta || {}, payload, { mac: cleanMac });
           }
 
-          // REPORTES DE AUDITORÍA CLÍNICA
+          // REPORTES DE AUDITORÍA
           if (channel === 'reporte_paquete') {
             const ciclosAcum = Number(payload?.ciclos_acumulados || payload?.ciclos || 0);
             if (!updated.datos.cfg) updated.datos.cfg = {};
@@ -181,7 +202,7 @@ export function useMqttFleet() {
                   eventos: payload?.eventos || []
                 }, { onConflict: 'session_id' });
               } catch (e) {
-                console.warn('[SUPABASE] Error guardando paquete clínico:', e);
+                console.warn('[SUPABASE] Error guardando paquete:', e);
               }
             })();
           }
@@ -196,7 +217,7 @@ export function useMqttFleet() {
     return () => { if (client) client.end(); };
   }, []);
 
-  // 3. Envío de órdenes y actualización optimista de memoria
+  // 3. Envío de órdenes optimista
   const sendDeviceCommand = (mac, cmd) => {
     const cleanMac = (mac || '').toUpperCase().replace(/[:\-]/g, '');
     if (!cleanMac) return;
@@ -210,7 +231,6 @@ export function useMqttFleet() {
         const newDatos = { ...dev.datos };
         const newCfg = { ...(dev.datos?.cfg || {}) };
 
-        // Parámetros de ciclo
         if (cmd.mot_ok !== undefined) {
           newDatos.motor = Boolean(cmd.mot_ok);
           newCfg.mot_ok = Boolean(cmd.mot_ok);
@@ -223,14 +243,12 @@ export function useMqttFleet() {
         if (cmd.sp_temp !== undefined) newCfg.sp_temp = Number(cmd.sp_temp);
         if (cmd.t_ciclo !== undefined) newCfg.t_ciclo = Number(cmd.t_ciclo);
 
-        // Conmutación manual de relé (SET_RELAY)
         if (cmd.cmd === 'SET_RELAY' && cmd.canal) {
           const currentReles = { ...(dev.datos?.reles || {}) };
           currentReles[`R${cmd.canal}`] = cmd.val ? 1 : 0;
           newDatos.reles = currentReles;
         }
 
-        // Acciones vehiculares (START / STOP)
         if (cmd.cmd === 'START_VEHICLE') {
           newDatos.fase = 'ARRANCANDO';
           const currentReles = { ...(dev.datos?.reles || {}) };
@@ -245,7 +263,6 @@ export function useMqttFleet() {
           newDatos.reles = currentReles;
         }
 
-        // Si se transmite una nueva lógica secuencial, reiniciar el ACK anterior para esperar el nuevo
         let nextLogicaAck = dev.logicaAck;
         if (cmd.cmd === 'APPLY_LOGICA_SECUENCIA') {
           nextLogicaAck = null;
@@ -261,7 +278,6 @@ export function useMqttFleet() {
         };
       });
 
-      // Sincronización en segundo plano con Supabase asignaciones_equipos
       (async () => {
         try {
           if (!cmd.cmd || cmd.cmd === 'APPLY_HAL_MAP' || cmd.cmd === 'SET_ALERTA_MANT') {
