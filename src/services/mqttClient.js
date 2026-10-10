@@ -28,7 +28,7 @@ export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
   const startMqttConnection = () => {
     if (mqttClient) return;
 
-    // Generar ClientID único para evitar colisiones en HiveMQ Cloud
+    // ClientID único aleatorio para evitar expulsión en HiveMQ Cloud
     const clientId = 'SCADA_WEB_' + Math.random().toString(36).substring(2, 10);
     
     mqttClient = mqtt.connect(BROKER_URL, {
@@ -36,10 +36,10 @@ export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
       username: MQTT_USER,
       password: MQTT_PASS,
       clean: true,
-      keepalive: 15,          // <-- CLAVE: Ping cada 15s (evita que el proxy de HiveMQ corte a los 60s)
-      reschedulePings: true,  // Reinicia el contador de ping con cada mensaje recibido
-      connectTimeout: 10000,  // 10s de tolerancia de handshake TLS
-      reconnectPeriod: 2000   // Reintento rápido en 2 segundos
+      keepalive: 15,          // Ping cada 15s: evita que el balanceador corte el socket
+      reschedulePings: true,  // Reinicia contador con cada mensaje entrante
+      connectTimeout: 10000,  // 10s de tolerancia TLS
+      reconnectPeriod: 2000   // Reconexión rápida en 2s
     });
 
     mqttClient.on('connect', () => {
@@ -56,6 +56,9 @@ export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
       mqttClient.subscribe('autoclave_med_2026/+/hardware_scan');
       mqttClient.subscribe('autoclave_med_2026/+/hw_profile');
 
+      // CANAL DE CONFIRMACIÓN DEL BLOQUE LÓGICO FOTA
+      mqttClient.subscribe('autoclave_med_2026/+/logica/ack');
+
       if (broadcast) {
         broadcast.postMessage({ type: 'STATUS_UPDATE', status: true });
       }
@@ -63,7 +66,6 @@ export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
 
     mqttClient.on('error', (err) => {
       console.warn('[MQTT LEADER ERROR]', err?.message || err);
-      // Si ocurre timeout de keepalive, forzar reconexión limpia del socket
       if (err && err.message && err.message.includes('Keepalive timeout')) {
         try {
           mqttClient.reconnect();
