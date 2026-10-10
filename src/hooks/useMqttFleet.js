@@ -15,7 +15,8 @@ export function useMqttFleet() {
     return {};
   });
 
-  const [mqttConnected, setMqttConnected] = useState(false);
+  // ARRANQUE OPTIMISTA EN TRUE: Sale verde desde el fotograma 0 (igual que Supabase)
+  const [mqttConnected, setMqttConnected] = useState(true);
   const sendCommandRef = useRef(null);
 
   // Persistir en memoria rápida de sesión periódicamente
@@ -50,15 +51,15 @@ export function useMqttFleet() {
 
                 initialFleet[devMac] = {
                   mac: devMac,
-                  // Si ya teníamos lastSeen reciente en caché, lo preservamos para no marcar OFFLINE en F5
-                  lastSeen: existing.lastSeen && (Date.now() - existing.lastSeen < 12000) ? existing.lastSeen : (existing.lastSeen || Date.now() - 2000),
+                  // ARRANQUE VERDE: Inicia con la hora actual para que nunca parpadee en rojo al dar F5
+                  lastSeen: existing.lastSeen || Date.now(),
                   datos: {
                     temp_camara: existing.datos?.temp_camara ?? 25.0,
                     presion: existing.datos?.presion ?? 0.0,
                     motor: existing.datos?.motor ?? false,
                     calentador: existing.datos?.calentador ?? false,
                     vacio: existing.datos?.vacio ?? false,
-                    fase: existing.datos?.fase || 'SINCRONIZANDO...',
+                    fase: existing.datos?.fase || 'ESPERA',
                     tipo: tipoCalculado,
                     seg_restantes: existing.datos?.seg_restantes ?? 0,
                     reles: existing.datos?.reles || { R1: 0, R2: 0, R3: 0, R4: 0, R5: 0, R6: 0, R7: 0, R8: 0 },
@@ -103,7 +104,7 @@ export function useMqttFleet() {
         setFleet((prevFleet) => {
           const currentDev = prevFleet[cleanMac] || {
             mac: cleanMac,
-            lastSeen: 0,
+            lastSeen: Date.now(),
             datos: {},
             esquema: null,
             i2cReport: null,
