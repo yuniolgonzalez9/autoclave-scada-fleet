@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { conversarYCompilarConIA } from '../../services/aiStudioService';
+import { conversarYCompilarConIA, detectarProveedorApiKey } from '../../services/aiStudioService';
 import { supabase } from '../../services/supabase';
 import { 
   Sparkles, 
@@ -9,6 +9,7 @@ import {
   Sliders, 
   CheckCircle2, 
   Play, 
+  Square,
   Key, 
   Zap, 
   Power, 
@@ -27,24 +28,71 @@ import {
   Search, 
   Building2, 
   Bot, 
-  User 
+  User,
+  Activity,
+  AlertTriangle,
+  RotateCcw
 } from 'lucide-react';
 
 const SNAP_GRID = 10;
 const GROQ_DEFAULT_API_KEY = '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';
 
+const CATALOGO_MAESTRO = {
+  VEHICULO: {
+    HYUNDAI: ['Staria Ambulancia / Van', 'Starex / H-1', 'Porter II'],
+    KIA: ['Carnival / Sedona', 'Bongo III', 'Sportage'],
+    TOYOTA: ['Hilux', 'HiAce Ambulancia', 'Land Cruiser'],
+    MERCEDES_BENZ: ['Sprinter 315/415 CDI', 'Vito Combi'],
+    GENERICO_VEHICULAR: ['Genérico 12V Gasolina', 'Genérico 24V Diésel']
+  },
+  AUTOCLAVE: {
+    STERIS_AMSCO: ['Amsco 400 Small', 'Amsco Century V116', 'Steris V-PRO'],
+    GETINGE: ['Getinge GSS67N', 'Getinge HS66', 'Getinge K-Series'],
+    TUTTNAUER: ['2340M Manual', 'Elara 11 Clase B', 'EZ10k Plus'],
+    GENERICO: ['Autoclave Clase B 24L', 'Horno Pasteur']
+  },
+  PLC_GENERICO: {
+    HANKERILA: ['HKL-EA8 (8 Relés / 8 Entradas / ADS1115)'],
+    GENERICO: ['Tablero Soft-PLC Universal 8 I/O', 'Controlador de Cuarto Frío']
+  }
+};
+
+const PLACAS_PREFABRICADAS = {
+  HKL_EA8: {
+    nombre: 'Hankerila HKL-EA8 Industrial',
+    desc: 'ESP32 16MB + Ethernet LAN8720 + I2C (0x24 Relés, 0x26 Opto, 0x48 ADC ADS1115)',
+    uplink: 'ETHERNET_LAN8720',
+    sda: 4,
+    scl: 5
+  },
+  KINCONY_A8: {
+    nombre: 'Kincony KC868-A8 PLC',
+    desc: 'ESP32 + Ethernet LAN8720 + 8 Relés Directos + 8 Entradas Opto',
+    uplink: 'ETHERNET_LAN8720',
+    sda: 4,
+    scl: 15
+  },
+  GENERIC_DEVKIT: {
+    nombre: 'ESP32 DevKit Genérico / Custom',
+    desc: 'Placa estándar con conexionado libre de taller',
+    uplink: 'WIFI',
+    sda: 21,
+    scl: 22
+  }
+};
+
 export default function AiAutomationStudio({ fleet = {}, sendCommand = null, initialDeviceMac = null }) {
-  const [activeTab, setActiveTab] = useState('STUDIO');
+  const [activeTab, setActiveTab] = useState('STUDIO'); // 'STUDIO' | 'HARDWARE_I2C' | 'BIBLIOTECA' | 'EDITOR_JSON'
   const [modoEdicion, setModoEdicion] = useState(false);
   const [widgetEnEdicion, setWidgetEnEdicion] = useState(null);
 
-  // Chat Conversacional
+  // Chat Conversacional con la IA
   const [prompt, setPrompt] = useState('');
   const [historialChat, setHistorialChat] = useState([
     {
       id: 'init_msg',
       sender: 'ai',
-      texto: 'Hola. Soy tu Copilot de Ingeniería. Describe cualquier lógica, secuencia o control y programaré el Core 1 de tu ESP32 HKL-EA8 a tu medida.'
+      texto: 'Hola. Soy tu Copilot de Ingeniería. Describe cualquier lógica, secuencia, autoclave, vehículo o proceso industrial y programaré directamente el Core 1 Soft-PLC de tu ESP32.'
     }
   ]);
   const [compilando, setCompilando] = useState(false);
@@ -52,7 +100,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
 
   const [apiKey] = useState(() => localStorage.getItem('biofleet_ai_key') || GROQ_DEFAULT_API_KEY);
 
-  // Perfil, Dashboard y Receta
+  // Perfil, Dashboard y Receta de Automatización
   const [perfilActivoId, setPerfilActivoId] = useState(null);
   const [perfilNombre, setPerfilNombre] = useState('Automatización Industrial v1');
   const [tipoEquipo, setTipoEquipo] = useState('UNIVERSAL_PLC');
@@ -72,10 +120,19 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
   const [transmitting, setTransmitting] = useState(false);
   const [msg, setMsg] = useState('');
 
-  // Hardware y Estados
+  // Telemetría en Vivo desde el Firmware
+  const cleanMac = (selectedMac || '').toUpperCase().replace(/[:\-]/g, '');
+  const activeDevice = fleet[cleanMac] || null;
+  const dDev = activeDevice?.datos || {};
+  const relesFisicos = dDev.reles || {};
+  const entradasFisicas = dDev.entradas || {};
+  const adcFisico = dDev.adc || {};
+
+  // Hardware y Escáner I2C
+  const [modoHardware, setModoHardware] = useState('PREFABRICADO');
+  const [placaPrefabricada, setPlacaPrefabricada] = useState('HKL_EA8');
   const [rolesReles, setRolesReles] = useState({});
   const [nombresReles, setNombresReles] = useState({});
-  const [liveRelayStates, setLiveRelayStates] = useState({});
   const [chipsDetectados, setChipsDetectados] = useState([]);
   const [scanningI2C, setScanningI2C] = useState(false);
 
@@ -83,7 +140,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
   const [perfilesGuardados, setPerfilesGuardados] = useState([]);
   const [loadingLib, setLoadingLib] = useState(false);
 
-  // Referencias para Pointer Events
+  // Referencias de Pointer Events para Lienzo Libre
   const canvasRef = useRef(null);
   const activeInteraction = useRef({
     type: null,
@@ -100,6 +157,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [historialChat]);
 
+  // Cargar Biblioteca de Supabase
   const cargarBiblioteca = async () => {
     setLoadingLib(true);
     try {
@@ -117,33 +175,31 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
     cargarBiblioteca();
   }, []);
 
+  // Escuchar reporte I2C físico emitido por la placa
   useEffect(() => {
-    const cleanMac = (selectedMac || '').toUpperCase().replace(/[:\-]/g, '');
-    const dev = fleet[cleanMac];
-    if (dev?.i2cReport?.chips) {
-      setChipsDetectados(dev.i2cReport.chips);
+    if (activeDevice?.i2cReport?.chips) {
+      setChipsDetectados(activeDevice.i2cReport.chips);
       setScanningI2C(false);
     }
-    if (dev?.datos?.reles) {
-      setLiveRelayStates(dev.datos.reles);
-    }
-  }, [fleet, selectedMac]);
+  }, [activeDevice?.i2cReport]);
 
-  // DISPARAR RECETA DE SECUENCIA AL CORE 1 DEL ESP32 (main.cpp: APPLY_LOGICA_SECUENCIA)
+  // =========================================================================
+  // OPERACIÓN EN VIVO HACIA EL ESP32 (CORE 1 SOFT-PLC & RELÉS)
+  // =========================================================================
+
+  // 1. DISPARAR RECETA DE SECUENCIA AL CORE 1 DEL ESP32 (main.cpp: APPLY_LOGICA_SECUENCIA)
   const handleDispararRecetaFisica = (recetaAEnviar = null) => {
-    const cleanMac = (selectedMac || '').toUpperCase().replace(/[:\-]/g, '');
     if (!cleanMac) {
-      alert('Por favor selecciona una placa en el selector.');
+      alert('Por favor selecciona una placa física en el selector.');
       return;
     }
 
     const r = recetaAEnviar || recetaActiva;
     if (!r) {
-      alert('No hay una receta de secuencia definida para ejecutar.');
+      alert('No hay una receta de fases definida para ejecutar.');
       return;
     }
 
-    // Estructura exacta que espera main.cpp en la línea 396
     const payloadSecuencia = {
       cmd: 'APPLY_LOGICA_SECUENCIA',
       mac: cleanMac,
@@ -152,38 +208,43 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
 
     if (sendCommand) {
       sendCommand(cleanMac, payloadSecuencia);
-      setMsg(`⚡ [${cleanMac.slice(-4)}] Orden enviada al Core 1: Ejecutando "${r.nombre_receta || 'Secuencia'}"`);
+      setMsg(`⚡ Orden enviada al Core 1: Ejecutando "${r.nombre_receta || 'Proceso'}" en [${cleanMac.slice(-4)}]`);
     }
   };
 
-  // CONTROL DIRECTO DE RELÉ INDIVIDUAL (main.cpp: SET_RELAY)
+  // 2. PARO DE EMERGENCIA GLOBAL (main.cpp: ABORTAR_PROCESO)
+  const handleParoEmergencia = () => {
+    if (!cleanMac) return;
+    if (sendCommand) {
+      sendCommand(cleanMac, {
+        cmd: 'ABORTAR_PROCESO',
+        mac: cleanMac
+      });
+      setMsg(`🚨 PARO DE EMERGENCIA ENVIADO A [${cleanMac.slice(-4)}]: Salidas desenergizadas.`);
+    }
+  };
+
+  // 3. CONTROL DIRECTO DE RELÉ INDIVIDUAL (main.cpp: SET_RELAY)
   const handleToggleRelayDirecto = (canal, currentState = null) => {
-    const cleanMac = (selectedMac || '').toUpperCase().replace(/[:\-]/g, '');
     if (!cleanMac) {
-      alert('Por favor selecciona una placa en el selector.');
+      alert('Por favor selecciona una placa física en el selector.');
       return;
     }
 
-    const stateActual = currentState !== null ? currentState : Boolean(liveRelayStates[canal] || liveRelayStates[`R${canal}`]);
-    const nextVal = !stateActual;
-
-    setLiveRelayStates(prev => ({
-      ...prev,
-      [canal]: nextVal ? 1 : 0,
-      [`R${canal}`]: nextVal ? 1 : 0
-    }));
+    const estadoActual = currentState !== null ? currentState : Boolean(relesFisicos[`R${canal}`]);
+    const nextVal = !estadoActual;
 
     if (sendCommand) {
       sendCommand(cleanMac, {
         cmd: 'SET_RELAY',
         canal: Number(canal),
-        val: nextVal // main.cpp espera un booleano (true/false)
+        val: nextVal
       });
-      setMsg(`📡 [${cleanMac.slice(-4)}] Relé R${canal} -> ${nextVal ? 'ON (ACTIVO)' : 'OFF (APAGADO)'}`);
+      setMsg(`📡 [${cleanMac.slice(-4)}] Comando SET_RELAY: R${canal} -> ${nextVal ? 'ON' : 'OFF'}`);
     }
   };
 
-  // ENVIAR MENSAJE AL COPILOT
+  // 4. DIALOGAR CON EL COPILOT Y COMPILAR MANIFIESTO
   const handleEnviarMensaje = async (e) => {
     if (e) e.preventDefault();
     const textoUsuario = prompt.trim();
@@ -195,13 +256,10 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
     setMsg('');
 
     try {
-      const cleanMac = (selectedMac || '').toUpperCase().replace(/[:\-]/g, '');
-      const targetDev = fleet[cleanMac] || null;
-
       const res = await conversarYCompilarConIA({
         prompt: textoUsuario,
         historial: historialChat.map(h => ({ sender: h.sender, contenido: h.texto })),
-        hardwareInfo: targetDev?.meta?.config_deseada || { reles: 8, entradas: 8 },
+        hardwareInfo: activeDevice?.meta?.config_deseada || { reles: 8, entradas: 8 },
         apiKey
       });
 
@@ -226,7 +284,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
 
       setHalPayload(res.halPayload || {});
       setJsonRaw(JSON.stringify(res, null, 2));
-      setMsg(`✨ Controles configurados para: "${res.titulo}"`);
+      setMsg(`✨ Arquitectura compilada: "${res.titulo}"`);
     } catch (err) {
       setHistorialChat(prev => [
         ...prev,
@@ -237,7 +295,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
     }
   };
 
-  // POINTER EVENTS (TOUCH Y MOUSE DRAG/RESIZE)
+  // 5. POINTER EVENTS: ARRASTRE Y REDIMENSIÓN EN LIENZO LIBRE
   const handlePointerDown = (e, idx, action) => {
     if (!modoEdicion) return;
     e.stopPropagation();
@@ -300,23 +358,22 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
     }
   };
 
+  // 6. ESCANEAR HARDWARE I2C
   const handleScanI2C = () => {
-    const cleanMac = (selectedMac || '').toUpperCase().replace(/[:\-]/g, '');
-    if (!cleanMac) return alert('Selecciona una placa.');
+    if (!cleanMac) return alert('Selecciona una placa física.');
     setScanningI2C(true);
     setMsg(`Escaneando bus I2C en [${cleanMac}]...`);
     if (sendCommand) sendCommand(cleanMac, { cmd: 'SCAN_HARDWARE' });
   };
 
-  // DESPLEGAR RECETA Y HAL COMPLETO A LITTLEFS
+  // 7. DESPLEGAR MANIFIESTO Y RECETA A LITTLEFS
   const handleDesplegarADispositivo = async () => {
-    const cleanMac = (selectedMac || '').toUpperCase().replace(/[:\-]/g, '');
     if (!cleanMac) return alert('Selecciona un equipo destino.');
 
     setTransmitting(true);
     setMsg(`Desplegando lógica y receta a [${cleanMac}]...`);
 
-    // 1. Si hay receta activa, enviarla al Core 1
+    // Si hay receta activa, transmitir al Core 1
     if (recetaActiva && sendCommand) {
       sendCommand(cleanMac, {
         cmd: 'APPLY_LOGICA_SECUENCIA',
@@ -325,7 +382,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
       });
     }
 
-    // 2. Grabar HAL en Flash LittleFS (main.cpp: APPLY_HAL_MAP)
+    // Grabar HAL en Flash LittleFS
     const commandPayload = {
       cmd: 'APPLY_HAL_MAP',
       mac: cleanMac,
@@ -348,7 +405,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
         updated_at: new Date().toISOString()
       }, { onConflict: 'mac' });
 
-      setMsg(`⚡ ¡Lógica y receta grabadas en Flash LittleFS de [${cleanMac}]!`);
+      setMsg(`⚡ ¡Lógica grabada en Flash LittleFS de [${cleanMac}]!`);
     } catch (err) {
       setMsg('Error Supabase: ' + err.message);
     } finally {
@@ -356,10 +413,55 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
     }
   };
 
+  // 8. GUARDAR PERFIL EN SUPABASE
+  const handleGuardarEnSupabase = async () => {
+    const payloadDB = {
+      nombre: perfilNombre.trim() || 'Perfil Sin Nombre',
+      descripcion: `Automatización para ${tipoEquipo} • ${widgets.length} Widgets`,
+      hardware_rev: placaPrefabricada,
+      perfil_json: { tipo: tipoEquipo, hal: halPayload, receta: recetaActiva, dashboard: widgets },
+      activo: true,
+      updated_at: new Date().toISOString()
+    };
+
+    try {
+      if (perfilActivoId) {
+        await supabase.from('perfiles_hardware').update(payloadDB).eq('id', perfilActivoId);
+      } else {
+        const { data } = await supabase.from('perfiles_hardware').insert([payloadDB]).select();
+        if (data && data[0]) setPerfilActivoId(data[0].id);
+      }
+      setMsg(`💾 ¡Perfil "${perfilNombre}" respaldado en Supabase Cloud!`);
+      cargarBiblioteca();
+    } catch (err) {
+      setMsg('Error Supabase: ' + err.message);
+    }
+  };
+
+  // Helper para obtener valores reales del snapshot de telemetría física
+  const getValorFisicoReal = (w) => {
+    const u = (w.unidad || '').toLowerCase();
+    const tit = (w.titulo || '').toLowerCase();
+
+    if (u.includes('c') || tit.includes('temp')) {
+      return (dDev.temp_camara !== undefined ? dDev.temp_camara : adcFisico.A0 || 25.0).toFixed(1);
+    }
+    if (u.includes('bar') || u.includes('psi') || tit.includes('pres')) {
+      return (dDev.presion !== undefined ? dDev.presion : adcFisico.A1 || 0.0).toFixed(2);
+    }
+    if (u.includes('v') || tit.includes('bat')) {
+      return (dDev.bateria_v !== undefined ? dDev.bateria_v : adcFisico.A2 || 12.6).toFixed(1);
+    }
+    if (u.includes('%') || tit.includes('nivel') || tit.includes('hum')) {
+      return (adcFisico.A3 !== undefined ? adcFisico.A3 : 45.0).toFixed(0);
+    }
+    return '0.0';
+  };
+
   return (
     <div className="space-y-4 font-mono text-xs select-none">
       
-      {/* 1. BARRA SUPERIOR */}
+      {/* 1. BARRA SUPERIOR CON ESTADO DE TELEMETRÍA */}
       <div className="ultra-glass p-4 rounded-2xl border border-amber-500/30 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
         <div className="flex items-center gap-3">
           <div className="p-2.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300">
@@ -369,15 +471,16 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
             <h2 className="text-base font-bold text-white flex items-center gap-2">
               BioFleet AI Studio Enterprise
               <span className="px-2 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[9px]">
-                FIRMWARE v8.0 SINCRONIZADO
+                FIRMWARE v8.5 CONECTADO
               </span>
             </h2>
             <p className="text-[11px] text-slate-300 font-sans">
-              Compilador IA directamente enlazado al Core 1 Soft-PLC de la placa HKL-EA8.
+              Supervisión SCADA en tiempo real y gobierno de autómata Soft-PLC (Core 1 a 50Hz).
             </p>
           </div>
         </div>
 
+        {/* NAVEGACIÓN Y MODO EDICIÓN */}
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex p-0.5 bg-slate-950 border border-slate-800 rounded-xl">
             <button
@@ -387,7 +490,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
               }`}
             >
               <LayoutGrid className="w-3.5 h-3.5" />
-              <span>Copilot & Lienzo</span>
+              <span>Copilot & SCADA</span>
             </button>
             <button
               onClick={() => setActiveTab('HARDWARE_I2C')}
@@ -444,7 +547,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
         </div>
       )}
 
-      {/* 2. CHAT CON LA IA & LIENZO */}
+      {/* 2. CHAT CON LA IA & LIENZO SCADA */}
       {activeTab === 'STUDIO' && (
         <div className="space-y-4">
           
@@ -453,11 +556,11 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
             <div className="flex justify-between items-center border-b border-slate-800 pb-2">
               <span className="text-amber-300 font-bold uppercase text-[11px] flex items-center gap-1.5">
                 <Bot className="w-4 h-4 text-emerald-400" />
-                Diálogo con el Ingeniero IA:
+                Diálogo con el Ingeniero IA (Groq Llama 3.1 8B):
               </span>
               <button
                 type="button"
-                onClick={() => setHistorialChat([{ id: 'reset', sender: 'ai', texto: 'Historial reiniciado. Dime qué nuevo sistema deseas diseñar.' }])}
+                onClick={() => setHistorialChat([{ id: 'reset', sender: 'ai', texto: 'Historial reiniciado. Describe qué nuevo proceso o máquina deseas diseñar.' }])}
                 className="text-[10px] text-slate-400 hover:text-white"
               >
                 Limpiar Chat
@@ -488,7 +591,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                 type="text"
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
-                placeholder="Escribe tu instrucción (ej: 'creame un boton para encender de r1 a r8 y que se apaguen en orden' o 'controla r5')..."
+                placeholder="Describe tu sistema (ej: 'Autoclave con doble rampa de vacío a -0.8 bar, calentar a 134°C en A0 con R1, meseta 5 min y paro por puerta IN1')..."
                 className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-sans text-xs focus:outline-none focus:border-amber-400"
               />
               <button
@@ -502,7 +605,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
             </form>
           </div>
 
-          {/* BARRA DE IDENTIDAD Y DESTINO */}
+          {/* BARRA DE IDENTIDAD Y ACCIONES RÁPIDAS */}
           <div className="ultra-glass p-3 rounded-xl border border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
             <div className="flex items-center gap-2 w-full sm:w-auto">
               <input
@@ -517,6 +620,15 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
             </div>
 
             <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+              <button
+                type="button"
+                onClick={handleGuardarEnSupabase}
+                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold flex items-center gap-1.5 shadow-md shadow-emerald-600/20"
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span>{perfilActivoId ? 'Actualizar Cloud' : 'Guardar en Supabase'}</span>
+              </button>
+
               <select
                 value={selectedMac}
                 onChange={(e) => setSelectedMac(e.target.value)}
@@ -542,24 +654,46 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
             </div>
           </div>
 
-          {/* LIENZO DE WIDGETS */}
+          {/* MONITOR DE FASE ACTIVA EN TIEMPO REAL DEL ESP32 */}
+          {dDev.fase && (
+            <div className="p-3 bg-slate-950/90 rounded-xl border border-cyan-500/40 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Activity className="w-4 h-4 text-cyan-400 animate-pulse" />
+                <span className="text-slate-400">FASE ACTIVA EN CORE 1:</span>
+                <span className="text-cyan-300 font-bold">{dDev.fase}</span>
+                {dDev.seg_restantes > 0 && (
+                  <span className="text-amber-400 ml-2">({dDev.seg_restantes}s restantes)</span>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={handleParoEmergencia}
+                className="px-3 py-1 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-lg flex items-center gap-1 shadow-md"
+              >
+                <Square className="w-3.5 h-3.5 fill-white" />
+                <span>PARO INMEDIATO</span>
+              </button>
+            </div>
+          )}
+
+          {/* LIENZO SCADA DE WIDGETS */}
           <div className="ultra-glass p-4 rounded-2xl border border-slate-800 space-y-3">
             <div className="flex justify-between items-center border-b border-slate-800 pb-2">
               <span className="text-white font-bold flex items-center gap-2">
                 <LayoutGrid className="w-4 h-4 text-cyan-400" />
-                Lienzo Generado ({widgets.length} Widgets):
+                Lienzo SCADA ({widgets.length} Controles):
               </span>
               <span className="text-[10px] text-amber-300">
                 {modoEdicion 
                   ? '🛠️ Arrastra la barra superior para mover y la esquina para redimensionar' 
-                  : '👁️ Modo Operador: Toca para accionar relés en vivo'}
+                  : '👁️ Modo Operador: Toca para accionar relés o disparar la receta en Core 1'}
               </span>
             </div>
 
             {widgets.length === 0 ? (
               <div className="py-16 border-2 border-dashed border-slate-800 rounded-xl text-center text-slate-500 space-y-2">
                 <Sparkles className="w-8 h-8 mx-auto text-amber-500/40 animate-pulse" />
-                <p>Escribe tu instrucción en el diálogo para que la IA genere tus controles.</p>
+                <p>Escribe tu instrucción en el diálogo de arriba para generar los controles.</p>
               </div>
             ) : (
               <div
@@ -569,8 +703,8 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                 <div className="w-[2400px] h-[1800px] relative">
                   {widgets.map((w, idx) => {
                     const isEditingThis = widgetEnEdicion === idx;
-                    const isRelayActive = Boolean(liveRelayStates[w.canal || 1] || liveRelayStates[`R${w.canal || 1}`]);
-                    const esBotonReceta = w.accion === 'EJECUTAR_RECETA' || recetaActiva !== null;
+                    const isRelayActive = Boolean(relesFisicos[`R${w.canal || 1}`]);
+                    const esBotonReceta = w.accion === 'EJECUTAR_RECETA' || (recetaActiva && w.tipo === 'ACTION_BUTTON');
 
                     return (
                       <div
@@ -624,7 +758,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                                 onClick={() => setWidgets(widgets.filter((_, i) => i !== idx))}
                                 className="p-1 rounded bg-slate-800 text-rose-300"
                               >
-                                <Trash2 className="w-3.5 h-3.5" />
+                                <Trash2 className="w-3 h-3" />
                               </button>
                             </div>
                           )}
@@ -692,10 +826,17 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
 
                               {w.tipo === 'GAUGE_RADIAL' && (
                                 <div className="text-center w-full">
-                                  <span className="text-2xl font-bold font-mono tracking-tight text-white">{w.max ? Math.round(w.max * 0.42) : 42}</span>
-                                  <span className="text-[10px] text-slate-400 ml-1">{w.unidad || ''}</span>
+                                  <span className="text-2xl font-bold font-mono tracking-tight text-white">
+                                    {getValorFisicoReal(w)}
+                                  </span>
+                                  <span className="text-[10px] text-slate-400 ml-1">{w.unidad || 'bar'}</span>
                                   <div className="w-full bg-slate-950 h-1.5 rounded-full overflow-hidden mt-1.5 border border-slate-800">
-                                    <div className="bg-current h-full w-2/5 rounded-full"></div>
+                                    <div 
+                                      className="bg-current h-full rounded-full transition-all duration-300"
+                                      style={{
+                                        width: `${Math.min(100, Math.max(0, ((parseFloat(getValorFisicoReal(w)) - (w.min || 0)) / ((w.max || 10) - (w.min || 0))) * 100))}%`
+                                      }}
+                                    ></div>
                                   </div>
                                   <span className="block text-[8px] text-slate-500 mt-1">{w.titulo}</span>
                                 </div>
@@ -703,8 +844,10 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
 
                               {w.tipo === 'VALUE_CARD' && (
                                 <div className="text-center">
-                                  <span className="text-2xl font-bold font-mono tracking-tight text-white">0.00</span>
-                                  <span className="text-xs text-slate-400 ml-1">{w.unidad || ''}</span>
+                                  <span className="text-2xl font-bold font-mono tracking-tight text-white">
+                                    {getValorFisicoReal(w)}
+                                  </span>
+                                  <span className="text-xs text-slate-400 ml-1">{w.unidad || '°C'}</span>
                                   <span className="block text-[8px] text-slate-500 mt-0.5">{w.titulo}</span>
                                 </div>
                               )}
@@ -784,7 +927,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
             </div>
             <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1">
               {[1, 2, 3, 4, 5, 6, 7, 8].map(num => {
-                const isRelayOn = Boolean(liveRelayStates[num] || liveRelayStates[`R${num}`]);
+                const isRelayOn = Boolean(relesFisicos[`R${num}`]);
                 return (
                   <div key={num} className="p-2.5 bg-slate-950 rounded-lg border border-slate-800 space-y-1.5">
                     <div className="flex justify-between items-center">
@@ -834,6 +977,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                       const j = p.perfil_json || {};
                       setWidgets(j.dashboard || []);
                       setHalPayload(j.hal || {});
+                      setRecetaActiva(j.receta || null);
                       setActiveTab('STUDIO');
                       setMsg(`📂 Perfil "${p.nombre}" cargado.`);
                     }}
