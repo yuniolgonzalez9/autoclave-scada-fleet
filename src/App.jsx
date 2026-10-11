@@ -551,7 +551,7 @@ function ScadaAppContent() {
           </div>
         </header>
 
-        {/* DOCK PC CON ACCESO DIRECTO A AI STUDIO */}
+        {/* DOCK PC CON ACCESO DIRECTO A AI STUDIO (PRESERVA MAC ACTIVA) */}
         {user && !kioskMac && !isOperator && (
           <div className="hidden md:flex items-center gap-2 px-6 py-2 bg-slate-950/60 border-b border-cyan-500/10">
             <ClinicalTooltip title={CLINICAL_HELP.nav_flota.title} description={CLINICAL_HELP.nav_flota.desc} badge={CLINICAL_HELP.nav_flota.badge}>
@@ -576,9 +576,9 @@ function ScadaAppContent() {
               </button>
             </ClinicalTooltip>
 
-            {/* BOTÓN DIRECTO: ✨ AI STUDIO */}
+            {/* BOTÓN DIRECTO: ✨ AI STUDIO (PRESERVA LA PLACA QUE ESTÉS EDITANDO) */}
             <button
-              onClick={() => { setActiveSection('studio'); setSelectedMac(null); }}
+              onClick={() => setActiveSection('studio')}
               className={`px-3.5 py-1.5 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 transition-all ${
                 activeSection === 'studio' 
                   ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/30' 
@@ -917,7 +917,7 @@ function ScadaAppContent() {
           </main>
         )}
 
-        {/* BARRA INFERIOR CELULAR CON BOTÓN STUDIO */}
+        {/* BARRA INFERIOR CELULAR CON BOTÓN STUDIO (PRESERVA MAC ACTIVA) */}
         {user && !kioskMac && (
           <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-slate-950/90 border-t border-cyan-500/30 backdrop-blur-xl flex items-center justify-around z-50 px-2">
             <button
@@ -942,7 +942,7 @@ function ScadaAppContent() {
 
             {/* BOTÓN STUDIO EN CELULAR */}
             <button
-              onClick={() => { setActiveSection('studio'); setSelectedMac(null); }}
+              onClick={() => setActiveSection('studio')}
               className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-[10px] font-mono ${
                 activeSection === 'studio' ? 'text-amber-400 font-bold' : 'text-slate-400'
               }`}
