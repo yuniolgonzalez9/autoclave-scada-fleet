@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 
 const SNAP_GRID = 10;
+const GROQ_DEFAULT_API_KEY = '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';
 
 const CATALOGO_MAESTRO = {
   VEHICULO: {
@@ -77,24 +78,24 @@ const PLACAS_PREFABRICADAS = {
 };
 
 export default function AiAutomationStudio({ fleet = {}, sendCommand = null, initialDeviceMac = null }) {
-  // Pestañas Principales
+  // Pestañas Maestras
   const [activeTab, setActiveTab] = useState('STUDIO'); // 'STUDIO' | 'HARDWARE_I2C' | 'BIBLIOTECA' | 'EDITOR_JSON'
   const [modoEdicion, setModoEdicion] = useState(false);
   const [widgetEnEdicion, setWidgetEnEdicion] = useState(null);
 
-  // Prompt y Compilador
+  // Prompt de Razonamiento
   const [prompt, setPrompt] = useState('');
   const [modoIaRefinar, setModoIaRefinar] = useState(false);
   const [compilando, setCompilando] = useState(false);
 
-  // Gestión de API Key
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('biofleet_ai_key') || '');
+  // Clave Groq conectada por defecto
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem('biofleet_ai_key') || GROQ_DEFAULT_API_KEY);
   const [showKeyModal, setShowKeyModal] = useState(false);
   const [keyInputTemp, setKeyInputTemp] = useState('');
 
   // Perfil y Dashboard
   const [perfilActivoId, setPerfilActivoId] = useState(null);
-  const [perfilNombre, setPerfilNombre] = useState('Sistema Inteligente v1');
+  const [perfilNombre, setPerfilNombre] = useState('Automatización Industrial v1');
   const [widgets, setWidgets] = useState([]);
   const [halPayload, setHalPayload] = useState(null);
   const [jsonRaw, setJsonRaw] = useState('');
@@ -117,7 +118,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
   const [marca, setMarca] = useState('HANKERILA');
   const [modelo, setModelo] = useState('HKL-EA8 (8 Relés / 8 Entradas / ADS1115)');
 
-  // Escáner I2C Real
+  // Escáner I2C
   const [scanningI2C, setScanningI2C] = useState(false);
   const [chipsDetectados, setChipsDetectados] = useState([]);
   const [selectedChipDir, setSelectedChipDir] = useState('0x24');
@@ -135,7 +136,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
   const [perfilesGuardados, setPerfilesGuardados] = useState([]);
   const [loadingLib, setLoadingLib] = useState(false);
 
-  // Referencias para Pointer Events (Arrastre y Redimensionamiento)
+  // Referencias para Pointer Events (Touch & Mouse Drag & Resize libre)
   const canvasRef = useRef(null);
   const activeInteraction = useRef({
     type: null,
@@ -147,6 +148,13 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
     initialW: 0,
     initialH: 0
   });
+
+  // Guardar en localStorage al montar si no estaba guardada
+  useEffect(() => {
+    if (!localStorage.getItem('biofleet_ai_key')) {
+      localStorage.setItem('biofleet_ai_key', GROQ_DEFAULT_API_KEY);
+    }
+  }, []);
 
   // Cargar Biblioteca de Supabase
   const cargarBiblioteca = async () => {
@@ -191,14 +199,14 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
     setApiKey(clean);
     localStorage.setItem('biofleet_ai_key', clean);
     setShowKeyModal(false);
-    setMsg(`✅ Proveedor activo: ${detectarProveedorApiKey(clean)}`);
+    setMsg(`✅ Motor activo: ${detectarProveedorApiKey(clean)}`);
   };
 
-  // COMPILAR CON IA (DESBLOQUEO INSTANTÁNEO GARANTIZADO)
+  // COMPILAR CON IA (RAZONAMIENTO PROFUNDO LLAMA 3.3 70B)
   const handleEjecutarCompilacion = async (textoPersonalizado = null) => {
     const texto = textoPersonalizado || prompt;
     if (!texto.trim()) {
-      alert('Por favor escribe qué automatización deseas compilar.');
+      alert('Por favor describe qué automatización deseas razonar y compilar.');
       return;
     }
 
@@ -220,7 +228,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
         if (!modoIaRefinar) {
           setPerfilActivoId(null);
           setPerfilNombre(res.titulo || 'Sistema Compilado');
-          setTipoEquipo(res.halPayload?.tipo || 'UNIVERSAL_PLC');
+          setTipoEquipo(res.tipo || res.halPayload?.tipo || 'UNIVERSAL_PLC');
         }
 
         if (res.halPayload?.nombres_reles) {
@@ -234,7 +242,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
         setHalPayload(res.halPayload || {});
         setJsonRaw(JSON.stringify(res, null, 2));
 
-        setMsg(`✨ ¡Compilación exitosa: ${res.titulo}!`);
+        setMsg(`🧠 [Groq Llama 3.3 70B]: ¡Arquitectura razonada con éxito para "${res.titulo}"!`);
       }
     } catch (err) {
       console.warn('Compilación ajustada:', err);
@@ -244,7 +252,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
     }
   };
 
-  // POINTER EVENTS: ARRASTRE Y REDIMENSIÓN LIBRE
+  // POINTER EVENTS: DRAG Y RESIZE LIBRE
   const handlePointerDown = (e, idx, action) => {
     if (!modoEdicion) return;
     e.stopPropagation();
@@ -340,7 +348,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
     if (sendCommand) sendCommand(cleanMac, { cmd: 'SCAN_HARDWARE' });
   };
 
-  // DESPLEGAR A LA PLACA FÍSICA (FLASH LITTLEFS & MQTT)
+  // DESPLEGAR A LA PLACA FÍSICA (LITTLEFS & MQTT)
   const handleDesplegarADispositivo = async () => {
     const cleanMac = (selectedMac || '').toUpperCase().replace(/[:\-]/g, '');
     if (!cleanMac) return alert('Selecciona un equipo destino en el selector.');
@@ -398,7 +406,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
     }
   };
 
-  // GUARDAR EN SUPABASE ('perfiles_hardware')
+  // GUARDAR EN SUPABASE
   const handleGuardarEnSupabase = async () => {
     const payloadDB = {
       nombre: perfilNombre.trim() || 'Perfil Sin Nombre',
@@ -423,8 +431,6 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
     }
   };
 
-  const proveedorActual = apiKey ? detectarProveedorApiKey(apiKey) : 'LOCAL';
-
   return (
     <div className="space-y-4 font-mono text-xs select-none">
       
@@ -438,11 +444,11 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
             <h2 className="text-base font-bold text-white flex items-center gap-2">
               BioFleet AI Studio Enterprise
               <span className="px-2 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[9px]">
-                MOTOR: {proveedorActual}
+                MOTOR: GROQ LLAMA 3.3 70B
               </span>
             </h2>
             <p className="text-[11px] text-slate-300 font-sans">
-              Compilador generativo industrial y provisión pin a pin para silicio HKL-EA8.
+              Razonamiento de ingeniería profunda para procesos industriales, SCADA y silicio HKL-EA8.
             </p>
           </div>
         </div>
@@ -451,14 +457,10 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
         <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={() => { setKeyInputTemp(apiKey); setShowKeyModal(true); }}
-            className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 border transition-all ${
-              apiKey 
-                ? 'bg-slate-900 border-emerald-500/50 text-emerald-300 hover:border-emerald-400' 
-                : 'bg-amber-500/20 border-amber-500/50 text-amber-300 hover:bg-amber-500/30'
-            }`}
+            className="px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 border transition-all bg-slate-900 border-emerald-500/50 text-emerald-300 hover:border-emerald-400"
           >
             <Key className="w-3.5 h-3.5" />
-            <span>{apiKey ? `🔑 Proveedor: ${proveedorActual}` : '🔑 Conectar API Key'}</span>
+            <span>Groq Llama 3.3 (Activo)</span>
           </button>
 
           <div className="flex p-0.5 bg-slate-950 border border-slate-800 rounded-xl">
@@ -527,17 +529,17 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
       )}
 
       {/* ========================================================================= */}
-      {/* 2. PESTAÑA PRINCIPAL: LIENZO Y PROMPT LIBRE                               */}
+      {/* 2. PESTAÑA PRINCIPAL: LIENZO Y PROMPT DE RAZONAMIENTO                     */}
       {/* ========================================================================= */}
       {activeTab === 'STUDIO' && (
         <div className="space-y-4">
           
-          {/* PROMPT DE INGENIERÍA */}
+          {/* PROMPT DE RAZONAMIENTO */}
           <div className="ultra-glass p-4 rounded-2xl border border-amber-500/30 space-y-3">
             <div className="flex justify-between items-center">
               <span className="text-amber-300 font-bold uppercase text-[11px] flex items-center gap-1.5">
                 <Wand2 className="w-3.5 h-3.5" />
-                Prompt Libre de Ingeniería (Escribe cualquier proceso industrial o máquina):
+                Prompt Libre de Ingeniería (Razona secuencias, rampas, autoclaves, vehículos y lógicas complejas):
               </span>
               <label className="text-[10px] text-slate-300 cursor-pointer flex items-center gap-1.5">
                 <input
@@ -555,7 +557,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                 rows={2}
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
-                placeholder="Ejemplo: 'r1' o 'necesito un boton el cual hara un teste en los reles desde el r1 hasta el r8'"
+                placeholder="Ejemplo: 'Autoclave con doble rampa de vacío, calentamiento 134°C en R1, sensor A0, purga R4 si pasa de 2.5 bar y paro por puerta IN1'"
                 className="flex-1 bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white font-sans focus:outline-none focus:border-amber-400"
               />
               <button
@@ -565,7 +567,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                 className="px-5 py-2 bg-gradient-to-r from-amber-500 to-emerald-500 hover:opacity-90 text-slate-950 font-bold rounded-xl flex flex-col items-center justify-center gap-1 shadow-lg shadow-amber-500/20 shrink-0 disabled:opacity-50 font-mono"
               >
                 {compilando ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                <span>{compilando ? 'Compilando...' : 'Generar IA'}</span>
+                <span>{compilando ? 'Razonando...' : 'Generar IA'}</span>
               </button>
             </div>
           </div>
@@ -659,7 +661,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
             {widgets.length === 0 ? (
               <div className="py-16 border-2 border-dashed border-slate-800 rounded-xl text-center text-slate-500 space-y-2">
                 <Sparkles className="w-8 h-8 mx-auto text-amber-500/40 animate-pulse" />
-                <p>Escribe tu automatización arriba (ej: "r1" o "test de reles r1 a r8") y pulsa "Generar IA".</p>
+                <p>Escribe tu automatización compleja arriba y pulsa "Generar IA".</p>
               </div>
             ) : (
               <div
@@ -689,7 +691,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                           'border-cyan-500/40 text-cyan-300'
                         }`}
                       >
-                        {/* 1. HEADER EXCLUSIVO PARA DRAG (NO INTERCEPTA CLICKS DE BOTONES) */}
+                        {/* 1. HEADER EXCLUSIVO PARA DRAG */}
                         <div
                           onPointerDown={(e) => handlePointerDown(e, idx, 'DRAG')}
                           onPointerMove={handlePointerMove}
@@ -1058,11 +1060,11 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
       {/* MODAL CONFIGURACIÓN API KEY */}
       {showKeyModal && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="ultra-glass border-2 border-amber-500/60 p-6 rounded-2xl max-w-md w-full space-y-4 shadow-2xl font-mono text-xs">
+          <div className="ultra-glass border-2 border-emerald-500/60 p-6 rounded-2xl max-w-md w-full space-y-4 shadow-2xl font-mono text-xs">
             <div className="flex justify-between items-center border-b border-slate-800 pb-2">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <Key className="w-4 h-4 text-amber-400" />
-                Vincular Proveedor de IA Cloud
+                <Key className="w-4 h-4 text-emerald-400" />
+                Motor de IA: Groq Llama 3.3 (70B)
               </h3>
               <button onClick={() => setShowKeyModal(false)} className="text-slate-400 hover:text-white">
                 <X className="w-4 h-4" />
@@ -1070,39 +1072,17 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
             </div>
 
             <p className="text-slate-300 leading-relaxed text-[11px]">
-              El sistema compila localmente sin fallos. Si deseas conectar un modelo LLM externo, ingresa una clave:
+              Tu clave de Groq Llama 3.3 está precargada y conectada. Si deseas actualizarla, puedes pegarla aquí:
             </p>
 
-            <div className="space-y-2">
-              <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-[10px]">
-                <p className="font-bold text-amber-400 flex items-center justify-between">
-                  <span>Groq (Ultra Rápido Llama 3.3 - Sin 404)</span>
-                  <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer" className="underline text-cyan-300 flex items-center gap-1">
-                    Obtener aquí <ExternalLink className="w-3 h-3" />
-                  </a>
-                </p>
-                <p className="text-slate-400 mt-0.5">Claves gratuitas con prefijo 'gsk_'.</p>
-              </div>
-
-              <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-[10px]">
-                <p className="font-bold text-emerald-400 flex items-center justify-between">
-                  <span>OpenAI (GPT-4o-mini)</span>
-                  <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer" className="underline text-cyan-300 flex items-center gap-1">
-                    Obtener aquí <ExternalLink className="w-3 h-3" />
-                  </a>
-                </p>
-                <p className="text-slate-400 mt-0.5">Claves estándar con prefijo 'sk-'.</p>
-              </div>
-            </div>
-
             <div>
-              <label className="text-slate-300 block mb-1 font-bold">API Key:</label>
+              <label className="text-slate-300 block mb-1 font-bold">API Key (Groq / gsk_...):</label>
               <input
                 type="password"
                 value={keyInputTemp}
                 onChange={(e) => setKeyInputTemp(e.target.value)}
-                placeholder="gsk_... o sk-..."
-                className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs font-mono focus:border-amber-400 focus:outline-none"
+                placeholder="gsk_..."
+                className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs font-mono focus:border-emerald-400 focus:outline-none"
               />
             </div>
 
@@ -1117,7 +1097,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
               <button
                 type="button"
                 onClick={handleGuardarApiKey}
-                className="flex-1 py-2 bg-amber-500 text-slate-950 font-bold rounded-xl shadow-lg hover:bg-amber-400"
+                className="flex-1 py-2 bg-emerald-500 text-slate-950 font-bold rounded-xl shadow-lg hover:bg-emerald-400"
               >
                 Guardar Clave
               </button>
