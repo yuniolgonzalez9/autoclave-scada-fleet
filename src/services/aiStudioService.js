@@ -1,7 +1,7 @@
 /**
  * =========================================================================================
  * PROYECTO: BIOFLEET OS™ v2.0 ENTERPRISE
- * SERVICIO COMPILADOR DE IA REAL - TEXT/JSON MULTI-ENGINE (GEMINI / GROQ / OPENAI)
+ * SERVICIO COMPILADOR DE IA REAL - TEXT/JSON MULTI-ENGINE BLINDADO
  * =========================================================================================
  */
 
@@ -24,8 +24,9 @@ TIPOS DE WIDGETS SOPORTADOS PARA EL DASHBOARD:
 - 'CHART_HISTORY': Gráfica temporal continua de telemetría.
 
 REGLAS DE SALIDA ESTRICTAS:
-- Devuelve EXCLUSIVAMENTE un objeto JSON válido (sin markdown, sin bloques de texto explicativo).
-- Estructura obligatoria del JSON:
+- Responde ÚNICAMENTE con un objeto JSON válido.
+- No agregues texto introductorio, ni saludos, ni explicaciones, ni etiquetas de código.
+- Estructura obligatoria:
 {
   "titulo_programa": "Nombre del sistema diseñado",
   "descripcion": "Explicación técnica detallada de la lógica implementada",
@@ -36,26 +37,27 @@ REGLAS DE SALIDA ESTRICTAS:
       "R5": "ROL_R5", "R6": "ROL_R6", "R7": "ROL_R7", "R8": "ROL_R8"
     },
     "nombres_reles": {
-      "R1": "Nombre salida 1", "R2": "Nombre salida 2", ...
+      "R1": "Nombre salida 1", "R2": "Nombre salida 2", "R3": "Nombre salida 3", "R4": "Nombre salida 4",
+      "R5": "Nombre salida 5", "R6": "Nombre salida 6", "R7": "Nombre salida 7", "R8": "Nombre salida 8"
     },
     "roles_entradas": {
-      "IN1": "ROL_IN1", "IN2": "ROL_IN2", ...
+      "IN1": "ROL_IN1", "IN2": "ROL_IN2"
     },
     "nombres_entradas": {
-      "IN1": "Nombre sensor 1", ...
+      "IN1": "Nombre sensor 1"
     }
   },
   "dashboard": [
     {
       "id": "w_1",
-      "tipo": "ACTION_BUTTON" | "SWITCH_TOGGLE" | "GAUGE_RADIAL" | "VALUE_CARD" | "STATUS_LED" | "CHART_HISTORY",
-      "titulo": "Etiqueta del Widget",
+      "tipo": "ACTION_BUTTON",
+      "titulo": "Test Secuencial R1-R8",
       "canal": 1,
-      "color": "cyan" | "emerald" | "amber" | "rose" | "purple",
-      "unidad": "bar" | "°C" | "V" | "RPM" | "%" | "L/min",
+      "color": "emerald",
+      "unidad": "",
       "min": 0,
       "max": 100,
-      "w": 260,
+      "w": 360,
       "h": 170
     }
   ]
@@ -64,32 +66,53 @@ REGLAS DE SALIDA ESTRICTAS:
 
 export function detectarProveedorApiKey(key = '') {
   const k = key.trim();
-  if (k.startsWith('AIza')) return 'GEMINI';
+  if (k.startsWith('AIza') || k.startsWith('AQ.')) return 'GEMINI';
   if (k.startsWith('gsk_')) return 'GROQ';
   if (k.startsWith('sk-')) return 'OPENAI';
   return 'GEMINI';
 }
 
 /**
- * INVOCADOR DE GOOGLE GEMINI (FILTRA MODELOS DE TEXTO EXCLUSIVOS, ELIMINA TTS/AUDIO)
+ * Función extractora tolerante a texto conversacional y markdown
+ */
+function extraerJsonPuro(textoCrudo) {
+  if (!textoCrudo) throw new Error('Respuesta vacía del modelo.');
+
+  let limpio = textoCrudo.trim();
+
+  // 1. Si viene envuelto en markdown ```json ... ```
+  if (limpio.includes('```')) {
+    limpio = limpio.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
+  }
+
+  // 2. Extraer el bloque delimitado por el primer '{' y el último '}'
+  const primerBrace = limpio.indexOf('{');
+  const ultimoBrace = limpio.lastIndexOf('}');
+
+  if (primerBrace !== -1 && ultimoBrace !== -1 && ultimoBrace > primerBrace) {
+    limpio = limpio.substring(primerBrace, ultimoBrace + 1);
+  }
+
+  return JSON.parse(limpio);
+}
+
+/**
+ * INVOCADOR DE GOOGLE GEMINI / GEMMA
  */
 async function invocarGemini(apiKey, userPrompt, hardwareInfo) {
-  // Lista fija de modelos oficiales probados de TEXTO en orden de prioridad
-  const modelosTextoFijos = [
+  let listaModelos = [
     'gemini-2.0-flash',
-    'gemini-2.0-flash-lite',
-    'gemini-1.5-flash-8b',
-    'gemini-1.5-pro'
+    'gemini-1.5-flash-latest',
+    'gemini-1.5-pro-latest',
+    'gemma-2-27b-it',
+    'gemma-2-9b-it'
   ];
 
-  let listaFinalModelos = [...modelosTextoFijos];
-
-  // Consultar lista viva de Google descartando explícitamente modelos de audio/tts
   try {
     const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
     if (listRes.ok) {
       const listData = await listRes.json();
-      const validosTexto = (listData.models || [])
+      const validos = (listData.models || [])
         .filter(m => 
           m.supportedGenerationMethods?.includes('generateContent') &&
           !m.name.includes('-tts') &&
@@ -98,40 +121,41 @@ async function invocarGemini(apiKey, userPrompt, hardwareInfo) {
         )
         .map(m => m.name.replace(/^models\//, ''));
 
-      if (validosTexto.length > 0) {
-        // Priorizar gemini-2.0-flash y los oficiales
-        listaFinalModelos = [
-          ...modelosTextoFijos.filter(m => validosTexto.includes(m)),
-          ...validosTexto
-        ];
+      if (validos.length > 0) {
+        listaModelos = [...validos];
       }
     }
   } catch (e) {
-    console.warn('[GEMINI] Consulta dinámica omitida, usando modelos oficiales:', e);
+    console.warn('[GEMINI] Consulta dinámica omitida:', e);
   }
 
-  const candidatosFinales = [...new Set(listaFinalModelos)];
-  let errorAcumulado = null;
+  const modelosUnicos = [...new Set(listaModelos)];
+  let ultimoError = null;
 
-  for (const model of candidatosFinales) {
+  for (const model of modelosUnicos) {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+    const esGemma = model.toLowerCase().includes('gemma');
+
+    // Construcción del payload respetando la compatibilidad con Gemma
+    const promptCompleto = `${BIOFLEET_SYSTEM_PROMPT}\n\nHARDWARE DISPONIBLE: ${JSON.stringify(hardwareInfo || {})}\n\nSOLICITUD:\n"${userPrompt}"\n\nIMPORTANTE: DEVUELVE EXCLUSIVAMENTE EL OBJETO JSON ENTRE LLAVES {}. NO ESCRIBAS TEXTO ADICIONAL.`;
 
     const payload = {
       contents: [
         {
           role: 'user',
-          parts: [
-            {
-              text: `${BIOFLEET_SYSTEM_PROMPT}\n\nHARDWARE DISPONIBLE: ${JSON.stringify(hardwareInfo || {})}\n\nSOLICITUD DEL USUARIO:\n"${userPrompt}"`
-            }
-          ]
+          parts: [{ text: promptCompleto }]
         }
       ],
       generationConfig: {
-        response_mime_type: 'application/json',
-        temperature: 0.2
+        temperature: 0.1
       }
     };
+
+    // Añadir response_mime_type solo para modelos Gemini compatibles
+    if (!esGemma) {
+      payload.generationConfig.response_mime_type = 'application/json';
+    }
 
     try {
       const response = await fetch(url, {
@@ -143,24 +167,32 @@ async function invocarGemini(apiKey, userPrompt, hardwareInfo) {
       if (response.ok) {
         const data = await response.json();
         const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+
         if (rawText) {
-          console.log(`✅ [GEMINI] Compilación exitosa usando modelo: ${model}`);
-          return JSON.parse(rawText);
+          try {
+            const parsed = extraerJsonPuro(rawText);
+            console.log(`✅ [GEMINI] Compilación exitosa usando modelo: ${model}`);
+            return parsed;
+          } catch (jsonErr) {
+            console.warn(`[GEMINI] ${model} respondió pero el texto no era JSON limpio:`, rawText);
+            ultimoError = `El modelo devolvió texto en vez de JSON: ${jsonErr.message}`;
+            continue;
+          }
         }
       } else {
         const errJson = await response.json().catch(() => null);
-        errorAcumulado = errJson?.error?.message || `HTTP ${response.status}`;
-        console.warn(`[GEMINI] Modelo ${model} no compatible (${response.status}), rotando al siguiente...`);
-        continue; // Continúa al siguiente modelo de texto
+        ultimoError = errJson?.error?.message || `HTTP ${response.status}`;
+        console.warn(`[GEMINI] Modelo ${model} no compatible (${response.status}), rotando...`);
+        continue;
       }
     } catch (err) {
-      errorAcumulado = err.message;
+      ultimoError = err.message;
       console.warn(`[GEMINI] Error en modelo ${model}:`, err.message);
-      continue; // Continúa al siguiente modelo
+      continue;
     }
   }
 
-  throw new Error(`Google Gemini no pudo completar la solicitud: ${errorAcumulado}`);
+  throw new Error(`Google Gemini no pudo completar la solicitud: ${ultimoError}`);
 }
 
 /**
@@ -183,7 +215,7 @@ async function invocarOpenAiCompatible(apiKey, endpoint, modelName, userPrompt, 
         }
       ],
       response_format: { type: 'json_object' },
-      temperature: 0.2
+      temperature: 0.1
     })
   });
 
@@ -195,7 +227,7 @@ async function invocarOpenAiCompatible(apiKey, endpoint, modelName, userPrompt, 
   const data = await response.json();
   const rawText = data?.choices?.[0]?.message?.content;
   if (!rawText) throw new Error('El modelo no devolvió contenido.');
-  return JSON.parse(rawText);
+  return extraerJsonPuro(rawText);
 }
 
 /**
