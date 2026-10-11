@@ -1,7 +1,7 @@
 /**
  * =========================================================================================
  * PROYECTO: BIOFLEET OS™ v2.0 ENTERPRISE
- * SERVICIO COMPILADOR DE IA REAL CON AUTO-DESCUBRIMIENTO DE MODELOS GEMINI / GROQ / OPENAI
+ * SERVICIO COMPILADOR DE IA REAL - TEXT/JSON MULTI-ENGINE (GEMINI / GROQ / OPENAI)
  * =========================================================================================
  */
 
@@ -16,8 +16,8 @@ ESPECIFICACIONES DEL HARDWARE FÍSICO:
 4. Pantalla: LCD Alfanumérica I2C (16x2 o 20x4, dirección 0x27).
 
 TIPOS DE WIDGETS SOPORTADOS PARA EL DASHBOARD:
-- 'ACTION_BUTTON': Botón para ejecutar acciones o secuencias (Arranque, Test, Purga, Ciclo, Paro).
-- 'SWITCH_TOGGLE': Interruptor ON/OFF para conmutar un relé directo (Bomba, Válvula, Calentador).
+- 'ACTION_BUTTON': Botón para ejecutar acciones o secuencias (Arranque, Test de Relés, Purga, Ciclo, Paro).
+- 'SWITCH_TOGGLE': Interruptor ON/OFF para conmutar un relé directo (Bomba, Válvula, Calentador, Relé individual).
 - 'GAUGE_RADIAL': Manómetro/indicador radial para presiones, RPM, humedad o nivel.
 - 'VALUE_CARD': Tarjeta de lectura digital numérica para temperatura (°C), tiempos o voltaje.
 - 'STATUS_LED': Luz indicadora de estado (ON/OFF) vinculada a una entrada física o relé.
@@ -71,35 +71,49 @@ export function detectarProveedorApiKey(key = '') {
 }
 
 /**
- * AUTO-DESCUBRIMIENTO Y LLAMADA A GEMINI SIN ERROR 404
+ * INVOCADOR DE GOOGLE GEMINI (FILTRA MODELOS DE TEXTO EXCLUSIVOS, ELIMINA TTS/AUDIO)
  */
 async function invocarGemini(apiKey, userPrompt, hardwareInfo) {
-  // 1. Obtener los modelos activos directamente de Google para tu clave
-  let modelosCandidatos = ['gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-1.5-flash-latest'];
+  // Lista fija de modelos oficiales probados de TEXTO en orden de prioridad
+  const modelosTextoFijos = [
+    'gemini-2.0-flash',
+    'gemini-2.0-flash-lite',
+    'gemini-1.5-flash-8b',
+    'gemini-1.5-pro'
+  ];
 
+  let listaFinalModelos = [...modelosTextoFijos];
+
+  // Consultar lista viva de Google descartando explícitamente modelos de audio/tts
   try {
     const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
     if (listRes.ok) {
       const listData = await listRes.json();
-      const validos = (listData.models || [])
-        .filter(m => m.supportedGenerationMethods?.includes('generateContent'))
+      const validosTexto = (listData.models || [])
+        .filter(m => 
+          m.supportedGenerationMethods?.includes('generateContent') &&
+          !m.name.includes('-tts') &&
+          !m.name.includes('-audio') &&
+          !m.name.includes('embedding')
+        )
         .map(m => m.name.replace(/^models\//, ''));
 
-      if (validos.length > 0) {
-        // Priorizar modelos Flash
-        const flashModels = validos.filter(m => m.includes('flash'));
-        modelosCandidatos = [...flashModels, ...validos];
+      if (validosTexto.length > 0) {
+        // Priorizar gemini-2.0-flash y los oficiales
+        listaFinalModelos = [
+          ...modelosTextoFijos.filter(m => validosTexto.includes(m)),
+          ...validosTexto
+        ];
       }
     }
   } catch (e) {
-    console.warn('[GEMINI] Lista de modelos omitida, usando candidatos estándar:', e);
+    console.warn('[GEMINI] Consulta dinámica omitida, usando modelos oficiales:', e);
   }
 
-  const modelosUnicos = [...new Set(modelosCandidatos)];
-  let ultimoError = null;
+  const candidatosFinales = [...new Set(listaFinalModelos)];
+  let errorAcumulado = null;
 
-  // 2. Probar candidatos hasta que Google entregue el JSON sin 404
-  for (const model of modelosUnicos) {
+  for (const model of candidatosFinales) {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
     const payload = {
@@ -130,30 +144,27 @@ async function invocarGemini(apiKey, userPrompt, hardwareInfo) {
         const data = await response.json();
         const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
         if (rawText) {
-          console.log(`✅ [GEMINI] Respuesta generada exitosamente con el modelo: ${model}`);
+          console.log(`✅ [GEMINI] Compilación exitosa usando modelo: ${model}`);
           return JSON.parse(rawText);
         }
       } else {
         const errJson = await response.json().catch(() => null);
-        ultimoError = errJson?.error?.message || `HTTP ${response.status}`;
-        if (response.status === 404) {
-          console.warn(`[GEMINI] Modelo ${model} no disponible (404), probando siguiente...`);
-          continue; // Intenta con el siguiente modelo de la lista
-        }
-        throw new Error(ultimoError);
+        errorAcumulado = errJson?.error?.message || `HTTP ${response.status}`;
+        console.warn(`[GEMINI] Modelo ${model} no compatible (${response.status}), rotando al siguiente...`);
+        continue; // Continúa al siguiente modelo de texto
       }
     } catch (err) {
-      ultimoError = err.message;
-      if (err.message.includes('404')) continue;
-      throw err;
+      errorAcumulado = err.message;
+      console.warn(`[GEMINI] Error en modelo ${model}:`, err.message);
+      continue; // Continúa al siguiente modelo
     }
   }
 
-  throw new Error(`Error Google Gemini: ${ultimoError}`);
+  throw new Error(`Google Gemini no pudo completar la solicitud: ${errorAcumulado}`);
 }
 
 /**
- * LLAMADA A OPENAI O GROQ
+ * INVOCADOR OPENAI / GROQ
  */
 async function invocarOpenAiCompatible(apiKey, endpoint, modelName, userPrompt, hardwareInfo) {
   const response = await fetch(endpoint, {
@@ -188,7 +199,7 @@ async function invocarOpenAiCompatible(apiKey, endpoint, modelName, userPrompt, 
 }
 
 /**
- * COMPILADOR MAESTRO
+ * COMPILADOR MAESTRO EXPORTADO
  */
 export async function compilarConIA({ prompt, device, hardwareInfo, apiKey = null }) {
   if (!prompt || !prompt.trim()) {
