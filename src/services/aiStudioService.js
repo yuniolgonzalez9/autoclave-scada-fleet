@@ -1,62 +1,21 @@
 /**
  * =========================================================================================
  * PROYECTO: BIOFLEET OS™ v2.0 ENTERPRISE
- * SERVICIO COMPILADOR DE IA HÍBRIDO ULTRA-RESILIENTE (GEMINI / GEMMA / MOTOR INMEDIATO)
+ * SERVICIO COMPILADOR DE IA INDUSTRIAL - MOTOR DETERMINISTA LOCAL + SOPORTE CLOUD
  * =========================================================================================
  */
 
-const BIOFLEET_SYSTEM_PROMPT = `
-Eres el Ingeniero de Control Industrial de BioFleet OS v2.0.
-Hardware: HKL-EA8 (8 Relés R1..R8 en 0x24, 8 Entradas IN1..IN8 en 0x26, 4 ADC A0..A3 en 0x48).
-Genera un objeto JSON válido con la siguiente estructura:
-{
-  "titulo_programa": "Nombre representativo",
-  "descripcion": "Descripción del sistema",
-  "tipo": "UNIVERSAL_PLC",
-  "hal_payload": {
-    "roles_reles": { "R1": "SALIDA_1", "R2": "SALIDA_2", "R3": "SALIDA_3", "R4": "SALIDA_4", "R5": "SALIDA_5", "R6": "SALIDA_6", "R7": "SALIDA_7", "R8": "SALIDA_8" },
-    "nombres_reles": { "R1": "Relé 1", "R2": "Relé 2", "R3": "Relé 3", "R4": "Relé 4", "R5": "Relé 5", "R6": "Relé 6", "R7": "Relé 7", "R8": "Relé 8" }
-  },
-  "dashboard": [
-    { "id": "w_1", "tipo": "ACTION_BUTTON", "titulo": "Test R1-R8", "canal": 1, "color": "emerald", "w": 360, "h": 170 }
-  ]
-}
-`;
-
 export function detectarProveedorApiKey(key = '') {
   const k = key.trim();
-  if (k.startsWith('AIza') || k.startsWith('AQ.')) return 'GEMINI';
   if (k.startsWith('gsk_')) return 'GROQ';
   if (k.startsWith('sk-')) return 'OPENAI';
-  return 'GEMINI';
+  if (k.startsWith('AIza') || k.startsWith('AQ.')) return 'GEMINI';
+  return 'LOCAL';
 }
 
 /**
- * Extractor seguro de JSON
- */
-function sanitizarJson(textoCrudo) {
-  if (!textoCrudo) return null;
-  let limpio = textoCrudo.trim();
-
-  if (limpio.includes('```')) {
-    limpio = limpio.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
-  }
-
-  const inicio = limpio.indexOf('{');
-  const fin = limpio.lastIndexOf('}');
-
-  if (inicio !== -1 && fin !== -1 && fin > inicio) {
-    try {
-      return JSON.parse(limpio.substring(inicio, fin + 1));
-    } catch (_) {
-      return null;
-    }
-  }
-  return null;
-}
-
-/**
- * COMPILADOR DETERMINISTA LOCAL (Responde en <10ms sin fallos ni esperas)
+ * MOTOR SEMÁNTICO LOCAL DETERMINISTA
+ * Procesa instantáneamente cualquier instrucción sin depender de servidores externos.
  */
 function compilarLocalmente(promptTexto) {
   const p = promptTexto.toLowerCase().trim();
@@ -69,7 +28,7 @@ function compilarLocalmente(promptTexto) {
     rolesReles[`R${i}`] = 'MANUAL';
   }
 
-  // 1. CASO: Test de relés (R1 a R8)
+  // CASO 1: Test de relés (R1 a R8)
   if (p.includes('test') || p.includes('teste') || (p.includes('r1') && p.includes('r8'))) {
     widgets.push({
       id: 'w_test_master',
@@ -89,36 +48,28 @@ function compilarLocalmente(promptTexto) {
         titulo: `Relé R${i}`,
         canal: i,
         color: 'cyan',
-        w: 240,
+        w: 260,
         h: 170
       });
     }
 
     return {
       exito: true,
-      fuente: 'MOTOR_BIOFLEET_LOCAL',
+      fuente: 'MOTOR_BIOFLEET_DETERMINISTA',
       titulo: 'Banco de Prueba Relés R1-R8',
-      descripcion: 'Generado para testeo completo de las 8 salidas físicas.',
+      descripcion: 'Control maestro de testeo secuencial para las 8 salidas físicas.',
+      tipo: 'UNIVERSAL_PLC',
       halPayload: { tipo: 'UNIVERSAL_PLC', roles_reles: rolesReles, nombres_reles: nombresReles },
       dashboardWidgets: widgets
     };
   }
 
-  // 2. CASO: Relé específico individual (ej: "r1", "r2", etc.)
-  const matchRele = p.match(/r([1-8])/);
+  // CASO 2: Relé específico individual (ej: "r1", "r2", etc.)
+  const matchRele = p.match(/\b(?:r|rele|relé)\s*([1-8])\b/) || p.match(/^r([1-8])$/);
   if (matchRele) {
     const canalNum = parseInt(matchRele[1], 10);
     nombresReles[`R${canalNum}`] = `Salida R${canalNum} Activa`;
     
-    widgets.push({
-      id: `w_btn_r${canalNum}`,
-      tipo: 'ACTION_BUTTON',
-      titulo: `Pulsar Relé R${canalNum}`,
-      canal: canalNum,
-      color: 'emerald',
-      w: 280,
-      h: 170
-    });
     widgets.push({
       id: `w_sw_r${canalNum}`,
       tipo: 'SWITCH_TOGGLE',
@@ -128,63 +79,79 @@ function compilarLocalmente(promptTexto) {
       w: 280,
       h: 170
     });
+    widgets.push({
+      id: `w_btn_r${canalNum}`,
+      tipo: 'ACTION_BUTTON',
+      titulo: `Pulsar Relé R${canalNum}`,
+      canal: canalNum,
+      color: 'emerald',
+      w: 280,
+      h: 170
+    });
 
     return {
       exito: true,
-      fuente: 'MOTOR_BIOFLEET_LOCAL',
+      fuente: 'MOTOR_BIOFLEET_DETERMINISTA',
       titulo: `Control Canal R${canalNum}`,
-      descripcion: `Comandos para salida R${canalNum}.`,
+      descripcion: `Mando y conmutación directa para la salida física R${canalNum}.`,
+      tipo: 'UNIVERSAL_PLC',
       halPayload: { tipo: 'UNIVERSAL_PLC', roles_reles: rolesReles, nombres_reles: nombresReles },
       dashboardWidgets: widgets
     };
   }
 
-  // 3. CASO GENERAL: Parseo de actuadores y sensores en texto libre
-  const actuadores = [
-    { k: ['bomba', 'motobomba'], t: 'SWITCH_TOGGLE', n: 'Bomba de Agua', c: 'cyan' },
-    { k: ['valvula', 'válvula'], t: 'SWITCH_TOGGLE', n: 'Electroválvula', c: 'cyan' },
-    { k: ['calentador', 'resistencia', 'macerador'], t: 'SWITCH_TOGGLE', n: 'Calentador', c: 'amber' },
-    { k: ['extractor', 'ventilador'], t: 'SWITCH_TOGGLE', n: 'Extractor', c: 'cyan' },
-    { k: ['ignicion', 'ignición', 'contacto'], t: 'SWITCH_TOGGLE', n: 'Ignición', c: 'amber' },
-    { k: ['starter', 'arranque'], t: 'ACTION_BUTTON', n: 'Starter Motor', c: 'emerald' },
-    { k: ['temperatura', 'pt100'], t: 'VALUE_CARD', n: 'Sensor Temperatura', u: '°C', c: 'cyan' },
-    { k: ['presion', 'presión', 'bar'], t: 'GAUGE_RADIAL', n: 'Presión', u: 'bar', c: 'pink' }
+  // CASO 3: Detección semántica de actuadores, motores y sensores
+  const DICCIONARIO = [
+    { k: ['bomba', 'motobomba', 'recirculado'], t: 'SWITCH_TOGGLE', n: 'Bomba Principal', c: 'cyan', rol: 'BOMBA' },
+    { k: ['valvula', 'válvula', 'solenoide'], t: 'SWITCH_TOGGLE', n: 'Electroválvula', c: 'cyan', rol: 'VALVULA' },
+    { k: ['calentador', 'resistencia', 'macerador', 'quemador'], t: 'SWITCH_TOGGLE', n: 'Calentador / Resistencia', c: 'amber', rol: 'CALENTADOR' },
+    { k: ['extractor', 'ventilador', 'fan'], t: 'SWITCH_TOGGLE', n: 'Extractor de Aire', c: 'cyan', rol: 'EXTRACTOR' },
+    { k: ['ignicion', 'ignición', 'contacto', 'acc'], t: 'SWITCH_TOGGLE', n: 'Contacto Ignición', c: 'amber', rol: 'IGNICION_ON' },
+    { k: ['starter', 'arranque', 'marcha'], t: 'ACTION_BUTTON', n: 'Motor de Arranque', c: 'emerald', rol: 'STARTER_MOTOR' },
+    { k: ['corte', 'inmovilizador', 'paro', 'stop'], t: 'ACTION_BUTTON', n: 'Corte Inmovilizador', c: 'rose', rol: 'INMOVILIZADOR' },
+    { k: ['temperatura', 'pt100', 'termometro', 'termómetro'], t: 'VALUE_CARD', n: 'Temperatura', u: '°C', c: 'cyan', rol: 'ADC_TEMP' },
+    { k: ['presion', 'presión', 'bar', 'psi'], t: 'GAUGE_RADIAL', n: 'Presión de Trabajo', u: 'bar', c: 'pink', rol: 'ADC_PRESION' },
+    { k: ['bateria', 'batería', 'voltaje', '12v'], t: 'GAUGE_RADIAL', n: 'Batería 12V', u: 'V', c: 'emerald', rol: 'ADC_BAT' }
   ];
 
   let canalContador = 1;
-  actuadores.forEach((act) => {
-    if (act.k.some(kw => p.includes(kw))) {
+  DICCIONARIO.forEach(item => {
+    if (item.k.some(palabra => p.includes(palabra))) {
       widgets.push({
-        id: `w_act_${canalContador}`,
-        tipo: act.t,
-        titulo: act.n,
+        id: `w_cmp_${canalContador}`,
+        tipo: item.t,
+        titulo: item.n,
         canal: canalContador <= 8 ? canalContador : 1,
-        unidad: act.u || '',
-        color: act.c,
+        unidad: item.u || '',
+        color: item.c,
+        min: 0,
+        max: item.u === 'bar' ? 10 : item.u === 'V' ? 16 : 100,
         w: 260,
         h: 170
       });
       if (canalContador <= 8) {
-        nombresReles[`R${canalContador}`] = act.n;
+        nombresReles[`R${canalContador}`] = item.n;
+        rolesReles[`R${canalContador}`] = item.rol;
         canalContador++;
       }
     }
   });
 
+  // Si no se reconoció ningún componente clave, generar controles genéricos basados en el texto
   if (widgets.length === 0) {
     widgets.push({
-      id: 'w_cmd_1',
+      id: 'w_cmd_auto',
       tipo: 'ACTION_BUTTON',
       titulo: promptTexto.length > 25 ? promptTexto.substring(0, 22) + '...' : promptTexto,
       canal: 1,
       color: 'emerald',
-      w: 280,
+      w: 300,
       h: 170
     });
     widgets.push({
-      id: 'w_cmd_2',
+      id: 'w_sw_auto',
       tipo: 'SWITCH_TOGGLE',
-      titulo: 'Salida R1',
+      titulo: 'Salida R1 Activa',
       canal: 1,
       color: 'cyan',
       w: 260,
@@ -192,106 +159,99 @@ function compilarLocalmente(promptTexto) {
     });
   }
 
+  let tipoDetectado = 'UNIVERSAL_PLC';
+  if (p.includes('carro') || p.includes('ambulancia') || p.includes('vehiculo') || p.includes('motor')) {
+    tipoDetectado = 'VEHICULO';
+  } else if (p.includes('autoclave') || p.includes('esteriliz')) {
+    tipoDetectado = 'AUTOCLAVE';
+  }
+
   return {
     exito: true,
-    fuente: 'MOTOR_BIOFLEET_LOCAL',
-    titulo: promptTexto.length > 25 ? promptTexto.substring(0, 22) + '...' : promptTexto,
+    fuente: 'MOTOR_BIOFLEET_DETERMINISTA',
+    titulo: promptTexto.length > 30 ? promptTexto.substring(0, 27) + '...' : promptTexto,
     descripcion: `Compilación generada para: "${promptTexto}"`,
-    halPayload: { tipo: 'UNIVERSAL_PLC', roles_reles: rolesReles, nombres_reles: nombresReles },
+    tipo: tipoDetectado,
+    halPayload: { tipo: tipoDetectado, roles_reles: rolesReles, nombres_reles: nombresReles },
     dashboardWidgets: widgets
   };
 }
 
 /**
- * CONSULTA A LA NUBE CON TIMEOUT DE 3.5 SEGUNDOS (ABORT CONTROLLER)
- */
-async function consultarNubeConTimeout(apiKey, promptTexto, hardwareInfo) {
-  const controlador = new AbortController();
-  const idTimeout = setTimeout(() => controlador.abort(), 3500);
-
-  const modelos = ['gemma-4-26b-a4b-it', 'gemini-2.0-flash', 'gemini-1.5-flash-latest'];
-
-  for (const model of modelos) {
-    try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-      const promptCompleto = `${BIOFLEET_SYSTEM_PROMPT}\nHardware: ${JSON.stringify(hardwareInfo || {})}\nOrden: "${promptTexto}"\nIMPORTANTE: Devuelve únicamente un JSON válido delimitado por { y }.`;
-
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': apiKey
-        },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: promptCompleto }] }],
-          generationConfig: { temperature: 0.1 }
-        }),
-        signal: controlador.signal
-      });
-
-      if (response.ok) {
-        clearTimeout(idTimeout);
-        const data = await response.json();
-        const textoRespuesta = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-        const parseado = sanitizarJson(textoRespuesta);
-        if (parseado && parseado.dashboard) {
-          return parseado;
-        }
-      }
-    } catch (_) {
-      // Si falla un modelo o se agota el tiempo, continúa
-    }
-  }
-
-  clearTimeout(idTimeout);
-  return null;
-}
-
-/**
- * FUNCIÓN EXPORTADA PRINCIPAL (NUNCA LANZA ERROR, SIEMPRE GENERA WIDGETS)
+ * FUNCIÓN PRINCIPAL EXPORTADA
+ * Procesa la orden sin bloqueos, garantizando siempre la entrega de los widgets.
  */
 export async function compilarConIA({ prompt, device, hardwareInfo, apiKey = null }) {
   const p = prompt ? prompt.trim() : '';
-  if (!p) throw new Error('El prompt no puede estar vacío.');
+  if (!p) throw new Error('Por favor escribe qué automatización deseas compilar.');
 
   const key = apiKey || localStorage.getItem('biofleet_ai_key') || null;
+  const proveedor = key ? detectarProveedorApiKey(key) : 'LOCAL';
 
-  // 1. Si hay clave, intenta obtener respuesta de la nube en menos de 3.5 segundos
-  if (key) {
+  // Si se utiliza Groq u OpenAI con credenciales estándar, consultar el endpoint
+  if (key && (proveedor === 'GROQ' || proveedor === 'OPENAI')) {
+    const endpoint = proveedor === 'GROQ' 
+      ? 'https://api.groq.com/openai/v1/chat/completions' 
+      : 'https://api.openai.com/v1/chat/completions';
+    const model = proveedor === 'GROQ' ? 'llama-3.3-70b-versatile' : 'gpt-4o-mini';
+
     try {
-      const resultadoNube = await consultarNubeConTimeout(key, p, hardwareInfo);
-      if (resultadoNube) {
-        const dashboardWidgets = (resultadoNube.dashboard || []).map((w, idx) => ({
-          ...w,
-          id: w.id || `w_${idx + 1}`,
-          x: w.x !== undefined ? w.x : (idx % 3) * 280 + 20,
-          y: w.y !== undefined ? w.y : Math.floor(idx / 3) * 190 + 20,
-          w: w.w || 260,
-          h: w.h || 170
-        }));
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3500);
 
-        return {
-          exito: true,
-          fuente: 'IA_NUBE_GEMINI',
-          titulo: resultadoNube.titulo_programa || p,
-          descripcion: resultadoNube.descripcion || p,
-          halPayload: resultadoNube.hal_payload || {},
-          dashboardWidgets
-        };
+      const resp = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${key}`
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: 'Genera un JSON con {"titulo_programa":"","tipo":"UNIVERSAL_PLC","hal_payload":{},"dashboard":[]}' },
+            { role: 'user', content: p }
+          ],
+          response_format: { type: 'json_object' }
+        }),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (resp.ok) {
+        const data = await resp.json();
+        const json = JSON.parse(data.choices[0].message.content);
+        if (json && json.dashboard && json.dashboard.length > 0) {
+          return {
+            exito: true,
+            fuente: `LLM_${proveedor}`,
+            titulo: json.titulo_programa || p,
+            descripcion: json.descripcion || p,
+            halPayload: json.hal_payload || {},
+            dashboardWidgets: json.dashboard.map((w, idx) => ({
+              ...w,
+              id: w.id || `w_${idx + 1}`,
+              x: (idx % 3) * 280 + 20,
+              y: Math.floor(idx / 3) * 190 + 20,
+              w: w.w || 260,
+              h: w.h || 170
+            }))
+          };
+        }
       }
     } catch (_) {}
   }
 
-  // 2. Respaldo local inmediato: genera los componentes sin latencia
-  const local = compilarLocalmente(p);
-  const widgetsConPosicion = local.dashboardWidgets.map((w, idx) => ({
+  // Generación local inmediata: procesa la instrucción y posiciona los widgets
+  const compilado = compilarLocalmente(p);
+  const widgetsConCoordenadas = compilado.dashboardWidgets.map((w, idx) => ({
     ...w,
     x: (idx % 3) * 280 + 20,
     y: Math.floor(idx / 3) * 190 + 20
   }));
 
   return {
-    ...local,
-    dashboardWidgets: widgetsConPosicion
+    ...compilado,
+    dashboardWidgets: widgetsConCoordenadas
   };
 }
