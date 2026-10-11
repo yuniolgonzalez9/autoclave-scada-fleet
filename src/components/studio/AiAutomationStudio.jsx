@@ -38,26 +38,26 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
   const [modoEdicion, setModoEdicion] = useState(false);
   const [widgetEnEdicion, setWidgetEnEdicion] = useState(null);
 
-  // Estados del Chat
+  // Chat Conversacional
   const [prompt, setPrompt] = useState('');
   const [historialChat, setHistorialChat] = useState([
     {
       id: 'init_msg',
       sender: 'ai',
-      texto: 'Hola. Soy tu Copilot de Ingeniería. Describe cualquier lógica, secuencia o proceso industrial y razonaré la arquitectura a tu medida sin plantillas fijas.'
+      texto: 'Hola. Soy tu Copilot de Ingeniería. Describe cualquier lógica, secuencia o control y programaré el Core 1 de tu ESP32 HKL-EA8 a tu medida.'
     }
   ]);
   const [compilando, setCompilando] = useState(false);
-  const [secuenciaEnProgreso, setSecuenciaEnProgreso] = useState(false);
   const chatBottomRef = useRef(null);
 
   const [apiKey] = useState(() => localStorage.getItem('biofleet_ai_key') || GROQ_DEFAULT_API_KEY);
 
-  // Perfil y Dashboard
+  // Perfil, Dashboard y Receta
   const [perfilActivoId, setPerfilActivoId] = useState(null);
   const [perfilNombre, setPerfilNombre] = useState('Automatización Industrial v1');
   const [tipoEquipo, setTipoEquipo] = useState('UNIVERSAL_PLC');
   const [widgets, setWidgets] = useState([]);
+  const [recetaActiva, setRecetaActiva] = useState(null);
   const [halPayload, setHalPayload] = useState(null);
   const [jsonRaw, setJsonRaw] = useState('');
 
@@ -72,7 +72,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
   const [transmitting, setTransmitting] = useState(false);
   const [msg, setMsg] = useState('');
 
-  // Hardware y Escáner I2C
+  // Hardware y Estados
   const [rolesReles, setRolesReles] = useState({});
   const [nombresReles, setNombresReles] = useState({});
   const [liveRelayStates, setLiveRelayStates] = useState({});
@@ -129,55 +129,41 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
     }
   }, [fleet, selectedMac]);
 
-  // SECUENCIADOR UNIVERSAL EN TIEMPO REAL VÍA MQTT
-  const handleEjecutarSecuenciaUniversal = async (widget) => {
+  // DISPARAR RECETA DE SECUENCIA AL CORE 1 DEL ESP32 (main.cpp: APPLY_LOGICA_SECUENCIA)
+  const handleDispararRecetaFisica = (recetaAEnviar = null) => {
     const cleanMac = (selectedMac || '').toUpperCase().replace(/[:\-]/g, '');
     if (!cleanMac) {
-      alert('Por favor selecciona una placa en el selector para transmitir los comandos.');
+      alert('Por favor selecciona una placa en el selector.');
       return;
     }
 
-    if (secuenciaEnProgreso) return;
-    setSecuenciaEnProgreso(true);
-    setMsg('⚡ Iniciando secuencia...');
-
-    const pasos = widget.secuencia || [];
-
-    for (let i = 0; i < pasos.length; i++) {
-      const paso = pasos[i];
-      const canal = paso.canal;
-      const estado = paso.val;
-
-      // 1. Reflejo visual inmediato en el SCADA
-      setLiveRelayStates(prev => ({
-        ...prev,
-        [canal]: estado,
-        [`R${canal}`]: estado
-      }));
-
-      // 2. Transmisión física al controlador HKL-EA8
-      if (sendCommand) {
-        sendCommand(cleanMac, {
-          cmd: 'SET_RELAY',
-          canal: Number(canal),
-          val: Number(estado)
-        });
-      }
-
-      setMsg(`Secuencia [${i + 1}/${pasos.length}]: R${canal} -> ${estado === 1 ? 'ON' : 'OFF'}`);
-
-      // 3. Retardo físico definido por la IA
-      const delay = paso.delay_ms || 500;
-      await new Promise(res => setTimeout(res, delay));
+    const r = recetaAEnviar || recetaActiva;
+    if (!r) {
+      alert('No hay una receta de secuencia definida para ejecutar.');
+      return;
     }
 
-    setMsg('✅ Secuencia completa ejecutada con éxito en la placa.');
-    setSecuenciaEnProgreso(false);
+    // Estructura exacta que espera main.cpp en la línea 396
+    const payloadSecuencia = {
+      cmd: 'APPLY_LOGICA_SECUENCIA',
+      mac: cleanMac,
+      receta: r
+    };
+
+    if (sendCommand) {
+      sendCommand(cleanMac, payloadSecuencia);
+      setMsg(`⚡ [${cleanMac.slice(-4)}] Orden enviada al Core 1: Ejecutando "${r.nombre_receta || 'Secuencia'}"`);
+    }
   };
 
-  // CONTROL DIRECTO DE RELÉ INDIVIDUAL
+  // CONTROL DIRECTO DE RELÉ INDIVIDUAL (main.cpp: SET_RELAY)
   const handleToggleRelayDirecto = (canal, currentState = null) => {
     const cleanMac = (selectedMac || '').toUpperCase().replace(/[:\-]/g, '');
+    if (!cleanMac) {
+      alert('Por favor selecciona una placa en el selector.');
+      return;
+    }
+
     const stateActual = currentState !== null ? currentState : Boolean(liveRelayStates[canal] || liveRelayStates[`R${canal}`]);
     const nextVal = !stateActual;
 
@@ -187,17 +173,17 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
       [`R${canal}`]: nextVal ? 1 : 0
     }));
 
-    if (cleanMac && sendCommand) {
+    if (sendCommand) {
       sendCommand(cleanMac, {
         cmd: 'SET_RELAY',
         canal: Number(canal),
-        val: nextVal ? 1 : 0
+        val: nextVal // main.cpp espera un booleano (true/false)
       });
-      setMsg(`📡 Relé R${canal} -> ${nextVal ? 'ON (ACTIVO)' : 'OFF (APAGADO)'}`);
+      setMsg(`📡 [${cleanMac.slice(-4)}] Relé R${canal} -> ${nextVal ? 'ON (ACTIVO)' : 'OFF (APAGADO)'}`);
     }
   };
 
-  // ENVIAR INSTRUCCIÓN A LA IA
+  // ENVIAR MENSAJE AL COPILOT
   const handleEnviarMensaje = async (e) => {
     if (e) e.preventDefault();
     const textoUsuario = prompt.trim();
@@ -228,6 +214,10 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
         setWidgets(res.dashboardWidgets);
       }
 
+      if (res.receta) {
+        setRecetaActiva(res.receta);
+      }
+
       setPerfilNombre(res.titulo || perfilNombre);
       setTipoEquipo(res.tipo || tipoEquipo);
 
@@ -236,18 +226,18 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
 
       setHalPayload(res.halPayload || {});
       setJsonRaw(JSON.stringify(res, null, 2));
-      setMsg(`✨ Arquitectura generada: "${res.titulo}"`);
+      setMsg(`✨ Controles configurados para: "${res.titulo}"`);
     } catch (err) {
       setHistorialChat(prev => [
         ...prev,
-        { id: `ai_err_${Date.now()}`, sender: 'ai', texto: `Error: ${err.message}` }
+        { id: `ai_err_${Date.now()}`, sender: 'ai', texto: `Nota: ${err.message}` }
       ]);
     } finally {
       setCompilando(false);
     }
   };
 
-  // POINTER EVENTS (TOUCH Y MOUSE LIBRE)
+  // POINTER EVENTS (TOUCH Y MOUSE DRAG/RESIZE)
   const handlePointerDown = (e, idx, action) => {
     if (!modoEdicion) return;
     e.stopPropagation();
@@ -306,7 +296,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
         try { e.currentTarget.releasePointerCapture(e.pointerId); } catch (_) {}
       }
       activeInteraction.current = { type: null, widgetIdx: null };
-      setJsonRaw(JSON.stringify({ tipo: tipoEquipo, hal: halPayload, dashboard: widgets }, null, 2));
+      setJsonRaw(JSON.stringify({ tipo: tipoEquipo, hal: halPayload, receta: recetaActiva, dashboard: widgets }, null, 2));
     }
   };
 
@@ -318,18 +308,28 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
     if (sendCommand) sendCommand(cleanMac, { cmd: 'SCAN_HARDWARE' });
   };
 
+  // DESPLEGAR RECETA Y HAL COMPLETO A LITTLEFS
   const handleDesplegarADispositivo = async () => {
     const cleanMac = (selectedMac || '').toUpperCase().replace(/[:\-]/g, '');
     if (!cleanMac) return alert('Selecciona un equipo destino.');
 
     setTransmitting(true);
-    setMsg(`Transmitiendo lógica a [${cleanMac}]...`);
+    setMsg(`Desplegando lógica y receta a [${cleanMac}]...`);
 
+    // 1. Si hay receta activa, enviarla al Core 1
+    if (recetaActiva && sendCommand) {
+      sendCommand(cleanMac, {
+        cmd: 'APPLY_LOGICA_SECUENCIA',
+        mac: cleanMac,
+        receta: recetaActiva
+      });
+    }
+
+    // 2. Grabar HAL en Flash LittleFS (main.cpp: APPLY_HAL_MAP)
     const commandPayload = {
       cmd: 'APPLY_HAL_MAP',
       mac: cleanMac,
       tipo: tipoEquipo,
-      timestamp: Date.now(),
       roles_reles: rolesReles,
       nombres_reles: nombresReles,
       custom_dashboard: {
@@ -344,11 +344,11 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
       await supabase.from('asignaciones_equipos').upsert({
         mac: cleanMac,
         alias: perfilNombre,
-        config_deseada: commandPayload,
+        config_deseada: { ...commandPayload, receta: recetaActiva },
         updated_at: new Date().toISOString()
       }, { onConflict: 'mac' });
 
-      setMsg(`⚡ ¡Lógica grabada en Flash LittleFS de [${cleanMac}]!`);
+      setMsg(`⚡ ¡Lógica y receta grabadas en Flash LittleFS de [${cleanMac}]!`);
     } catch (err) {
       setMsg('Error Supabase: ' + err.message);
     } finally {
@@ -369,11 +369,11 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
             <h2 className="text-base font-bold text-white flex items-center gap-2">
               BioFleet AI Studio Enterprise
               <span className="px-2 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[9px]">
-                GROQ LLAMA-3.1-8B
+                FIRMWARE v8.0 SINCRONIZADO
               </span>
             </h2>
             <p className="text-[11px] text-slate-300 font-sans">
-              Compilador de razonamiento directo para SCADA, autómatas y hardware HKL-EA8.
+              Compilador IA directamente enlazado al Core 1 Soft-PLC de la placa HKL-EA8.
             </p>
           </div>
         </div>
@@ -457,7 +457,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
               </span>
               <button
                 type="button"
-                onClick={() => setHistorialChat([{ id: 'reset', sender: 'ai', texto: 'Historial reiniciado. Dime qué sistema o lógica deseas diseñar.' }])}
+                onClick={() => setHistorialChat([{ id: 'reset', sender: 'ai', texto: 'Historial reiniciado. Dime qué nuevo sistema deseas diseñar.' }])}
                 className="text-[10px] text-slate-400 hover:text-white"
               >
                 Limpiar Chat
@@ -488,7 +488,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                 type="text"
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
-                placeholder="Escribe tu requerimiento (ej: 'creame un boton para encender de r1 a r8 y que se apaguen en orden')..."
+                placeholder="Escribe tu instrucción (ej: 'creame un boton para encender de r1 a r8 y que se apaguen en orden' o 'controla r5')..."
                 className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-sans text-xs focus:outline-none focus:border-amber-400"
               />
               <button
@@ -547,21 +547,19 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
             <div className="flex justify-between items-center border-b border-slate-800 pb-2">
               <span className="text-white font-bold flex items-center gap-2">
                 <LayoutGrid className="w-4 h-4 text-cyan-400" />
-                Lienzo ({widgets.length} Widgets):
+                Lienzo Generado ({widgets.length} Widgets):
               </span>
               <span className="text-[10px] text-amber-300">
-                {secuenciaEnProgreso 
-                  ? '⚡ EJECUTANDO SECUENCIA EN LA PLACA FÍSICA...' 
-                  : modoEdicion 
+                {modoEdicion 
                   ? '🛠️ Arrastra la barra superior para mover y la esquina para redimensionar' 
-                  : '👁️ Modo Operador: Toca para accionar relés o disparar la secuencia'}
+                  : '👁️ Modo Operador: Toca para accionar relés en vivo'}
               </span>
             </div>
 
             {widgets.length === 0 ? (
               <div className="py-16 border-2 border-dashed border-slate-800 rounded-xl text-center text-slate-500 space-y-2">
                 <Sparkles className="w-8 h-8 mx-auto text-amber-500/40 animate-pulse" />
-                <p>Escribe tu instrucción en el chat para que la IA razone y arme los controles.</p>
+                <p>Escribe tu instrucción en el diálogo para que la IA genere tus controles.</p>
               </div>
             ) : (
               <div
@@ -572,7 +570,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                   {widgets.map((w, idx) => {
                     const isEditingThis = widgetEnEdicion === idx;
                     const isRelayActive = Boolean(liveRelayStates[w.canal || 1] || liveRelayStates[`R${w.canal || 1}`]);
-                    const esSecuencia = w.accion === 'SECUENCIA' || (w.secuencia && w.secuencia.length > 0);
+                    const esBotonReceta = w.accion === 'EJECUTAR_RECETA' || recetaActiva !== null;
 
                     return (
                       <div
@@ -604,11 +602,11 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                           <div className="flex items-center gap-1.5 overflow-hidden">
                             {modoEdicion && <GripHorizontal className="w-3.5 h-3.5 text-amber-400 shrink-0" />}
                             <span className="font-bold text-white text-[10px] uppercase truncate">{w.titulo}</span>
-                            {w.canal && !esSecuencia && (
+                            {w.canal && !esBotonReceta && (
                               <span className="text-[8px] px-1 py-0.2 rounded bg-slate-800 text-slate-300 shrink-0">R{w.canal}</span>
                             )}
-                            {esSecuencia && (
-                              <span className="text-[8px] px-1 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shrink-0">SECUENCIA</span>
+                            {esBotonReceta && (
+                              <span className="text-[8px] px-1 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shrink-0">CORE 1</span>
                             )}
                           </div>
 
@@ -626,7 +624,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                                 onClick={() => setWidgets(widgets.filter((_, i) => i !== idx))}
                                 className="p-1 rounded bg-slate-800 text-rose-300"
                               >
-                                <Trash2 className="w-3 h-3" />
+                                <Trash2 className="w-3.5 h-3.5" />
                               </button>
                             </div>
                           )}
@@ -658,28 +656,21 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                               {w.tipo === 'ACTION_BUTTON' && (
                                 <button
                                   type="button"
-                                  disabled={secuenciaEnProgreso}
                                   onClick={() => {
-                                    if (esSecuencia) {
-                                      handleEjecutarSecuenciaUniversal(w);
+                                    if (esBotonReceta) {
+                                      handleDispararRecetaFisica();
                                     } else {
                                       handleToggleRelayDirecto(w.canal || 1);
                                     }
                                   }}
                                   className={`w-full py-3.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-lg transition-all ${
-                                    secuenciaEnProgreso && esSecuencia
-                                      ? 'bg-amber-500 text-slate-950 animate-pulse shadow-amber-500/30'
-                                      : isRelayActive && !esSecuencia
+                                    isRelayActive && !esBotonReceta
                                       ? 'bg-cyan-500 text-slate-950 shadow-cyan-500/30 scale-95'
                                       : 'bg-slate-950 border border-current hover:brightness-125'
                                   }`}
                                 >
-                                  {secuenciaEnProgreso && esSecuencia ? (
-                                    <RefreshCw className="w-4 h-4 animate-spin" />
-                                  ) : (
-                                    <Play className={`w-3.5 h-3.5 ${isRelayActive ? 'fill-slate-950' : 'fill-current'}`} />
-                                  )}
-                                  <span>{secuenciaEnProgreso && esSecuencia ? 'Ejecutando Secuencia...' : w.titulo}</span>
+                                  <Play className={`w-3.5 h-3.5 ${isRelayActive ? 'fill-slate-950' : 'fill-current'}`} />
+                                  <span>{w.titulo}</span>
                                 </button>
                               )}
 
