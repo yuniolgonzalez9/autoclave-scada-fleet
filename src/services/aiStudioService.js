@@ -1,304 +1,247 @@
 /**
  * =========================================================================================
  * PROYECTO: BIOFLEET OS™ v2.0 ENTERPRISE
- * SERVICIO COMPILADOR DE INTELIGENCIA ARTIFICIAL & ANALIZADOR SEMÁNTICO PROFUNDO
+ * SERVICIO COMPILADOR DE INTELIGENCIA ARTIFICIAL & ANALIZADOR SEMÁNTICO UNIVERSAL
  * 
- * Conoce el 100% de la arquitectura:
- * - Hardware: HKL-EA8 (Relés R1..R8, Entradas IN1..IN8, ADC A0..A3, LCD I2C)
- * - Secuencias elásticas: Pasos inmediatos, temporizados (ms) y condicionales (sensores)
- * - Reglas de enclavamiento lógicas (ej: Ignición fuerza Servicios, corte apaga todo)
- * - Widgets de Dashboard personalizados con redimensionamiento libre y enlaces de hardware
+ * Capacidad:
+ * 1. Interpreta libremente cualquier máquina industrial o vehicular (sin plantillas fijas).
+ * 2. Extrae actuadores (relés R1..R8), sensores (IN1..IN8, ADC A0..A3) y tiempos en segundos/ms.
+ * 3. Si hay API Key (OpenAI / Groq), consulta el LLM. Si no hay key, corre el Motor de
+ *    Procesamiento Semántico Dinámico (DSP) que construye widgets según las palabras reales.
  * =========================================================================================
  */
 
-// CONOCIMIENTO TOTAL DEL ENTORNO PARA EL PROMPT DE SISTEMA
 const BIOFLEET_SYSTEM_PROMPT = `
 Eres el Compilador de Ingeniería y Copilot de Automatización Industrial de BioFleet OS v2.0.
-Tienes conocimiento absoluto de la plataforma y del hardware:
-1. HARDWARE DISPONIBLE:
-   - 8 Relés de Salida de Potencia: R1, R2, R3, R4, R5, R6, R7, R8.
-   - 8 Entradas Optocopladas NPN/PNP: IN1, IN2, IN3, IN4, IN5, IN6, IN7, IN8.
-   - 4 Canales ADC Analógicos de 16-bit: A0, A1, A2, A3 (0-10V / 4-20mA / Batería).
-   - Pantalla LCD I2C (16x2 o 20x4).
-2. TIPOS DE MÁQUINAS: 'VEHICULO', 'AUTOCLAVE', 'UNIVERSAL_PLC', 'CAMA_HOSPITALARIA'.
-3. TIPOS DE WIDGETS DE DASHBOARD SOPORTADOS:
-   - 'ACTION_BUTTON': Botón pulsador que dispara una acción o secuencia.
-   - 'SWITCH_TOGGLE': Interruptor biestable ON/OFF asociado a un relé.
-   - 'GAUGE_RADIAL': Reloj analógico de aguja para presión, batería o nivel.
-   - 'VALUE_CARD': Tarjeta numérica para temperatura o valores en tiempo real.
-   - 'STATUS_LED': Indicador luminoso (ON/OFF) asociado a una entrada digital.
-   - 'TEXT_STATUS': Caja de texto para fase del sistema (ej: MOTOR_EN_MARCHA, CALENTANDO).
-   - 'CHART_HISTORY': Gráfica temporal continua de temperatura o presión.
-4. REGLAS DE COMPILACIÓN ESTRICTAS:
-   - Extrae con precisión matemática todos los tiempos (ej: '1 segundo' = 1000ms, '7 segundos' = 7000ms).
-   - Bautiza cada relé y entrada con el nombre exacto pedido por el usuario (ej: 'Servicios (ACC)', 'Ignición', 'Starter').
-   - Modela las relaciones lógicas ('si se activa Ignición a su vez activa Servicios', 'corte apaga todos los relés').
-   - Responde EXCLUSIVAMENTE con un JSON válido estructurado.
+Hardware disponible:
+- 8 Relés de Salida: R1 a R8 (Chip I2C 0x24)
+- 8 Entradas Optocopladas: IN1 a IN8 (Chip I2C 0x26)
+- 4 Canales ADC: A0 a A3 (Chip I2C 0x48)
+- Tipos de Widgets: 'ACTION_BUTTON', 'SWITCH_TOGGLE', 'GAUGE_RADIAL', 'VALUE_CARD', 'STATUS_LED', 'TEXT_STATUS', 'CHART_HISTORY'
+
+Instrucción obligatoria:
+Analiza el texto del usuario y genera un sistema de automatización único que refleje exactamente lo que pidió.
+Responde ÚNICAMENTE con un JSON con la siguiente estructura:
+{
+  "titulo_programa": "Nombre representativo del sistema",
+  "descripcion": "Resumen técnico de la lógica configurada",
+  "tipo": "VEHICULO" | "AUTOCLAVE" | "UNIVERSAL_PLC",
+  "hal_payload": {
+    "roles_reles": { "R1": "...", "R2": "...", ... },
+    "nombres_reles": { "R1": "...", "R2": "...", ... },
+    "roles_entradas": { "IN1": "...", ... },
+    "nombres_entradas": { "IN1": "...", ... }
+  },
+  "dashboard": [
+    {
+      "id": "w_1",
+      "tipo": "ACTION_BUTTON" | "SWITCH_TOGGLE" | "GAUGE_RADIAL" | "VALUE_CARD" | "STATUS_LED" | "TEXT_STATUS" | "CHART_HISTORY",
+      "titulo": "Nombre del control",
+      "canal": 1,
+      "color": "cyan" | "emerald" | "amber" | "rose" | "purple",
+      "unidad": "bar" | "°C" | "V" | "RPM" | "%",
+      "min": 0,
+      "max": 100,
+      "colSpan": 1
+    }
+  ]
+}
 `;
 
 /**
- * Analizador Semántico Profundo (Corre localmente si no hay API Key o falla la red)
- * Extrae tiempos, nombres de relés, dependencias lógicas y genera el JSON exacto.
+ * MOTOR SEMÁNTICO DINÁMICO (DSP) EN JAVASCRIPT PURO
+ * No usa plantillas fijas. Lee los sustantivos, verbos, componentes y números del usuario.
  */
-function analizarYCompilarSemanticaLocal(prompt, device) {
-  const p = prompt.toLowerCase();
-  
-  // 1. Detección de Modelo y Tipo
-  let tipoDetectado = "UNIVERSAL_PLC";
-  let modeloDetectado = "Dispositivo Inteligente";
-  
-  if (p.includes("kia") || p.includes("k5")) {
-    tipoDetectado = "VEHICULO";
-    modeloDetectado = "Kia K5";
-  } else if (p.includes("hyundai") || p.includes("staria") || p.includes("ambulancia") || p.includes("carro") || p.includes("arranque")) {
-    tipoDetectado = "VEHICULO";
-    modeloDetectado = "Ambulancia Hyundai Staria";
-  } else if (p.includes("autoclave") || p.includes("esteriliz") || p.includes("vapor")) {
-    tipoDetectado = "AUTOCLAVE";
-    modeloDetectado = "Autoclave Quirúrgico Clase B";
+function compilarSemanticaDinamicaUniversal(promptTexto) {
+  const p = promptTexto.toLowerCase();
+
+  // 1. Detección de Actuadores y Elementos de Salida (Relés R1..R8)
+  const DICCIONARIO_ACTUADORES = [
+    { claves: ['ignicion', 'ignición', 'contacto', 'acc', 'servicio'], rol: 'IGNICION_ON', defaultName: 'Contacto Ignición', color: 'amber' },
+    { claves: ['starter', 'arranque', 'marcha', 'start'], rol: 'STARTER_MOTOR', defaultName: 'Motor de Arranque', color: 'emerald' },
+    { claves: ['corte', 'inmovilizador', 'bloqueo', 'paro', 'stop', 'apagado'], rol: 'INMOVILIZADOR', defaultName: 'Corte Inmovilizador', color: 'rose' },
+    { claves: ['bomba', 'motobomba', 'bombeo', 'recirculado'], rol: 'BOMBA', defaultName: 'Bomba Principal', color: 'cyan' },
+    { claves: ['valvula', 'válvula', 'electroválvula', 'solenoide'], rol: 'VALVULA', defaultName: 'Electroválvula', color: 'cyan' },
+    { claves: ['calentador', 'resistencia', 'calor', 'macerador', 'quemador'], rol: 'CALENTADOR', defaultName: 'Resistencia Calefactora', color: 'amber' },
+    { claves: ['purga', 'escape', 'alivio', 'despresuriz'], rol: 'PURGA_VAPOR', defaultName: 'Válvula de Purga', color: 'rose' },
+    { claves: ['extractor', 'ventilador', 'fan', 'soplador'], rol: 'EXTRACTOR', defaultName: 'Extractor de Aire', color: 'cyan' },
+    { claves: ['sirena', 'alarma', 'luz', 'luces', 'baliza'], rol: 'SIRENA_LUCES', defaultName: 'Alarma / Luces', color: 'amber' },
+    { claves: ['agitador', 'mezclador', 'motor'], rol: 'MOTOR_AGITADOR', defaultName: 'Motor Agitador', color: 'purple' },
+    { claves: ['vacio', 'vacío'], rol: 'BOMBA_VACIO', defaultName: 'Bomba de Vacío', color: 'cyan' }
+  ];
+
+  // 2. Detección de Sensores y Variables
+  const DICCIONARIO_SENSORES = [
+    { claves: ['temperatura', 'termometro', 'termómetro', 'calor', 'pt100', '°c'], tipo: 'VALUE_CARD', unidad: '°C', defaultName: 'Sensor Temperatura', variable: 'temp' },
+    { claves: ['presion', 'presión', 'manometro', 'manómetro', 'bar', 'psi'], tipo: 'GAUGE_RADIAL', unidad: 'bar', defaultName: 'Presión de Trabajo', min: 0, max: 10, variable: 'presion' },
+    { claves: ['bateria', 'batería', 'voltaje', 'voltios', '12v', '24v', 'v'], tipo: 'GAUGE_RADIAL', unidad: 'V', defaultName: 'Voltaje Batería', min: 9, max: 16, variable: 'bateria_v' },
+    { claves: ['humedad', '%'], tipo: 'GAUGE_RADIAL', unidad: '%', defaultName: 'Sensor Humedad', min: 0, max: 100, variable: 'humedad' },
+    { claves: ['nivel', 'boya', 'tanque'], tipo: 'STATUS_LED', defaultName: 'Sensor de Nivel', entrada: 'IN1' },
+    { claves: ['alternador', 'd+'], tipo: 'STATUS_LED', defaultName: 'Alternador D+ 14V', entrada: 'IN2' },
+    { claves: ['freno', 'pedal'], tipo: 'STATUS_LED', defaultName: 'Pedal de Freno', entrada: 'IN1' },
+    { claves: ['puerta', 'fin de carrera', 'switch'], tipo: 'STATUS_LED', defaultName: 'Sensor Fin de Carrera', entrada: 'IN3' },
+    { claves: ['emergencia', 'seta'], tipo: 'STATUS_LED', defaultName: 'Paro de Emergencia', entrada: 'IN4' }
+  ];
+
+  // 3. Extracción de tiempos numéricos
+  const regexTiempos = /(\d+)\s*(segundo|segundos|seg|s|ms|minuto|minutos|min)/g;
+  const tiemposExtraidos = [];
+  let mTiempo;
+  while ((mTiempo = regexTiempos.exec(p)) !== null) {
+    const valor = parseInt(mTiempo[1], 10);
+    const unidad = mTiempo[2].toLowerCase();
+    const ms = unidad.startsWith('min') ? valor * 60000 : unidad.startsWith('ms') ? valor : valor * 1000;
+    tiemposExtraidos.push({ valor, unidad, ms });
   }
 
-  // 2. Extracción de Tiempos Numéricos
-  const regexSegundos = /(\d+)\s*(segundo|segundos|s)/g;
-  const tiemposEncontrados = [];
-  let match;
-  while ((match = regexSegundos.exec(p)) !== null) {
-    tiemposEncontrados.push(parseInt(match[1], 10) * 1000);
+  // 4. Identificar qué actuadores están presentes en el texto del usuario
+  const actuadoresDetectados = [];
+  DICCIONARIO_ACTUADORES.forEach(act => {
+    const coincide = act.claves.some(k => p.includes(k));
+    if (coincide) {
+      actuadoresDetectados.push(act);
+    }
+  });
+
+  // Si no se encontró ningún actuador conocido por palabras clave, extraer genéricamente según canales
+  if (actuadoresDetectados.length === 0) {
+    const palabras = promptTexto.split(/[,.;\n]+/).map(s => s.trim()).filter(Boolean);
+    palabras.slice(0, 4).forEach((palabra, idx) => {
+      actuadoresDetectados.push({
+        rol: `SALIDA_CANAL_${idx + 1}`,
+        defaultName: palabra.length > 25 ? `Control ${idx + 1}` : palabra,
+        color: idx === 0 ? 'cyan' : idx === 1 ? 'emerald' : idx === 2 ? 'amber' : 'purple'
+      });
+    });
   }
 
-  // Tiempos por defecto si no se especificaron
-  const tServicioMs = tiemposEncontrados[0] || 1000;  // 1s
-  const tIgnicionMs = tiemposEncontrados[1] || 7000;  // 7s
-  const tStarterMs  = tiemposEncontrados[2] || 7000;  // 7s
+  // 5. Identificar qué sensores están presentes
+  const sensoresDetectados = [];
+  DICCIONARIO_SENSORES.forEach(sens => {
+    const coincide = sens.claves.some(k => p.includes(k));
+    if (coincide && !sensoresDetectados.some(s => s.defaultName === sens.defaultName)) {
+      sensoresDetectados.push(sens);
+    }
+  });
 
-  // 3. Caso Específico: Vehículo con Servicios + Ignición + Starter + Corte Total
-  if (tipoDetectado === "VEHICULO") {
-    const tieneServicios = p.includes("servicio") || p.includes("servisios") || p.includes("acc");
-    const tieneIgnicion = p.includes("ignicion") || p.includes("ignision") || p.includes("contacto");
-    const tieneStarter = p.includes("arranque") || p.includes("starter");
-
-    const halPayload = {
-      tipo: "VEHICULO",
-      nombre: `HAL_${modeloDetectado.replace(/\s+/g, '_')}`,
-      starter_ms: tStarterMs,
-      roles_reles: {
-        R1: tieneServicios ? "SERVICIOS_ACC" : "IGNICION_ON",
-        R2: tieneIgnicion ? "IGNICION_ON" : "STARTER_MOTOR",
-        R3: tieneStarter ? "STARTER_MOTOR" : "INMOVILIZADOR",
-        R4: "CORTE_INMOVILIZADOR",
-        R5: "MANUAL", R6: "MANUAL", R7: "MANUAL", R8: "MANUAL"
-      },
-      nombres_reles: {
-        R1: tieneServicios ? "Alimentación Servicios (ACC)" : "Contacto Ignición",
-        R2: tieneIgnicion ? "Contacto Ignición" : "Motor de Arranque",
-        R3: tieneStarter ? `Motor de Arranque (${tStarterMs / 1000}s)` : "Corte Inmovilizador",
-        R4: "Inmovilizador / Corte General",
-        R5: "Auxiliar 5", R6: "Auxiliar 6", R7: "Auxiliar 7", R8: "Auxiliar 8"
-      },
-      roles_entradas: {
-        IN1: "SENSOR_FRENO",
-        IN2: "ALTERNADOR_D",
-        IN3: "PUERTA_CABINA",
-        IN4: "PARO_EMERGENCIA",
-        IN5: "LIBRE", IN6: "LIBRE", IN7: "LIBRE", IN8: "LIBRE"
-      },
-      nombres_entradas: {
-        IN1: "Pedal de Freno",
-        IN2: "Alternador D+ 14V",
-        IN3: "Puerta Conductor",
-        IN4: "Corte de Emergencia",
-        IN5: "Sensor 5", IN6: "Sensor 6", IN7: "Sensor 7", IN8: "Sensor 8"
-      }
-    };
-
-    const reglasEnclavamiento = [
-      {
-        id: "regla_ignicion_servicios",
-        descripcion: "Al encender Ignición (R2) se fuerza el encendido simultáneo de Servicios (R1)",
-        condicion: { rele: "R2", estado: true },
-        accion: { rele: "R1", estado: true }
-      },
-      {
-        id: "regla_corte_inmovilizador",
-        descripcion: "Corte de Inmovilizador apaga todos los relés por seguridad",
-        condicion: { comando: "CORTE_TOTAL" },
-        accion: { apagar_todos_reles: true }
-      }
-    ];
-
-    const secuenciaPasos = [
-      {
-        paso: 1,
-        nombre: "Encendido Servicios",
-        tipo_transicion: "TEMPORIZADO",
-        tiempo_ms: tServicioMs,
-        acciones_encender: ["R1"],
-        acciones_apagar: []
-      },
-      {
-        paso: 2,
-        nombre: "Encendido Ignición",
-        tipo_transicion: "TEMPORIZADO",
-        tiempo_ms: tIgnicionMs,
-        acciones_encender: ["R2"],
-        acciones_apagar: []
-      },
-      {
-        paso: 3,
-        nombre: `Accionamiento Starter (${tStarterMs / 1000}s)`,
-        tipo_transicion: "TEMPORIZADO",
-        tiempo_ms: tStarterMs,
-        acciones_encender: ["R3"],
-        acciones_apagar: ["R3"]
-      },
-      {
-        paso: 4,
-        nombre: "Verificación Alternador 14V",
-        tipo_transicion: "CONDICIONAL",
-        condicion: { sensor: "IN2", valor: 1, timeout_ms: 4000 },
-        acciones_encender: [],
-        acciones_apagar: []
-      }
-    ];
-
-    const dashboardWidgets = [
-      {
-        id: "w_start_smart",
-        tipo: "ACTION_BUTTON",
-        titulo: `⚡ Arranque Remoto (${tServicioMs / 1000}s ➔ ${tIgnicionMs / 1000}s ➔ ${tStarterMs / 1000}s)`,
-        accion: "START_VEHICLE",
-        color: "emerald",
-        icono: "Key",
-        colSpan: 2
-      },
-      {
-        id: "w_acc",
-        tipo: "SWITCH_TOGGLE",
-        titulo: "Servicios (ACC)",
-        canal: 1,
-        color: "cyan",
-        icono: "Zap",
-        colSpan: 1
-      },
-      {
-        id: "w_ign",
-        tipo: "SWITCH_TOGGLE",
-        titulo: "Ignición (+ Servicios)",
-        canal: 2,
-        color: "amber",
-        icono: "Zap",
-        colSpan: 1
-      },
-      {
-        id: "w_starter_manual",
-        tipo: "ACTION_BUTTON",
-        titulo: `Starter (${tStarterMs / 1000}s)`,
-        accion: "SET_RELAY",
-        canal: 3,
-        color: "amber",
-        icono: "Play",
-        colSpan: 1
-      },
-      {
-        id: "w_kill_all",
-        tipo: "ACTION_BUTTON",
-        titulo: "🛑 Corte Total Inmovilizador",
-        accion: "STOP_VEHICLE",
-        color: "rose",
-        icono: "PowerOff",
-        colSpan: 1
-      },
-      {
-        id: "w_bat",
-        tipo: "GAUGE_RADIAL",
-        titulo: `Batería ${modeloDetectado}`,
-        variable: "bateria_v",
-        unidad: "V",
-        min: 10,
-        max: 16,
-        color: "emerald",
-        colSpan: 1
-      },
-      {
-        id: "w_alt",
-        tipo: "STATUS_LED",
-        titulo: "Alternador D+",
-        entrada: "IN2",
-        labelOn: "14V CARGA",
-        labelOff: "SIN CARGA",
-        color: "cyan",
-        colSpan: 1
-      }
-    ];
-
-    return {
-      exito: true,
-      fuente: "COMPILADOR_SEMANTICO_MOTOR",
-      titulo: `${modeloDetectado} - Secuencia Inteligente`,
-      descripcion: `Compilado: Servicios (${tServicioMs}ms) ➔ Ignición (${tIgnicionMs}ms) ➔ Starter (${tStarterMs}ms) con interbloqueos y corte total.`,
-      halPayload,
-      dashboardWidgets,
-      secuenciaPasos,
-      reglasEnclavamiento
-    };
+  // 6. Construir roles y nombres de relés dinámicamente
+  const rolesReles = {};
+  const nombresReles = {};
+  for (let i = 1; i <= 8; i++) {
+    const act = actuadoresDetectados[i - 1];
+    if (act) {
+      rolesReles[`R${i}`] = act.rol;
+      nombresReles[`R${i}`] = act.defaultName;
+    } else {
+      rolesReles[`R${i}`] = 'MANUAL';
+      nombresReles[`R${i}`] = `Salida R${i} Libre`;
+    }
   }
 
-  // 4. Caso Autoclave Clínico
-  if (tipoDetectado === "AUTOCLAVE") {
-    const spTemp = p.includes("121") ? 121.0 : 134.0;
-    const tCiclo = p.includes("121") ? 15 : 4;
+  // 7. Construir Widgets dinámicos basados estrictamente en lo detectado
+  const widgetsConstruidos = [];
+  let widgetIdx = 1;
 
-    return {
-      exito: true,
-      fuente: "COMPILADOR_SEMANTICO_MOTOR",
-      titulo: `${modeloDetectado} (${spTemp}°C)`,
-      descripcion: `Esterilización clínica completa con PID térmico a ${spTemp}°C, purga y cálculo F0.`,
-      halPayload: {
-        tipo: "AUTOCLAVE",
-        nombre: `HAL_AUTOCLAVE_${spTemp}`,
-        sp_temp: spTemp,
-        t_ciclo: tCiclo,
-        p_max: 2.65,
-        roles_reles: { R1: "CALENTADOR", R2: "BOMBA_VACIO", R3: "MOTOR_AGITADOR", R4: "PURGA_VAPOR" }
-      },
-      dashboardWidgets: [
-        { id: "w_temp", tipo: "VALUE_CARD", titulo: "Temperatura Cámara", variable: "temp_camara", unidad: "°C", color: "cyan", colSpan: 1 },
-        { id: "w_pres", tipo: "GAUGE_RADIAL", titulo: "Presión Vapor", variable: "presion", unidad: "bar", min: 0, max: 3, color: "pink", colSpan: 1 },
-        { id: "w_f0", tipo: "VALUE_CARD", titulo: "Letalidad (F0)", variable: "f0Score", unidad: "min", color: "emerald", colSpan: 1 },
-        { id: "w_fase", tipo: "TEXT_STATUS", titulo: "Fase Ciclo", variable: "fase", color: "amber", colSpan: 1 },
-        { id: "w_start_cycle", tipo: "ACTION_BUTTON", titulo: `Iniciar Ciclo (${spTemp}°C)`, accion: "INICIAR_CICLO", color: "cyan", icono: "Play", colSpan: 2 },
-        { id: "w_abort", tipo: "ACTION_BUTTON", titulo: "Paro Emergencia", accion: "ABORTAR_CICLO", color: "rose", icono: "Square", colSpan: 1 },
-        { id: "w_chart", tipo: "CHART_HISTORY", titulo: "Curva Térmica en Vivo", color: "cyan", colSpan: 4 }
-      ]
-    };
+  // Si hay tiempos detectados y es una secuencia o ciclo, añadir botón maestro de ejecución
+  if (tiemposExtraidos.length > 0 || p.includes('secuencia') || p.includes('ciclo') || p.includes('arranque')) {
+    const desgloseTiempos = tiemposExtraidos.map(t => `${t.valor}${t.unidad.startsWith('min') ? 'm' : 's'}`).join(' ➔ ');
+    widgetsConstruidos.push({
+      id: `w_${widgetIdx++}`,
+      tipo: 'ACTION_BUTTON',
+      titulo: desgloseTiempos ? `⚡ Iniciar Secuencia (${desgloseTiempos})` : '⚡ Iniciar Secuencia Automática',
+      canal: 1,
+      color: 'emerald',
+      icono: 'Play',
+      w: 360,
+      h: 170
+    });
   }
 
-  // 5. Caso Soft-PLC Genérico por defecto
+  // Añadir un widget por cada actuador detectado
+  actuadoresDetectados.forEach((act, idx) => {
+    const canalNum = idx + 1;
+    if (canalNum <= 8) {
+      widgetsConstruidos.push({
+        id: `w_${widgetIdx++}`,
+        tipo: 'SWITCH_TOGGLE',
+        titulo: act.defaultName,
+        canal: canalNum,
+        color: act.color || 'cyan',
+        w: 260,
+        h: 170
+      });
+    }
+  });
+
+  // Añadir un widget por cada sensor detectado
+  sensoresDetectados.forEach((sens) => {
+    widgetsConstruidos.push({
+      id: `w_${widgetIdx++}`,
+      tipo: sens.tipo,
+      titulo: sens.defaultName,
+      variable: sens.variable || 'valor',
+      unidad: sens.unidad || '',
+      min: sens.min ?? 0,
+      max: sens.max ?? 100,
+      color: sens.tipo === 'VALUE_CARD' ? 'cyan' : 'emerald',
+      w: 260,
+      h: 170
+    });
+  });
+
+  // Si se pidió gráfica o histórico explícitamente
+  if (p.includes('grafica') || p.includes('gráfica') || p.includes('curva') || p.includes('historial')) {
+    widgetsConstruidos.push({
+      id: `w_${widgetIdx++}`,
+      tipo: 'CHART_HISTORY',
+      titulo: 'Curva de Telemetría en Vivo',
+      color: 'cyan',
+      w: 540,
+      h: 170
+    });
+  }
+
+  // Determinar Tipo de Máquina según el contexto del texto
+  let tipoFinal = 'UNIVERSAL_PLC';
+  if (p.includes('vehiculo') || p.includes('vehículo') || p.includes('carro') || p.includes('ambulancia') || p.includes('motor') || p.includes('staria')) {
+    tipoFinal = 'VEHICULO';
+  } else if (p.includes('autoclave') || p.includes('esteriliz') || p.includes('clinico') || p.includes('clínico')) {
+    tipoFinal = 'AUTOCLAVE';
+  }
+
+  // Título derivado del propio texto del usuario (hasta 40 caracteres)
+  const tituloDerivado = promptTexto.length > 40
+    ? promptTexto.slice(0, 37).trim() + '...'
+    : promptTexto;
+
   return {
     exito: true,
-    fuente: "COMPILADOR_SEMANTICO_MOTOR",
-    titulo: "Soft-PLC Universal",
-    descripcion: `Automatización compilada basada en: "${prompt}"`,
+    fuente: 'MOTOR_SEMANTICO_DINAMICO',
+    titulo: tituloDerivado.charAt(0).toUpperCase() + tituloDerivado.slice(1),
+    descripcion: `Compilación dinámica: ${actuadoresDetectados.length} salidas asignadas, ${sensoresDetectados.length} sensores vinculados.`,
     halPayload: {
-      tipo: "UNIVERSAL_PLC",
-      roles_reles: { R1: "MANUAL", R2: "MANUAL", R3: "MANUAL", R4: "MANUAL" }
+      tipo: tipoFinal,
+      roles_reles: rolesReles,
+      nombres_reles: nombresReles,
+      tiempos: tiemposExtraidos
     },
-    dashboardWidgets: [
-      { id: "w_r1", tipo: "SWITCH_TOGGLE", titulo: "Salida Relé 1", canal: 1, color: "cyan", colSpan: 1 },
-      { id: "w_r2", tipo: "SWITCH_TOGGLE", titulo: "Salida Relé 2", canal: 2, color: "cyan", colSpan: 1 },
-      { id: "w_r3", tipo: "SWITCH_TOGGLE", titulo: "Salida Relé 3", canal: 3, color: "cyan", colSpan: 1 },
-      { id: "w_r4", tipo: "SWITCH_TOGGLE", titulo: "Salida Relé 4", canal: 4, color: "cyan", colSpan: 1 }
-    ]
+    dashboardWidgets: widgetsConstruidos
   };
 }
 
 /**
- * Función Principal Exportada para Compilar con IA
+ * FUNCIÓN PRINCIPAL EXPORTADA
+ * Prioridad 1: LLM Cloud (OpenAI / Groq) si hay clave configurada.
+ * Prioridad 2: Motor Semántico Dinámico (interpreta libremente en JS sin keys ni costo).
  */
 export async function compilarConIA({ prompt, device, hardwareInfo, apiKey }) {
-  const realKey = apiKey || import.meta.env.VITE_OPENAI_API_KEY || null;
+  if (!prompt || !prompt.trim()) {
+    throw new Error('El prompt de automatización no puede estar vacío.');
+  }
 
-  // Si hay API Key configurada, consulta al modelo de lenguaje en la nube
+  const realKey = apiKey || import.meta.env.VITE_OPENAI_API_KEY || import.meta.env.VITE_GROQ_API_KEY || null;
+
+  // Si hay API Key en las variables de entorno, consulta al modelo de lenguaje en la nube
   if (realKey) {
     try {
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -313,13 +256,11 @@ export async function compilarConIA({ prompt, device, hardwareInfo, apiKey }) {
             { role: 'system', content: BIOFLEET_SYSTEM_PROMPT },
             {
               role: 'user',
-              content: `Hardware de la placa detectado: ${JSON.stringify(hardwareInfo || {})}.
-Instrucción del usuario: "${prompt}".
-Genera el objeto JSON completo con "titulo_programa", "descripcion", "hal_payload", "reglas_enclavamiento", "secuencia_pasos" y "dashboard".`
+              content: `Instrucción del usuario: "${prompt}". Hardware disponible: ${JSON.stringify(hardwareInfo || {})}. Genera el JSON completo.`
             }
           ],
-          response_format: { type: "json_object" },
-          temperature: 0.2
+          response_format: { type: 'json_object' },
+          temperature: 0.3
         })
       });
 
@@ -328,20 +269,18 @@ Genera el objeto JSON completo con "titulo_programa", "descripcion", "hal_payloa
         const content = JSON.parse(jsonRes.choices[0].message.content);
         return {
           exito: true,
-          fuente: 'IA_NUBE',
+          fuente: 'IA_NUBE_LLM',
           titulo: content.titulo_programa || 'Automatización Compilada',
           descripcion: content.descripcion || prompt,
           halPayload: content.hal_payload,
-          dashboardWidgets: content.dashboard || [],
-          secuenciaPasos: content.secuencia_pasos || [],
-          reglasEnclavamiento: content.reglas_enclavamiento || []
+          dashboardWidgets: content.dashboard || []
         };
       }
     } catch (e) {
-      console.warn('[AI COMPILER] Fallo en API Cloud, activando Analizador Semántico Nativo:', e);
+      console.warn('[AI COMPILER] Fallo en la llamada cloud, activando Motor Semántico Dinámico:', e);
     }
   }
 
-  // Si no hay API Key o falló la conexión, ejecuta el Analizador Semántico Nativo
-  return analizarYCompilarSemanticaLocal(prompt, device);
+  // Si no hay API Key configurada o falla la red, ejecuta el Motor Semántico Dinámico en JavaScript
+  return compilarSemanticaDinamicaUniversal(prompt);
 }
