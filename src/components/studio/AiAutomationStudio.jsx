@@ -26,10 +26,8 @@ import {
   GripHorizontal, 
   Search, 
   Building2, 
-  MessageSquare,
-  Bot,
-  User,
-  CornerDownLeft
+  Bot, 
+  User 
 } from 'lucide-react';
 
 const SNAP_GRID = 10;
@@ -40,13 +38,13 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
   const [modoEdicion, setModoEdicion] = useState(false);
   const [widgetEnEdicion, setWidgetEnEdicion] = useState(null);
 
-  // Estados del Chat Conversacional con la IA
+  // Estados del Chat
   const [prompt, setPrompt] = useState('');
   const [historialChat, setHistorialChat] = useState([
     {
       id: 'init_msg',
       sender: 'ai',
-      texto: 'Hola. Soy tu Copilot de Ingeniería. Describe libremente qué máquina, relés, sensores o lógica necesitas y la construiré de cero sin plantillas fijas. Si tienes dudas, pregúntame.'
+      texto: 'Hola. Soy tu Copilot de Ingeniería. Escribe exactamente lo que necesitas y generaré los controles a tu medida sin plantillas fijas.'
     }
   ]);
   const [compilando, setCompilando] = useState(false);
@@ -155,7 +153,6 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
       const cleanMac = (selectedMac || '').toUpperCase().replace(/[:\-]/g, '');
       const targetDev = fleet[cleanMac] || null;
 
-      // Enviar historial completo a Groq Llama 3.3 70B
       const res = await conversarYCompilarConIA({
         prompt: textoUsuario,
         historial: historialChat.map(h => ({ sender: h.sender, contenido: h.texto })),
@@ -173,6 +170,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
         }
       ]);
 
+      // Renderizar widgets generados en el lienzo
       if (res.dashboardWidgets && res.dashboardWidgets.length > 0) {
         setWidgets(res.dashboardWidgets);
       }
@@ -189,15 +187,15 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
 
       setHalPayload(res.halPayload || {});
       setJsonRaw(JSON.stringify(res, null, 2));
-      setMsg(`✨ IA actualizó el diseño: "${res.titulo}"`);
+      setMsg(`✨ Controles generados: "${res.titulo}"`);
     } catch (err) {
-      console.error('Error al dialogar con la IA:', err);
+      console.error('Error al compilar:', err);
       setHistorialChat(prev => [
         ...prev,
         {
           id: `ai_err_${Date.now()}`,
           sender: 'ai',
-          texto: `Hubo un inconveniente al procesar la orden: ${err.message}. ¿Podrías reformularla o darme más detalles?`
+          texto: `Se produjo un detalle con la orden: ${err.message}. ¿Podrías reformularla?`
         }
       ]);
     } finally {
@@ -205,7 +203,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
     }
   };
 
-  // POINTER EVENTS: ARRASTRE Y REDIMENSIÓN
+  // POINTER EVENTS: ARRASTRE Y REDIMENSIÓN LIBRE
   const handlePointerDown = (e, idx, action) => {
     if (!modoEdicion) return;
     e.stopPropagation();
@@ -301,7 +299,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
     if (sendCommand) sendCommand(cleanMac, { cmd: 'SCAN_HARDWARE' });
   };
 
-  // DESPLEGAR A LA PLACA (LITTLEFS)
+  // DESPLEGAR A LA PLACA (LITTLEFS & MQTT)
   const handleDesplegarADispositivo = async () => {
     const cleanMac = (selectedMac || '').toUpperCase().replace(/[:\-]/g, '');
     if (!cleanMac) return alert('Selecciona un equipo destino.');
@@ -372,11 +370,11 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
             <h2 className="text-base font-bold text-white flex items-center gap-2">
               BioFleet AI Studio Conversacional
               <span className="px-2 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[9px]">
-                GROQ LLAMA 3.3 70B
+                GROQ ACTIVO
               </span>
             </h2>
             <p className="text-[11px] text-slate-300 font-sans">
-              Copilot interactivo sin plantillas fijas: dialoga, aclara dudas y construye en vivo.
+              Copilot sin plantillas fijas: escribe cualquier requerimiento libre y genera en vivo.
             </p>
           </div>
         </div>
@@ -449,28 +447,28 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
       )}
 
       {/* ========================================================================= */}
-      {/* 2. PESTAÑA PRINCIPAL: CHAT CON EL COPILOT + LIENZO                       */}
+      {/* 2. CONSOLA DE DIÁLOGO CON IA & LIENZO                                     */}
       {/* ========================================================================= */}
       {activeTab === 'STUDIO' && (
         <div className="space-y-4">
           
-          {/* CONSOLA DE DIÁLOGO CON IA (MEMORIA Y PREGUNTAS/RESPUESTAS) */}
+          {/* CONSOLA DE DIÁLOGO */}
           <div className="ultra-glass p-4 rounded-2xl border border-amber-500/30 space-y-3">
             <div className="flex justify-between items-center border-b border-slate-800 pb-2">
               <span className="text-amber-300 font-bold uppercase text-[11px] flex items-center gap-1.5">
                 <Bot className="w-4 h-4 text-emerald-400" />
-                Diálogo con el Ingeniero IA (Escribe cualquier instrucción o responde sus preguntas):
+                Diálogo con el Ingeniero IA:
               </span>
               <button
                 type="button"
-                onClick={() => setHistorialChat([{ id: 'reset', sender: 'ai', texto: 'Historial reiniciado. Dime qué nuevo sistema deseas diseñar.' }])}
+                onClick={() => setHistorialChat([{ id: 'reset', sender: 'ai', texto: 'Historial reiniciado. Dime qué nuevo control o máquina deseas diseñar.' }])}
                 className="text-[10px] text-slate-400 hover:text-white"
               >
                 Limpiar Chat
               </button>
             </div>
 
-            {/* HISTORIAL DE MENSAJES */}
+            {/* HISTORIAL */}
             <div className="max-h-48 overflow-y-auto space-y-2 pr-1">
               {historialChat.map((msgItem) => (
                 <div
@@ -502,7 +500,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                 type="text"
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
-                placeholder="Escribe aquí tu requerimiento o contesta a la IA (ej: 'agrega un botón de parada en R3 y un sensor de presión en A0')..."
+                placeholder="Escribe aquí (ej: 'creame un boton que controle r5')..."
                 className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-sans text-xs focus:outline-none focus:border-amber-400"
               />
               <button
@@ -511,7 +509,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                 className="px-4 py-2 bg-gradient-to-r from-amber-500 to-emerald-500 hover:opacity-90 text-slate-950 font-bold rounded-xl flex items-center gap-1.5 shadow-lg disabled:opacity-50 shrink-0 font-mono"
               >
                 {compilando ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-                <span>{compilando ? 'Razonando...' : 'Enviar'}</span>
+                <span>{compilando ? 'Procesando...' : 'Enviar'}</span>
               </button>
             </form>
           </div>
@@ -556,7 +554,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
             </div>
           </div>
 
-          {/* LIENZO LIBRE X/Y/W/H */}
+          {/* LIENZO LIBRE */}
           <div className="ultra-glass p-4 rounded-2xl border border-slate-800 space-y-3">
             <div className="flex justify-between items-center border-b border-slate-800 pb-2">
               <span className="text-white font-bold flex items-center gap-2">
@@ -571,7 +569,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
             {widgets.length === 0 ? (
               <div className="py-16 border-2 border-dashed border-slate-800 rounded-xl text-center text-slate-500 space-y-2">
                 <Sparkles className="w-8 h-8 mx-auto text-amber-500/40 animate-pulse" />
-                <p>Describe en el chat de arriba lo que deseas y la IA colocará aquí tus controles.</p>
+                <p>Escribe tu instrucción en el diálogo de arriba y la IA generará tus controles.</p>
               </div>
             ) : (
               <div
@@ -780,7 +778,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
       )}
 
       {/* ========================================================================= */}
-      {/* 3. PESTAÑA B: HARDWARE & ESCÁNER I2C                                      */}
+      {/* 3. HARDWARE & I2C                                                         */}
       {/* ========================================================================= */}
       {activeTab === 'HARDWARE_I2C' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -849,7 +847,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
       )}
 
       {/* ========================================================================= */}
-      {/* 4. PESTAÑA C: BIBLIOTECA CLOUD                                            */}
+      {/* 4. BIBLIOTECA CLOUD                                                       */}
       {/* ========================================================================= */}
       {activeTab === 'BIBLIOTECA' && (
         <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 space-y-4">
@@ -892,7 +890,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
       )}
 
       {/* ========================================================================= */}
-      {/* 5. PESTAÑA D: EDITOR JSON                                                 */}
+      {/* 5. EDITOR JSON                                                            */}
       {/* ========================================================================= */}
       {activeTab === 'EDITOR_JSON' && (
         <div className="ultra-glass p-5 rounded-2xl border border-indigo-500/30 space-y-3">
