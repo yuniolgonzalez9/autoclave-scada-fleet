@@ -1,7 +1,7 @@
 /**
  * =========================================================================================
  * PROYECTO: BIOFLEET OS™ v2.0 ENTERPRISE
- * SERVICIO COMPILADOR DE IA REAL (GOOGLE GEMINI / GROQ / OPENAI MULTI-ENGINE)
+ * SERVICIO COMPILADOR DE IA REAL CON AUTO-DESCUBRIMIENTO DE MODELOS GEMINI / GROQ / OPENAI
  * =========================================================================================
  */
 
@@ -16,11 +16,11 @@ ESPECIFICACIONES DEL HARDWARE FÍSICO:
 4. Pantalla: LCD Alfanumérica I2C (16x2 o 20x4, dirección 0x27).
 
 TIPOS DE WIDGETS SOPORTADOS PARA EL DASHBOARD:
-- 'ACTION_BUTTON': Botón para ejecutar acciones o secuencias (Arranque, Purga, Ciclo, Paro).
+- 'ACTION_BUTTON': Botón para ejecutar acciones o secuencias (Arranque, Test, Purga, Ciclo, Paro).
 - 'SWITCH_TOGGLE': Interruptor ON/OFF para conmutar un relé directo (Bomba, Válvula, Calentador).
 - 'GAUGE_RADIAL': Manómetro/indicador radial para presiones, RPM, humedad o nivel.
 - 'VALUE_CARD': Tarjeta de lectura digital numérica para temperatura (°C), tiempos o voltaje.
-- 'STATUS_LED': Luz indicadora de estado (ON/OFF) vinculada a una entrada física.
+- 'STATUS_LED': Luz indicadora de estado (ON/OFF) vinculada a una entrada física o relé.
 - 'CHART_HISTORY': Gráfica temporal continua de telemetría.
 
 REGLAS DE SALIDA ESTRICTAS:
@@ -62,62 +62,98 @@ REGLAS DE SALIDA ESTRICTAS:
 }
 `;
 
-/**
- * Detecta automáticamente el proveedor según el formato de la API Key:
- * - AIza... -> Google Gemini
- * - gsk_...  -> Groq
- * - sk-...   -> OpenAI
- */
 export function detectarProveedorApiKey(key = '') {
   const k = key.trim();
   if (k.startsWith('AIza')) return 'GEMINI';
   if (k.startsWith('gsk_')) return 'GROQ';
   if (k.startsWith('sk-')) return 'OPENAI';
-  return 'GEMINI'; // Por defecto Gemini
+  return 'GEMINI';
 }
 
 /**
- * LLAMADA A GOOGLE GEMINI (GEMINI 1.5 FLASH / 2.0 FLASH)
+ * AUTO-DESCUBRIMIENTO Y LLAMADA A GEMINI SIN ERROR 404
  */
 async function invocarGemini(apiKey, userPrompt, hardwareInfo) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+  // 1. Obtener los modelos activos directamente de Google para tu clave
+  let modelosCandidatos = ['gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-1.5-flash-latest'];
 
-  const payload = {
-    contents: [
-      {
-        role: 'user',
-        parts: [
-          {
-            text: `${BIOFLEET_SYSTEM_PROMPT}\n\nHARDWARE DISPONIBLE: ${JSON.stringify(hardwareInfo || {})}\n\nSOLICITUD DEL USUARIO:\n"${userPrompt}"`
-          }
-        ]
+  try {
+    const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+    if (listRes.ok) {
+      const listData = await listRes.json();
+      const validos = (listData.models || [])
+        .filter(m => m.supportedGenerationMethods?.includes('generateContent'))
+        .map(m => m.name.replace(/^models\//, ''));
+
+      if (validos.length > 0) {
+        // Priorizar modelos Flash
+        const flashModels = validos.filter(m => m.includes('flash'));
+        modelosCandidatos = [...flashModels, ...validos];
       }
-    ],
-    generationConfig: {
-      response_mime_type: 'application/json',
-      temperature: 0.2
     }
-  };
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  });
-
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Error Google Gemini (${response.status}): ${errText}`);
+  } catch (e) {
+    console.warn('[GEMINI] Lista de modelos omitida, usando candidatos estándar:', e);
   }
 
-  const data = await response.json();
-  const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!rawText) throw new Error('Gemini no devolvió texto en su respuesta.');
-  return JSON.parse(rawText);
+  const modelosUnicos = [...new Set(modelosCandidatos)];
+  let ultimoError = null;
+
+  // 2. Probar candidatos hasta que Google entregue el JSON sin 404
+  for (const model of modelosUnicos) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+    const payload = {
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            {
+              text: `${BIOFLEET_SYSTEM_PROMPT}\n\nHARDWARE DISPONIBLE: ${JSON.stringify(hardwareInfo || {})}\n\nSOLICITUD DEL USUARIO:\n"${userPrompt}"`
+            }
+          ]
+        }
+      ],
+      generationConfig: {
+        response_mime_type: 'application/json',
+        temperature: 0.2
+      }
+    };
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (rawText) {
+          console.log(`✅ [GEMINI] Respuesta generada exitosamente con el modelo: ${model}`);
+          return JSON.parse(rawText);
+        }
+      } else {
+        const errJson = await response.json().catch(() => null);
+        ultimoError = errJson?.error?.message || `HTTP ${response.status}`;
+        if (response.status === 404) {
+          console.warn(`[GEMINI] Modelo ${model} no disponible (404), probando siguiente...`);
+          continue; // Intenta con el siguiente modelo de la lista
+        }
+        throw new Error(ultimoError);
+      }
+    } catch (err) {
+      ultimoError = err.message;
+      if (err.message.includes('404')) continue;
+      throw err;
+    }
+  }
+
+  throw new Error(`Error Google Gemini: ${ultimoError}`);
 }
 
 /**
- * LLAMADA A OPENAI O GROQ (COMPATIBLE OPENAI API)
+ * LLAMADA A OPENAI O GROQ
  */
 async function invocarOpenAiCompatible(apiKey, endpoint, modelName, userPrompt, hardwareInfo) {
   const response = await fetch(endpoint, {
@@ -152,14 +188,13 @@ async function invocarOpenAiCompatible(apiKey, endpoint, modelName, userPrompt, 
 }
 
 /**
- * COMPILADOR MAESTRO EXPORTADO
+ * COMPILADOR MAESTRO
  */
 export async function compilarConIA({ prompt, device, hardwareInfo, apiKey = null }) {
   if (!prompt || !prompt.trim()) {
     throw new Error('Por favor escribe qué automatización deseas compilar.');
   }
 
-  // 1. Obtener la API key de múltiples fuentes
   const keyActiva =
     apiKey ||
     localStorage.getItem('biofleet_ai_key') ||
@@ -175,7 +210,7 @@ export async function compilarConIA({ prompt, device, hardwareInfo, apiKey = nul
   const proveedor = detectarProveedorApiKey(keyActiva);
   let resultadoJson = null;
 
-  console.log(`🤖 [BIOFLEET AI] Consultando modelo real vía proveedor: ${proveedor}`);
+  console.log(`🤖 [BIOFLEET AI] Conectando con IA real vía proveedor: ${proveedor}`);
 
   if (proveedor === 'GEMINI') {
     resultadoJson = await invocarGemini(keyActiva, prompt, hardwareInfo);
@@ -188,7 +223,6 @@ export async function compilarConIA({ prompt, device, hardwareInfo, apiKey = nul
       hardwareInfo
     );
   } else {
-    // OPENAI
     resultadoJson = await invocarOpenAiCompatible(
       keyActiva,
       'https://api.openai.com/v1/chat/completions',
@@ -198,7 +232,6 @@ export async function compilarConIA({ prompt, device, hardwareInfo, apiKey = nul
     );
   }
 
-  // Adaptar coordenadas libres si no vienen definidas
   const dashboardWidgets = (resultadoJson.dashboard || []).map((w, idx) => ({
     ...w,
     id: w.id || `w_ai_${idx + 1}`,
