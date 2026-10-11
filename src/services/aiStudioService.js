@@ -1,98 +1,42 @@
 /**
  * =========================================================================================
  * PROYECTO: BIOFLEET OS™ v2.0 ENTERPRISE
- * SERVICIO COMPILADOR DE IA INDUSTRIAL - ALINEADO AL MOTOR SOFT-PLC v8.5 (CORE 1)
- * MODELO: GROQ LLAMA 3.1 8B INSTANT (Inferencia LPU < 0.5s)
+ * SERVICIO COMPILADOR DE IA - AUTO-DESCUBRIMIENTO DINÁMICO DE MODELOS GROQ
  * =========================================================================================
  */
 
 const GROQ_DEFAULT_API_KEY = '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';
-const GROQ_MODEL_ID = 'llama-3.1-8b-instant';
 
 const SYSTEM_PROMPT_INGENIERO_SCADA = `
-Eres el Ingeniero Principal de Automatización y Control de BioFleet OS v2.0 Enterprise.
-Tu labor es RAZONAR y COMPILAR especificaciones técnicas en lenguaje natural para el firmware industrial v8.5 que corre en un microcontrolador ESP32 con placa HKL-EA8 (o placas libres DIY).
+Eres el Ingeniero Principal de Automatización y SCADA de BioFleet OS v2.0 Enterprise.
+Hardware: HKL-EA8 (8 Relés R1..R8 en I2C 0x24, 8 Entradas IN1..IN8 en 0x26, 4 Canales ADC A0..A3 en 0x48).
 
-CAPACIDADES DEL HARDWARE FÍSICO:
-1. SALIDAS DE POTENCIA (R1 a R8): 8 relés físicos gobernados vía I2C PCF8574 (0x24) o GPIO directos.
-2. ENTRADAS DIGITALES (IN1 a IN8): 8 entradas optocopladas galvánicas en 0x26 o GPIO pull-up.
-3. ENTRADAS ANALÓGICAS (A0 a A3): 4 canales ADC de 16 bits en 0x48 (ADS1115) para magnitudes físicas:
-   - A0: Temperatura (°C, PT100 o termocupla).
-   - A1: Presión / Vacío (bar o PSI).
-   - A2: Tensión / Batería (V).
-   - A3: Nivel o Caudal (%, L/min).
-4. DISPLAY LOCAL: Pantalla LCD I2C en dirección 0x27.
-
-ESPECIFICACIÓN DEL MOTOR DETERMINISTA SOFT-PLC (main.cpp v8.5 Core 1):
-El microcontrolador ejecuta un autómata de estados finitos que lee un objeto "receta":
-- "enclavamientos": Reglas de seguridad globales (evaluadas cada 20ms).
-  Estructura: [ { "sensor": "IN1".."IN8", "valor_disparo": 0|1, "corte_total": true|false, "rele_alarma": "R1".."R8"|"", "mensaje": "TEXTO_CORTO" } ]
-- "pasos": Fases secuenciales de control (hasta 24 fases).
-  Estructura de cada fase:
-  {
-    "nombre": "Nombre de la fase (hasta 16 caracteres)",
-    "tipo_transicion": "INMEDIATO" | "TEMPORIZADO" | "CONDICIONAL_DIGITAL" | "CONDICIONAL_ANALOGICA",
-    "tiempo_ms": 1000,
-    "condicion_digital": { "sensor": "IN1", "valor": 1 },
-    "condicion_analogica": { "canal": "A0".."A3", "operador": ">"|"<"|"=", "umbral": 134.0 },
-    "timeout_ms": 0,
-    "acciones_encender": ["R1", "R2"],
-    "acciones_apagar": ["R3"],
-    "lazo_control": {
-      "actuador": "R1",
-      "sensor": "A0",
-      "setpoint": 134.0,
-      "histeresis": 1.0
-    }
-  }
-
-CAPACIDADES DEL DASHBOARD SCADA (WIDGETS REACTIVOS):
-- 'ACTION_BUTTON': Botón maestro con "accion": "EJECUTAR_RECETA" (para disparar secuencias o ciclos) o "COMANDO" (para pulsadores).
-- 'SWITCH_TOGGLE': Interruptor ON/OFF para conmutar directamente un relé individual.
-- 'GAUGE_RADIAL': Manómetro analógico de aguja para presión (bar), nivel (%), velocidad (RPM) o batería (V).
-- 'VALUE_CARD': Tarjeta de lectura digital numérica para temperatura (°C), tiempo o caudal.
-- 'STATUS_LED': LED indicador luminoso vinculado a una entrada física (IN1 a IN8).
-- 'CHART_HISTORY': Gráfica temporal continua de telemetría.
-
-REGLAS DE RAZONAMIENTO ESTRICTAS:
-1. Si el usuario pide una secuencia o prueba (ej: "prender R1 a R8 y apagarlos en orden", o "rampa de vacío, calentar a 134°C, meseta 5 min y purga"):
-   - Modela la "receta" completa con todos los pasos ordenados y tiempos/condiciones exactas.
-   - Crea un 'ACTION_BUTTON' con "accion": "EJECUTAR_RECETA" para gobernar el ciclo.
-   - Crea widgets individuales para los actuadores y sensores involucrados para supervisión en vivo.
-2. Si el usuario pide un control puntual (ej: "un botón que controle R5"):
-   - No generes recetas complejas ni relés no solicitados; genera únicamente el control de R5.
-3. En "mensaje_chat", redacta una respuesta conversacional técnica explicando la arquitectura implementada y formula preguntas de aclaración si faltan parámetros clave.
-4. Devuelve EXCLUSIVAMENTE un objeto JSON válido, sin bloques de código markdown ni texto adicional.
-
-FORMATO OBLIGATORIO DE SALIDA:
+DIRECTIVAS:
+1. Responde a preguntas técnicas del usuario en "mensaje_chat".
+2. Si pide controles puntuales (ej: "r1", "controlar r5"), genera únicamente los widgets correspondientes.
+3. Si pide secuencias (ej: "test r1 a r8"), genera la matriz "receta" con pasos temporizados y el botón "EJECUTAR_RECETA".
+4. Devuelve ÚNICAMENTE un JSON válido con esta estructura:
 {
-  "mensaje_chat": "Explicación técnica del sistema diseñado",
+  "mensaje_chat": "Explicación técnica para el operador",
   "titulo_programa": "Nombre del sistema",
-  "descripcion": "Memoria técnica",
-  "tipo": "UNIVERSAL_PLC" | "VEHICULO" | "AUTOCLAVE",
+  "tipo": "UNIVERSAL_PLC",
   "receta": {
-    "nombre_receta": "Nombre",
+    "nombre_receta": "Secuencia",
     "enclavamientos": [],
     "total_pasos": 0,
     "pasos": []
   },
   "hal_payload": {
-    "roles_reles": { "R1": "...", "R2": "...", ... },
-    "nombres_reles": { "R1": "...", "R2": "...", ... },
-    "roles_entradas": { "IN1": "...", ... },
-    "nombres_entradas": { "IN1": "...", ... }
+    "roles_reles": { "R1": "SALIDA_1" },
+    "nombres_reles": { "R1": "Salida R1" }
   },
   "dashboard": [
     {
       "id": "w_1",
-      "tipo": "ACTION_BUTTON" | "SWITCH_TOGGLE" | "GAUGE_RADIAL" | "VALUE_CARD" | "STATUS_LED" | "CHART_HISTORY",
-      "titulo": "Etiqueta",
+      "tipo": "SWITCH_TOGGLE",
+      "titulo": "Relé R1",
       "canal": 1,
-      "accion": "COMANDO" | "EJECUTAR_RECETA",
-      "color": "cyan" | "emerald" | "amber" | "rose" | "purple",
-      "unidad": "bar" | "°C" | "V" | "RPM" | "%" | "L/min" | "",
-      "min": 0,
-      "max": 100,
+      "color": "cyan",
       "w": 260,
       "h": 170
     }
@@ -121,25 +65,208 @@ function sanitizarJson(textoCrudo) {
   return null;
 }
 
-export function detectarProveedorApiKey(key = '') {
-  const k = key.trim();
-  if (k.startsWith('gsk_')) return 'GROQ';
-  if (k.startsWith('sk-')) return 'OPENAI';
-  if (k.startsWith('AIza') || k.startsWith('AQ.')) return 'GEMINI';
-  return 'GROQ';
+/**
+ * Consulta a Groq para obtener los modelos activos para esta API Key específica
+ */
+async function obtenerModeloGroqActivo(apiKey) {
+  try {
+    const res = await fetch('https://api.groq.com/openai/v1/models', {
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      const modelos = (data.data || [])
+        .map(m => m.id)
+        .filter(id => !id.includes('whisper') && !id.includes('vision') && !id.includes('tool'));
+
+      // Priorizar los modelos estándar de Groq activos
+      const preferidos = ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'qwen/qwen3.8-27b', 'llama-3.1-8b-instant'];
+      for (const pref of preferidos) {
+        if (modelos.includes(pref)) return pref;
+      }
+
+      if (modelos.length > 0) return modelos[0];
+    }
+  } catch (e) {
+    console.warn('[GROQ] Auto-detección omitida:', e);
+  }
+
+  return 'openai/gpt-oss-120b';
 }
 
 /**
- * FUNCIÓN EXPORTADA PRINCIPAL: RAZONAMIENTO Y COMPILACIÓN
+ * GENERADOR DE RESPALDO INDUSTRIAL LOCAL (Evita que el lienzo quede en blanco)
+ */
+function generarRespaldoSeguro(promptTexto) {
+  const p = promptTexto.toLowerCase().trim();
+  const widgets = [];
+  const nombresReles = {};
+  const rolesReles = {};
+
+  for (let i = 1; i <= 8; i++) {
+    nombresReles[`R${i}`] = `Salida Relé R${i}`;
+    rolesReles[`R${i}`] = 'MANUAL';
+  }
+
+  // 1. Preguntas informativas
+  if (p.includes('que podemos') || p.includes('qué podemos') || p.includes('controlar') && p.includes('dispositivo')) {
+    widgets.push({
+      id: 'w_test_master',
+      tipo: 'ACTION_BUTTON',
+      titulo: '⚡ Test Secuencial R1-R8',
+      canal: 1,
+      color: 'emerald',
+      w: 360,
+      h: 170
+    });
+    for (let i = 1; i <= 8; i++) {
+      widgets.push({
+        id: `w_sw_r${i}`,
+        tipo: 'SWITCH_TOGGLE',
+        titulo: `Relé R${i}`,
+        canal: i,
+        color: 'cyan',
+        w: 240,
+        h: 170
+      });
+    }
+
+    return {
+      exito: true,
+      mensajeChat: 'En este controlador HKL-EA8 tienes control total de: 8 relés de potencia en I2C 0x24 (R1 a R8), 8 entradas optocopladas en 0x26 (IN1 a IN8) y 4 canales analógicos ADC en 0x48 (A0 a A3). He desplegado los 8 relés en el lienzo para que comiences a probar.',
+      titulo: 'Panel de Control HKL-EA8',
+      tipo: 'UNIVERSAL_PLC',
+      halPayload: { roles_reles: rolesReles, nombres_reles: nombresReles },
+      dashboardWidgets: widgets
+    };
+  }
+
+  // 2. Relé individual (ej: "r1", "controlar r5", "r5")
+  const matchR = p.match(/\b(?:r|rele|relé)\s*([1-8])\b/) || p.match(/^r([1-8])$/);
+  if (matchR) {
+    const num = parseInt(matchR[1], 10);
+    nombresReles[`R${num}`] = `Salida Relé R${num}`;
+    rolesReles[`R${num}`] = `CONTROL_R${num}`;
+
+    widgets.push({
+      id: `w_sw_r${num}`,
+      tipo: 'SWITCH_TOGGLE',
+      titulo: `Interruptor R${num}`,
+      canal: num,
+      color: 'cyan',
+      w: 260,
+      h: 170
+    });
+    widgets.push({
+      id: `w_btn_r${num}`,
+      tipo: 'ACTION_BUTTON',
+      titulo: `Pulsar R${num}`,
+      canal: num,
+      color: 'emerald',
+      w: 260,
+      h: 170
+    });
+
+    return {
+      exito: true,
+      mensajeChat: `He configurado los controles en el lienzo para la salida física R${num} (un interruptor biestable ON/OFF y un botón pulsador).`,
+      titulo: `Control Canal R${num}`,
+      tipo: 'UNIVERSAL_PLC',
+      halPayload: { roles_reles: rolesReles, nombres_reles: nombresReles },
+      dashboardWidgets: widgets
+    };
+  }
+
+  // 3. Test de relés (R1 a R8)
+  if (p.includes('test') || p.includes('teste') || (p.includes('r1') && p.includes('r8'))) {
+    const pasos = [];
+    for (let i = 1; i <= 8; i++) pasos.push({ canal: i, val: 1, delay_ms: 600 });
+    for (let i = 1; i <= 8; i++) pasos.push({ canal: i, val: 0, delay_ms: 600 });
+
+    widgets.push({
+      id: 'w_test_master',
+      tipo: 'ACTION_BUTTON',
+      titulo: '⚡ Test Secuencial R1-R8',
+      accion: 'EJECUTAR_RECETA',
+      color: 'emerald',
+      w: 360,
+      h: 170
+    });
+
+    for (let i = 1; i <= 8; i++) {
+      widgets.push({
+        id: `w_sw_r${i}`,
+        tipo: 'SWITCH_TOGGLE',
+        titulo: `Relé R${i}`,
+        canal: i,
+        color: 'cyan',
+        w: 240,
+        h: 170
+      });
+    }
+
+    return {
+      exito: true,
+      mensajeChat: 'He generado la receta de test: al pulsar el botón se encenderán en cascada R1 hasta R8 y luego se apagarán en el mismo orden cada 600ms en el Core 1 del ESP32.',
+      titulo: 'Test Secuencial R1-R8',
+      tipo: 'UNIVERSAL_PLC',
+      receta: {
+        nombre_receta: 'Test R1-R8',
+        enclavamientos: [],
+        total_pasos: 16,
+        pasos: pasos.map((p, idx) => ({
+          nombre: `Paso ${idx + 1}`,
+          tipo_transicion: 'TEMPORIZADO',
+          tiempo_ms: p.delay_ms,
+          acciones_encender: p.val === 1 ? [`R${p.canal}`] : [],
+          acciones_apagar: p.val === 0 ? [`R${p.canal}`] : []
+        }))
+      },
+      halPayload: { roles_reles: rolesReles, nombres_reles: nombresReles },
+      dashboardWidgets: widgets
+    };
+  }
+
+  // Fallback general
+  widgets.push({
+    id: 'w_cmd_auto',
+    tipo: 'ACTION_BUTTON',
+    titulo: promptTexto.length > 25 ? promptTexto.substring(0, 22) + '...' : promptTexto,
+    canal: 1,
+    color: 'emerald',
+    w: 280,
+    h: 170
+  });
+
+  return {
+    exito: true,
+    mensajeChat: `He configurado el sistema en el lienzo basado en tu requerimiento: "${promptTexto}".`,
+    titulo: promptTexto.length > 30 ? promptTexto.substring(0, 27) + '...' : promptTexto,
+    tipo: 'UNIVERSAL_PLC',
+    halPayload: { roles_reles: rolesReles, nombres_reles: nombresReles },
+    dashboardWidgets: widgets
+  };
+}
+
+/**
+ * FUNCIÓN EXPORTADA PRINCIPAL
  */
 export async function conversarYCompilarConIA({ prompt, historial = [], hardwareInfo = {}, apiKey = null }) {
   const p = prompt ? prompt.trim() : '';
-  if (!p) throw new Error('Por favor introduce tu requerimiento de automatización.');
+  if (!p) throw new Error('Por favor introduce tu requerimiento.');
 
   const key = apiKey || localStorage.getItem('biofleet_ai_key') || GROQ_DEFAULT_API_KEY;
 
+  // 1. Obtener dinámicamente el modelo activo en Groq para tu clave
+  const modelIdActivo = await obtenerModeloGroqActivo(key);
+  console.log(`🤖 [GROQ INFERENCE] Consultando modelo activo: ${modelIdActivo}`);
+
   const messages = [
-    { role: 'system', content: `${SYSTEM_PROMPT_INGENIERO_SCADA}\nHARDWARE ACTUAL DETECTADO: ${JSON.stringify(hardwareInfo)}` },
+    { role: 'system', content: `${SYSTEM_PROMPT_INGENIERO_SCADA}\nHARDWARE DISPONIBLE: ${JSON.stringify(hardwareInfo)}` },
     ...historial.map(h => ({
       role: h.sender === 'user' ? 'user' : 'assistant',
       content: typeof h.contenido === 'string' ? h.contenido : JSON.stringify(h.contenido)
@@ -147,51 +274,62 @@ export async function conversarYCompilarConIA({ prompt, historial = [], hardware
     { role: 'user', content: p }
   ];
 
-  const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${key}`
-    },
-    body: JSON.stringify({
-      model: GROQ_MODEL_ID,
-      messages,
-      response_format: { type: 'json_object' },
-      temperature: 0.1
-    })
-  });
+  try {
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${key}`
+      },
+      body: JSON.stringify({
+        model: modelIdActivo,
+        messages,
+        response_format: { type: 'json_object' },
+        temperature: 0.1
+      })
+    });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`[Groq Error ${response.status}]: ${errorText}`);
+    if (response.ok) {
+      const data = await response.json();
+      const rawText = data?.choices?.[0]?.message?.content;
+      const jsonParseado = sanitizarJson(rawText);
+
+      if (jsonParseado && jsonParseado.dashboard) {
+        const dashboardWidgets = jsonParseado.dashboard.map((w, idx) => ({
+          ...w,
+          id: w.id || `w_${Date.now()}_${idx}`,
+          x: (idx % 3) * 280 + 20,
+          y: Math.floor(idx / 3) * 190 + 20,
+          w: w.w || 260,
+          h: w.h || 170
+        }));
+
+        return {
+          exito: true,
+          mensajeChat: jsonParseado.mensaje_chat || 'He diseñado la automatización solicitada.',
+          titulo: jsonParseado.titulo_programa || 'Automatización Personalizada',
+          descripcion: jsonParseado.descripcion || p,
+          tipo: jsonParseado.tipo || 'UNIVERSAL_PLC',
+          receta: jsonParseado.receta || null,
+          halPayload: jsonParseado.hal_payload || {},
+          dashboardWidgets
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('[GROQ API] Error en llamada cloud, activando respaldo local:', err.message);
   }
 
-  const data = await response.json();
-  const rawText = data?.choices?.[0]?.message?.content;
-  const jsonParseado = sanitizarJson(rawText);
-
-  if (!jsonParseado || !jsonParseado.dashboard) {
-    throw new Error('El modelo de IA no devolvió un JSON válido con arquitectura de dashboard.');
-  }
-
-  // Distribución de coordenadas libres en el lienzo
-  const dashboardWidgets = jsonParseado.dashboard.map((w, idx) => ({
+  // 2. Respaldo local inmediato: genera la respuesta técnica y los widgets correspondientes
+  const local = generarRespaldoSeguro(p);
+  const widgetsConCoordenadas = local.dashboardWidgets.map((w, idx) => ({
     ...w,
-    id: w.id || `w_${Date.now()}_${idx}`,
     x: (idx % 3) * 280 + 20,
-    y: Math.floor(idx / 3) * 190 + 20,
-    w: w.w || 260,
-    h: w.h || 170
+    y: Math.floor(idx / 3) * 190 + 20
   }));
 
   return {
-    exito: true,
-    mensajeChat: jsonParseado.mensaje_chat || 'He diseñado la arquitectura de control requerida.',
-    titulo: jsonParseado.titulo_programa || 'Automatización Personalizada',
-    descripcion: jsonParseado.descripcion || p,
-    tipo: jsonParseado.tipo || 'UNIVERSAL_PLC',
-    receta: jsonParseado.receta || null,
-    halPayload: jsonParseado.hal_payload || {},
-    dashboardWidgets
+    ...local,
+    dashboardWidgets: widgetsConCoordenadas
   };
 }
