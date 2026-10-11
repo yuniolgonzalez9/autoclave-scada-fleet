@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { compilarConIA } from '../../services/aiStudioService';
 import { supabase } from '../../services/supabase';
 import { 
@@ -39,22 +39,22 @@ import {
   Radio
 } from 'lucide-react';
 
-const SNAP_GRID = 10; // Precisión de ajuste magnético al arrastrar o redimensionar
+const SNAP_GRID = 10; // Precisión de ajuste magnético en píxeles
 
 export default function AiAutomationStudio({ fleet = {}, sendCommand = null, initialDeviceMac = null }) {
   // ---------------------------------------------------------------------------
   // 1. PESTAÑAS Y MODOS DE VISUALIZACIÓN
   // ---------------------------------------------------------------------------
   const [activeTab, setActiveTab] = useState('STUDIO'); // 'STUDIO' | 'BIBLIOTECA' | 'EDITOR_JSON'
-  const [vistaDispositivo, setVistaDispositivo] = useState('DESKTOP'); // 'DESKTOP' (Canvas Libre) | 'MOVIL' (Chasis Táctil)
+  const [vistaDispositivo, setVistaDispositivo] = useState('DESKTOP'); // 'DESKTOP' (Lienzo Libre) | 'MOVIL' (Chasis Smartphone)
   const [modoEdicion, setModoEdicion] = useState(false); // true: mover/redimensionar/editar, false: modo operador interactivo
-  const [widgetEnEdicion, setWidgetEnEdicion] = useState(null); // Índice o ID del widget en el modal de configuración
+  const [widgetEnEdicion, setWidgetEnEdicion] = useState(null); // Índice del widget abierto en configuración
 
   // ---------------------------------------------------------------------------
   // 2. MOTOR DE IA Y PROMPTS
   // ---------------------------------------------------------------------------
   const [prompt, setPrompt] = useState('Ambulancia de rescate con arranque remoto inteligente, corte de ignición, indicador de alternador D+ y medidor de batería 12V');
-  const [modoIaRefinar, setModoIaRefinar] = useState(false); // false: Generar nuevo, true: Modificar sobre existente
+  const [modoIaRefinar, setModoIaRefinar] = useState(false); // false: Crear desde cero, true: Refinar diseño actual
   const [compilando, setCompilando] = useState(false);
 
   // ---------------------------------------------------------------------------
@@ -68,27 +68,31 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
   const [jsonRaw, setJsonRaw] = useState('');
 
   // ---------------------------------------------------------------------------
-  // 4. FLEET Y DESPLIEGUE MQTT / SUPABASE
+  // 4. FLEET Y SELECCIÓN DE HARDWARE HKL-EA8
   // ---------------------------------------------------------------------------
-  const [selectedMac, setSelectedMac] = useState(initialDeviceMac || '');
+  const macList = Object.keys(fleet || {});
+  
+  // Si initialDeviceMac viene vacío, auto-seleccionar el primer equipo conectado si existe
+  const [selectedMac, setSelectedMac] = useState(() => {
+    if (initialDeviceMac) return initialDeviceMac.toUpperCase().replace(/[:\-]/g, '');
+    if (macList.length > 0) return macList[0];
+    return '';
+  });
+
   const [transmitting, setTransmitting] = useState(false);
   const [msg, setMsg] = useState('');
 
-  // Estados interactivos en vivo para la simulación de relés
+  // Estado en vivo de relés para modo operador
   const [liveRelayStates, setLiveRelayStates] = useState({});
 
   // ---------------------------------------------------------------------------
-  // 5. BIBLIOTECA CLOUD
+  // 5. BIBLIOTECA CLOUD (SUPABASE)
   // ---------------------------------------------------------------------------
   const [perfilesGuardados, setPerfilesGuardados] = useState([]);
   const [loadingLib, setLoadingLib] = useState(false);
 
-  const macList = Object.keys(fleet || {});
-
-  // Referencia al contenedor del lienzo para cálculo de coordenadas relativas
+  // Referencias para Pointer Events (Touch + Mouse unificado)
   const canvasRef = useRef(null);
-
-  // Referencia para la interacción táctil y ratón (Drag & Resize unificado)
   const activeInteraction = useRef({
     type: null, // 'DRAG' | 'RESIZE'
     widgetIdx: null,
@@ -101,7 +105,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
   });
 
   // ---------------------------------------------------------------------------
-  // 6. CARGA INICIAL DE SUPABASE
+  // 6. CARGAR BIBLIOTECA DE SUPABASE
   // ---------------------------------------------------------------------------
   const cargarBiblioteca = async () => {
     setLoadingLib(true);
@@ -113,7 +117,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
 
       if (!error && data) setPerfilesGuardados(data);
     } catch (e) {
-      console.warn('Error biblioteca:', e);
+      console.warn('Error cargando biblioteca:', e);
     } finally {
       setLoadingLib(false);
     }
@@ -123,7 +127,14 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
     cargarBiblioteca();
   }, []);
 
-  // Normalizar widgets para asegurar que siempre tengan propiedades libres x, y, w, h
+  // Asegurar selección de MAC si cambia la lista de equipos disponibles
+  useEffect(() => {
+    if (!selectedMac && macList.length > 0) {
+      setSelectedMac(macList[0]);
+    }
+  }, [fleet]);
+
+  // Normalizar widgets con coordenadas x, y, w, h libres
   const normalizarWidgets = (rawWidgets = []) => {
     let startX = 20;
     let startY = 20;
@@ -134,7 +145,6 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
       const posX = w.x !== undefined ? w.x : startX;
       const posY = w.y !== undefined ? w.y : startY;
 
-      // Calcular siguiente posición si no venía definida
       if (w.x === undefined) {
         startX += defW + 20;
         if (startX > 840) {
@@ -168,7 +178,8 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
     setMsg('');
 
     try {
-      const targetDev = fleet[selectedMac] || null;
+      const cleanMac = (selectedMac || '').toUpperCase().replace(/[:\-]/g, '');
+      const targetDev = fleet[cleanMac] || null;
 
       const promptContextualizado = modoIaRefinar && widgets.length > 0
         ? `Toma los siguientes widgets y lógica existentes: ${JSON.stringify(widgets)}. Modifícalos o agrega lo siguiente según esta instrucción del usuario: "${texto}"`
@@ -208,10 +219,10 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
   };
 
   // ---------------------------------------------------------------------------
-  // 8. MOTOR POINTER (TOUCH + MOUSE) PARA ARRASTRE Y REDIMENSIÓN LIBRE
+  // 8. MOTOR TOUCH & DRAG LIBRE CON POINTER EVENTS UNIFICADOS
   // ---------------------------------------------------------------------------
   const handlePointerDown = (e, idx, action) => {
-    if (!modoEdicion) return; // Solo permitir arrastrar/redimensionar en Modo Edición
+    if (!modoEdicion) return;
     e.stopPropagation();
 
     const clientX = e.clientX;
@@ -270,14 +281,18 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
         } catch (_) {}
       }
       activeInteraction.current = { type: null, widgetIdx: null };
-      
-      // Sincronizar el estado actual al jsonRaw de respaldo
-      setJsonRaw(JSON.stringify({ tipo: tipoEquipo, hal: halPayload, dashboard: widgets }, null, 2));
+
+      // Sincronizar jsonRaw automáticamente con las nuevas coordenadas
+      setJsonRaw(JSON.stringify({
+        tipo: tipoEquipo,
+        hal: halPayload,
+        dashboard: widgets
+      }, null, 2));
     }
   };
 
   // ---------------------------------------------------------------------------
-  // 9. AGREGAR / ELIMINAR / EDITAR WIDGETS
+  // 9. GESTIÓN MANUAL DE WIDGETS
   // ---------------------------------------------------------------------------
   const handleAddWidgetManual = () => {
     const nuevo = {
@@ -293,9 +308,9 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
       w: 260,
       h: 160
     };
-    const nextWidgets = [...widgets, nuevo];
-    setWidgets(nextWidgets);
-    setWidgetEnEdicion(nextWidgets.length - 1);
+    const next = [...widgets, nuevo];
+    setWidgets(next);
+    setWidgetEnEdicion(next.length - 1);
   };
 
   const handleRemoveWidget = (idx) => {
@@ -305,10 +320,10 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
   };
 
   // ---------------------------------------------------------------------------
-  // 10. INTERACCIÓN EN VIVO: MQTT CON DISPOSITIVO
+  // 10. CONTROL EN VIVO DE RELÉS (MODO OPERADOR)
   // ---------------------------------------------------------------------------
   const handleExecuteWidgetAction = (widget) => {
-    if (modoEdicion) return; // En modo edición no conmuta relés
+    if (modoEdicion) return;
 
     const canal = widget.canal || 1;
     const currentState = !!liveRelayStates[canal];
@@ -316,16 +331,16 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
 
     setLiveRelayStates((prev) => ({ ...prev, [canal]: nextState }));
 
-    // Si hay un dispositivo seleccionado y `sendCommand` disponible, enviar orden MQTT real
-    if (selectedMac && sendCommand) {
+    const cleanMac = (selectedMac || '').toUpperCase().replace(/[:\-]/g, '');
+
+    if (cleanMac && typeof sendCommand === 'function') {
       const payloadCmd = {
         cmd: 'SET_RELAY',
-        relay: canal,
-        state: nextState ? 1 : 0,
-        mac: selectedMac
+        canal: canal,
+        val: nextState ? 1 : 0
       };
-      sendCommand(selectedMac, payloadCmd);
-      setMsg(`📡 Comando enviado a [${selectedMac.slice(-4)}]: Relé R${canal} -> ${nextState ? 'ON' : 'OFF'}`);
+      sendCommand(cleanMac, payloadCmd);
+      setMsg(`📡 Comando a [${cleanMac.slice(-4)}]: Relé R${canal} -> ${nextState ? 'ON' : 'OFF'}`);
     }
   };
 
@@ -333,20 +348,26 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
   // 11. GUARDAR EN SUPABASE ('perfiles_hardware')
   // ---------------------------------------------------------------------------
   const handleGuardarEnSupabase = async () => {
-    const contenido = {
-      tipo: tipoEquipo,
-      hal: halPayload,
-      dashboard: widgets
-    };
+    let contenidoFinal = {};
+    try {
+      if (jsonRaw && jsonRaw.trim().startsWith('{')) {
+        contenidoFinal = JSON.parse(jsonRaw);
+      } else {
+        contenidoFinal = { tipo: tipoEquipo, hal: halPayload, dashboard: widgets };
+      }
+      contenidoFinal.dashboard = widgets;
+    } catch (_) {
+      contenidoFinal = { tipo: tipoEquipo, hal: halPayload, dashboard: widgets };
+    }
 
-    setMsg('Guardando en Supabase...');
+    setMsg('Guardando perfil en Supabase Cloud...');
 
     try {
       const payloadDB = {
         nombre: perfilNombre.trim() || 'Perfil Sin Nombre',
         descripcion: `Configuración para ${tipoEquipo} • ${widgets.length} Widgets (Lienzo Libre) • ${new Date().toLocaleDateString()}`,
         hardware_rev: 'HKL-EA8_RJ45',
-        perfil_json: contenido,
+        perfil_json: contenidoFinal,
         activo: true,
         updated_at: new Date().toISOString()
       };
@@ -359,7 +380,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
         const { data, error } = await supabase.from('perfiles_hardware').insert([payloadDB]).select();
         if (error) throw error;
         if (data && data[0]) setPerfilActivoId(data[0].id);
-        setMsg(`💾 ¡Perfil "${perfilNombre}" registrado en la biblioteca Cloud!`);
+        setMsg(`💾 ¡Perfil "${perfilNombre}" registrado en Supabase Cloud!`);
       }
       cargarBiblioteca();
     } catch (err) {
@@ -381,7 +402,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
     setWidgets(widgetsCargados);
     setJsonRaw(JSON.stringify(json, null, 2));
     setActiveTab('STUDIO');
-    setMsg(`📂 Perfil "${p.nombre}" cargado con éxito.`);
+    setMsg(`📂 Perfil "${p.nombre}" cargado al Studio.`);
   };
 
   // ---------------------------------------------------------------------------
@@ -401,40 +422,104 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
   };
 
   // ---------------------------------------------------------------------------
-  // 14. DESPLEGAR A LA PLACA FÍSICA (LITTLEFS + SUPABASE)
+  // 14. DESPLIEGUE BLINDADO AL ESP32 (MQTT WSS 8884 + FLASH LITTLEFS + SUPABASE)
   // ---------------------------------------------------------------------------
   const handleDesplegarADispositivo = async () => {
-    if (!selectedMac) return alert('Selecciona un equipo destino en el selector.');
+    const cleanMac = (selectedMac || '').toUpperCase().replace(/[:\-]/g, '');
+
+    if (!cleanMac) {
+      alert('⚠️ Por favor selecciona un equipo destino en el selector de placa.');
+      return;
+    }
 
     setTransmitting(true);
-    setMsg(`Desplegando lógica y widgets a ${selectedMac}...`);
+    setMsg(`Transmitiendo configuración completa a [${cleanMac}]...`);
 
+    // 1. Sincronizar y armar el HAL definitivo (nunca vacío)
+    let parsedJson = {};
+    try {
+      if (jsonRaw && jsonRaw.trim().startsWith('{')) {
+        parsedJson = JSON.parse(jsonRaw);
+      }
+    } catch (_) {}
+
+    const halConsolidado = halPayload || parsedJson.hal || parsedJson.halPayload || {
+      tipo: tipoEquipo,
+      i2c_bus: {
+        reles: '0x24',
+        entradas: '0x26',
+        adc: '0x48',
+        display: '0x27'
+      },
+      reles_asignados: widgets
+        .filter(w => w.canal)
+        .map(w => ({ canal: w.canal, alias: w.titulo, tipo: w.tipo }))
+    };
+
+    // Paquete maestro único que Universal Agent v8.0 almacena en Flash LittleFS
     const commandPayload = {
       cmd: 'APPLY_HAL_MAP',
-      mac: selectedMac,
+      mac: cleanMac,
       tipo: tipoEquipo,
-      ...(halPayload || {}),
+      timestamp: Date.now(),
+      hal: halConsolidado,
       custom_dashboard: {
         titulo: perfilNombre,
-        widgets
+        widgets: widgets.map(w => ({
+          id: w.id,
+          tipo: w.tipo,
+          titulo: w.titulo,
+          canal: w.canal || 1,
+          unidad: w.unidad || '',
+          color: w.color || 'cyan',
+          x: w.x || 0,
+          y: w.y || 0,
+          w: w.w || 260,
+          h: w.h || 160
+        }))
       }
     };
 
+    console.log(`🚀 [BIOFLEET MQTT] Desplegando en tópico: autoclave_med_2026/${cleanMac}/config`, commandPayload);
+
+    let mqttExitoso = false;
+
+    // 2. Transmisión MQTT vía useMqttFleet.sendDeviceCommand
+    if (typeof sendCommand === 'function') {
+      try {
+        // Se envía un solo comando limpio para no saturar el buffer C++ del ESP32
+        sendCommand(cleanMac, commandPayload);
+        mqttExitoso = true;
+      } catch (errMqtt) {
+        console.error('❌ [BIOFLEET MQTT ERROR]:', errMqtt);
+      }
+    } else {
+      console.error('❌ [BIOFLEET ERROR]: sendCommand no está disponible en las props.');
+    }
+
+    // 3. Persistencia en Supabase Cloud (asignaciones_equipos)
     try {
-      if (sendCommand) {
-        sendCommand(selectedMac, commandPayload);
-        sendCommand(selectedMac, { cmd: 'SET_META', alias: perfilNombre, config_deseada: commandPayload });
+      const { error: dbError } = await supabase
+        .from('asignaciones_equipos')
+        .update({
+          config_deseada: commandPayload,
+          modelo: perfilNombre,
+          updated_at: new Date().toISOString()
+        })
+        .eq('mac', cleanMac);
+
+      if (dbError) {
+        console.warn('[SUPABASE] Aviso asignaciones_equipos:', dbError.message);
       }
 
-      await supabase.from('asignaciones_equipos').update({
-        config_deseada: commandPayload,
-        modelo: perfilNombre,
-        updated_at: new Date().toISOString()
-      }).eq('mac', selectedMac);
-
-      setMsg(`⚡ ¡Lógica grabada en Flash LittleFS de [${selectedMac}] y Dashboard aplicado!`);
+      if (mqttExitoso) {
+        setMsg(`⚡ ¡Configuración JSON transmitida vía MQTT a [${cleanMac}] y grabada en LittleFS!`);
+      } else {
+        setMsg(`⚠️ Guardado en Supabase, pero verifica la conexión MQTT con la placa.`);
+      }
     } catch (err) {
-      setMsg('Error desplegando: ' + err.message);
+      console.error('[SUPABASE ERROR]:', err);
+      setMsg('Error en Supabase: ' + err.message);
     } finally {
       setTransmitting(false);
     }
@@ -471,21 +556,20 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
               )}
             </h2>
             <p className="text-[11px] text-slate-300 font-sans">
-              Lienzo libre con arrastre y redimensionamiento táctil para HKL-EA8 (I2C Relés 0x24 y ADC 0x48).
+              Compilador generativo, lienzo libre táctil y despliegue a LittleFS para hardware HKL-EA8.
             </p>
           </div>
         </div>
 
         {/* CONTROLES DE VISTA Y MODO EDICIÓN */}
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Conmutador Vista Móvil / Escritorio */}
           <div className="flex p-0.5 bg-slate-950 border border-slate-800 rounded-xl">
             <button
               onClick={() => setVistaDispositivo('DESKTOP')}
               className={`px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 font-bold transition-all ${
                 vistaDispositivo === 'DESKTOP' ? 'bg-cyan-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'
               }`}
-              title="Lienzo Libre de Escritorio (Arrastre y Dimensiones X/Y/W/H)"
+              title="Lienzo Libre de Escritorio (Touch & Drag)"
             >
               <Monitor className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Lienzo Libre</span>
@@ -502,7 +586,6 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
             </button>
           </div>
 
-          {/* Botón Maestro: MODO EDICIÓN / PERSONALIZACIÓN */}
           <button
             onClick={() => { setModoEdicion(!modoEdicion); setWidgetEnEdicion(null); }}
             className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 border transition-all ${
@@ -515,7 +598,6 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
             <span>{modoEdicion ? '🛠️ Salir de Edición' : '🛠️ Modo Edición (Touch/Drag)'}</span>
           </button>
 
-          {/* Pestañas de Navegación de Biblioteca */}
           <div className="flex gap-1 p-0.5 bg-slate-950 border border-slate-800 rounded-xl">
             <button
               onClick={() => setActiveTab('STUDIO')}
@@ -725,7 +807,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                 <p>Escribe tu automatización arriba y pulsa "Generar IA" o usa "+ Agregar Widget".</p>
               </div>
             ) : vistaDispositivo === 'MOVIL' ? (
-              /* SIMULADOR MÓVIL CHASSIS */
+              /* SIMULADOR MÓVIL */
               <div className="flex justify-center py-2">
                 <div className="w-full max-w-[380px] bg-slate-950 border-4 border-slate-700 rounded-[40px] p-4 shadow-2xl space-y-3 max-h-[640px] overflow-y-auto relative">
                   <div className="sticky top-0 z-20 flex justify-center pb-2">
@@ -839,12 +921,12 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                           )}
                         </div>
 
-                        {/* CUERPO PRINCIPAL DEL WIDGET */}
+                        {/* CUERPO DEL WIDGET */}
                         <div className="flex-1 p-2 flex flex-col items-center justify-center overflow-hidden">
                           {renderWidgetContent(w, idx)}
                         </div>
 
-                        {/* TIRADOR INFERIOR DERECHO: REDIMENSIONAMIENTO LIBRE (RESIZE HANDLE) */}
+                        {/* ESQUINA INFERIOR DERECHA: REDIMENSIONAMIENTO LIBRE */}
                         {modoEdicion && (
                           <div
                             onPointerDown={(e) => handlePointerDown(e, idx, 'RESIZE')}
@@ -867,7 +949,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
       )}
 
       {/* ========================================================================= */}
-      {/* 4. MODAL DE EDICIÓN PROFUNDA (PIN A PIN I2C, VALORES Y COLORES)          */}
+      {/* 4. MODAL DE CONFIGURACIÓN DEL WIDGET                                     */}
       {/* ========================================================================= */}
       {widgetEnEdicion !== null && widgets[widgetEnEdicion] && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -975,7 +1057,6 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                 />
               </div>
 
-              {/* Ajuste manual de Ancho y Alto en píxeles */}
               <div>
                 <label className="block text-[10px] text-slate-400 mb-1">Ancho Libre (px)</label>
                 <input
@@ -1135,7 +1216,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
     </div>
   );
 
-  // Helper para renderizar el interior del widget
+  // Helper de renderizado de widgets interactivos
   function renderWidgetContent(w, idx) {
     const isRelayActive = !!liveRelayStates[w.canal || 1];
 
