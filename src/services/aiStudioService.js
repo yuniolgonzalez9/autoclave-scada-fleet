@@ -1,55 +1,77 @@
 /**
  * =========================================================================================
  * PROYECTO: BIOFLEET OS™ v2.0 ENTERPRISE
- * SERVICIO COMPILADOR DE IA INDUSTRIAL - MOTOR NEURONAL GROQ PURO
+ * SERVICIO COMPILADOR DE IA INDUSTRIAL - ALINEADO AL CORE 1 DEL FIRMWARE v8.0
  * =========================================================================================
  */
 
 const GROQ_DEFAULT_API_KEY = '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';
 const GROQ_MODEL_ID = 'llama-3.1-8b-instant';
 
-const SYSTEM_PROMPT_AUTOMATIZACION_LIBRE = `
-Eres el Ingeniero Principal de Control y SCADA de BioFleet OS v2.0 Enterprise.
-Tu labor es RAZONAR y CONSTRUIR arquitecturas de automatización completas basadas estrictamente en lo que el usuario pida.
+const SYSTEM_PROMPT_FIRMWARE_V8 = `
+Eres el Ingeniero de Control y Automatización de BioFleet OS v2.0 Enterprise.
+Tu función es razonar y generar arquitecturas industriales exactas para el firmware v8.0 que corre en un ESP32 con placa HKL-EA8.
 
-HARDWARE FÍSICO DISPONIBLE (HKL-EA8):
-- Salidas de Potencia: 8 Relés digitales (R1 a R8) vía I2C PCF8574 (0x24).
-- Entradas Digitales: 8 Entradas Optocopladas (IN1 a IN8) vía I2C PCF8574 (0x26).
-- Entradas Analógicas: 4 Canales ADC de 16-bit (A0 a A3) vía I2C ADS1115 (0x48).
-- Display Local: Pantalla LCD I2C 16x2 o 20x4 (0x27).
+ESPECIFICACIÓN EXACTA DEL FIRMWARE (main.cpp Core 1):
+1. CONTROL DIRECTO DE RELÉS:
+   - Soporta comando 'SET_RELAY' con {"canal": 1..8, "val": true/false}.
+2. MOTOR DE SECUENCIAS AUTOMÁTICO (Core 1):
+   - Soporta comando 'APPLY_LOGICA_SECUENCIA' con un objeto "receta".
+   - Estructura obligatoria de la "receta":
+     {
+       "nombre_receta": "Nombre",
+       "enclavamiento_paro": "IN4",
+       "total_pasos": N,
+       "pasos": [
+         {
+           "nombre": "Paso 1",
+           "tipo_transicion": "TEMPORIZADO",
+           "tiempo_ms": 600,
+           "acciones_encender": ["R1"],
+           "acciones_apagar": []
+         }
+       ]
+     }
+3. HARDWARE HKL-EA8:
+   - Relés R1 a R8 (I2C 0x24 PCF8574).
+   - Entradas IN1 a IN8 (I2C 0x26).
+   - Entradas ADC A0 a A3 (I2C 0x48 ADS1115).
+   - Display LCD (I2C 0x27).
 
-DIRECTIVAS ESTRICTAS DE RAZONAMIENTO:
-1. LIBERTAD Y ADAPTABILIDAD TOTAL: No agregues relés, botones ni sensores que el usuario no haya solicitado o que no sean estrictamente necesarios para su lógica.
-2. SECUENCIAS Y RUTINAS: Si el usuario pide una secuencia (por ejemplo: "probar relés R1 a R8 y apagarlos en el mismo orden", o "arranque con precalentamiento, crank y descanso"):
-   - Incluye en el widget de tipo 'ACTION_BUTTON' la propiedad "accion": "SECUENCIA" y la matriz "secuencia" con todos los pasos detallados: [{ "canal": 1, "val": 1, "delay_ms": 500 }, ..., { "canal": 1, "val": 0, "delay_ms": 500 }].
-   - Agrega también los widgets visuales individuales (interruptores o LEDs) para los canales que intervienen, permitiendo monitorear su estado.
-3. ENCLAVAMIENTOS Y CONDICIONES: Modela con precisión cualquier lógica condicional que pida el usuario.
-4. DIÁLOGO ACTIVO: En "mensaje_chat", explica detalladamente las decisiones de ingeniería tomadas. Si la instrucción del usuario carece de datos críticos (como tiempos o voltajes), indícalo y hazle la pregunta correspondiente.
+REGLAS DE GENERACIÓN:
+1. Si el usuario pide una secuencia o prueba de relés (como encender de R1 a R8 y apagarlos en orden):
+   - Genera en "receta" los pasos exactos: primero 8 pasos temporizados encendiendo R1 hasta R8 secuencialmente, y luego 8 pasos temporizados apagando R1 hasta R8 secuencialmente.
+   - Crea un widget 'ACTION_BUTTON' con "accion": "EJECUTAR_RECETA" que contenga esa receta.
+   - Agrega también widgets 'SWITCH_TOGGLE' para los relés involucrados para que el usuario pueda operarlos manualmente.
+2. Si el usuario pide controlar una salida específica (como R5):
+   - Genera únicamente los controles de ese relé (un 'SWITCH_TOGGLE' y un 'ACTION_BUTTON' asociados a ese canal).
+3. En "mensaje_chat", explica al usuario la lógica que construiste.
 
 RESPONDE EXCLUSIVAMENTE CON UN OBJETO JSON VÁLIDO:
 {
-  "mensaje_chat": "Explicación técnica clara y preguntas de refinamiento si son necesarias",
-  "titulo_programa": "Nombre representativo del sistema",
-  "descripcion": "Memoria descriptiva técnica",
-  "tipo": "UNIVERSAL_PLC" | "VEHICULO" | "AUTOCLAVE",
+  "mensaje_chat": "Explicación técnica para el operador",
+  "titulo_programa": "Nombre del sistema",
+  "descripcion": "Memoria descriptiva",
+  "tipo": "UNIVERSAL_PLC",
+  "receta": {
+    "nombre_receta": "Secuencia R1-R8",
+    "enclavamiento_paro": "IN4",
+    "total_pasos": 16,
+    "pasos": []
+  },
   "hal_payload": {
     "roles_reles": { "R1": "...", "R2": "...", ... },
-    "nombres_reles": { "R1": "...", "R2": "...", ... },
-    "roles_entradas": { "IN1": "...", ... },
-    "nombres_entradas": { "IN1": "...", ... }
+    "nombres_reles": { "R1": "...", "R2": "...", ... }
   },
   "dashboard": [
     {
       "id": "w_1",
-      "tipo": "ACTION_BUTTON" | "SWITCH_TOGGLE" | "GAUGE_RADIAL" | "VALUE_CARD" | "STATUS_LED" | "CHART_HISTORY",
-      "titulo": "Etiqueta del control",
+      "tipo": "ACTION_BUTTON" | "SWITCH_TOGGLE" | "GAUGE_RADIAL" | "VALUE_CARD",
+      "titulo": "Etiqueta",
       "canal": 1,
-      "accion": "COMANDO" | "SECUENCIA",
-      "secuencia": [
-        { "canal": 1, "val": 1, "delay_ms": 500 }
-      ],
-      "color": "cyan" | "emerald" | "amber" | "rose" | "purple",
-      "unidad": "bar" | "°C" | "V" | "RPM" | "%" | "L/min" | "",
+      "accion": "COMANDO" | "EJECUTAR_RECETA",
+      "color": "cyan" | "emerald" | "amber" | "rose",
+      "unidad": "",
       "min": 0,
       "max": 100,
       "w": 260,
@@ -80,17 +102,14 @@ function sanitizarJson(textoCrudo) {
   return null;
 }
 
-/**
- * FUNCIÓN EXPORTADA: CONSULTA DIRECTA AL MODELO NEURONAL EN GROQ
- */
 export async function conversarYCompilarConIA({ prompt, historial = [], hardwareInfo = {}, apiKey = null }) {
   const p = prompt ? prompt.trim() : '';
-  if (!p) throw new Error('Por favor introduce tu requerimiento de automatización.');
+  if (!p) throw new Error('Por favor introduce tu instrucción de automatización.');
 
   const key = apiKey || localStorage.getItem('biofleet_ai_key') || GROQ_DEFAULT_API_KEY;
 
   const messages = [
-    { role: 'system', content: `${SYSTEM_PROMPT_AUTOMATIZACION_LIBRE}\nHARDWARE ACTUAL DETECTADO: ${JSON.stringify(hardwareInfo)}` },
+    { role: 'system', content: `${SYSTEM_PROMPT_FIRMWARE_V8}\nHARDWARE DETECTADO: ${JSON.stringify(hardwareInfo)}` },
     ...historial.map(h => ({
       role: h.sender === 'user' ? 'user' : 'assistant',
       content: typeof h.contenido === 'string' ? h.contenido : JSON.stringify(h.contenido)
@@ -122,10 +141,9 @@ export async function conversarYCompilarConIA({ prompt, historial = [], hardware
   const jsonParseado = sanitizarJson(rawText);
 
   if (!jsonParseado || !jsonParseado.dashboard) {
-    throw new Error('El modelo de IA no devolvió una estructura JSON válida.');
+    throw new Error('El modelo de IA no devolvió un JSON válido.');
   }
 
-  // Asignación de coordenadas para distribución en lienzo libre
   const dashboardWidgets = jsonParseado.dashboard.map((w, idx) => ({
     ...w,
     id: w.id || `w_${Date.now()}_${idx}`,
@@ -137,10 +155,11 @@ export async function conversarYCompilarConIA({ prompt, historial = [], hardware
 
   return {
     exito: true,
-    mensajeChat: jsonParseado.mensaje_chat || 'He diseñado la automatización solicitada.',
+    mensajeChat: jsonParseado.mensaje_chat || 'He diseñado la arquitectura de control.',
     titulo: jsonParseado.titulo_programa || 'Automatización Personalizada',
     descripcion: jsonParseado.descripcion || p,
     tipo: jsonParseado.tipo || 'UNIVERSAL_PLC',
+    receta: jsonParseado.receta || null,
     halPayload: jsonParseado.hal_payload || {},
     dashboardWidgets
   };
