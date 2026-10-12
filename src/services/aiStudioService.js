@@ -1,34 +1,49 @@
 /**
  * =========================================================================================
  * PROYECTO: BIOFLEET OS™ v2.0 ENTERPRISE
- * SERVICIO COMPILADOR HÍBRIDO ULTRA-RÁPIDO (INTÉRPRETE DIRECTO 0ms + LLM GROQ INDUSTRIAL)
+ * SERVICIO COMPILADOR DE IA INDUSTRIAL - ALINEADO AL FIRMWARE ESP32 v8.6 ROCK-SOLID
+ * MOTOR NEURONAL: GROQ CLOUD + AUTO-RESOLUCIÓN EN VIVO DE MODELOS ACTIVOS
  * =========================================================================================
  */
 
 const GROQ_DEFAULT_API_KEY = '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';
 
-const SYSTEM_PROMPT_SCADA_COMPLETO = `
-Eres el Ingeniero de Control y SCADA de BioFleet OS v2.0.
-Hardware: ESP32 HKL-EA8 (8 Relés R1..R8 en 0x24, 8 Entradas IN1..IN8 en 0x26, 4 ADC A0..A3 en 0x48, LCD 0x27).
+const SYSTEM_PROMPT_INGENIERO_SCADA = `
+Eres el Ingeniero Principal de Automatización y Control de BioFleet OS v2.0 Enterprise.
+Tu función es razonar y generar arquitecturas industriales para el firmware v8.6 que corre en un microcontrolador ESP32 (Core 1 a 50Hz) sobre placa HKL-EA8 (o placas libres DIY).
 
-DIRECTIVAS ESTRICTAS DE TEMPORIZACIÓN Y CONTROL:
-1. INSTRUCCIONES CON TIEMPO (ej: "prende R1 por 5 segundos", "R2 10s y luego R3 2s"):
-   - Modela SIEMPRE la "receta" con pasos temporizados exactos ("tiempo_ms": segundos * 1000).
-   - Genera en el dashboard un widget 'SEQUENCE_TIMER' con:
-     * "totalSegundos": duración total en segundos.
-     * "pasos": array con [{ "nombre": "Fase", "tiempoMs": 5000, "canal": 1 }].
-     * "accion": "EJECUTAR_RECETA".
-   - Agrega también el widget 'SWITCH_TOGGLE' del relé asociado para supervisión.
-2. INSTRUCCIONES CORTAS (ej: "r1", "apaga todo", "r5 on"):
-   - Genera de forma limpia y directa los widgets necesarios sin inventar componentes extraños.
-3. INSTRUCCIONES INDUSTRIALES COMPLEJAS (autoclaves, secuencias vehiculares, plantas químicas):
-   - Modela la máquina de estados completa en "receta" (fases, lazos de control analógicos, enclavamientos de seguridad en IN1..IN8).
-   - Diseña el panel SCADA con manómetros radiales, tanques de nivel, termómetros y setas de paro.
+HARDWARE FÍSICO (HKL-EA8 Industrial):
+- 8 Relés de Potencia: R1 a R8 (I2C 0x24 PCF8574).
+- 8 Entradas Optocopladas: IN1 a IN8 (I2C 0x26 PCF8574).
+- 4 Entradas Analógicas ADC 16-bit: A0 a A3 (I2C 0x48 ADS1115).
+- Display LCD: I2C 0x27 (16x2 o 20x4).
 
-FORMATO OBLIGATORIO DE RESPUESTA (JSON PURO):
+CATÁLOGO DE WIDGETS SCADA:
+- 'SEQUENCE_TIMER': Temporizador de proceso con cuenta regresiva en segundos, barra de progreso y fases.
+- 'ACTION_BUTTON': Botón pulsador directo ("accion": "COMANDO", "canal": N) o disparo de receta FSM ("accion": "EJECUTAR_RECETA").
+- 'SWITCH_TOGGLE': Interruptor ON/OFF para conmutar un relé directo.
+- 'MOMENTARY_BUTTON': Pulsador tipo jog (activo solo mientras se mantiene presionado).
+- 'EMERGENCY_STOP': Seta de paro de emergencia con enclavamiento ("accion": "ABORTAR").
+- 'ROTARY_SELECTOR': Selector rotativo de 3 posiciones (MAN - 0 - AUTO).
+- 'GAUGE_RADIAL': Manómetro radial para presión (-1 a 3 bar), RPM o voltímetro.
+- 'VALUE_CARD': Tarjeta de lectura digital numérica (°C, caudal, tiempo).
+- 'LEVEL_TANK': Indicador vertical de nivel de tanque animado (0 a 100%).
+- 'STATUS_LED': LED indicador luminoso de entrada digital o estado.
+
+REGLAS DE TEMPORIZACIÓN Y CONTROL:
+1. SI EL USUARIO MENCIONA TIEMPOS O TEMPORIZADORES (ej: "prende R1 por 5 segundos", "secuencia R1 a R8 con 600ms", "autoclave con meseta 5 min"):
+   - Define la "receta" con los pasos temporizados en "tiempo_ms" (milisegundos).
+   - Genera en el dashboard un widget 'SEQUENCE_TIMER' con "totalSegundos" (suma total de segundos) y la lista de "pasos".
+   - Agrega también los widgets 'SWITCH_TOGGLE' de los relés que intervienen para supervisar su estado físico.
+2. SI EL USUARIO PIDE UN CONTROL PUNTUAL (ej: "r5", "controlar r2"):
+   - Genera únicamente los controles solicitados (interruptor y botón de ese relé).
+3. En "mensaje_chat", redacta una respuesta conversacional técnica explicando la arquitectura implementada.
+
+RESPONDE EXCLUSIVAMENTE CON UN OBJETO JSON VÁLIDO:
 {
-  "mensaje_chat": "Explicación técnica clara",
-  "titulo_programa": "Nombre del sistema",
+  "mensaje_chat": "Explicación técnica de la arquitectura configurada",
+  "titulo_programa": "Nombre representativo del sistema",
+  "descripcion": "Memoria técnica descriptiva",
   "tipo": "UNIVERSAL_PLC" | "AUTOCLAVE" | "VEHICULO",
   "receta": {
     "nombre_receta": "Nombre",
@@ -40,13 +55,13 @@ FORMATO OBLIGATORIO DE RESPUESTA (JSON PURO):
         "tipo_transicion": "TEMPORIZADO",
         "tiempo_ms": 5000,
         "acciones_encender": ["R1"],
-        "acciones_apagar": ["R1"]
+        "acciones_apagar": []
       }
     ]
   },
   "hal_payload": {
-    "roles_reles": {},
-    "nombres_reles": {}
+    "roles_reles": { "R1": "CONTROL_R1" },
+    "nombres_reles": { "R1": "Relé R1" }
   },
   "dashboard": [
     {
@@ -54,7 +69,7 @@ FORMATO OBLIGATORIO DE RESPUESTA (JSON PURO):
       "tipo": "SEQUENCE_TIMER" | "SWITCH_TOGGLE" | "ACTION_BUTTON" | "GAUGE_RADIAL" | "VALUE_CARD" | "LEVEL_TANK" | "EMERGENCY_STOP",
       "titulo": "Etiqueta",
       "canal": 1,
-      "accion": "EJECUTAR_RECETA" | "COMANDO" | "ABORTAR",
+      "accion": "COMANDO" | "EJECUTAR_RECETA" | "ABORTAR",
       "totalSegundos": 5,
       "pasos": [],
       "color": "cyan" | "emerald" | "amber" | "rose",
@@ -89,6 +104,9 @@ function sanitizarJson(textoCrudo) {
   return null;
 }
 
+/**
+ * Consulta en vivo a Groq para obtener el modelo activo de texto
+ */
 async function resolverModeloGroqActivo(apiKey) {
   try {
     const res = await fetch('https://api.groq.com/openai/v1/models', {
@@ -114,8 +132,16 @@ async function resolverModeloGroqActivo(apiKey) {
   return 'openai/gpt-oss-120b';
 }
 
+export function detectarProveedorApiKey(key = '') {
+  const k = key.trim();
+  if (k.startsWith('gsk_')) return 'GROQ';
+  if (k.startsWith('sk-')) return 'OPENAI';
+  if (k.startsWith('AIza') || k.startsWith('AQ.')) return 'GEMINI';
+  return 'GROQ';
+}
+
 /**
- * INTÉRPRETE DE RESPALDO ULTRA-RÁPIDO (0 ms de latencia para comandos directos con tiempos)
+ * COMPILADOR DIRECTO LOCAL (0 ms de latencia para órdenes con tiempos o relés)
  */
 function compilarInstruccionInmediata(promptTexto) {
   const p = promptTexto.toLowerCase().trim();
@@ -134,7 +160,7 @@ function compilarInstruccionInmediata(promptTexto) {
   const matchR = p.match(/\b(?:r|rele|relé)\s*([1-8])\b/) || p.match(/r([1-8])/);
   const canal = matchR ? parseInt(matchR[1], 10) : 1;
 
-  // CASO A: Instrucción con temporizador explícito (ej: "prende R1 por 5 segundos")
+  // CASO A: Temporizador simple explícito (ej: "prende R1 por 5 segundos")
   if (tiempos.length > 0) {
     const totalSegs = tiempos[0];
     const pasosReceta = [
@@ -156,7 +182,7 @@ function compilarInstruccionInmediata(promptTexto) {
 
     return {
       exito: true,
-      mensajeChat: `He programado la temporización para el Relé R${canal} durante ${totalSegs} segundos. Puedes iniciar la cuenta regresiva desde el widget del lienzo.`,
+      mensajeChat: `He programado la temporización para el Relé R${canal} durante ${totalSegs} segundos. El temporizador activará la salida física y la apagará automáticamente al cumplirse el tiempo.`,
       titulo: `Temporizador R${canal} (${totalSegs}s)`,
       tipo: 'UNIVERSAL_PLC',
       receta: {
@@ -195,7 +221,7 @@ function compilarInstruccionInmediata(promptTexto) {
     };
   }
 
-  // CASO B: Secuencia de prueba R1 a R8
+  // CASO B: Secuencia en cascada R1 a R8 con apagado en orden
   if (p.includes('test') || p.includes('secuencia') || (p.includes('r1') && p.includes('r8'))) {
     const pasos = [];
     for (let i = 1; i <= 8; i++) pasos.push({ canal: i, val: 1, delay_ms: 600 });
@@ -205,7 +231,7 @@ function compilarInstruccionInmediata(promptTexto) {
       {
         id: 'w_test_master',
         tipo: 'SEQUENCE_TIMER',
-        titulo: '⚡ Test Secuencial R1-R8',
+        titulo: '⚡ Secuencia Cascada R1-R8',
         accion: 'EJECUTAR_RECETA',
         totalSegundos: 10,
         pasos: [
@@ -232,19 +258,19 @@ function compilarInstruccionInmediata(promptTexto) {
 
     return {
       exito: true,
-      mensajeChat: 'He generado la secuencia de prueba: encendido en cascada R1 a R8 (600ms c/u) y posterior apagado en el mismo orden.',
-      titulo: 'Test Secuencial R1-R8',
+      mensajeChat: 'He generado la receta de cascada completa: encendido secuencial de R1 a R8 (600ms c/u) y posterior apagado en el mismo orden.',
+      titulo: 'Secuencia Cascada R1-R8',
       tipo: 'UNIVERSAL_PLC',
       receta: {
-        nombre_receta: 'Test Cascada R1-R8',
+        nombre_receta: 'Cascada R1-R8',
         enclavamientos: [],
         total_pasos: 16,
-        pasos: pasos.map((p, idx) => ({
+        pasos: pasos.map((pso, idx) => ({
           nombre: `Paso ${idx + 1}`,
           tipo_transicion: 'TEMPORIZADO',
-          tiempo_ms: p.delay_ms,
-          acciones_encender: p.val === 1 ? [`R${p.canal}`] : [],
-          acciones_apagar: p.val === 0 ? [`R${p.canal}`] : []
+          tiempo_ms: pso.delay_ms,
+          acciones_encender: pso.val === 1 ? [`R${pso.canal}`] : [],
+          acciones_apagar: pso.val === 0 ? [`R${pso.canal}`] : []
         }))
       },
       halPayload: {},
@@ -252,11 +278,11 @@ function compilarInstruccionInmediata(promptTexto) {
     };
   }
 
-  // CASO C: Control puntual simple (ej: "r5", "enciende r2")
+  // CASO C: Control individual directo (ej: "r5", "enciende r2")
   if (matchR) {
     return {
       exito: true,
-      mensajeChat: `He colocado el interruptor para el Relé R${canal}. Para temporizarlo, puedes especificar los segundos (ej: "prende R${canal} por 10 segundos").`,
+      mensajeChat: `He colocado el control para el Relé R${canal}. Para temporizarlo, indica los segundos (ejemplo: "prende R${canal} por 10 segundos").`,
       titulo: `Control Canal R${canal}`,
       tipo: 'UNIVERSAL_PLC',
       halPayload: {
@@ -287,7 +313,7 @@ export async function conversarYCompilarConIA({ prompt, historial = [], hardware
   const p = prompt ? prompt.trim() : '';
   if (!p) throw new Error('Por favor introduce tu requerimiento.');
 
-  // 1. Si es un comando corto o directo con tiempos, resolverlo en 0 ms
+  // 1. Evaluar si es comando directo para resolución en 0 ms
   const directo = compilarInstruccionInmediata(p);
   if (directo) {
     let curX = 20;
@@ -301,7 +327,7 @@ export async function conversarYCompilarConIA({ prompt, historial = [], hardware
     return { ...directo, dashboardWidgets: conCoords };
   }
 
-  // 2. Si es una instrucción más compleja, consultar a Groq con el modelo activo
+  // 2. Consulta a Groq con el modelo activo descubierto
   const key = apiKey || localStorage.getItem('biofleet_ai_key') || GROQ_DEFAULT_API_KEY;
 
   try {
@@ -309,7 +335,7 @@ export async function conversarYCompilarConIA({ prompt, historial = [], hardware
     console.log(`🤖 [GROQ INFERENCE] Consultando modelo activo: ${modelIdActivo}`);
 
     const messages = [
-      { role: 'system', content: `${SYSTEM_PROMPT_SCADA_COMPLETO}\nHARDWARE DISPONIBLE: ${JSON.stringify(hardwareInfo)}` },
+      { role: 'system', content: `${SYSTEM_PROMPT_INGENIERO_SCADA}\nHARDWARE DISPONIBLE: ${JSON.stringify(hardwareInfo)}` },
       ...historial.map(h => ({
         role: h.sender === 'user' ? 'user' : 'assistant',
         content: typeof h.contenido === 'string' ? h.contenido : JSON.stringify(h.contenido)
@@ -364,10 +390,10 @@ export async function conversarYCompilarConIA({ prompt, historial = [], hardware
     console.warn('[GROQ API] Error en llamada cloud:', err.message);
   }
 
-  // 3. Fallback genérico si la llamada externa no tuvo éxito
+  // 3. Fallback seguro en caso de corte de red
   return {
     exito: true,
-    mensajeChat: `He configurado los controles en el lienzo basados en tu instrucción: "${p}".`,
+    mensajeChat: `He colocado los controles en el lienzo basados en: "${p}".`,
     titulo: p.length > 30 ? p.substring(0, 27) + '...' : p,
     tipo: 'UNIVERSAL_PLC',
     halPayload: {},
