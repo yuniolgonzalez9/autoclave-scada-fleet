@@ -1,38 +1,55 @@
 /**
  * =========================================================================================
  * PROYECTO: BIOFLEET OS™ v2.0 ENTERPRISE
- * SERVICIO COMPILADOR DE IA INDUSTRIAL - GENERADOR MINIMALISTA (CERO WIDGETS REDUNDANTES)
- * MODELO: GROQ CLOUD + RESOLUCIÓN DINÁMICA DE MODELOS ACTIVOS
+ * SERVICIO COMPILADOR DE IA - CON CONCIENCIA TOTAL DEL ENTORNO WEB Y DEL LIENZO
  * =========================================================================================
  */
 
 const GROQ_DEFAULT_API_KEY = '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';
 
-const SYSTEM_PROMPT_INGENIERO_SCADA = `
-Eres el Ingeniero Principal de Automatización y SCADA de BioFleet OS v2.0 Enterprise.
-Hardware: Controlador industrial ESP32 HKL-EA8 (8 Relés R1..R8 en 0x24, 8 Entradas IN1..IN8 en 0x26, 4 ADC A0..A3 en 0x48, LCD 0x27).
+function construirPromptConContexto(hardwareInfo, widgetsActuales, recetaActual, telemetriaActual) {
+  return `
+Eres el Copilot e Ingeniero Principal de SCADA de BioFleet OS v2.0 Enterprise.
+Tienes CONCIENCIA TOTAL y control directo sobre el entorno web, el lienzo y el hardware físico HKL-EA8.
 
-REGLA DE ORO DE MINIMALISMO ABSOLUTO (CERO WIDGETS REDUNDANTES):
-Genera ÚNICAMENTE los widgets que el usuario haya solicitado explícitamente:
-1. Si el usuario pide una secuencia o temporización (ej: "secuencia R1 a R8", "enciende R1 2s luego R2 2s"):
-   - Genera OBLIGATORIAMENTE UN SOLO WIDGET: el widget de secuencia 'SEQUENCE_TIMER' o 'ACTION_BUTTON'.
-   - NUNCA agregues interruptores adicionales (SWITCH_TOGGLE) para cada relé de la secuencia. Son innecesarios y saturan el lienzo.
-2. Si el usuario pide controlar un relé puntual (ej: "r5", "interruptor para r2"):
-   - Genera únicamente el interruptor de ese relé.
-3. Si el usuario pide un manómetro, termómetro o nivel:
-   - Genera únicamente ese medidor.
+ESTADO ACTUAL DEL ENTORNO EN TIEMPO REAL:
+1. HARDWARE FÍSICO: ${JSON.stringify(hardwareInfo || {})}
+2. WIDGETS QUE EL USUARIO TIENE ACTUALMENTE EN SU PANTALLA:
+${JSON.stringify(widgetsActuales || [])}
+3. RECETA FSM ACTIVA: ${JSON.stringify(recetaActual || null)}
+4. TELEMETRÍA EN VIVO: ${JSON.stringify(telemetriaActual || {})}
 
-ESTRUCTURA DE SECUENCIAS PARA EL CORE 1 DEL ESP32:
-- "receta":
-  * "total_pasos": Número de etapas.
-  * "pasos": Array con { "nombre": "Fase", "tipo_transicion": "TEMPORIZADO", "tiempo_ms": N, "acciones_encender": ["R1"], "acciones_apagar": ["R1"] }.
-- "dashboard":
-  * [ { "id": "w_seq", "tipo": "SEQUENCE_TIMER", "titulo": "Nombre Secuencia", "accion": "EJECUTAR_RECETA", "totalSegundos": N, "pasos": [...], "w": 380, "h": 220 } ]
+CAPACIDADES DE MANIPULACIÓN SOBRE EL ENTORNO WEB:
+1. ELIMINAR WIDGETS:
+   - Si el usuario te pide eliminar, quitar o borrar un control (ej: "elimina el botón de R2", "quita los interruptores", "borra todo excepto la secuencia"):
+     Devuelve en "dashboard" la lista de widgets SIN los elementos que pidió eliminar. Explícalo en "mensaje_chat".
+2. MODIFICAR WIDGETS EXISTENTES:
+   - Si el usuario te pide alterar un control existente (ej: "cambia el color a rojo", "sube el tiempo de la secuencia a 10s", "renombra R1 a Bomba"):
+     Localiza el widget en la lista actual, aplica el cambio solicitado y conserva intactos todos los demás widgets.
+3. AGREGAR WIDGETS:
+   - Si el usuario te pide agregar algo nuevo sobre lo que ya tiene (ej: "agrega ahora un manómetro", "ponle una seta de paro"):
+     Conserva los widgets que ya están en pantalla y agrega el nuevo elemento con coordenadas libres.
+4. REEMPLAZAR O CREAR DE CERO:
+   - Si el usuario pide un sistema completamente nuevo, genera una nueva lista de widgets desde cero.
+5. RESPONDER CONSULTAS DEL ENTORNO:
+   - Si el usuario te pregunta qué hay en pantalla o qué puede controlar, describe con exactitud los widgets que están en su pantalla y los canales físicos disponibles.
+
+TIPOS DE WIDGETS:
+- 'SEQUENCE_TIMER': Temporizador de secuencia con cuenta regresiva en segundos y fases.
+- 'ACTION_BUTTON': Botón pulsador o disparo de receta.
+- 'SWITCH_TOGGLE': Interruptor ON/OFF biestable.
+- 'MOMENTARY_BUTTON': Pulsador jog (activo solo mientras se presiona).
+- 'EMERGENCY_STOP': Seta de paro de emergencia con enclavamiento.
+- 'ROTARY_SELECTOR': Selector rotativo (MAN - 0 - AUTO).
+- 'GAUGE_RADIAL': Manómetro analógico de aguja.
+- 'VALUE_CARD': Display digital numérico (°C, caudal, etc.).
+- 'LEVEL_TANK': Tanque de nivel de fluido (0-100%).
+- 'STATUS_LED': LED indicador luminoso de entrada o estado.
 
 RESPONDE EXCLUSIVAMENTE CON UN OBJETO JSON VÁLIDO:
 {
-  "mensaje_chat": "Explicación técnica concisa para el operador",
-  "titulo_programa": "Nombre del programa",
+  "mensaje_chat": "Explicación clara de la acción ejecutada sobre el entorno web (eliminado, modificado o agregado) o respuesta a la pregunta",
+  "titulo_programa": "Nombre del sistema",
   "tipo": "UNIVERSAL_PLC" | "AUTOCLAVE" | "VEHICULO",
   "receta": {
     "nombre_receta": "Nombre",
@@ -45,20 +62,11 @@ RESPONDE EXCLUSIVAMENTE CON UN OBJETO JSON VÁLIDO:
     "nombres_reles": {}
   },
   "dashboard": [
-    {
-      "id": "w_1",
-      "tipo": "SEQUENCE_TIMER",
-      "titulo": "Secuencia",
-      "accion": "EJECUTAR_RECETA",
-      "totalSegundos": 10,
-      "pasos": [],
-      "color": "emerald",
-      "w": 380,
-      "h": 220
-    }
+    // La lista final y actualizada de widgets que deben quedar en el lienzo
   ]
 }
 `;
+}
 
 function sanitizarJson(textoCrudo) {
   if (!textoCrudo) return null;
@@ -115,162 +123,28 @@ export function detectarProveedorApiKey(key = '') {
 }
 
 /**
- * PARSER MULTI-ETAPA LOCAL LIMPIO (CERO WIDGETS REDUNDANTES)
+ * FUNCIÓN PRINCIPAL EXPORTADA CON CONCIENCIA TOTAL DEL LIENZO
  */
-function compilarMultiEtapaLocal(promptTexto) {
-  const p = promptTexto.toLowerCase().trim();
-
-  // Buscar todos los patrones "R<numero> ... <tiempo> seg"
-  const regexEtapa = /(?:r|rele|relé)\s*([1-8])[^\d]*?(\d+)\s*(?:segundo|segundos|seg|s)/gi;
-  const etapas = [];
-  let m;
-
-  while ((m = regexEtapa.exec(p)) !== null) {
-    etapas.push({
-      canal: parseInt(m[1], 10),
-      segundos: parseInt(m[2], 10)
-    });
-  }
-
-  // Si detectó una secuencia con pasos
-  if (etapas.length > 0) {
-    const pasosReceta = [];
-    const pasosWidget = [];
-    let totalSegs = 0;
-    const rolesReles = {};
-    const nombresReles = {};
-
-    etapas.forEach((etapa, idx) => {
-      totalSegs += etapa.segundos;
-      const rAnterior = idx > 0 ? `R${etapas[idx - 1].canal}` : null;
-      
-      pasosReceta.push({
-        nombre: `Paso ${idx + 1}: R${etapa.canal} (${etapa.segundos}s)`,
-        tipo_transicion: 'TEMPORIZADO',
-        tiempo_ms: etapa.segundos * 1000,
-        acciones_encender: [`R${etapa.canal}`],
-        acciones_apagar: rAnterior ? [rAnterior] : []
-      });
-
-      pasosWidget.push({
-        nombre: `R${etapa.canal} (${etapa.segundos}s)`,
-        tiempoMs: etapa.segundos * 1000,
-        canal: etapa.canal
-      });
-
-      rolesReles[`R${etapa.canal}`] = `SECUENCIA_${idx + 1}`;
-      nombresReles[`R${etapa.canal}`] = `Relé R${etapa.canal}`;
-    });
-
-    const ultimoRelay = `R${etapas[etapas.length - 1].canal}`;
-    pasosReceta.push({
-      nombre: 'Fin de Secuencia',
-      tipo_transicion: 'INMEDIATO',
-      tiempo_ms: 0,
-      acciones_encender: [],
-      acciones_apagar: [ultimoRelay]
-    });
-
-    // ÚNICO WIDGET: El control maestro de la secuencia (Sin interruptores redundantes)
-    const widgets = [
-      {
-        id: 'w_seq_timer',
-        tipo: 'SEQUENCE_TIMER',
-        titulo: `Secuencia (${totalSegs}s)`,
-        accion: 'EJECUTAR_RECETA',
-        totalSegundos: totalSegs,
-        pasos: pasosWidget,
-        color: 'emerald',
-        w: 380,
-        h: 220,
-        x: 20,
-        y: 20
-      }
-    ];
-
-    return {
-      exito: true,
-      mensajeChat: `He generado la secuencia de ${etapas.length} etapas con un tiempo total de ${totalSegs} segundos. El control único está listo en el lienzo.`,
-      titulo: `Secuencia (${totalSegs}s)`,
-      tipo: 'UNIVERSAL_PLC',
-      receta: {
-        nombre_receta: `Secuencia ${totalSegs}s`,
-        enclavamientos: [],
-        total_pasos: pasosReceta.length,
-        pasos: pasosReceta
-      },
-      halPayload: { roles_reles: rolesReles, nombres_reles: nombresReles },
-      dashboardWidgets: widgets
-    };
-  }
-
-  // Caso: Secuencia R1 a R8 completa (16 pasos en cascada)
-  if (p.includes('r1') && p.includes('r8') && (p.includes('secuencia') || p.includes('cascada') || p.includes('test'))) {
-    const pasos = [];
-    for (let i = 1; i <= 8; i++) pasos.push({ canal: i, val: 1, delay_ms: 600 });
-    for (let i = 1; i <= 8; i++) pasos.push({ canal: i, val: 0, delay_ms: 600 });
-
-    const pasosWidget = [
-      { nombre: 'Encendido R1-R8', tiempoMs: 4800, canal: 1 },
-      { nombre: 'Apagado R1-R8', tiempoMs: 4800, canal: 1 }
-    ];
-
-    const widgets = [
-      {
-        id: 'w_seq_timer',
-        tipo: 'SEQUENCE_TIMER',
-        titulo: 'Secuencia Cascada R1-R8',
-        accion: 'EJECUTAR_RECETA',
-        totalSegundos: 10,
-        pasos: pasosWidget,
-        color: 'emerald',
-        w: 380,
-        h: 220,
-        x: 20,
-        y: 20
-      }
-    ];
-
-    return {
-      exito: true,
-      mensajeChat: 'He generado el control único de la secuencia en cascada para R1 a R8 (sin interruptores adicionales).',
-      titulo: 'Secuencia Cascada R1-R8',
-      tipo: 'UNIVERSAL_PLC',
-      receta: {
-        nombre_receta: 'Cascada R1-R8',
-        enclavamientos: [],
-        total_pasos: 16,
-        pasos: pasos.map((pso, idx) => ({
-          nombre: `Paso ${idx + 1}`,
-          tipo_transicion: 'TEMPORIZADO',
-          tiempo_ms: pso.delay_ms,
-          acciones_encender: pso.val === 1 ? [`R${pso.canal}`] : [],
-          acciones_apagar: pso.val === 0 ? [`R${pso.canal}`] : []
-        }))
-      },
-      halPayload: {},
-      dashboardWidgets: widgets
-    };
-  }
-
-  return null;
-}
-
-/**
- * FUNCIÓN PRINCIPAL EXPORTADA
- */
-export async function conversarYCompilarConIA({ prompt, historial = [], hardwareInfo = {}, apiKey = null }) {
+export async function conversarYCompilarConIA({ 
+  prompt, 
+  historial = [], 
+  hardwareInfo = {}, 
+  widgetsActuales = [], 
+  recetaActual = null, 
+  telemetriaActual = {}, 
+  apiKey = null 
+}) {
   const p = prompt ? prompt.trim() : '';
   if (!p) throw new Error('Por favor introduce tu requerimiento.');
 
   const key = apiKey || localStorage.getItem('biofleet_ai_key') || GROQ_DEFAULT_API_KEY;
 
-  // 1. Consultar a Groq con directiva estricta de minimalismo
   try {
     const modelIdActivo = await resolverModeloGroqActivo(key);
+    const systemPromptConContexto = construirPromptConContexto(hardwareInfo, widgetsActuales, recetaActual, telemetriaActual);
 
     const messages = [
-      { role: 'system', content: `${SYSTEM_PROMPT_INGENIERO_SCADA}\nHARDWARE DISPONIBLE: ${JSON.stringify(hardwareInfo)}` },
+      { role: 'system', content: systemPromptConContexto },
       ...historial.map(h => ({
         role: h.sender === 'user' ? 'user' : 'assistant',
         content: typeof h.contenido === 'string' ? h.contenido : JSON.stringify(h.contenido)
@@ -297,22 +171,30 @@ export async function conversarYCompilarConIA({ prompt, historial = [], hardware
       const rawText = data?.choices?.[0]?.message?.content;
       const parseado = sanitizarJson(rawText);
 
-      if (parseado && parseado.dashboard && parseado.dashboard.length > 0) {
+      if (parseado) {
+        // Asegurar coordenadas a los widgets resultantes
         let curX = 20;
         let curY = 20;
-        const dashboardWidgets = parseado.dashboard.map((w, idx) => {
-          const width = w.w || (w.tipo === 'SEQUENCE_TIMER' ? 380 : 260);
-          const height = w.h || (w.tipo === 'SEQUENCE_TIMER' ? 220 : 170);
-          const wPos = { ...w, id: w.id || `w_${Date.now()}_${idx}`, x: curX, y: curY, w: width, h: height };
-          curX += width + 20;
+        const dashboardWidgets = (parseado.dashboard || []).map((w, idx) => {
+          const posX = w.x !== undefined ? w.x : curX;
+          const posY = w.y !== undefined ? w.y : currentY;
+          curX += (w.w || 260) + 20;
           if (curX > 860) { curX = 20; curY += 210; }
-          return wPos;
+
+          return {
+            ...w,
+            id: w.id || `w_${Date.now()}_${idx}`,
+            x: posX,
+            y: posY,
+            w: w.w || (w.tipo === 'SEQUENCE_TIMER' ? 380 : 260),
+            h: w.h || (w.tipo === 'SEQUENCE_TIMER' ? 220 : 170)
+          };
         });
 
         return {
           exito: true,
-          mensajeChat: parseado.mensaje_chat || 'He diseñado los controles solicitados.',
-          titulo: parseado.titulo_programa || 'Control Industrial',
+          mensajeChat: parseado.mensaje_chat || 'He actualizado el entorno según tu solicitud.',
+          titulo: parseado.titulo_programa || 'Control SCADA',
           descripcion: parseado.descripcion || p,
           tipo: parseado.tipo || 'UNIVERSAL_PLC',
           receta: parseado.receta || null,
@@ -322,27 +204,17 @@ export async function conversarYCompilarConIA({ prompt, historial = [], hardware
       }
     }
   } catch (err) {
-    console.warn('[GROQ API] Error en llamada cloud, activando parser local limpio:', err.message);
+    console.warn('[GROQ API] Error consultando IA:', err.message);
   }
 
-  // 2. Respaldo local limpio (Genera únicamente lo pedido)
-  const local = compilarMultiEtapaLocal(p);
-  if (local) {
-    return local;
-  }
-
-  // Fallback simple para relé puntual
-  const matchR = p.match(/\b(?:r|rele|relé)\s*([1-8])\b/) || p.match(/^r([1-8])$/);
-  const canal = matchR ? parseInt(matchR[1], 10) : 1;
-
+  // Fallback simple si no hay conexión
   return {
     exito: true,
-    mensajeChat: `He colocado el interruptor único para R${canal}.`,
-    titulo: `Control R${canal}`,
+    mensajeChat: `He recibido tu instrucción: "${p}".`,
+    titulo: 'Control SCADA',
     tipo: 'UNIVERSAL_PLC',
+    receta: null,
     halPayload: {},
-    dashboardWidgets: [
-      { id: `w_sw_r${canal}`, tipo: 'SWITCH_TOGGLE', titulo: `Interruptor R${canal}`, canal, color: 'cyan', w: 260, h: 170, x: 20, y: 20 }
-    ]
+    dashboardWidgets: widgetsActuales // Conservar los que ya estaban en pantalla
   };
 }
