@@ -1,7 +1,7 @@
 /**
  * =========================================================================================
  * PROYECTO: BIOFLEET OS™ v2.0 ENTERPRISE
- * SERVICIO COMPILADOR DE IA - MODELO GROQ GPT-OSS-120B / 20B CON RESPALDO INDUSTRIAL
+ * SERVICIO COMPILADOR DE IA INDUSTRIAL - ESPECIALISTA EN TEMPORIZADORES Y SECUENCIAS
  * =========================================================================================
  */
 
@@ -11,35 +11,70 @@ const SYSTEM_PROMPT_INGENIERO_SCADA = `
 Eres el Ingeniero Principal de Automatización y SCADA de BioFleet OS v2.0 Enterprise.
 Hardware: Controlador industrial HKL-EA8 (8 Relés R1..R8 en 0x24, 8 Entradas IN1..IN8 en 0x26, 4 ADC A0..A3 en 0x48, LCD 0x27).
 
-DIRECTIVAS ESTRICTAS:
-1. DIÁLOGO ACTIVO: En "mensaje_chat", responde al operador con explicaciones técnicas claras de lo que construiste.
-2. Si el usuario hace preguntas sobre qué se puede controlar, enumera las salidas y entradas del HKL-EA8.
-3. Si el usuario pide un control puntual (ej: "r1", "controlar r5"), genera únicamente los widgets solicitados.
-4. Si el usuario pide una secuencia o proceso (ej: "test r1 a r8 y que se apaguen en orden"), genera en "receta" todos los pasos detallados para el Core 1 y el botón "EJECUTAR_RECETA".
-5. Devuelve EXCLUSIVAMENTE un objeto JSON válido con esta estructura:
+TIPOS DE WIDGETS DISPONIBLES:
+- 'SEQUENCE_TIMER': Temporizador de secuencia con cuenta regresiva en segundos, barra de progreso y desglose de tiempos.
+- 'ACTION_BUTTON': Botón pulsador directo o disparo de receta.
+- 'SWITCH_TOGGLE': Interruptor ON/OFF para conmutar un relé manual.
+- 'GAUGE_RADIAL': Manómetro analógico de aguja (presión, RPM, nivel, batería).
+- 'VALUE_CARD': Tarjeta de lectura digital numérica (temperatura, tiempo).
+- 'STATUS_LED': LED indicador luminoso de entrada digital o estado.
+- 'CHART_HISTORY': Gráfica temporal continua de telemetría.
+
+REGLA FUNDAMENTAL PARA TEMPORIZACIONES Y RETARDOS:
+Si el usuario menciona CUALQUIER tiempo ("10 segundos", "5s", "1 minuto", "temporizador", "retardo", "precalentamiento 7s y arranque 2s", "cíclico"):
+1. En "receta":
+   Define cada fase en "pasos" con:
+   - "nombre": Nombre de la etapa (ej: "Precalentamiento", "Arranque", "Descanso", "Temporizado").
+   - "tipo_transicion": "TEMPORIZADO".
+   - "tiempo_ms": El valor en milisegundos (ej: 7 segundos = 7000, 10s = 10000).
+   - "acciones_encender": Array de relés a activar en ese paso (ej: ["R1"]).
+   - "acciones_apagar": Array de relés a desactivar en ese paso (ej: ["R1"]).
+2. En "dashboard":
+   - Genera OBLIGATORIAMENTE un widget de tipo 'SEQUENCE_TIMER' con:
+     * "titulo": Nombre del temporizador o secuencia.
+     * "accion": "EJECUTAR_RECETA".
+     * "color": "amber" o "emerald".
+     * "totalSegundos": Suma total de los segundos de la secuencia.
+     * "pasos": Array de objetos con { "nombre": "Etapa", "tiempoMs": 7000, "canal": 1 }.
+     * "w": 360, "h": 220.
+   - Genera también los widgets 'SWITCH_TOGGLE' de los relés que intervienen para que el operador supervise su estado físico.
+
+RESPONDE EXCLUSIVAMENTE CON UN OBJETO JSON VÁLIDO CON ESTA ESTRUCTURA:
 {
-  "mensaje_chat": "Explicación técnica para el operador",
+  "mensaje_chat": "Explicación técnica de la temporización configurada",
   "titulo_programa": "Nombre del sistema",
   "tipo": "UNIVERSAL_PLC",
   "receta": {
-    "nombre_receta": "Secuencia",
+    "nombre_receta": "Secuencia Temporizada",
     "enclavamientos": [],
-    "total_pasos": 0,
-    "pasos": []
+    "total_pasos": 2,
+    "pasos": [
+      {
+        "nombre": "Paso 1",
+        "tipo_transicion": "TEMPORIZADO",
+        "tiempo_ms": 7000,
+        "acciones_encender": ["R1"],
+        "acciones_apagar": []
+      }
+    ]
   },
   "hal_payload": {
-    "roles_reles": { "R1": "SALIDA_1" },
-    "nombres_reles": { "R1": "Salida R1" }
+    "roles_reles": { "R1": "TEMPORIZADO" },
+    "nombres_reles": { "R1": "Relé R1" }
   },
   "dashboard": [
     {
-      "id": "w_1",
-      "tipo": "SWITCH_TOGGLE",
-      "titulo": "Relé R1",
-      "canal": 1,
-      "color": "cyan",
-      "w": 260,
-      "h": 170
+      "id": "w_timer_1",
+      "tipo": "SEQUENCE_TIMER",
+      "titulo": "Temporizador R1",
+      "accion": "EJECUTAR_RECETA",
+      "color": "emerald",
+      "totalSegundos": 7,
+      "pasos": [
+        { "nombre": "Fase 1", "tiempoMs": 7000, "canal": 1 }
+      ],
+      "w": 360,
+      "h": 220
     }
   ]
 }
@@ -66,9 +101,6 @@ function sanitizarJson(textoCrudo) {
   return null;
 }
 
-/**
- * Consulta a Groq para obtener los modelos activos para esta API Key específica
- */
 async function resolverModeloGroqActivo(apiKey) {
   try {
     const res = await fetch('https://api.groq.com/openai/v1/models', {
@@ -81,15 +113,8 @@ async function resolverModeloGroqActivo(apiKey) {
     if (res.ok) {
       const data = await res.json();
       const modelos = (data.data || []).map(m => m.id);
+      const candidatos = modelos.filter(id => !id.includes('whisper') && !id.includes('guard'));
 
-      // Modelos de texto/razonamiento activos en Groq (Octubre 2026)
-      const candidatos = modelos.filter(id => 
-        !id.includes('whisper') && 
-        !id.includes('guard') && 
-        !id.includes('orpheus')
-      );
-
-      // Priorizar el modelo insignia de razonamiento GPT-OSS 120B o 20B
       const preferido = candidatos.find(id => id.includes('gpt-oss-120b')) ||
                         candidatos.find(id => id.includes('gpt-oss-20b')) ||
                         candidatos.find(id => id.includes('qwen')) ||
@@ -97,17 +122,12 @@ async function resolverModeloGroqActivo(apiKey) {
 
       if (preferido) return preferido;
     }
-  } catch (e) {
-    console.warn('[GROQ] Auto-detección de modelos omitida:', e);
-  }
-
-  // Modelo de producción activo por defecto
+  } catch (_) {}
   return 'openai/gpt-oss-120b';
 }
 
 /**
- * GENERADOR DE RESPALDO INDUSTRIAL LOCAL
- * Asegura que el usuario siempre reciba respuesta y controles en el lienzo
+ * GENERADOR DE RESPALDO INDUSTRIAL ESPECIALIZADO EN TEMPORIZADORES
  */
 function generarRespaldoSeguro(promptTexto) {
   const p = promptTexto.toLowerCase().trim();
@@ -120,43 +140,99 @@ function generarRespaldoSeguro(promptTexto) {
     rolesReles[`R${i}`] = 'MANUAL';
   }
 
-  // 1. Preguntas de orientación / Inventario
-  if (p.includes('que podemos') || p.includes('qué podemos') || (p.includes('controlar') && p.includes('dispositivo'))) {
+  // Extracción de tiempos numéricos (segundos o minutos)
+  const regexTiempos = /(\d+)\s*(segundo|segundos|seg|s|minuto|minutos|min)/g;
+  const tiemposEncontrados = [];
+  let m;
+  while ((m = regexTiempos.exec(p)) !== null) {
+    const val = parseInt(m[1], 10);
+    const u = m[2].toLowerCase();
+    const segs = u.startsWith('min') ? val * 60 : val;
+    tiemposEncontrados.push(segs);
+  }
+
+  // CASO A: Temporizador o Secuencia con tiempos especificados
+  if (tiemposEncontrados.length > 0 || p.includes('temporizador') || p.includes('temporiza') || p.includes('secuencia')) {
+    const t1 = tiemposEncontrados[0] || 7;
+    const t2 = tiemposEncontrados[1] || 2;
+    const t3 = tiemposEncontrados[2] || 5;
+
+    // Detectar qué relé se mencionó
+    const matchR = p.match(/\b(?:r|rele|relé)\s*([1-8])\b/) || p.match(/r([1-8])/);
+    const canalBase = matchR ? parseInt(matchR[1], 10) : 1;
+
+    let pasosReceta = [];
+    let pasosWidget = [];
+    let totalSegs = 0;
+
+    if (tiemposEncontrados.length === 1) {
+      // Temporizador simple: encender por t1 segundos y apagar
+      totalSegs = t1;
+      pasosReceta = [
+        { nombre: `Activar R${canalBase}`, tipo_transicion: 'TEMPORIZADO', tiempo_ms: t1 * 1000, acciones_encender: [`R${canalBase}`], acciones_apagar: [] },
+        { nombre: `Desactivar R${canalBase}`, tipo_transicion: 'INMEDIATO', tiempo_ms: 0, acciones_encender: [], acciones_apagar: [`R${canalBase}`] }
+      ];
+      pasosWidget = [
+        { nombre: `Encendido R${canalBase}`, tiempoMs: t1 * 1000, canal: canalBase }
+      ];
+    } else {
+      // Secuencia multi-etapa (ej: precalentamiento, crank, descanso)
+      totalSegs = t1 + t2 + (tiemposEncontrados.length > 2 ? t3 : 0);
+      pasosReceta = [
+        { nombre: 'Fase 1 (Precalent.)', tipo_transicion: 'TEMPORIZADO', tiempo_ms: t1 * 1000, acciones_encender: ['R1'], acciones_apagar: [] },
+        { nombre: 'Fase 2 (Arranque)', tipo_transicion: 'TEMPORIZADO', tiempo_ms: t2 * 1000, acciones_encender: ['R2'], acciones_apagar: ['R1'] },
+        { nombre: 'Fase 3 (Descanso/Fin)', tipo_transicion: 'TEMPORIZADO', tiempo_ms: t3 * 1000, acciones_encender: [], acciones_apagar: ['R2'] }
+      ];
+      pasosWidget = [
+        { nombre: 'Fase 1', tiempoMs: t1 * 1000, canal: 1 },
+        { nombre: 'Fase 2', tiempoMs: t2 * 1000, canal: 2 },
+        { nombre: 'Fase 3', tiempoMs: t3 * 1000, canal: 2 }
+      ];
+    }
+
     widgets.push({
-      id: 'w_test_master',
-      tipo: 'ACTION_BUTTON',
-      titulo: '⚡ Test Secuencial R1-R8',
+      id: 'w_seq_timer',
+      tipo: 'SEQUENCE_TIMER',
+      titulo: `Temporizador ${canalBase ? 'R' + canalBase : 'Industrial'} (${totalSegs}s)`,
       accion: 'EJECUTAR_RECETA',
-      color: 'emerald',
+      color: 'amber',
+      totalSegundos: totalSegs,
+      pasos: pasosWidget,
       w: 360,
+      h: 220
+    });
+
+    // Agregar interruptores de supervisión
+    widgets.push({
+      id: `w_sw_supervision_${canalBase}`,
+      tipo: 'SWITCH_TOGGLE',
+      titulo: `Supervisión Relé R${canalBase}`,
+      canal: canalBase,
+      color: 'cyan',
+      w: 260,
       h: 170
     });
-    for (let i = 1; i <= 8; i++) {
-      widgets.push({
-        id: `w_sw_r${i}`,
-        tipo: 'SWITCH_TOGGLE',
-        titulo: `Relé R${i}`,
-        canal: i,
-        color: 'cyan',
-        w: 240,
-        h: 170
-      });
-    }
 
     return {
       exito: true,
-      mensajeChat: 'En este controlador HKL-EA8 tienes control total de: 8 relés de potencia en I2C 0x24 (R1 a R8), 8 entradas optocopladas en 0x26 (IN1 a IN8) y 4 canales analógicos ADC en 0x48 (A0 a A3). He desplegado los 8 relés en el lienzo para que comiences a probar.',
-      titulo: 'Panel de Control HKL-EA8',
+      mensajeChat: `He configurado el Temporizador Industrial con una duración programada de ${totalSegs} segundos. Puedes ver la cuenta regresiva y la barra de progreso en el nuevo widget del lienzo.`,
+      titulo: `Temporizador Secuencial (${totalSegs}s)`,
       tipo: 'UNIVERSAL_PLC',
+      receta: {
+        nombre_receta: `Temporizador ${totalSegs}s`,
+        enclavamientos: [],
+        total_pasos: pasosReceta.length,
+        pasos: pasosReceta
+      },
       halPayload: { roles_reles: rolesReles, nombres_reles: nombresReles },
       dashboardWidgets: widgets
     };
   }
 
-  // 2. Control de relé individual (ej: "r1", "controlar r5", "r5")
-  const matchR = p.match(/\b(?:r|rele|relé)\s*([1-8])\b/) || p.match(/^r([1-8])$/);
-  if (matchR) {
-    const num = parseInt(matchR[1], 10);
+  // CASO B: Relé individual simple
+  const matchSimple = p.match(/\b(?:r|rele|relé)\s*([1-8])\b/) || p.match(/^r([1-8])$/);
+  if (matchSimple) {
+    const num = parseInt(matchSimple[1], 10);
     nombresReles[`R${num}`] = `Salida Relé R${num}`;
     rolesReles[`R${num}`] = `CONTROL_R${num}`;
 
@@ -169,19 +245,10 @@ function generarRespaldoSeguro(promptTexto) {
       w: 260,
       h: 170
     });
-    widgets.push({
-      id: `w_btn_r${num}`,
-      tipo: 'ACTION_BUTTON',
-      titulo: `Pulsar R${num}`,
-      canal: num,
-      color: 'emerald',
-      w: 260,
-      h: 170
-    });
 
     return {
       exito: true,
-      mensajeChat: `He configurado los controles para la salida física R${num} con un interruptor biestable (ON/OFF) y un pulsador directo.`,
+      mensajeChat: `He colocado el interruptor manual para R${num}. Si deseas que se apague automáticamente, especifícame el tiempo (ejemplo: "prende R${num} por 10 segundos").`,
       titulo: `Control Canal R${num}`,
       tipo: 'UNIVERSAL_PLC',
       halPayload: { roles_reles: rolesReles, nombres_reles: nombresReles },
@@ -189,57 +256,7 @@ function generarRespaldoSeguro(promptTexto) {
     };
   }
 
-  // 3. Secuencia o test de relés (R1 a R8)
-  if (p.includes('test') || p.includes('teste') || (p.includes('r1') && p.includes('r8'))) {
-    const pasos = [];
-    for (let i = 1; i <= 8; i++) pasos.push({ canal: i, val: 1, delay_ms: 600 });
-    for (let i = 1; i <= 8; i++) pasos.push({ canal: i, val: 0, delay_ms: 600 });
-
-    widgets.push({
-      id: 'w_test_master',
-      tipo: 'ACTION_BUTTON',
-      titulo: '⚡ Test Secuencial R1-R8',
-      accion: 'EJECUTAR_RECETA',
-      color: 'emerald',
-      w: 360,
-      h: 170
-    });
-
-    for (let i = 1; i <= 8; i++) {
-      widgets.push({
-        id: `w_sw_r${i}`,
-        tipo: 'SWITCH_TOGGLE',
-        titulo: `Relé R${i}`,
-        canal: i,
-        color: 'cyan',
-        w: 240,
-        h: 170
-      });
-    }
-
-    return {
-      exito: true,
-      mensajeChat: 'He generado la receta de test: al pulsar el botón se encenderán en cascada R1 hasta R8 y luego se apagarán en el mismo orden cada 600ms en el Core 1 del ESP32.',
-      titulo: 'Test Secuencial R1-R8',
-      tipo: 'UNIVERSAL_PLC',
-      receta: {
-        nombre_receta: 'Test R1-R8',
-        enclavamientos: [],
-        total_pasos: 16,
-        pasos: pasos.map((paso, idx) => ({
-          nombre: `Paso ${idx + 1}`,
-          tipo_transicion: 'TEMPORIZADO',
-          tiempo_ms: paso.delay_ms,
-          acciones_encender: paso.val === 1 ? [`R${paso.canal}`] : [],
-          acciones_apagar: paso.val === 0 ? [`R${paso.canal}`] : []
-        }))
-      },
-      halPayload: { roles_reles: rolesReles, nombres_reles: nombresReles },
-      dashboardWidgets: widgets
-    };
-  }
-
-  // Fallback general dinámico
+  // Fallback estándar
   widgets.push({
     id: 'w_cmd_auto',
     tipo: 'ACTION_BUTTON',
@@ -252,7 +269,7 @@ function generarRespaldoSeguro(promptTexto) {
 
   return {
     exito: true,
-    mensajeChat: `He configurado los controles en el lienzo basados en tu instrucción: "${promptTexto}".`,
+    mensajeChat: `He configurado los controles para "${promptTexto}". Puedes pedirme secuencias temporizadas indicándome los segundos o minutos deseados.`,
     titulo: promptTexto.length > 30 ? promptTexto.substring(0, 27) + '...' : promptTexto,
     tipo: 'UNIVERSAL_PLC',
     halPayload: { roles_reles: rolesReles, nombres_reles: nombresReles },
@@ -308,24 +325,24 @@ export async function conversarYCompilarConIA({ prompt, historial = [], hardware
       }
     }
   } catch (err) {
-    console.warn('[GROQ API] Error en llamada cloud, activando generador seguro:', err.message);
+    console.warn('[GROQ API] Error en llamada cloud, activando generador local:', err.message);
   }
 
-  // Si la respuesta de la nube fue exitosa y tiene widgets válidos
+  // Si Groq entregó la arquitectura temporizada
   if (resultadoJson) {
     const dashboardWidgets = (resultadoJson.dashboard || []).map((w, idx) => ({
       ...w,
       id: w.id || `w_${Date.now()}_${idx}`,
       x: (idx % 3) * 280 + 20,
       y: Math.floor(idx / 3) * 190 + 20,
-      w: w.w || 260,
-      h: w.h || 170
+      w: w.w || (w.tipo === 'SEQUENCE_TIMER' ? 360 : 260),
+      h: w.h || (w.tipo === 'SEQUENCE_TIMER' ? 220 : 170)
     }));
 
     return {
       exito: true,
-      mensajeChat: resultadoJson.mensaje_chat || 'He diseñado la automatización solicitada.',
-      titulo: resultadoJson.titulo_programa || 'Automatización Personalizada',
+      mensajeChat: resultadoJson.mensaje_chat || 'He diseñado la temporización solicitada.',
+      titulo: resultadoJson.titulo_programa || 'Automatización Temporizada',
       descripcion: resultadoJson.descripcion || p,
       tipo: resultadoJson.tipo || 'UNIVERSAL_PLC',
       receta: resultadoJson.receta || null,
@@ -334,7 +351,7 @@ export async function conversarYCompilarConIA({ prompt, historial = [], hardware
     };
   }
 
-  // Respaldo de alta fidelidad: genera siempre los controles en pantalla
+  // Respaldo de alta fidelidad
   const local = generarRespaldoSeguro(p);
   const widgetsConCoordenadas = local.dashboardWidgets.map((w, idx) => ({
     ...w,
