@@ -49,7 +49,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
     {
       id: 'init_msg',
       sender: 'ai',
-      texto: 'BioFleet SCADA listo con conciencia total del entorno. Puedes pedirme crear nuevos sistemas, pero también eliminar widgets existentes (ej: "elimina el botón de R2"), modificar parámetros (ej: "cambia el tiempo a 10s") o preguntarme qué controles tienes en pantalla.'
+      texto: 'BioFleet SCADA listo con normalizador industrial blindado. Puedes pedir secuencias, temporizadores, o manipular controles existentes (ej: "elimina todo", "agrega interruptor para R5").'
     }
   ]);
   const [compilando, setCompilando] = useState(false);
@@ -160,17 +160,31 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
 
     if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
 
-    // 1. Enviar la receta al Core 1 del ESP32 para ejecución en hardware
-    if (recetaActiva && sendCommand) {
+    // 1. Enviar la receta al Core 1 del ESP32 si existe
+    const recetaParaEnviar = recetaActiva || (widget.pasos && widget.pasos.length > 0 ? {
+      nombre_receta: widget.titulo,
+      enclavamientos: [],
+      total_pasos: widget.pasos.length,
+      pasos: widget.pasos.map(p => ({
+        nombre: p.nombre,
+        tipo_transicion: 'TEMPORIZADO',
+        tiempo_ms: p.tiempoMs || p.tiempo_ms || 3000,
+        acciones_encender: p.acciones_encender || [`R${p.canal}`],
+        acciones_apagar: p.acciones_apagar || []
+      }))
+    } : null);
+
+    if (recetaParaEnviar && sendCommand) {
       sendCommand(cleanMac, {
         cmd: 'APPLY_LOGICA_SECUENCIA',
         mac: cleanMac,
-        receta: recetaActiva
+        receta: recetaParaEnviar
       });
       setMsg(`⚡ Receta FSM enviada al Core 1 de [${cleanMac.slice(-4)}]`);
     }
 
-    const pasos = widget.pasos || (recetaActiva ? recetaActiva.pasos : []);
+    // 2. Extraer los pasos temporizados garantizando canales y tiempos válidos
+    const pasos = widget.pasos || (recetaParaEnviar ? recetaParaEnviar.pasos : []);
     const totalSegs = widget.totalSegundos || 6;
 
     setTimerEjecutando({
@@ -179,15 +193,16 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
       totalSegundos: totalSegs
     });
 
-    // 2. Orquestación local para actualización en vivo a 0 ms
+    // 3. Orquestación local para conmutación física inmediata paso por paso
     if (pasos && pasos.length > 0) {
       (async () => {
         for (let i = 0; i < pasos.length; i++) {
           const paso = pasos[i];
-          const canal = paso.canal;
-          const delayMs = paso.tiempoMs || 2000;
+          const canal = Number(paso.canal || (paso.acciones_encender?.[0]?.replace(/\D/g, '')) || (i + 1));
+          const delayMs = Number(paso.tiempoMs || paso.tiempo_ms || 3000);
 
-          if (canal) {
+          if (canal >= 1 && canal <= 8) {
+            // Apagar relés previos y encender el actual
             setRelesLocales(prev => {
               const copia = { ...prev };
               Object.keys(copia).forEach(k => { copia[k] = 0; });
@@ -198,19 +213,20 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
             if (sendCommand) {
               sendCommand(cleanMac, {
                 cmd: 'SET_RELAY',
-                canal: Number(canal),
+                canal,
                 val: true,
                 duracion_ms: delayMs
               });
             }
           }
 
-          setMsg(`⚡ Ejecutando: ${paso.nombre || 'Etapa ' + (i + 1)} en placa física...`);
+          setMsg(`⚡ Ejecutando: ${paso.nombre || 'Etapa ' + (i + 1)} (Relé R${canal})`);
           await new Promise(r => setTimeout(r, delayMs));
         }
 
+        // Finalizar secuencia y apagar
         setRelesLocales({});
-        setMsg('✅ Secuencia multi-etapa completada con éxito.');
+        setMsg('✅ Secuencia completada con éxito en la placa.');
       })();
     }
 
@@ -248,27 +264,26 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
       return;
     }
 
-    const estadoActual = currentState !== null ? currentState : Boolean(relesLocales[`R${canal}`]);
+    const numCanal = Number(canal || 1);
+    const estadoActual = currentState !== null ? currentState : Boolean(relesLocales[`R${numCanal}`]);
     const nextVal = !estadoActual;
 
     setRelesLocales(prev => ({
       ...prev,
-      [`R${canal}`]: nextVal ? 1 : 0
+      [`R${numCanal}`]: nextVal ? 1 : 0
     }));
 
     if (sendCommand) {
       sendCommand(cleanMac, {
         cmd: 'SET_RELAY',
-        canal: Number(canal),
+        canal: numCanal,
         val: nextVal
       });
-      setMsg(`📡 R${canal} -> ${nextVal ? 'ON (ACTIVO)' : 'OFF (APAGADO)'}`);
+      setMsg(`📡 R${numCanal} -> ${nextVal ? 'ON (ACTIVO)' : 'OFF (APAGADO)'}`);
     }
   };
 
-  // =========================================================================
   // ENVIAR MENSAJE AL COPILOT CON CONCIENCIA TOTAL DEL LIENZO
-  // =========================================================================
   const handleEnviarMensaje = async (e) => {
     if (e) e.preventDefault();
     const textoUsuario = prompt.trim();
@@ -282,12 +297,11 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
     try {
       const targetDev = fleet[cleanMac] || null;
 
-      // PASAR EL ESTADO VIVO DEL LIENZO A LA IA PARA QUE TENGA OJOS COMPLETOS
       const res = await conversarYCompilarConIA({
         prompt: textoUsuario,
         historial: historialChat.map(h => ({ sender: h.sender, contenido: h.texto })),
         hardwareInfo: targetDev?.meta?.config_deseada || { reles: 8, entradas: 8 },
-        widgetsActuales: widgets, // <--- LA IA AHORA VE TODOS LOS WIDGETS DE TU PANTALLA
+        widgetsActuales: widgets,
         recetaActual: recetaActiva,
         telemetriaActual: { reles: relesLocales, fase: dDev.fase, adc: adcFisico },
         apiKey
@@ -298,7 +312,6 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
         { id: `ai_${Date.now()}`, sender: 'ai', texto: res.mensajeChat }
       ]);
 
-      // Si la IA eliminó, modificó o agregó widgets, actualizar el lienzo de inmediato
       if (res.dashboardWidgets !== undefined) {
         setWidgets(res.dashboardWidgets);
       }
@@ -439,11 +452,11 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
             <h2 className="text-base font-bold text-white flex items-center gap-2">
               BioFleet SCADA Enterprise v2.0
               <span className="px-2 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[9px] flex items-center gap-1">
-                <Timer className="w-3 h-3" /> CONCIENCIA TOTAL DE LIENZO
+                <Timer className="w-3 h-3" /> NORMALIZADOR ACTIVO
               </span>
             </h2>
             <p className="text-[11px] text-slate-300 font-sans">
-              La IA ahora ve, modifica, agrega y elimina controles de tu pantalla en tiempo real.
+              La IA ve, agrega, modifica y elimina controles de pantalla sin errores de formato.
             </p>
           </div>
         </div>
@@ -518,16 +531,16 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
       {activeTab === 'STUDIO' && (
         <div className="space-y-4">
           
-          {/* CONSOLA DE DIÁLOGO CON MEMORIA Y VISTA DEL LIENZO */}
+          {/* CONSOLA DE DIÁLOGO */}
           <div className="ultra-glass p-4 rounded-2xl border border-amber-500/30 space-y-3">
             <div className="flex justify-between items-center border-b border-slate-800 pb-2">
               <span className="text-amber-300 font-bold uppercase text-[11px] flex items-center gap-1.5">
                 <Bot className="w-4 h-4 text-emerald-400" />
-                Diálogo con el Ingeniero IA (Puede ver, agregar, modificar y eliminar controles):
+                Diálogo con el Ingeniero IA:
               </span>
               <button
                 type="button"
-                onClick={() => setHistorialChat([{ id: 'reset', sender: 'ai', texto: 'Historial reiniciado. Dime qué acción o diseño deseas realizar en el entorno.' }])}
+                onClick={() => setHistorialChat([{ id: 'reset', sender: 'ai', texto: 'Historial reiniciado. Dime qué nuevo requerimiento deseas programar.' }])}
                 className="text-[10px] text-slate-400 hover:text-white"
               >
                 Limpiar Chat
@@ -558,7 +571,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                 type="text"
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
-                placeholder="Ejemplo: 'elimina el botón de R2', 'cambia el tiempo a 10s' o '¿qué controles tengo en pantalla?'..."
+                placeholder="Escribe tu requerimiento (ej: 'Crea una secuencia con R1 y R2 de 3 segundos cada uno, pero agrégale al lado un interruptor para la luz en R5')..."
                 className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-sans text-xs focus:outline-none focus:border-amber-400"
               />
               <button
@@ -641,7 +654,8 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                 <div className="w-[2400px] h-[1800px] relative">
                   {widgets.map((w, idx) => {
                     const isEditingThis = widgetEnEdicion === idx;
-                    const isRelayActive = Boolean(relesLocales[`R${w.canal || 1}`]);
+                    const numCanal = Number(w.canal || 1);
+                    const isRelayActive = Boolean(relesLocales[`R${numCanal}`]);
                     const esTimerActivo = timerEjecutando && timerEjecutando.widgetId === w.id;
                     const segRest = esTimerActivo ? timerEjecutando.segundosRestantes : (w.totalSegundos || 6);
                     const pctProgreso = esTimerActivo ? ((w.totalSegundos - segRest) / w.totalSegundos) * 100 : 0;
@@ -707,7 +721,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                           className="flex-1 p-3 flex flex-col justify-center overflow-hidden" 
                           onPointerDown={(e) => e.stopPropagation()}
                         >
-                          {/* WIDGET TEMPORIZADOR MULTI-ETAPA */}
+                          {/* WIDGET TEMPORIZADOR MULTI-ETAPA (SIN NaNs) */}
                           {w.tipo === 'SEQUENCE_TIMER' && (
                             <div className="flex flex-col justify-between h-full space-y-2">
                               <div className="flex items-center justify-between">
@@ -724,16 +738,20 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                                 />
                               </div>
 
+                              {/* Desglose de cada etapa en segundos reales */}
                               {w.pasos && w.pasos.length > 0 && (
-                                <div className="grid grid-cols-3 gap-1">
-                                  {w.pasos.map((paso, pIdx) => (
-                                    <div key={pIdx} className="p-1 rounded bg-slate-950 border border-slate-800 text-center">
-                                      <span className="block text-[8px] text-slate-400 truncate">{paso.nombre}</span>
-                                      <span className="font-mono text-cyan-300 font-bold text-[9px]">
-                                        {Math.round(paso.tiempoMs / 1000)}s
-                                      </span>
-                                    </div>
-                                  ))}
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-1">
+                                  {w.pasos.map((paso, pIdx) => {
+                                    const segsPaso = Math.round((paso.tiempoMs || paso.tiempo_ms || 3000) / 1000);
+                                    return (
+                                      <div key={pIdx} className="p-1 rounded bg-slate-950 border border-slate-800 text-center">
+                                        <span className="block text-[8px] text-slate-400 truncate">{paso.nombre}</span>
+                                        <span className="font-mono text-cyan-300 font-bold text-[9px]">
+                                          {segsPaso}s
+                                        </span>
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                               )}
 
@@ -761,13 +779,13 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                             </div>
                           )}
 
-                          {/* SWITCH INTERRUPTOR */}
+                          {/* SWITCH INTERRUPTOR (DIMENSIÓN CORRECTA Y CANAL REAL) */}
                           {w.tipo === 'SWITCH_TOGGLE' && (
                             <div
                               onClick={() => handleToggleRelayDirecto(w.canal || 1)}
                               className="flex items-center justify-between w-full px-3 cursor-pointer py-2.5 bg-slate-950/60 rounded-xl border border-slate-800 hover:border-cyan-400 transition-colors"
                             >
-                              <span className="text-[10px] text-slate-300 font-bold">R{w.canal || 1} • {w.titulo}</span>
+                              <span className="text-[10px] text-slate-300 font-bold">R{numCanal} • {w.titulo}</span>
                               <div
                                 className={`w-12 h-6 rounded-full border border-current p-0.5 flex items-center transition-all ${
                                   isRelayActive ? 'justify-end bg-cyan-500/20' : 'justify-start bg-slate-950'
@@ -777,6 +795,18 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                               </div>
                             </div>
                           )}
+
+                          {/* BOTÓN DE ACCIÓN DIRECTO */}
+                          {w.tipo === 'ACTION_BUTTON' && (
+                            <button
+                              type="button"
+                              onClick={() => handleToggleRelayDirecto(w.canal || 1)}
+                              className="w-full py-3.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-lg bg-slate-950 border border-current text-cyan-300 hover:brightness-125"
+                            >
+                              <Play className="w-3.5 h-3.5 fill-current" />
+                              <span>{w.titulo}</span>
+                            </button>
+                          )}
                         </div>
 
                         {/* RESIZE HANDLE */}
@@ -785,6 +815,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                             onPointerDown={(e) => handlePointerDown(e, idx, 'RESIZE')}
                             onPointerMove={handlePointerMove}
                             onPointerUp={handlePointerUp}
+                            title="Tira con el dedo o mouse para redimensionar"
                             className="absolute bottom-0 right-0 w-6 h-6 flex items-center justify-center cursor-nwse-resize z-30 touch-none group"
                           >
                             <div className="w-2.5 h-2.5 border-r-2 border-b-2 border-amber-400 group-hover:w-3.5 group-hover:h-3.5 transition-all" />
