@@ -49,7 +49,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
     {
       id: 'init_msg',
       sender: 'ai',
-      texto: 'BioFleet SCADA listo con soporte para secuencias multi-etapa. Escribe cualquier instrucción temporal (ej: "enciende R1 por 2 segundos, luego R2 por 2 segundos y luego R3 por 2 segundos") y compilaré la arquitectura en tiempo real.'
+      texto: 'BioFleet SCADA listo con conciencia total del entorno. Puedes pedirme crear nuevos sistemas, pero también eliminar widgets existentes (ej: "elimina el botón de R2"), modificar parámetros (ej: "cambia el tiempo a 10s") o preguntarme qué controles tienes en pantalla.'
     }
   ]);
   const [compilando, setCompilando] = useState(false);
@@ -57,14 +57,14 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
 
   // Estados Locales en Tiempo Real (0 ms de Lag)
   const [relesLocales, setRelesLocales] = useState({});
-  const [timerEjecutando, setTimerEjecutando] = useState(null); // { widgetId, segundosRestantes, totalSegundos }
+  const [timerEjecutando, setTimerEjecutando] = useState(null);
   const timerIntervalRef = useRef(null);
 
   const [apiKey] = useState(() => localStorage.getItem('biofleet_ai_key') || GROQ_DEFAULT_API_KEY);
 
   // Perfil, Dashboard y Receta FSM
   const [perfilActivoId, setPerfilActivoId] = useState(null);
-  const [perfilNombre, setPerfilNombre] = useState('Secuencia Multi-Relé v1');
+  const [perfilNombre, setPerfilNombre] = useState('Consola SCADA Activa');
   const [tipoEquipo, setTipoEquipo] = useState('UNIVERSAL_PLC');
   const [widgets, setWidgets] = useState([]);
   const [recetaActiva, setRecetaActiva] = useState(null);
@@ -170,7 +170,6 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
       setMsg(`⚡ Receta FSM enviada al Core 1 de [${cleanMac.slice(-4)}]`);
     }
 
-    // 2. Extraer los pasos temporizados (sea del widget o de la receta)
     const pasos = widget.pasos || (recetaActiva ? recetaActiva.pasos : []);
     const totalSegs = widget.totalSegundos || 6;
 
@@ -180,7 +179,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
       totalSegundos: totalSegs
     });
 
-    // 3. Orquestación local para actualización en vivo a 0 ms si es necesario
+    // 2. Orquestación local para actualización en vivo a 0 ms
     if (pasos && pasos.length > 0) {
       (async () => {
         for (let i = 0; i < pasos.length; i++) {
@@ -188,7 +187,6 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
           const canal = paso.canal;
           const delayMs = paso.tiempoMs || 2000;
 
-          // Apagar relés anteriores si aplica y encender el actual
           if (canal) {
             setRelesLocales(prev => {
               const copia = { ...prev };
@@ -211,7 +209,6 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
           await new Promise(r => setTimeout(r, delayMs));
         }
 
-        // Al finalizar todos los pasos, apagar todo
         setRelesLocales({});
         setMsg('✅ Secuencia multi-etapa completada con éxito.');
       })();
@@ -269,7 +266,9 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
     }
   };
 
-  // ENVIAR MENSAJE AL COPILOT
+  // =========================================================================
+  // ENVIAR MENSAJE AL COPILOT CON CONCIENCIA TOTAL DEL LIENZO
+  // =========================================================================
   const handleEnviarMensaje = async (e) => {
     if (e) e.preventDefault();
     const textoUsuario = prompt.trim();
@@ -283,10 +282,14 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
     try {
       const targetDev = fleet[cleanMac] || null;
 
+      // PASAR EL ESTADO VIVO DEL LIENZO A LA IA PARA QUE TENGA OJOS COMPLETOS
       const res = await conversarYCompilarConIA({
         prompt: textoUsuario,
         historial: historialChat.map(h => ({ sender: h.sender, contenido: h.texto })),
         hardwareInfo: targetDev?.meta?.config_deseada || { reles: 8, entradas: 8 },
+        widgetsActuales: widgets, // <--- LA IA AHORA VE TODOS LOS WIDGETS DE TU PANTALLA
+        recetaActual: recetaActiva,
+        telemetriaActual: { reles: relesLocales, fase: dDev.fase, adc: adcFisico },
         apiKey
       });
 
@@ -295,7 +298,8 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
         { id: `ai_${Date.now()}`, sender: 'ai', texto: res.mensajeChat }
       ]);
 
-      if (res.dashboardWidgets && res.dashboardWidgets.length > 0) {
+      // Si la IA eliminó, modificó o agregó widgets, actualizar el lienzo de inmediato
+      if (res.dashboardWidgets !== undefined) {
         setWidgets(res.dashboardWidgets);
       }
 
@@ -311,7 +315,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
 
       setHalPayload(res.halPayload || {});
       setJsonRaw(JSON.stringify(res, null, 2));
-      setMsg(`✨ Controles generados: "${res.titulo}"`);
+      setMsg(`✨ Entorno actualizado: "${res.titulo}"`);
     } catch (err) {
       setHistorialChat(prev => [
         ...prev,
@@ -435,11 +439,11 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
             <h2 className="text-base font-bold text-white flex items-center gap-2">
               BioFleet SCADA Enterprise v2.0
               <span className="px-2 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[9px] flex items-center gap-1">
-                <Timer className="w-3 h-3" /> SECUENCIADOR MULTI-ETAPA
+                <Timer className="w-3 h-3" /> CONCIENCIA TOTAL DE LIENZO
               </span>
             </h2>
             <p className="text-[11px] text-slate-300 font-sans">
-              Consola HMI con ejecución en cascada de múltiples relés con tiempos de precisión.
+              La IA ahora ve, modifica, agrega y elimina controles de tu pantalla en tiempo real.
             </p>
           </div>
         </div>
@@ -514,16 +518,16 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
       {activeTab === 'STUDIO' && (
         <div className="space-y-4">
           
-          {/* CONSOLA DE DIÁLOGO */}
+          {/* CONSOLA DE DIÁLOGO CON MEMORIA Y VISTA DEL LIENZO */}
           <div className="ultra-glass p-4 rounded-2xl border border-amber-500/30 space-y-3">
             <div className="flex justify-between items-center border-b border-slate-800 pb-2">
               <span className="text-amber-300 font-bold uppercase text-[11px] flex items-center gap-1.5">
                 <Bot className="w-4 h-4 text-emerald-400" />
-                Diálogo con el Ingeniero IA:
+                Diálogo con el Ingeniero IA (Puede ver, agregar, modificar y eliminar controles):
               </span>
               <button
                 type="button"
-                onClick={() => setHistorialChat([{ id: 'reset', sender: 'ai', texto: 'Historial reiniciado. Dime qué nueva secuencia deseas diseñar.' }])}
+                onClick={() => setHistorialChat([{ id: 'reset', sender: 'ai', texto: 'Historial reiniciado. Dime qué acción o diseño deseas realizar en el entorno.' }])}
                 className="text-[10px] text-slate-400 hover:text-white"
               >
                 Limpiar Chat
@@ -554,7 +558,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                 type="text"
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
-                placeholder="Escribe tu requerimiento (ej: 'encienda R1 por 2 segundos, luego R2 por 2 segundos y luego R3 por 2 segundos')..."
+                placeholder="Ejemplo: 'elimina el botón de R2', 'cambia el tiempo a 10s' o '¿qué controles tengo en pantalla?'..."
                 className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-sans text-xs focus:outline-none focus:border-amber-400"
               />
               <button
@@ -608,7 +612,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
             </div>
           </div>
 
-          {/* LIENZO SCADA CON ESTADO OPTIMISTA DE 0ms */}
+          {/* LIENZO SCADA */}
           <div className="ultra-glass p-4 rounded-2xl border border-slate-800 space-y-3">
             <div className="flex justify-between items-center border-b border-slate-800 pb-2">
               <span className="text-white font-bold flex items-center gap-2">
@@ -620,7 +624,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                   ? `⏱️ SECUENCIA EN EJECUCIÓN: ${timerEjecutando.segundosRestantes}s RESTANTES` 
                   : modoEdicion 
                   ? '🛠️ Arrastra la barra superior para mover y la esquina para redimensionar' 
-                  : '👁️ Modo Operador: Pulsa "Iniciar" para ejecutar la secuencia en cascada'}
+                  : '👁️ Modo Operador: Puedes interactuar o pedirle a la IA que modifique cualquier widget'}
               </span>
             </div>
 
@@ -703,11 +707,11 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                           className="flex-1 p-3 flex flex-col justify-center overflow-hidden" 
                           onPointerDown={(e) => e.stopPropagation()}
                         >
-                          {/* CASO: WIDGET DE TEMPORIZADOR MULTI-ETAPA */}
+                          {/* WIDGET TEMPORIZADOR MULTI-ETAPA */}
                           {w.tipo === 'SEQUENCE_TIMER' && (
                             <div className="flex flex-col justify-between h-full space-y-2">
                               <div className="flex items-center justify-between">
-                                <span className="text-[10px] text-slate-400 font-sans">Secuencia Multi-Paso:</span>
+                                <span className="text-[10px] text-slate-400 font-sans">Secuencia FSM:</span>
                                 <span className={`text-2xl font-bold font-mono tracking-wider ${esTimerActivo ? 'text-amber-400 animate-pulse' : 'text-white'}`}>
                                   {segRest}s
                                 </span>
@@ -720,7 +724,6 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                                 />
                               </div>
 
-                              {/* Desglose de cada etapa */}
                               {w.pasos && w.pasos.length > 0 && (
                                 <div className="grid grid-cols-3 gap-1">
                                   {w.pasos.map((paso, pIdx) => (
@@ -758,7 +761,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                             </div>
                           )}
 
-                          {/* CASO: SWITCH INTERRUPTOR DE SUPERVISIÓN */}
+                          {/* SWITCH INTERRUPTOR */}
                           {w.tipo === 'SWITCH_TOGGLE' && (
                             <div
                               onClick={() => handleToggleRelayDirecto(w.canal || 1)}
