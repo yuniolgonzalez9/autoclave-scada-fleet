@@ -28,50 +28,58 @@ import {
   Search, 
   Building2, 
   Bot, 
-  User,
-  Activity,
-  Clock,
-  Timer,
-  AlertTriangle,
-  RotateCcw
+  User, 
+  Activity, 
+  Clock, 
+  Timer, 
+  OctagonAlert, 
+  RotateCw, 
+  SlidersHorizontal, 
+  Droplets, 
+  Radio, 
+  BellRing, 
+  Check 
 } from 'lucide-react';
 
 const SNAP_GRID = 10;
 const GROQ_DEFAULT_API_KEY = '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';
 
 export default function AiAutomationStudio({ fleet = {}, sendCommand = null, initialDeviceMac = null }) {
-  const [activeTab, setActiveTab] = useState('STUDIO'); // 'STUDIO' | 'HARDWARE_I2C' | 'BIBLIOTECA' | 'EDITOR_JSON'
+  const [activeTab, setActiveTab] = useState('STUDIO');
   const [modoEdicion, setModoEdicion] = useState(false);
   const [widgetEnEdicion, setWidgetEnEdicion] = useState(null);
 
-  // Chat de Ingeniería con Memoria
+  // Chat de Ingeniería
   const [prompt, setPrompt] = useState('');
   const [historialChat, setHistorialChat] = useState([
     {
       id: 'init_msg',
       sender: 'ai',
-      texto: 'BioFleet AI Engine v2.0 listo. Describe cualquier proceso industrial complejo (autoclaves con rampas de vacío y esterilización, secuencias vehiculares, plantas químicas o lazos de control analógico) y compilaré el programa íntegro para el Core 1 Soft-PLC de tu ESP32.'
+      texto: 'BioFleet SCADA Enterprise v2.0 listo. Catálogo ampliado disponible: pulsadores momentáneos (jog), setas de paro de emergencia, selectores rotativos, tanques de nivel de fluido, pilotos luminosos de 22mm, deslizadores analógicos, manómetros y temporizadores FSM.'
     }
   ]);
   const [compilando, setCompilando] = useState(false);
   const chatBottomRef = useRef(null);
 
-  // Motor de Temporización en Vivo
+  // Estados Interactivos de Controles SCADA
   const [timerEjecutando, setTimerEjecutando] = useState(null);
   const timerIntervalRef = useRef(null);
+  const [rotaryStates, setRotaryStates] = useState({}); // { widgetId: 'MAN' | '0' | 'AUTO' }
+  const [sliderValues, setSliderValues] = useState({}); // { widgetId: valor }
+  const [estopLatched, setEstopLatched] = useState(false);
 
   const [apiKey] = useState(() => localStorage.getItem('biofleet_ai_key') || GROQ_DEFAULT_API_KEY);
 
   // Perfil, Dashboard y Receta FSM
   const [perfilActivoId, setPerfilActivoId] = useState(null);
-  const [perfilNombre, setPerfilNombre] = useState('Automatización Industrial v1');
+  const [perfilNombre, setPerfilNombre] = useState('Consola SCADA Avanzada');
   const [tipoEquipo, setTipoEquipo] = useState('UNIVERSAL_PLC');
   const [widgets, setWidgets] = useState([]);
   const [recetaActiva, setRecetaActiva] = useState(null);
   const [halPayload, setHalPayload] = useState(null);
   const [jsonRaw, setJsonRaw] = useState('');
 
-  // Hardware y Telemetría en Vivo
+  // Selección de Hardware
   const macList = Object.keys(fleet || {});
   const [selectedMac, setSelectedMac] = useState(() => {
     if (initialDeviceMac) return initialDeviceMac.toUpperCase().replace(/[:\-]/g, '');
@@ -98,7 +106,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
   const [perfilesGuardados, setPerfilesGuardados] = useState([]);
   const [loadingLib, setLoadingLib] = useState(false);
 
-  // Pointer Events para Arrastre y Redimensión Libre
+  // Pointer Events para Lienzo Libre
   const canvasRef = useRef(null);
   const activeInteraction = useRef({
     type: null,
@@ -146,93 +154,102 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
   }, [activeDevice?.i2cReport]);
 
   // =========================================================================
-  // EJECUCIÓN DIRECTA AL CORE 1 SOFT-PLC DEL ESP32
+  // FÍSICA Y DISPARADORES DE LOS WIDGETS INDUSTRIALES
   // =========================================================================
 
-  // 1. DISPARAR RECETA DE FASES AL ESP32 (main.cpp: APPLY_LOGICA_SECUENCIA)
-  const handleDispararRecetaAlCore1 = (recetaAEnviar = null) => {
-    if (!cleanMac) {
-      alert('Por favor selecciona una placa física en el selector.');
-      return;
-    }
+  // 1. PULSADOR MOMENTÁNEO (Activo mientras se presiona, apagado al soltar)
+  const handleMomentaryDown = (canal) => {
+    if (!cleanMac || !sendCommand) return;
+    sendCommand(cleanMac, { cmd: 'SET_RELAY', canal: Number(canal), val: true });
+    setMsg(`🔘 Pulsador presionado: R${canal} -> ON (ENERGIZADO)`);
+  };
 
-    const r = recetaAEnviar || recetaActiva;
-    if (!r) {
-      alert('No hay una receta o autómata de fases cargado.');
-      return;
-    }
+  const handleMomentaryUp = (canal) => {
+    if (!cleanMac || !sendCommand) return;
+    sendCommand(cleanMac, { cmd: 'SET_RELAY', canal: Number(canal), val: false });
+    setMsg(`⚪ Pulsador liberado: R${canal} -> OFF (DESENERGIZADO)`);
+  };
 
+  // 2. SETA DE PARO DE EMERGENCIA CON ENCLAVAMIENTO
+  const handleEmergencyStopToggle = () => {
+    if (!cleanMac) return;
+    const nextLatch = !estopLatched;
+    setEstopLatched(nextLatch);
+
+    if (nextLatch) {
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+      setTimerEjecutando(null);
+      if (sendCommand) sendCommand(cleanMac, { cmd: 'ABORTAR_PROCESO', mac: cleanMac });
+      setMsg(`🚨 SETA DE PARO ENCLAVADA: Todas las salidas desenergizadas por hardware.`);
+    } else {
+      if (sendCommand) sendCommand(cleanMac, { cmd: 'RESET_ALARMA', mac: cleanMac });
+      setMsg(`🔄 Seta de paro desenclavada. Sistema restablecido.`);
+    }
+  };
+
+  // 3. SELECTOR ROTATIVO (MAN - 0 - AUTO)
+  const handleRotaryStep = (widgetId, canal) => {
+    const estadoActual = rotaryStates[widgetId] || '0';
+    let siguiente = 'MAN';
+    if (estadoActual === 'MAN') siguiente = '0';
+    else if (estadoActual === '0') siguiente = 'AUTO';
+    else siguiente = 'MAN';
+
+    setRotaryStates(prev => ({ ...prev, [widgetId]: siguiente }));
+
+    if (cleanMac && sendCommand) {
+      const valRelay = siguiente === 'MAN' || siguiente === 'AUTO';
+      sendCommand(cleanMac, { cmd: 'SET_RELAY', canal: Number(canal || 1), val: valRelay });
+    }
+    setMsg(`⚙️ Selector rotativo posicionado en: [${siguiente}]`);
+  };
+
+  // 4. DESLIZADOR ANALÓGICO DE SETPOINT
+  const handleSliderChange = (widgetId, val) => {
+    setSliderValues(prev => ({ ...prev, [widgetId]: val }));
+  };
+
+  // 5. DISPARAR RECETA DE FASES AL CORE 1
+  const handleDispararRecetaAlCore1 = () => {
+    if (!cleanMac || !recetaActiva) return;
     if (sendCommand) {
-      sendCommand(cleanMac, {
-        cmd: 'APPLY_LOGICA_SECUENCIA',
-        mac: cleanMac,
-        receta: r
-      });
-      setMsg(`⚡ Autómata enviado al Core 1 de [${cleanMac.slice(-4)}]: Ejecutando "${r.nombre_receta}"`);
+      sendCommand(cleanMac, { cmd: 'APPLY_LOGICA_SECUENCIA', mac: cleanMac, receta: recetaActiva });
+      setMsg(`⚡ Autómata FSM enviado al Core 1 de [${cleanMac.slice(-4)}]`);
     }
 
-    // Animar temporizador local si la receta incluye tiempos
     let totalSegs = 0;
-    if (r.pasos && Array.isArray(r.pasos)) {
-      totalSegs = r.pasos.reduce((acc, p) => acc + (p.tiempo_ms ? Math.round(p.tiempo_ms / 1000) : 0), 0);
+    if (recetaActiva.pasos && Array.isArray(recetaActiva.pasos)) {
+      totalSegs = recetaActiva.pasos.reduce((acc, p) => acc + (p.tiempo_ms ? Math.round(p.tiempo_ms / 1000) : 0), 0);
     }
     if (totalSegs > 0) {
-      iniciarAnimacionTemporizador(totalSegs);
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+      setTimerEjecutando({ segundosRestantes: totalSegs, totalSegundos: totalSegs });
+      let segs = totalSegs;
+      timerIntervalRef.current = setInterval(() => {
+        segs--;
+        if (segs <= 0) {
+          clearInterval(timerIntervalRef.current);
+          setTimerEjecutando(null);
+        } else {
+          setTimerEjecutando({ segundosRestantes: segs, totalSegundos: totalSegs });
+        }
+      }, 1000);
     }
   };
 
-  const iniciarAnimacionTemporizador = (totalSegs) => {
-    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
-    setTimerEjecutando({ segundosRestantes: totalSegs, totalSegundos: totalSegs });
-
-    let segs = totalSegs;
-    timerIntervalRef.current = setInterval(() => {
-      segs--;
-      if (segs <= 0) {
-        clearInterval(timerIntervalRef.current);
-        setTimerEjecutando(null);
-      } else {
-        setTimerEjecutando({ segundosRestantes: segs, totalSegundos: totalSegs });
-      }
-    }, 1000);
-  };
-
-  // 2. PARO DE EMERGENCIA GLOBAL (main.cpp: ABORTAR_PROCESO)
-  const handleParoEmergencia = () => {
-    if (!cleanMac) return;
-    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
-    setTimerEjecutando(null);
-
-    if (sendCommand) {
-      sendCommand(cleanMac, {
-        cmd: 'ABORTAR_PROCESO',
-        mac: cleanMac
-      });
-      setMsg(`🚨 PARO DE EMERGENCIA ENVIADO A [${cleanMac.slice(-4)}]: Salidas desenergizadas en <20ms.`);
-    }
-  };
-
-  // 3. CONMUTACIÓN MANUAL DE RELÉ INDIVIDUAL (main.cpp: SET_RELAY)
+  // 6. TOGGLE DE RELÉ TRADICIONAL
   const handleToggleRelayDirecto = (canal, currentState = null) => {
-    if (!cleanMac) {
-      alert('Por favor selecciona una placa física.');
-      return;
-    }
-
+    if (!cleanMac) return;
     const estadoActual = currentState !== null ? currentState : Boolean(relesFisicos[`R${canal}`]);
     const nextVal = !estadoActual;
 
     if (sendCommand) {
-      sendCommand(cleanMac, {
-        cmd: 'SET_RELAY',
-        canal: Number(canal),
-        val: nextVal
-      });
-      setMsg(`📡 [${cleanMac.slice(-4)}] SET_RELAY: R${canal} -> ${nextVal ? 'ON' : 'OFF'}`);
+      sendCommand(cleanMac, { cmd: 'SET_RELAY', canal: Number(canal), val: nextVal });
+      setMsg(`📡 SET_RELAY: R${canal} -> ${nextVal ? 'ON' : 'OFF'}`);
     }
   };
 
-  // 4. DIALOGAR CON EL COPILOT Y COMPILAR
+  // ENVIAR MENSAJE AL COPILOT
   const handleEnviarMensaje = async (e) => {
     if (e) e.preventDefault();
     const textoUsuario = prompt.trim();
@@ -272,18 +289,18 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
 
       setHalPayload(res.halPayload || {});
       setJsonRaw(JSON.stringify(res, null, 2));
-      setMsg(`✨ Arquitectura generada: "${res.titulo}"`);
+      setMsg(`✨ Controles generados: "${res.titulo}"`);
     } catch (err) {
       setHistorialChat(prev => [
         ...prev,
-        { id: `ai_err_${Date.now()}`, sender: 'ai', texto: `Error en compilación: ${err.message}` }
+        { id: `ai_err_${Date.now()}`, sender: 'ai', texto: `Nota: ${err.message}` }
       ]);
     } finally {
       setCompilando(false);
     }
   };
 
-  // POINTER EVENTS: ARRASTRE Y REDIMENSIÓN
+  // POINTER EVENTS: DRAG Y RESIZE
   const handlePointerDown = (e, idx, action) => {
     if (!modoEdicion) return;
     e.stopPropagation();
@@ -346,19 +363,38 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
     }
   };
 
-  // DESPLEGAR RECETA Y CONFIGURACIÓN A LITTLEFS
+  // AGREGAR WIDGET MANUALMENTE CON EL CATÁLOGO EXPANDIDO
+  const handleAgregarWidgetManual = (tipo) => {
+    const nuevo = {
+      id: `w_man_${Date.now()}`,
+      tipo,
+      titulo: tipo === 'MOMENTARY_BUTTON' ? 'Pulsador Jog' :
+              tipo === 'EMERGENCY_STOP' ? 'Paro Emergencia' :
+              tipo === 'ROTARY_SELECTOR' ? 'Selector MAN/AUTO' :
+              tipo === 'LEVEL_TANK' ? 'Nivel Tanque' :
+              tipo === 'PILOT_LIGHT' ? 'Piloto Señal' :
+              tipo === 'ANALOG_SLIDER' ? 'Ajuste Setpoint' : 'Control SCADA',
+      canal: 1,
+      color: tipo === 'EMERGENCY_STOP' ? 'rose' : tipo === 'PILOT_LIGHT' ? 'emerald' : 'cyan',
+      min: 0,
+      max: 100,
+      valor: 50,
+      w: tipo === 'LEVEL_TANK' ? 240 : tipo === 'EMERGENCY_STOP' ? 220 : 260,
+      h: tipo === 'LEVEL_TANK' ? 240 : 170,
+      x: 30,
+      y: 30
+    };
+    setWidgets(prev => [...prev, nuevo]);
+    setWidgetEnEdicion(widgets.length);
+  };
+
   const handleDesplegarADispositivo = async () => {
     if (!cleanMac) return alert('Selecciona una placa.');
-
     setTransmitting(true);
     setMsg(`Desplegando lógica a LittleFS en [${cleanMac}]...`);
 
     if (recetaActiva && sendCommand) {
-      sendCommand(cleanMac, {
-        cmd: 'APPLY_LOGICA_SECUENCIA',
-        mac: cleanMac,
-        receta: recetaActiva
-      });
+      sendCommand(cleanMac, { cmd: 'APPLY_LOGICA_SECUENCIA', mac: cleanMac, receta: recetaActiva });
     }
 
     const commandPayload = {
@@ -380,7 +416,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
         updated_at: new Date().toISOString()
       }, { onConflict: 'mac' });
 
-      setMsg(`⚡ ¡Manifiesto y FSM grabados en LittleFS de [${cleanMac}]!`);
+      setMsg(`⚡ ¡Lógica y catálogo grabados en LittleFS de [${cleanMac}]!`);
     } catch (err) {
       setMsg('Error Supabase: ' + err.message);
     } finally {
@@ -388,31 +424,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
     }
   };
 
-  const handleGuardarEnSupabase = async () => {
-    const payloadDB = {
-      nombre: perfilNombre.trim() || 'Perfil Sin Nombre',
-      descripcion: `Automatización para ${tipoEquipo} • ${widgets.length} Widgets`,
-      hardware_rev: 'HKL-EA8_RJ45',
-      perfil_json: { tipo: tipoEquipo, hal: halPayload, receta: recetaActiva, dashboard: widgets },
-      activo: true,
-      updated_at: new Date().toISOString()
-    };
-
-    try {
-      if (perfilActivoId) {
-        await supabase.from('perfiles_hardware').update(payloadDB).eq('id', perfilActivoId);
-      } else {
-        const { data } = await supabase.from('perfiles_hardware').insert([payloadDB]).select();
-        if (data && data[0]) setPerfilActivoId(data[0].id);
-      }
-      setMsg(`💾 ¡Perfil "${perfilNombre}" respaldado en Supabase!`);
-      cargarBiblioteca();
-    } catch (err) {
-      setMsg('Error Supabase: ' + err.message);
-    }
-  };
-
-  // Lectura de magnitudes físicas del snapshot de telemetría física
+  // Helper de valores físicos analógicos
   const getValorFisicoReal = (w) => {
     const u = (w.unidad || '').toLowerCase();
     const tit = (w.titulo || '').toLowerCase();
@@ -426,10 +438,10 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
     if (u.includes('v') || tit.includes('bat')) {
       return (dDev.bateria_v !== undefined ? dDev.bateria_v : adcFisico.A2 || 12.6).toFixed(1);
     }
-    if (u.includes('%') || tit.includes('nivel') || tit.includes('hum')) {
-      return (adcFisico.A3 !== undefined ? adcFisico.A3 : 45.0).toFixed(0);
+    if (u.includes('%') || tit.includes('nivel') || tit.includes('tanque')) {
+      return (sliderValues[w.id] !== undefined ? sliderValues[w.id] : adcFisico.A3 !== undefined ? adcFisico.A3 : 65).toFixed(0);
     }
-    return '0.0';
+    return (sliderValues[w.id] !== undefined ? sliderValues[w.id] : 50).toFixed(0);
   };
 
   return (
@@ -443,13 +455,13 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
           </div>
           <div>
             <h2 className="text-base font-bold text-white flex items-center gap-2">
-              BioFleet AI Studio Enterprise
-              <span className="px-2 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[9px] flex items-center gap-1">
-                <Cpu className="w-3 h-3" /> FSM SOFT-PLC v8.5
+              BioFleet SCADA Enterprise v2.0
+              <span className="px-2 py-0.2 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 text-[9px] flex items-center gap-1">
+                <Layers className="w-3 h-3" /> CATÁLOGO EXPANDIDO (12 WIDGETS)
               </span>
             </h2>
             <p className="text-[11px] text-slate-300 font-sans">
-              Compilador de ingeniería para procesos complejos, máquinas de estado y silicio HKL-EA8.
+              Consola HMI industrial con setas de paro, pulsadores jog, selectores rotativos y tanques.
             </p>
           </div>
         </div>
@@ -463,7 +475,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
               }`}
             >
               <LayoutGrid className="w-3.5 h-3.5" />
-              <span>Copilot & SCADA</span>
+              <span>Lienzo HMI</span>
             </button>
             <button
               onClick={() => setActiveTab('HARDWARE_I2C')}
@@ -520,7 +532,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
         </div>
       )}
 
-      {/* 2. CONSOLA DE DIÁLOGO Y LIENZO SCADA */}
+      {/* 2. CHAT DE CONTROL Y LIENZO SCADA */}
       {activeTab === 'STUDIO' && (
         <div className="space-y-4">
           
@@ -529,11 +541,11 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
             <div className="flex justify-between items-center border-b border-slate-800 pb-2">
               <span className="text-amber-300 font-bold uppercase text-[11px] flex items-center gap-1.5">
                 <Bot className="w-4 h-4 text-emerald-400" />
-                Diálogo de Ingeniería de Control (Describe sistemas industriales completos):
+                Copilot Industrial (Escribe pulsadores, tanques de nivel, setas de paro o selectores):
               </span>
               <button
                 type="button"
-                onClick={() => setHistorialChat([{ id: 'reset', sender: 'ai', texto: 'Historial reiniciado. Describe el sistema o máquina que deseas diseñar.' }])}
+                onClick={() => setHistorialChat([{ id: 'reset', sender: 'ai', texto: 'Historial reiniciado. Dime qué nuevo sistema o máquina deseas diseñar con el catálogo de widgets.' }])}
                 className="text-[10px] text-slate-400 hover:text-white"
               >
                 Limpiar Chat
@@ -564,7 +576,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                 type="text"
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
-                placeholder="Ejemplo: 'Autoclave de esterilización a 134°C con vacío previo, lazo en R1, sensor A0, meseta 5 min, purga R4 y paro por puerta IN1'..."
+                placeholder="Ejemplo: 'Tanque de agua con bomba en R1, pulsador jog en R2, selector MAN/AUTO, seta de paro y sensor de nivel'..."
                 className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-sans text-xs focus:outline-none focus:border-amber-400"
               />
               <button
@@ -578,30 +590,59 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
             </form>
           </div>
 
-          {/* BARRA DE IDENTIDAD Y ACCIONES RÁPIDAS */}
+          {/* BARRA DE IDENTIDAD Y ACCIONES RÁPIDAS CON CATÁLOGO MANUAL */}
           <div className="ultra-glass p-3 rounded-xl border border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-            <div className="flex items-center gap-2 w-full sm:w-auto">
+            <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
               <input
                 type="text"
                 value={perfilNombre}
                 onChange={(e) => setPerfilNombre(e.target.value)}
-                className="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white font-bold text-xs focus:outline-none focus:border-cyan-400 w-full sm:w-64"
+                className="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white font-bold text-xs focus:outline-none focus:border-cyan-400 w-full sm:w-56"
               />
               <span className="px-2 py-1 rounded bg-slate-900 border border-slate-800 text-amber-400 font-bold text-[10px]">
                 {tipoEquipo}
               </span>
+
+              {/* MENÚ DESPLEGABLE PARA AGREGAR CONTROLES MANUALES */}
+              {modoEdicion && (
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => handleAgregarWidgetManual('MOMENTARY_BUTTON')}
+                    className="px-2 py-1 bg-cyan-950 border border-cyan-500/50 hover:bg-cyan-900 text-cyan-300 rounded text-[10px] font-bold"
+                    title="Pulsador mientras se mantiene presionado"
+                  >
+                    + Pulsador Jog
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAgregarWidgetManual('EMERGENCY_STOP')}
+                    className="px-2 py-1 bg-rose-950 border border-rose-500/50 hover:bg-rose-900 text-rose-300 rounded text-[10px] font-bold"
+                    title="Seta de Paro con enclavamiento"
+                  >
+                    + Seta Paro
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAgregarWidgetManual('ROTARY_SELECTOR')}
+                    className="px-2 py-1 bg-slate-900 border border-slate-700 hover:bg-slate-800 text-slate-300 rounded text-[10px] font-bold"
+                    title="Selector MAN/0/AUTO"
+                  >
+                    + Selector 3-Pos
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAgregarWidgetManual('LEVEL_TANK')}
+                    className="px-2 py-1 bg-blue-950 border border-blue-500/50 hover:bg-blue-900 text-blue-300 rounded text-[10px] font-bold"
+                    title="Tanque de nivel animado"
+                  >
+                    + Tanque
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
-              <button
-                type="button"
-                onClick={handleGuardarEnSupabase}
-                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg font-bold flex items-center gap-1.5 shadow-md shadow-emerald-600/20"
-              >
-                <Save className="w-3.5 h-3.5" />
-                <span>Guardar Cloud</span>
-              </button>
-
               <select
                 value={selectedMac}
                 onChange={(e) => setSelectedMac(e.target.value)}
@@ -627,60 +668,26 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
             </div>
           </div>
 
-          {/* MONITOR EN VIVO DEL CORE 1 (ESP32) */}
-          <div className="p-3 bg-slate-950/90 rounded-xl border border-cyan-500/40 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <Activity className="w-4 h-4 text-cyan-400 animate-pulse" />
-              <span className="text-slate-400">ESTADO CORE 1:</span>
-              <span className="text-cyan-300 font-bold">{dDev.fase || 'EN LINEA'}</span>
-              {dDev.seg_restantes > 0 && (
-                <span className="text-amber-400 ml-2">({dDev.seg_restantes}s restantes)</span>
-              )}
-            </div>
-
-            <div className="flex items-center gap-2">
-              {recetaActiva && (
-                <button
-                  type="button"
-                  onClick={() => handleDispararRecetaAlCore1()}
-                  className="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg flex items-center gap-1 shadow-md"
-                >
-                  <Play className="w-3.5 h-3.5 fill-white" />
-                  <span>EJECUTAR FSM EN PLACA</span>
-                </button>
-              )}
-
-              <button
-                type="button"
-                onClick={handleParoEmergencia}
-                className="px-3 py-1 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-lg flex items-center gap-1 shadow-md"
-              >
-                <Square className="w-3.5 h-3.5 fill-white" />
-                <span>PARO INMEDIATO</span>
-              </button>
-            </div>
-          </div>
-
-          {/* LIENZO SCADA REACTIVO */}
+          {/* LIENZO SCADA REACTIVO CON LOS 12 WIDGETS */}
           <div className="ultra-glass p-4 rounded-2xl border border-slate-800 space-y-3">
             <div className="flex justify-between items-center border-b border-slate-800 pb-2">
               <span className="text-white font-bold flex items-center gap-2">
                 <LayoutGrid className="w-4 h-4 text-cyan-400" />
-                Lienzo SCADA Industrial ({widgets.length} Controles):
+                Lienzo HMI ({widgets.length} Controles en Pantalla):
               </span>
               <span className="text-[10px] text-amber-300">
-                {timerEjecutando 
-                  ? `⏱️ FASE ACTIVA: ${timerEjecutando.segundosRestantes}s RESTANTES` 
+                {estopLatched 
+                  ? '🚨 SETA DE PARO ENCLAVADA - SALIDAS DESENERGIZADAS' 
                   : modoEdicion 
                   ? '🛠️ Arrastra la barra superior para mover y la esquina para redimensionar' 
-                  : '👁️ Modo Operador: Supervisión en tiempo real y disparo de procesos'}
+                  : '👁️ Modo Operador: Interactúa con pulsadores, interruptores y selectores'}
               </span>
             </div>
 
             {widgets.length === 0 ? (
               <div className="py-16 border-2 border-dashed border-slate-800 rounded-xl text-center text-slate-500 space-y-2">
                 <Sparkles className="w-8 h-8 mx-auto text-amber-500/40 animate-pulse" />
-                <p>Describe en el chat tu máquina o proceso y la IA creará el panel completo.</p>
+                <p>Escribe tu instrucción en el diálogo de arriba para generar los controles.</p>
               </div>
             ) : (
               <div
@@ -692,8 +699,8 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                     const isEditingThis = widgetEnEdicion === idx;
                     const isRelayActive = Boolean(relesFisicos[`R${w.canal || 1}`]);
                     const esTimerActivo = timerEjecutando && timerEjecutando.widgetId === w.id;
-                    const segRest = esTimerActivo ? timerEjecutando.segundosRestantes : (w.totalSegundos || 10);
-                    const pctProgreso = esTimerActivo ? ((w.totalSegundos - segRest) / w.totalSegundos) * 100 : 0;
+                    const rotaryPos = rotaryStates[w.id] || '0';
+                    const sliderVal = sliderValues[w.id] !== undefined ? sliderValues[w.id] : w.valor || 50;
 
                     return (
                       <div
@@ -707,7 +714,9 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                         className={`absolute rounded-2xl border bg-slate-900/95 flex flex-col justify-between shadow-xl transition-shadow ${
                           modoEdicion ? 'ring-1 ring-amber-500/40' : ''
                         } ${
-                          w.tipo === 'SEQUENCE_TIMER' ? 'border-amber-500/50 text-amber-300' :
+                          w.tipo === 'EMERGENCY_STOP' ? 'border-rose-500/60 bg-rose-950/20 shadow-rose-500/20' :
+                          w.tipo === 'LEVEL_TANK' ? 'border-blue-500/50 bg-blue-950/20' :
+                          w.tipo === 'PILOT_LIGHT' ? 'border-emerald-500/50 bg-emerald-950/20' :
                           w.color === 'emerald' ? 'border-emerald-500/40 text-emerald-300' :
                           w.color === 'amber' ? 'border-amber-500/40 text-amber-300' :
                           w.color === 'rose' ? 'border-rose-500/40 text-rose-300' :
@@ -751,81 +760,153 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                           )}
                         </div>
 
-                        {/* CUERPO DEL WIDGET */}
+                        {/* CUERPO INTERACTIVO SEGÚN EL TIPO DE WIDGET DEL CATÁLOGO */}
                         <div 
                           className="flex-1 p-3 flex flex-col justify-center overflow-hidden" 
                           onPointerDown={(e) => e.stopPropagation()}
                         >
-                          {/* CASO: TEMPORIZADOR POR FASES (SEQUENCE_TIMER) */}
-                          {w.tipo === 'SEQUENCE_TIMER' && (
-                            <div className="flex flex-col justify-between h-full space-y-2">
-                              <div className="flex items-center justify-between">
-                                <span className="text-[10px] text-slate-400 font-sans">Temporizador FSM:</span>
-                                <span className={`text-xl font-bold font-mono tracking-wider ${esTimerActivo ? 'text-amber-400 animate-pulse' : 'text-white'}`}>
-                                  {segRest}s
-                                </span>
-                              </div>
+                          {/* 1. PULSADOR MOMENTÁNEO (JOG) */}
+                          {w.tipo === 'MOMENTARY_BUTTON' && (
+                            <div className="flex flex-col items-center justify-center h-full gap-2">
+                              <button
+                                type="button"
+                                onPointerDown={() => handleMomentaryDown(w.canal || 1)}
+                                onPointerUp={() => handleMomentaryUp(w.canal || 1)}
+                                onPointerLeave={() => handleMomentaryUp(w.canal || 1)}
+                                className="w-20 h-20 rounded-full border-4 border-cyan-400 bg-slate-950 flex flex-col items-center justify-center shadow-lg active:scale-95 active:bg-cyan-500 active:text-slate-950 transition-all text-cyan-300"
+                              >
+                                <Radio className="w-6 h-6 animate-pulse" />
+                                <span className="text-[9px] font-bold mt-1">MANTENER</span>
+                              </button>
+                              <span className="text-[9px] text-slate-400 font-sans">Pulsador Jog (Activo al pulsar)</span>
+                            </div>
+                          )}
 
-                              <div className="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-800">
-                                <div 
-                                  className="bg-gradient-to-r from-amber-500 to-emerald-400 h-full transition-all duration-300"
-                                  style={{ width: `${esTimerActivo ? pctProgreso : 0}%` }}
-                                />
-                              </div>
-
-                              {w.pasos && w.pasos.length > 0 && (
-                                <div className="grid grid-cols-3 gap-1">
-                                  {w.pasos.slice(0, 3).map((paso, pIdx) => (
-                                    <div key={pIdx} className="p-1 rounded bg-slate-950 border border-slate-800 text-center">
-                                      <span className="block text-[8px] text-slate-400 truncate">{paso.nombre}</span>
-                                      <span className="font-mono text-cyan-300 font-bold text-[9px]">
-                                        {Math.round(paso.tiempoMs / 1000)}s
-                                      </span>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-
-                              <div className="pt-1">
+                          {/* 2. SETA DE PARO DE EMERGENCIA */}
+                          {w.tipo === 'EMERGENCY_STOP' && (
+                            <div className="flex flex-col items-center justify-center h-full gap-2">
+                              <div className="relative p-2 rounded-full border-4 border-amber-400 bg-amber-400/10">
                                 <button
                                   type="button"
-                                  onClick={() => handleDispararRecetaAlCore1()}
-                                  className="w-full py-2 bg-gradient-to-r from-amber-500 to-emerald-500 hover:opacity-90 font-bold text-slate-950 rounded-xl flex items-center justify-center gap-1.5 shadow-md"
+                                  onClick={handleEmergencyStopToggle}
+                                  className={`w-20 h-20 rounded-full border-4 flex flex-col items-center justify-center shadow-2xl transition-all ${
+                                    estopLatched
+                                      ? 'bg-rose-700 border-white text-white scale-90 ring-4 ring-rose-500 animate-pulse'
+                                      : 'bg-rose-600 border-rose-800 text-white hover:scale-105'
+                                  }`}
                                 >
-                                  <Play className="w-3.5 h-3.5 fill-slate-950" />
-                                  <span>Disparar Proceso en Core 1</span>
+                                  <OctagonAlert className="w-8 h-8" />
+                                  <span className="text-[8px] font-black tracking-widest mt-0.5">E-STOP</span>
                                 </button>
+                              </div>
+                              <span className="text-[9px] font-bold text-rose-400">
+                                {estopLatched ? 'BLOQUEADO - GIRAR PARA RESET' : 'PARO DE EMERGENCIA'}
+                              </span>
+                            </div>
+                          )}
+
+                          {/* 3. SELECTOR ROTATIVO (MAN - 0 - AUTO) */}
+                          {w.tipo === 'ROTARY_SELECTOR' && (
+                            <div className="flex flex-col items-center justify-center h-full gap-2">
+                              <div className="flex items-center gap-3">
+                                <span className={`text-[9px] font-bold ${rotaryPos === 'MAN' ? 'text-cyan-400 scale-110' : 'text-slate-600'}`}>MAN</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRotaryStep(w.id, w.canal)}
+                                  className="w-16 h-16 rounded-full border-4 border-slate-700 bg-slate-950 flex items-center justify-center shadow-xl hover:border-cyan-400 transition-all relative"
+                                >
+                                  <div 
+                                    className="w-1.5 h-8 bg-cyan-400 rounded-full transition-transform duration-300"
+                                    style={{
+                                      transform: rotaryPos === 'MAN' ? 'rotate(-45deg)' : rotaryPos === 'AUTO' ? 'rotate(45deg)' : 'rotate(0deg)'
+                                    }}
+                                  />
+                                </button>
+                                <span className={`text-[9px] font-bold ${rotaryPos === 'AUTO' ? 'text-emerald-400 scale-110' : 'text-slate-600'}`}>AUTO</span>
+                              </div>
+                              <span className="text-[10px] font-bold text-white uppercase">POSICIÓN: [{rotaryPos}]</span>
+                            </div>
+                          )}
+
+                          {/* 4. PILOTO LUMINOSO DE 22mm */}
+                          {w.tipo === 'PILOT_LIGHT' && (
+                            <div className="flex flex-col items-center justify-center h-full gap-2">
+                              <div className="p-2 rounded-full border-2 border-slate-700 bg-slate-950">
+                                <div className={`w-14 h-14 rounded-full border-2 border-current flex items-center justify-center transition-all ${
+                                  isRelayActive
+                                    ? 'bg-emerald-500 shadow-[0_0_25px_#10b981] animate-pulse text-white'
+                                    : 'bg-slate-900 border-slate-800 text-slate-700'
+                                }`}>
+                                  <Radio className="w-6 h-6" />
+                                </div>
+                              </div>
+                              <span className="text-[10px] font-bold uppercase">{isRelayActive ? 'SEÑAL ACTIVA' : 'STANDBY'}</span>
+                            </div>
+                          )}
+
+                          {/* 5. TANQUE DE NIVEL DE FLUIDO ANIMADO */}
+                          {w.tipo === 'LEVEL_TANK' && (
+                            <div className="flex items-center justify-between h-full px-2 gap-4">
+                              <div className="w-20 h-full max-h-36 bg-slate-950 rounded-xl border-2 border-blue-500/60 overflow-hidden relative flex flex-col justify-end">
+                                <div 
+                                  className="bg-gradient-to-t from-blue-600 to-cyan-400 w-full transition-all duration-500 relative"
+                                  style={{ height: `${getValorFisicoReal(w)}%` }}
+                                >
+                                  <div className="absolute top-0 left-0 right-0 h-1 bg-white/40 animate-pulse" />
+                                </div>
+                              </div>
+                              <div className="flex-1 text-left space-y-1">
+                                <span className="text-3xl font-black font-mono text-cyan-300">{getValorFisicoReal(w)}%</span>
+                                <span className="block text-[9px] text-slate-400">Volumen Actual</span>
+                                <div className="text-[9px] text-slate-500 font-sans">Capacidad: 1000 Litros</div>
                               </div>
                             </div>
                           )}
 
-                          {/* CASO: BOTÓN DE ACCIÓN */}
+                          {/* 6. DESLIZADOR ANALÓGICO / SETPOINT */}
+                          {w.tipo === 'ANALOG_SLIDER' && (
+                            <div className="flex flex-col justify-center h-full space-y-3 px-2">
+                              <div className="flex justify-between items-center">
+                                <span className="text-[10px] text-slate-400">Ajuste de Setpoint:</span>
+                                <span className="text-xl font-bold font-mono text-cyan-300">{sliderVal}{w.unidad || '%'}</span>
+                              </div>
+                              <input
+                                type="range"
+                                min={w.min || 0}
+                                max={w.max || 100}
+                                value={sliderVal}
+                                onChange={(e) => handleSliderChange(w.id, Number(e.target.value))}
+                                className="w-full accent-cyan-400 cursor-pointer h-2 bg-slate-950 rounded-lg border border-slate-800"
+                              />
+                              <div className="flex justify-between text-[9px] text-slate-500">
+                                <span>{w.min || 0}</span>
+                                <span>Canal R{w.canal || 1}</span>
+                                <span>{w.max || 100}</span>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* 7. BOTÓN DE ACCIÓN / DISPARO FSM */}
                           {w.tipo === 'ACTION_BUTTON' && (
                             <button
                               type="button"
                               onClick={() => {
-                                if (w.accion === 'ABORTAR') {
-                                  handleParoEmergencia();
-                                } else if (w.accion === 'EJECUTAR_RECETA' || recetaActiva) {
-                                  handleDispararRecetaAlCore1();
-                                } else {
-                                  handleToggleRelayDirecto(w.canal || 1);
-                                }
+                                if (w.accion === 'ABORTAR') handleEmergencyStopToggle();
+                                else if (w.accion === 'EJECUTAR_RECETA' || recetaActiva) handleDispararRecetaAlCore1();
+                                else handleToggleRelayDirecto(w.canal || 1);
                               }}
                               className={`w-full py-3.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-lg transition-all ${
-                                w.accion === 'ABORTAR'
-                                  ? 'bg-rose-600 hover:bg-rose-500 text-white'
-                                  : isRelayActive
+                                isRelayActive
                                   ? 'bg-cyan-500 text-slate-950 shadow-cyan-500/30 scale-95'
                                   : 'bg-slate-950 border border-current hover:brightness-125'
                               }`}
                             >
-                              <Play className={`w-3.5 h-3.5 ${w.accion === 'ABORTAR' ? 'fill-white' : isRelayActive ? 'fill-slate-950' : 'fill-current'}`} />
+                              <Play className={`w-3.5 h-3.5 ${isRelayActive ? 'fill-slate-950' : 'fill-current'}`} />
                               <span>{w.titulo}</span>
                             </button>
                           )}
 
-                          {/* CASO: SWITCH INTERRUPTOR */}
+                          {/* 8. INTERRUPTOR BI-ESTABLE */}
                           {w.tipo === 'SWITCH_TOGGLE' && (
                             <div
                               onClick={() => handleToggleRelayDirecto(w.canal || 1)}
@@ -842,7 +923,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                             </div>
                           )}
 
-                          {/* CASO: GAUGE ANALÓGICO RADIAL */}
+                          {/* 9. MANÓMETRO ANALÓGICO RADIAL */}
                           {w.tipo === 'GAUGE_RADIAL' && (
                             <div className="text-center w-full">
                               <span className="text-2xl font-bold font-mono tracking-tight text-white">
@@ -861,22 +942,53 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                             </div>
                           )}
 
-                          {/* CASO: TARJETA DIGITAL NUMÉRICA */}
+                          {/* 10. DISPLAY DIGITAL / TARJETA */}
                           {w.tipo === 'VALUE_CARD' && (
                             <div className="text-center">
-                              <span className="text-2xl font-bold font-mono tracking-tight text-white">
+                              <span className="text-3xl font-black font-mono tracking-tight text-cyan-300">
                                 {getValorFisicoReal(w)}
                               </span>
                               <span className="text-xs text-slate-400 ml-1">{w.unidad || '°C'}</span>
-                              <span className="block text-[8px] text-slate-500 mt-0.5">{w.titulo}</span>
+                              <span className="block text-[8px] text-slate-500 mt-1">{w.titulo}</span>
                             </div>
                           )}
 
-                          {/* CASO: LED INDICADOR */}
-                          {w.tipo === 'STATUS_LED' && (
-                            <div className="flex items-center gap-2">
-                              <span className={`w-3 h-3 rounded-full ${isRelayActive ? 'bg-emerald-400 animate-ping' : 'bg-slate-700'}`}></span>
-                              <span className="font-bold text-xs">{isRelayActive ? 'ACTIVO' : 'ESPERA'}</span>
+                          {/* 11. TEMPORIZADOR POR FASES */}
+                          {w.tipo === 'SEQUENCE_TIMER' && (
+                            <div className="flex flex-col justify-between h-full space-y-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] text-slate-400 font-sans">Cuenta Regresiva:</span>
+                                <span className="text-xl font-bold font-mono text-amber-400">
+                                  {timerEjecutando ? `${timerEjecutando.segundosRestantes}s` : `${w.totalSegundos || 10}s`}
+                                </span>
+                              </div>
+                              <div className="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-800">
+                                <div className="bg-amber-400 h-full w-2/3" />
+                              </div>
+                              <button
+                                type="button"
+                                onClick={handleDispararRecetaAlCore1}
+                                className="w-full py-2 bg-gradient-to-r from-amber-500 to-emerald-500 font-bold text-slate-950 rounded-xl text-xs"
+                              >
+                                Disparar Proceso Core 1
+                              </button>
+                            </div>
+                          )}
+
+                          {/* 12. AVISADOR DE ALARMAS */}
+                          {w.tipo === 'ALARM_ANNUNCIATOR' && (
+                            <div className="flex items-center justify-between p-2 bg-rose-950/40 border border-rose-500/60 rounded-xl text-rose-300">
+                              <div className="flex items-center gap-2">
+                                <BellRing className="w-5 h-5 animate-bounce" />
+                                <span className="font-bold text-[10px] uppercase">Alerta de Seguridad</span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleEmergencyStopToggle()}
+                                className="px-2 py-1 bg-rose-600 hover:bg-rose-500 text-white rounded text-[9px] font-bold"
+                              >
+                                ACK / Silenciar
+                              </button>
                             </div>
                           )}
                         </div>
@@ -1021,7 +1133,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
           <div className="flex justify-between items-center border-b border-indigo-500/20 pb-2">
             <h3 className="text-sm font-bold text-indigo-300 flex items-center gap-2">
               <FileCode className="w-4 h-4" />
-              Editor JSON Manifiesto Completo
+              Editor JSON Manifiesto
             </h3>
           </div>
           <textarea
