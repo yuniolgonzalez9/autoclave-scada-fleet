@@ -1,7 +1,7 @@
 /**
  * =========================================================================================
  * PROYECTO: BIOFLEET OS™ v2.0 ENTERPRISE
- * SERVICIO COMPILADOR DE IA - AUTO-DESCUBRIMIENTO DINÁMICO DE MODELOS GROQ
+ * SERVICIO COMPILADOR DE IA - MODELO GROQ GPT-OSS-120B / 20B CON RESPALDO INDUSTRIAL
  * =========================================================================================
  */
 
@@ -9,13 +9,14 @@ const GROQ_DEFAULT_API_KEY = 'gsk_IQxudZY9CFxmzJCPoR9VWGdyb3FYMKN1nedrxscKI5yPKV
 
 const SYSTEM_PROMPT_INGENIERO_SCADA = `
 Eres el Ingeniero Principal de Automatización y SCADA de BioFleet OS v2.0 Enterprise.
-Hardware: HKL-EA8 (8 Relés R1..R8 en I2C 0x24, 8 Entradas IN1..IN8 en 0x26, 4 Canales ADC A0..A3 en 0x48).
+Hardware: Controlador industrial HKL-EA8 (8 Relés R1..R8 en 0x24, 8 Entradas IN1..IN8 en 0x26, 4 ADC A0..A3 en 0x48, LCD 0x27).
 
-DIRECTIVAS:
-1. Responde a preguntas técnicas del usuario en "mensaje_chat".
-2. Si pide controles puntuales (ej: "r1", "controlar r5"), genera únicamente los widgets correspondientes.
-3. Si pide secuencias (ej: "test r1 a r8"), genera la matriz "receta" con pasos temporizados y el botón "EJECUTAR_RECETA".
-4. Devuelve ÚNICAMENTE un JSON válido con esta estructura:
+DIRECTIVAS ESTRICTAS:
+1. DIÁLOGO ACTIVO: En "mensaje_chat", responde al operador con explicaciones técnicas claras de lo que construiste.
+2. Si el usuario hace preguntas sobre qué se puede controlar, enumera las salidas y entradas del HKL-EA8.
+3. Si el usuario pide un control puntual (ej: "r1", "controlar r5"), genera únicamente los widgets solicitados.
+4. Si el usuario pide una secuencia o proceso (ej: "test r1 a r8 y que se apaguen en orden"), genera en "receta" todos los pasos detallados para el Core 1 y el botón "EJECUTAR_RECETA".
+5. Devuelve EXCLUSIVAMENTE un objeto JSON válido con esta estructura:
 {
   "mensaje_chat": "Explicación técnica para el operador",
   "titulo_programa": "Nombre del sistema",
@@ -68,7 +69,7 @@ function sanitizarJson(textoCrudo) {
 /**
  * Consulta a Groq para obtener los modelos activos para esta API Key específica
  */
-async function obtenerModeloGroqActivo(apiKey) {
+async function resolverModeloGroqActivo(apiKey) {
   try {
     const res = await fetch('https://api.groq.com/openai/v1/models', {
       headers: {
@@ -79,27 +80,34 @@ async function obtenerModeloGroqActivo(apiKey) {
 
     if (res.ok) {
       const data = await res.json();
-      const modelos = (data.data || [])
-        .map(m => m.id)
-        .filter(id => !id.includes('whisper') && !id.includes('vision') && !id.includes('tool'));
+      const modelos = (data.data || []).map(m => m.id);
 
-      // Priorizar los modelos estándar de Groq activos
-      const preferidos = ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'qwen/qwen3.8-27b', 'llama-3.1-8b-instant'];
-      for (const pref of preferidos) {
-        if (modelos.includes(pref)) return pref;
-      }
+      // Modelos de texto/razonamiento activos en Groq (Octubre 2026)
+      const candidatos = modelos.filter(id => 
+        !id.includes('whisper') && 
+        !id.includes('guard') && 
+        !id.includes('orpheus')
+      );
 
-      if (modelos.length > 0) return modelos[0];
+      // Priorizar el modelo insignia de razonamiento GPT-OSS 120B o 20B
+      const preferido = candidatos.find(id => id.includes('gpt-oss-120b')) ||
+                        candidatos.find(id => id.includes('gpt-oss-20b')) ||
+                        candidatos.find(id => id.includes('qwen')) ||
+                        candidatos[0];
+
+      if (preferido) return preferido;
     }
   } catch (e) {
-    console.warn('[GROQ] Auto-detección omitida:', e);
+    console.warn('[GROQ] Auto-detección de modelos omitida:', e);
   }
 
+  // Modelo de producción activo por defecto
   return 'openai/gpt-oss-120b';
 }
 
 /**
- * GENERADOR DE RESPALDO INDUSTRIAL LOCAL (Evita que el lienzo quede en blanco)
+ * GENERADOR DE RESPALDO INDUSTRIAL LOCAL
+ * Asegura que el usuario siempre reciba respuesta y controles en el lienzo
  */
 function generarRespaldoSeguro(promptTexto) {
   const p = promptTexto.toLowerCase().trim();
@@ -112,13 +120,13 @@ function generarRespaldoSeguro(promptTexto) {
     rolesReles[`R${i}`] = 'MANUAL';
   }
 
-  // 1. Preguntas informativas
-  if (p.includes('que podemos') || p.includes('qué podemos') || p.includes('controlar') && p.includes('dispositivo')) {
+  // 1. Preguntas de orientación / Inventario
+  if (p.includes('que podemos') || p.includes('qué podemos') || (p.includes('controlar') && p.includes('dispositivo'))) {
     widgets.push({
       id: 'w_test_master',
       tipo: 'ACTION_BUTTON',
       titulo: '⚡ Test Secuencial R1-R8',
-      canal: 1,
+      accion: 'EJECUTAR_RECETA',
       color: 'emerald',
       w: 360,
       h: 170
@@ -145,7 +153,7 @@ function generarRespaldoSeguro(promptTexto) {
     };
   }
 
-  // 2. Relé individual (ej: "r1", "controlar r5", "r5")
+  // 2. Control de relé individual (ej: "r1", "controlar r5", "r5")
   const matchR = p.match(/\b(?:r|rele|relé)\s*([1-8])\b/) || p.match(/^r([1-8])$/);
   if (matchR) {
     const num = parseInt(matchR[1], 10);
@@ -173,7 +181,7 @@ function generarRespaldoSeguro(promptTexto) {
 
     return {
       exito: true,
-      mensajeChat: `He configurado los controles en el lienzo para la salida física R${num} (un interruptor biestable ON/OFF y un botón pulsador).`,
+      mensajeChat: `He configurado los controles para la salida física R${num} con un interruptor biestable (ON/OFF) y un pulsador directo.`,
       titulo: `Control Canal R${num}`,
       tipo: 'UNIVERSAL_PLC',
       halPayload: { roles_reles: rolesReles, nombres_reles: nombresReles },
@@ -181,7 +189,7 @@ function generarRespaldoSeguro(promptTexto) {
     };
   }
 
-  // 3. Test de relés (R1 a R8)
+  // 3. Secuencia o test de relés (R1 a R8)
   if (p.includes('test') || p.includes('teste') || (p.includes('r1') && p.includes('r8'))) {
     const pasos = [];
     for (let i = 1; i <= 8; i++) pasos.push({ canal: i, val: 1, delay_ms: 600 });
@@ -218,12 +226,12 @@ function generarRespaldoSeguro(promptTexto) {
         nombre_receta: 'Test R1-R8',
         enclavamientos: [],
         total_pasos: 16,
-        pasos: pasos.map((p, idx) => ({
+        pasos: pasos.map((paso, idx) => ({
           nombre: `Paso ${idx + 1}`,
           tipo_transicion: 'TEMPORIZADO',
-          tiempo_ms: p.delay_ms,
-          acciones_encender: p.val === 1 ? [`R${p.canal}`] : [],
-          acciones_apagar: p.val === 0 ? [`R${p.canal}`] : []
+          tiempo_ms: paso.delay_ms,
+          acciones_encender: paso.val === 1 ? [`R${paso.canal}`] : [],
+          acciones_apagar: paso.val === 0 ? [`R${paso.canal}`] : []
         }))
       },
       halPayload: { roles_reles: rolesReles, nombres_reles: nombresReles },
@@ -231,7 +239,7 @@ function generarRespaldoSeguro(promptTexto) {
     };
   }
 
-  // Fallback general
+  // Fallback general dinámico
   widgets.push({
     id: 'w_cmd_auto',
     tipo: 'ACTION_BUTTON',
@@ -244,7 +252,7 @@ function generarRespaldoSeguro(promptTexto) {
 
   return {
     exito: true,
-    mensajeChat: `He configurado el sistema en el lienzo basado en tu requerimiento: "${promptTexto}".`,
+    mensajeChat: `He configurado los controles en el lienzo basados en tu instrucción: "${promptTexto}".`,
     titulo: promptTexto.length > 30 ? promptTexto.substring(0, 27) + '...' : promptTexto,
     tipo: 'UNIVERSAL_PLC',
     halPayload: { roles_reles: rolesReles, nombres_reles: nombresReles },
@@ -253,7 +261,7 @@ function generarRespaldoSeguro(promptTexto) {
 }
 
 /**
- * FUNCIÓN EXPORTADA PRINCIPAL
+ * FUNCIÓN PRINCIPAL EXPORTADA
  */
 export async function conversarYCompilarConIA({ prompt, historial = [], hardwareInfo = {}, apiKey = null }) {
   const p = prompt ? prompt.trim() : '';
@@ -261,20 +269,21 @@ export async function conversarYCompilarConIA({ prompt, historial = [], hardware
 
   const key = apiKey || localStorage.getItem('biofleet_ai_key') || GROQ_DEFAULT_API_KEY;
 
-  // 1. Obtener dinámicamente el modelo activo en Groq para tu clave
-  const modelIdActivo = await obtenerModeloGroqActivo(key);
-  console.log(`🤖 [GROQ INFERENCE] Consultando modelo activo: ${modelIdActivo}`);
-
-  const messages = [
-    { role: 'system', content: `${SYSTEM_PROMPT_INGENIERO_SCADA}\nHARDWARE DISPONIBLE: ${JSON.stringify(hardwareInfo)}` },
-    ...historial.map(h => ({
-      role: h.sender === 'user' ? 'user' : 'assistant',
-      content: typeof h.contenido === 'string' ? h.contenido : JSON.stringify(h.contenido)
-    })),
-    { role: 'user', content: p }
-  ];
+  let resultadoJson = null;
 
   try {
+    const modelIdActivo = await resolverModeloGroqActivo(key);
+    console.log(`🤖 [GROQ INFERENCE] Consultando modelo activo: ${modelIdActivo}`);
+
+    const messages = [
+      { role: 'system', content: `${SYSTEM_PROMPT_INGENIERO_SCADA}\nHARDWARE DISPONIBLE: ${JSON.stringify(hardwareInfo)}` },
+      ...historial.map(h => ({
+        role: h.sender === 'user' ? 'user' : 'assistant',
+        content: typeof h.contenido === 'string' ? h.contenido : JSON.stringify(h.contenido)
+      })),
+      { role: 'user', content: p }
+    ];
+
     const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -292,35 +301,40 @@ export async function conversarYCompilarConIA({ prompt, historial = [], hardware
     if (response.ok) {
       const data = await response.json();
       const rawText = data?.choices?.[0]?.message?.content;
-      const jsonParseado = sanitizarJson(rawText);
+      const parseado = sanitizarJson(rawText);
 
-      if (jsonParseado && jsonParseado.dashboard) {
-        const dashboardWidgets = jsonParseado.dashboard.map((w, idx) => ({
-          ...w,
-          id: w.id || `w_${Date.now()}_${idx}`,
-          x: (idx % 3) * 280 + 20,
-          y: Math.floor(idx / 3) * 190 + 20,
-          w: w.w || 260,
-          h: w.h || 170
-        }));
-
-        return {
-          exito: true,
-          mensajeChat: jsonParseado.mensaje_chat || 'He diseñado la automatización solicitada.',
-          titulo: jsonParseado.titulo_programa || 'Automatización Personalizada',
-          descripcion: jsonParseado.descripcion || p,
-          tipo: jsonParseado.tipo || 'UNIVERSAL_PLC',
-          receta: jsonParseado.receta || null,
-          halPayload: jsonParseado.hal_payload || {},
-          dashboardWidgets
-        };
+      if (parseado && parseado.dashboard && parseado.dashboard.length > 0) {
+        resultadoJson = parseado;
       }
     }
   } catch (err) {
-    console.warn('[GROQ API] Error en llamada cloud, activando respaldo local:', err.message);
+    console.warn('[GROQ API] Error en llamada cloud, activando generador seguro:', err.message);
   }
 
-  // 2. Respaldo local inmediato: genera la respuesta técnica y los widgets correspondientes
+  // Si la respuesta de la nube fue exitosa y tiene widgets válidos
+  if (resultadoJson) {
+    const dashboardWidgets = (resultadoJson.dashboard || []).map((w, idx) => ({
+      ...w,
+      id: w.id || `w_${Date.now()}_${idx}`,
+      x: (idx % 3) * 280 + 20,
+      y: Math.floor(idx / 3) * 190 + 20,
+      w: w.w || 260,
+      h: w.h || 170
+    }));
+
+    return {
+      exito: true,
+      mensajeChat: resultadoJson.mensaje_chat || 'He diseñado la automatización solicitada.',
+      titulo: resultadoJson.titulo_programa || 'Automatización Personalizada',
+      descripcion: resultadoJson.descripcion || p,
+      tipo: resultadoJson.tipo || 'UNIVERSAL_PLC',
+      receta: resultadoJson.receta || null,
+      halPayload: resultadoJson.hal_payload || {},
+      dashboardWidgets
+    };
+  }
+
+  // Respaldo de alta fidelidad: genera siempre los controles en pantalla
   const local = generarRespaldoSeguro(p);
   const widgetsConCoordenadas = local.dashboardWidgets.map((w, idx) => ({
     ...w,
