@@ -1,7 +1,7 @@
 /**
  * =========================================================================================
  * PROYECTO: BIOFLEET OS™ v2.0 ENTERPRISE
- * SERVICIO COMPILADOR DE IA - CON CONCIENCIA TOTAL DEL ENTORNO WEB Y DEL LIENZO
+ * SERVICIO COMPILADOR DE IA - CON NORMALIZADOR INDUSTRIAL DE ESQUEMA TOLERANTE A VARIACIONES
  * =========================================================================================
  */
 
@@ -10,59 +10,81 @@ const GROQ_DEFAULT_API_KEY = 'gsk_IQxudZY9CFxmzJCPoR9VWGdyb3FYMKN1nedrxscKI5yPKV
 function construirPromptConContexto(hardwareInfo, widgetsActuales, recetaActual, telemetriaActual) {
   return `
 Eres el Copilot e Ingeniero Principal de SCADA de BioFleet OS v2.0 Enterprise.
-Tienes CONCIENCIA TOTAL y control directo sobre el entorno web, el lienzo y el hardware físico HKL-EA8.
+Hardware: HKL-EA8 (8 Relés R1..R8 en 0x24, 8 Entradas IN1..IN8 en 0x26, 4 ADC A0..A3 en 0x48, LCD 0x27).
 
-ESTADO ACTUAL DEL ENTORNO EN TIEMPO REAL:
-1. HARDWARE FÍSICO: ${JSON.stringify(hardwareInfo || {})}
-2. WIDGETS QUE EL USUARIO TIENE ACTUALMENTE EN SU PANTALLA:
-${JSON.stringify(widgetsActuales || [])}
-3. RECETA FSM ACTIVA: ${JSON.stringify(recetaActual || null)}
-4. TELEMETRÍA EN VIVO: ${JSON.stringify(telemetriaActual || {})}
+ESTADO ACTUAL DEL ENTORNO:
+1. HARDWARE: ${JSON.stringify(hardwareInfo || {})}
+2. WIDGETS EN PANTALLA: ${JSON.stringify(widgetsActuales || [])}
+3. RECETA FSM: ${JSON.stringify(recetaActual || null)}
 
-CAPACIDADES DE MANIPULACIÓN SOBRE EL ENTORNO WEB:
-1. ELIMINAR WIDGETS:
-   - Si el usuario te pide eliminar, quitar o borrar un control (ej: "elimina el botón de R2", "quita los interruptores", "borra todo excepto la secuencia"):
-     Devuelve en "dashboard" la lista de widgets SIN los elementos que pidió eliminar. Explícalo en "mensaje_chat".
-2. MODIFICAR WIDGETS EXISTENTES:
-   - Si el usuario te pide alterar un control existente (ej: "cambia el color a rojo", "sube el tiempo de la secuencia a 10s", "renombra R1 a Bomba"):
-     Localiza el widget en la lista actual, aplica el cambio solicitado y conserva intactos todos los demás widgets.
-3. AGREGAR WIDGETS:
-   - Si el usuario te pide agregar algo nuevo sobre lo que ya tiene (ej: "agrega ahora un manómetro", "ponle una seta de paro"):
-     Conserva los widgets que ya están en pantalla y agrega el nuevo elemento con coordenadas libres.
-4. REEMPLAZAR O CREAR DE CERO:
-   - Si el usuario pide un sistema completamente nuevo, genera una nueva lista de widgets desde cero.
-5. RESPONDER CONSULTAS DEL ENTORNO:
-   - Si el usuario te pregunta qué hay en pantalla o qué puede controlar, describe con exactitud los widgets que están en su pantalla y los canales físicos disponibles.
-
-TIPOS DE WIDGETS:
-- 'SEQUENCE_TIMER': Temporizador de secuencia con cuenta regresiva en segundos y fases.
-- 'ACTION_BUTTON': Botón pulsador o disparo de receta.
-- 'SWITCH_TOGGLE': Interruptor ON/OFF biestable.
-- 'MOMENTARY_BUTTON': Pulsador jog (activo solo mientras se presiona).
-- 'EMERGENCY_STOP': Seta de paro de emergencia con enclavamiento.
-- 'ROTARY_SELECTOR': Selector rotativo (MAN - 0 - AUTO).
-- 'GAUGE_RADIAL': Manómetro analógico de aguja.
-- 'VALUE_CARD': Display digital numérico (°C, caudal, etc.).
-- 'LEVEL_TANK': Tanque de nivel de fluido (0-100%).
-- 'STATUS_LED': LED indicador luminoso de entrada o estado.
+REGLAS DE FORMATO ESTRICTAS:
+1. NOMBRES DE PROPIEDADES EXACTOS:
+   - Para títulos usa SIEMPRE "titulo" (NO "label", NO "nombre").
+   - Para el canal del relé usa SIEMPRE "canal": 1..8 como NÚMERO ENTERO (NO uses "relé": "R5", usa "canal": 5).
+   - Para tamaños de widgets: usa ancho "w": 260 y alto "h": 170 como mínimo para interruptores. Para secuencias usa "w": 380 y "h": 220.
+2. SECUENCIAS:
+   - Si creas una secuencia, debes incluir los pasos TANTO en "receta.pasos" como en "dashboard[].pasos".
+   - Cada paso debe tener: { "nombre": "Paso 1", "canal": 1, "tiempo_ms": 3000, "acciones_encender": ["R1"], "acciones_apagar": [] }
+3. DIÁLOGO Y MINIMALISMO:
+   - En "mensaje_chat", explica claramente lo que construiste.
+   - Crea ÚNICAMENTE los widgets solicitados. Si el usuario pide R1, R2 y un interruptor para R5, crea exactamente esos elementos.
 
 RESPONDE EXCLUSIVAMENTE CON UN OBJETO JSON VÁLIDO:
 {
-  "mensaje_chat": "Explicación clara de la acción ejecutada sobre el entorno web (eliminado, modificado o agregado) o respuesta a la pregunta",
-  "titulo_programa": "Nombre del sistema",
-  "tipo": "UNIVERSAL_PLC" | "AUTOCLAVE" | "VEHICULO",
+  "mensaje_chat": "Explicación técnica para el usuario",
+  "titulo_programa": "Nombre del programa",
+  "tipo": "UNIVERSAL_PLC",
   "receta": {
-    "nombre_receta": "Nombre",
+    "nombre_receta": "Secuencia R1-R2",
     "enclavamientos": [],
-    "total_pasos": 0,
-    "pasos": []
+    "total_pasos": 2,
+    "pasos": [
+      {
+        "nombre": "Paso 1",
+        "canal": 1,
+        "tipo_transicion": "TEMPORIZADO",
+        "tiempo_ms": 3000,
+        "acciones_encender": ["R1"],
+        "acciones_apagar": []
+      },
+      {
+        "nombre": "Paso 2",
+        "canal": 2,
+        "tipo_transicion": "TEMPORIZADO",
+        "tiempo_ms": 3000,
+        "acciones_encender": ["R2"],
+        "acciones_apagar": ["R1"]
+      }
+    ]
   },
   "hal_payload": {
-    "roles_reles": {},
-    "nombres_reles": {}
+    "roles_reles": { "R1": "SECUENCIA", "R2": "SECUENCIA", "R5": "LUZ" },
+    "nombres_reles": { "R1": "Relé R1", "R2": "Relé R2", "R5": "Luz R5" }
   },
   "dashboard": [
-    // La lista final y actualizada de widgets que deben quedar en el lienzo
+    {
+      "id": "w_seq",
+      "tipo": "SEQUENCE_TIMER",
+      "titulo": "Secuencia R1→R2",
+      "accion": "EJECUTAR_RECETA",
+      "totalSegundos": 6,
+      "pasos": [
+        { "nombre": "Paso 1: R1", "canal": 1, "tiempo_ms": 3000 },
+        { "nombre": "Paso 2: R2", "canal": 2, "tiempo_ms": 3000 }
+      ],
+      "color": "emerald",
+      "w": 380,
+      "h": 220
+    },
+    {
+      "id": "w_sw_r5",
+      "tipo": "SWITCH_TOGGLE",
+      "titulo": "Luz R5",
+      "canal": 5,
+      "color": "amber",
+      "w": 260,
+      "h": 170
+    }
   ]
 }
 `;
@@ -123,7 +145,142 @@ export function detectarProveedorApiKey(key = '') {
 }
 
 /**
- * FUNCIÓN PRINCIPAL EXPORTADA CON CONCIENCIA TOTAL DEL LIENZO
+ * NORMALIZADOR INDUSTRIAL: Blinda los datos y elimina NaNs, claves en español o canales erróneos
+ */
+function normalizarRespuestaIA(parseado, userPrompt) {
+  if (!parseado) return null;
+
+  const resultado = { ...parseado };
+  resultado.titulo = resultado.titulo_programa || resultado.titulo || 'Control SCADA';
+  resultado.descripcion = resultado.descripcion || userPrompt;
+  resultado.tipo = resultado.tipo || 'UNIVERSAL_PLC';
+  resultado.mensajeChat = resultado.mensaje_chat || resultado.mensajeChat || 'He configurado los controles en el lienzo.';
+
+  // 1. Normalizar los Widgets del Dashboard
+  const rawWidgets = resultado.dashboard || resultado.dashboardWidgets || [];
+  let curX = 20;
+  let curY = 20;
+
+  resultado.dashboardWidgets = rawWidgets.map((w, idx) => {
+    // Normalizar título
+    const titulo = w.titulo || w.label || w.nombre || `Control ${idx + 1}`;
+
+    // Normalizar Canal de Relé (convierte "R5", "rele 5", etc. en el entero 5)
+    let canal = w.canal;
+    if (!canal) {
+      const canalStr = String(w['relé'] || w.rele || w.relay || w.id || '');
+      const match = canalStr.match(/(\d+)/);
+      canal = match ? parseInt(match[1], 10) : 1;
+    }
+    canal = Number(canal);
+
+    // Dimensiones mínimas para que nunca se aplasten
+    const anchoMin = w.tipo === 'SEQUENCE_TIMER' || w.tipo === 'CHART_HISTORY' ? 380 : 260;
+    const altoMin = w.tipo === 'SEQUENCE_TIMER' ? 220 : 170;
+    const width = Math.max(anchoMin, w.w || anchoMin);
+    const height = Math.max(altoMin, w.h || altoMin);
+
+    // Normalizar los Pasos del Temporizador (elimina el 'NaNs')
+    let pasosNormalizados = [];
+    let totalSegundos = w.totalSegundos || 0;
+
+    if (w.pasos && Array.isArray(w.pasos)) {
+      pasosNormalizados = w.pasos.map((p, pIdx) => {
+        // Soporta tanto tiempo_ms como tiempoMs o segundos
+        let ms = p.tiempo_ms || p.tiempoMs || (p.tiempo ? p.tiempo * 1000 : 0);
+        if (!ms && p.segundos) ms = p.segundos * 1000;
+        if (!ms) ms = 3000; // 3s por defecto
+
+        // Detectar canal del paso
+        let pCanal = p.canal;
+        if (!pCanal) {
+          const enc = (p.encender && p.encender[0]) || (p.acciones_encender && p.acciones_encender[0]) || '';
+          const m = String(enc).match(/(\d+)/);
+          pCanal = m ? parseInt(m[1], 10) : (pIdx + 1);
+        }
+
+        return {
+          nombre: p.nombre || `Paso ${pIdx + 1}`,
+          canal: Number(pCanal),
+          tiempoMs: Number(ms),
+          tiempo_ms: Number(ms),
+          acciones_encender: p.acciones_encender || p.encender || [`R${pCanal}`],
+          acciones_apagar: p.acciones_apagar || p.apagar || []
+        };
+      });
+
+      if (!totalSegundos) {
+        totalSegundos = pasosNormalizados.reduce((acc, p) => acc + Math.round(p.tiempoMs / 1000), 0);
+      }
+    }
+
+    const posX = w.x !== undefined && w.x > 0 ? w.x : curX;
+    const posY = w.y !== undefined && w.y > 0 ? w.y : curY;
+
+    curX += width + 20;
+    if (curX > 860) { curX = 20; curY += 210; }
+
+    return {
+      ...w,
+      id: w.id || `w_${Date.now()}_${idx}`,
+      tipo: w.tipo || 'SWITCH_TOGGLE',
+      titulo,
+      canal,
+      color: w.color || (canal === 5 ? 'amber' : 'cyan'),
+      w: width,
+      h: height,
+      x: posX,
+      y: posY,
+      totalSegundos,
+      pasos: pasosNormalizados
+    };
+  });
+
+  // 2. Normalizar la Receta para el ESP32 (evita que viaje vacía)
+  let receta = resultado.receta || {};
+  if (!receta.pasos || receta.pasos.length === 0) {
+    // Si la receta vino vacía pero hay un widget SEQUENCE_TIMER, heredar los pasos del widget
+    const timerWidget = resultado.dashboardWidgets.find(w => w.tipo === 'SEQUENCE_TIMER' && w.pasos.length > 0);
+    if (timerWidget) {
+      receta = {
+        nombre_receta: timerWidget.titulo,
+        enclavamientos: receta.enclavamientos || [],
+        total_pasos: timerWidget.pasos.length,
+        pasos: timerWidget.pasos.map(p => ({
+          nombre: p.nombre,
+          tipo_transicion: 'TEMPORIZADO',
+          tiempo_ms: p.tiempoMs,
+          acciones_encender: p.acciones_encender,
+          acciones_apagar: p.acciones_apagar
+        }))
+      };
+    }
+  }
+  resultado.receta = receta;
+
+  // 3. Normalizar HalPayload para registrar todos los relés utilizados
+  const hal = resultado.hal_payload || resultado.halPayload || {};
+  const rolesReles = hal.roles_reles || {};
+  const nombresReles = hal.nombres_reles || {};
+
+  resultado.dashboardWidgets.forEach(w => {
+    if (w.canal && w.canal >= 1 && w.canal <= 8) {
+      const rKey = `R${w.canal}`;
+      if (!rolesReles[rKey]) rolesReles[rKey] = w.tipo;
+      if (!nombresReles[rKey]) nombresReles[rKey] = w.titulo;
+    }
+  });
+
+  resultado.halPayload = {
+    roles_reles: rolesReles,
+    nombres_reles: nombresReles
+  };
+
+  return resultado;
+}
+
+/**
+ * FUNCIÓN PRINCIPAL EXPORTADA
  */
 export async function conversarYCompilarConIA({ 
   prompt, 
@@ -172,34 +329,11 @@ export async function conversarYCompilarConIA({
       const parseado = sanitizarJson(rawText);
 
       if (parseado) {
-        // Asegurar coordenadas a los widgets resultantes
-        let curX = 20;
-        let curY = 20;
-        const dashboardWidgets = (parseado.dashboard || []).map((w, idx) => {
-          const posX = w.x !== undefined ? w.x : curX;
-          const posY = w.y !== undefined ? w.y : currentY;
-          curX += (w.w || 260) + 20;
-          if (curX > 860) { curX = 20; curY += 210; }
-
-          return {
-            ...w,
-            id: w.id || `w_${Date.now()}_${idx}`,
-            x: posX,
-            y: posY,
-            w: w.w || (w.tipo === 'SEQUENCE_TIMER' ? 380 : 260),
-            h: w.h || (w.tipo === 'SEQUENCE_TIMER' ? 220 : 170)
-          };
-        });
-
+        // Blindar mediante el Normalizador Industrial
+        const normalizado = normalizarRespuestaIA(parseado, p);
         return {
           exito: true,
-          mensajeChat: parseado.mensaje_chat || 'He actualizado el entorno según tu solicitud.',
-          titulo: parseado.titulo_programa || 'Control SCADA',
-          descripcion: parseado.descripcion || p,
-          tipo: parseado.tipo || 'UNIVERSAL_PLC',
-          receta: parseado.receta || null,
-          halPayload: parseado.hal_payload || {},
-          dashboardWidgets
+          ...normalizado
         };
       }
     }
@@ -207,7 +341,7 @@ export async function conversarYCompilarConIA({
     console.warn('[GROQ API] Error consultando IA:', err.message);
   }
 
-  // Fallback simple si no hay conexión
+  // Fallback simple seguro
   return {
     exito: true,
     mensajeChat: `He recibido tu instrucción: "${p}".`,
@@ -215,6 +349,6 @@ export async function conversarYCompilarConIA({
     tipo: 'UNIVERSAL_PLC',
     receta: null,
     halPayload: {},
-    dashboardWidgets: widgetsActuales // Conservar los que ya estaban en pantalla
+    dashboardWidgets: widgetsActuales
   };
 }
