@@ -1,105 +1,73 @@
 /**
  * =========================================================================================
  * PROYECTO: BIOFLEET OS™ v2.0 ENTERPRISE
- * SERVICIO COMPILADOR INDUSTRIAL MAESTRO - GENERADOR DE AUTÓMATAS FSM PARA ESP32 (v8.5)
- * MODELO: GROQ OPENAI GPT-OSS-120B / LLAMA 3.1
+ * SERVICIO COMPILADOR INDUSTRIAL MAESTRO - CATÁLOGO EXPANDIDO DE WIDGETS SCADA
  * =========================================================================================
  */
 
 const GROQ_DEFAULT_API_KEY = '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';
 
-const SYSTEM_PROMPT_INGENIERO_SENIOR_C_PLUS_PLUS = `
-Eres el Arquitecto Principal de Sistemas Embebidos y Control Industrial de BioFleet OS v2.0 Enterprise.
-Tu misión es COMPILAR cualquier requerimiento humano en un MANIFIESTO INDUSTRIAL COMPLETO Y COMPLEJO en formato JSON, diseñado para ejecutarse de forma determinista y autónoma en el Core 1 (Soft-PLC) de un microcontrolador ESP32 (Firmware v8.5 en C++/FreeRTOS) sobre una placa HKL-EA8 o placa DIY libre.
+const SYSTEM_PROMPT_SCADA_CATALOGO_AMPLIO = `
+Eres el Diseñador Principal de SCADA e Interfaces HMI Industriales de BioFleet OS v2.0 Enterprise.
+Hardware: Controlador industrial ESP32 HKL-EA8 (8 Relés R1..R8 en 0x24, 8 Entradas IN1..IN8 en 0x26, 4 ADC A0..A3 en 0x48, LCD 0x27) o placas DIY libres.
 
-CONOCIMIENTO ABSOLUTO DEL HARDWARE Y DE LAS ESTRUCTURAS EN C++:
+CATÁLOGO MAESTRO DE WIDGETS INDUSTRIALES DISPONIBLES:
+1. 'MOMENTARY_BUTTON': Pulsador momentáneo tipo jog/inching. Activa la salida únicamente mientras se mantiene pulsado y la desactiva al soltarlo.
+2. 'EMERGENCY_STOP': Seta de paro de emergencia industrial de enclavamiento físico. Desenergiza todas las salidas de inmediato.
+3. 'ROTARY_SELECTOR': Selector industrial rotativo de 3 posiciones: "MAN" (Manual), "0" (Apagado) y "AUTO" (Automático).
+4. 'PILOT_LIGHT': Piloto luminoso industrial de 22mm con halo brillante (verde, rojo, ámbar, azul) vinculado a entradas digitales o relés.
+5. 'ANALOG_SLIDER': Deslizador analógico para ajuste continuo de setpoints (temperatura, presión, velocidad, nivel de 0 a 100%).
+6. 'LEVEL_TANK': Indicador vertical de nivel de tanque cilíndrico animado (0 a 100% de fluido) vinculado a canales analógicos o boyas.
+7. 'SEQUENCE_TIMER': Temporizador de proceso multi-etapa con cuenta regresiva en segundos, barra de progreso y fases.
+8. 'ALARM_ANNUNCIATOR': Cuadro avisador de alarmas con destello de advertencia y botón de reconocimiento (ACK).
+9. 'ACTION_BUTTON': Botón pulsador maestro para iniciar recetas o secuencias completas.
+10. 'SWITCH_TOGGLE': Interruptor basculante biestable ON/OFF con indicador LED de estado.
+11. 'GAUGE_RADIAL': Manómetro analógico de aguja para presión (-1 a 3 bar), tacómetro (RPM) o voltímetro (V).
+12. 'VALUE_CARD': Tarjeta de display digital de alta precisión para temperatura (°C) y variables numéricas.
+13. 'CHART_HISTORY': Gráfica temporal continua de telemetría de proceso.
 
-1. MAPEO FÍSICO (HKL-EA8 Industrial PLC):
-   - 8 Relés de Potencia (R1 a R8): I2C 0x24 (PCF8574) o GPIO directos.
-   - 8 Entradas Optocopladas (IN1 a IN8): I2C 0x26 (PCF8574) o GPIO con pull-up.
-   - 4 Canales ADC de 16-bit (A0 a A3): I2C 0x48 (ADS1115):
-     * A0: Temperatura (°C, rango 0..150°C o PT100).
-     * A1: Presión / Vacío (bar, rango -1..3 bar o PSI).
-     * A2: Tensión / Batería / Alternador (V, rango 0..16V o 0..24V).
-     * A3: Nivel de Tanque o Humedad (%, rango 0..100%).
-   - Display LCD: I2C 0x27 (16x2 o 20x4).
-
-2. ESTRUCTURA EXACTA DEL MOTOR DE RECETA EN C++ (Core 1 a 50Hz):
-   - "enclavamientos": Matriz de hasta 4 reglas de seguridad que evalúan entradas en <20ms.
-     Estructura: [ { "sensor": "IN1".."IN8", "valor_disparo": 0|1, "corte_total": true, "rele_alarma": "R1".."R8"|"", "mensaje": "TEXTO_CORTO" } ]
-   - "pasos": Matriz secuencial de fases (hasta 24 fases).
-     Estructura de cada fase:
-     {
-       "nombre": "Nombre de la fase (hasta 20 caracteres)",
-       "tipo_transicion": "INMEDIATO" | "TEMPORIZADO" | "CONDICIONAL_DIGITAL" | "CONDICIONAL_ANALOGICA",
-       "tiempo_ms": uint32 (milisegundos si es TEMPORIZADO),
-       "condicion_digital": { "sensor": "IN1".."IN8", "valor": 0|1 },
-       "condicion_analogica": { "canal": "A0".."A3", "operador": ">"|"<"|"=", "umbral": float },
-       "timeout_ms": uint32 (tiempo límite de seguridad para abortar si no se cumple la condición),
-       "acciones_encender": ["R1", "R2", ...],
-       "acciones_apagar": ["R3", ...],
-       "lazo_control": {
-         "actuador": "R1".."R8",
-         "sensor": "A0".."A3",
-         "setpoint": float,
-         "histeresis": float
-       }
-     }
-
-3. DASHBOARD SCADA COMPLETO (WIDGETS REACTIVOS):
-   - 'SEQUENCE_TIMER': Muestra el progreso de la receta, cuenta regresiva en segundos y desglose de fases.
-   - 'ACTION_BUTTON': Botón maestro ("accion": "EJECUTAR_RECETA" o "ABORTAR").
-   - 'SWITCH_TOGGLE': Interruptores para los relés involucrados.
-   - 'GAUGE_RADIAL': Manómetros o relojes analógicos para presión (A1), nivel (A3) o batería (A2).
-   - 'VALUE_CARD': Tarjetas digitales para temperatura (A0).
-   - 'STATUS_LED': Indicadores luminosos para entradas de seguridad (IN1..IN8).
-   - 'CHART_HISTORY': Gráfica temporal continua de telemetría.
-
-DIRECTIVAS OBLIGATORIAS:
-- NUNCA generes respuestas a medias o simplistas. Genera el programa COMPLETO, con todos los relés necesarios, las calibraciones de sensores, las fases de la máquina de estados y las reglas de seguridad.
-- Si es un autoclave, modela vacío inicial, rampas térmicas con lazo bang-bang en R1 con A0 a 134°C, meseta de esterilización, purga y secado, más enclavamiento de puerta IN1.
-- Si es un vehículo o generador, modela precalentamiento, crank, comprobación de alternador o RPM en A2/IN2, lazo de marcha y corte total.
-- Si es un proceso industrial químico o de bombeo, modela llenado, agitación, dosificación, vaciado y niveles de seguridad.
+DIRECTIVAS DE DISEÑO:
+- Utiliza la mayor variedad de elementos del catálogo según el proceso descrito:
+  * Si piden pruebas momentáneas, jog o pulsos manuales: utiliza 'MOMENTARY_BUTTON'.
+  * Si piden seguridad crítica: incluye 'EMERGENCY_STOP'.
+  * Si hay tanques, boyas o depósitos: utiliza 'LEVEL_TANK'.
+  * Si hay modos de operación: utiliza 'ROTARY_SELECTOR'.
+  * Si hay secuencias con tiempos: utiliza 'SEQUENCE_TIMER' y 'ACTION_BUTTON'.
+  * Si hay magnitudes continuas: utiliza 'GAUGE_RADIAL', 'ANALOG_SLIDER' y 'VALUE_CARD'.
+- Modela en "receta" los pasos temporizados y lazos de control para el Core 1 del ESP32.
 - Responde EXCLUSIVAMENTE con el objeto JSON válido.
 
 ESTRUCTURA DE RESPUESTA:
 {
-  "mensaje_chat": "Explicación técnica detallada de la arquitectura, fases, lazos de control y enclavamientos implementados",
-  "titulo_programa": "Nombre formal de la máquina o proceso",
-  "descripcion": "Memoria descriptiva de ingeniería",
+  "mensaje_chat": "Explicación técnica de la selección de widgets y lógica implementada",
+  "titulo_programa": "Nombre formal del sistema",
+  "descripcion": "Memoria descriptiva técnica",
   "tipo": "UNIVERSAL_PLC" | "AUTOCLAVE" | "VEHICULO",
   "receta": {
     "nombre_receta": "Nombre",
     "enclavamientos": [],
-    "total_pasos": N,
+    "total_pasos": 0,
     "pasos": []
   },
   "hal_payload": {
     "roles_reles": {},
-    "nombres_reles": {},
-    "roles_entradas": {},
-    "nombres_entradas": {},
-    "calibracion_adc": {
-      "A0": { "unidad": "°C", "min": 0, "max": 150 },
-      "A1": { "unidad": "bar", "min": -1, "max": 3 },
-      "A2": { "unidad": "V", "min": 0, "max": 16 },
-      "A3": { "unidad": "%", "min": 0, "max": 100 }
-    }
+    "nombres_reles": {}
   },
   "dashboard": [
     {
       "id": "w_1",
-      "tipo": "SEQUENCE_TIMER" | "ACTION_BUTTON" | "SWITCH_TOGGLE" | "GAUGE_RADIAL" | "VALUE_CARD" | "STATUS_LED" | "CHART_HISTORY",
+      "tipo": "MOMENTARY_BUTTON" | "EMERGENCY_STOP" | "ROTARY_SELECTOR" | "PILOT_LIGHT" | "ANALOG_SLIDER" | "LEVEL_TANK" | "SEQUENCE_TIMER" | "ALARM_ANNUNCIATOR" | "ACTION_BUTTON" | "SWITCH_TOGGLE" | "GAUGE_RADIAL" | "VALUE_CARD" | "CHART_HISTORY",
       "titulo": "Etiqueta",
       "canal": 1,
-      "accion": "EJECUTAR_RECETA" | "ABORTAR" | "COMANDO",
-      "color": "cyan" | "emerald" | "amber" | "rose" | "purple",
-      "unidad": "bar" | "°C" | "V" | "RPM" | "%" | "",
+      "accion": "COMANDO" | "EJECUTAR_RECETA" | "ABORTAR",
+      "color": "cyan" | "emerald" | "amber" | "rose" | "purple" | "blue",
+      "unidad": "bar" | "°C" | "V" | "RPM" | "%" | "L",
       "min": 0,
       "max": 100,
+      "valor": 50,
       "totalSegundos": 10,
       "pasos": [],
-      "w": 360,
+      "w": 260,
       "h": 170
     }
   ]
@@ -161,19 +129,17 @@ export function detectarProveedorApiKey(key = '') {
 }
 
 /**
- * FUNCIÓN PRINCIPAL EXPORTADA: COMPILADOR INDUSTRIAL
+ * FUNCIÓN PRINCIPAL EXPORTADA
  */
 export async function conversarYCompilarConIA({ prompt, historial = [], hardwareInfo = {}, apiKey = null }) {
   const p = prompt ? prompt.trim() : '';
   if (!p) throw new Error('Por favor introduce tu requerimiento de automatización.');
 
   const key = apiKey || localStorage.getItem('biofleet_ai_key') || GROQ_DEFAULT_API_KEY;
-
   const modelIdActivo = await resolverModeloGroqActivo(key);
-  console.log(`🧠 [BIOFLEET COMPILER] Compilando con modelo de razonamiento: ${modelIdActivo}`);
 
   const messages = [
-    { role: 'system', content: `${SYSTEM_PROMPT_INGENIERO_SENIOR_C_PLUS_PLUS}\nHARDWARE ACTIVO: ${JSON.stringify(hardwareInfo)}` },
+    { role: 'system', content: `${SYSTEM_PROMPT_SCADA_CATALOGO_AMPLIO}\nHARDWARE ACTIVO: ${JSON.stringify(hardwareInfo)}` },
     ...historial.map(h => ({
       role: h.sender === 'user' ? 'user' : 'assistant',
       content: typeof h.contenido === 'string' ? h.contenido : JSON.stringify(h.contenido)
@@ -205,15 +171,27 @@ export async function conversarYCompilarConIA({ prompt, historial = [], hardware
   const jsonParseado = sanitizarJson(rawText);
 
   if (!jsonParseado || !jsonParseado.dashboard || jsonParseado.dashboard.length === 0) {
-    throw new Error('El modelo no devolvió una estructura de control válida.');
+    throw new Error('El modelo de IA no devolvió un catálogo de controles válido.');
   }
 
-  // Distribución automática de coordenadas en el lienzo para que no queden superpuestos
+  // Distribución automática de coordenadas en el lienzo
   let currentX = 20;
   let currentY = 20;
   const dashboardWidgets = jsonParseado.dashboard.map((w, idx) => {
-    const width = w.w || (w.tipo === 'SEQUENCE_TIMER' || w.tipo === 'CHART_HISTORY' ? 380 : 260);
-    const height = w.h || (w.tipo === 'SEQUENCE_TIMER' ? 220 : 170);
+    let width = w.w;
+    let height = w.h;
+
+    if (!width || !height) {
+      if (w.tipo === 'SEQUENCE_TIMER' || w.tipo === 'CHART_HISTORY') {
+        width = 380; height = 220;
+      } else if (w.tipo === 'EMERGENCY_STOP' || w.tipo === 'PILOT_LIGHT') {
+        width = 220; height = 180;
+      } else if (w.tipo === 'LEVEL_TANK') {
+        width = 240; height = 240;
+      } else {
+        width = 260; height = 170;
+      }
+    }
 
     const widgetPositioned = {
       ...w,
@@ -227,7 +205,7 @@ export async function conversarYCompilarConIA({ prompt, historial = [], hardware
     currentX += width + 20;
     if (currentX > 860) {
       currentX = 20;
-      currentY += 190;
+      currentY += 210;
     }
 
     return widgetPositioned;
@@ -235,7 +213,7 @@ export async function conversarYCompilarConIA({ prompt, historial = [], hardware
 
   return {
     exito: true,
-    mensajeChat: jsonParseado.mensaje_chat || 'He compilado la arquitectura de control completa.',
+    mensajeChat: jsonParseado.mensaje_chat || 'He diseñado la interfaz SCADA con los controles industriales seleccionados.',
     titulo: jsonParseado.titulo_programa || 'Automatización Industrial',
     descripcion: jsonParseado.descripcion || p,
     tipo: jsonParseado.tipo || 'UNIVERSAL_PLC',
