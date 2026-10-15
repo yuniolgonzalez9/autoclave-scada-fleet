@@ -35,25 +35,23 @@ import {
   OctagonAlert, 
   Radio,
   Check,
-  ShieldCheck,
-  ToggleLeft,
-  ToggleRight
+  ShieldCheck
 } from 'lucide-react';
 
 const SNAP_GRID = 10;
+const GROQ_DEFAULT_API_KEY = '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';
 
 export default function AiAutomationStudio({ fleet = {}, sendCommand = null, initialDeviceMac = null }) {
-  const [activeTab, setActiveTab] = useState('STUDIO'); // 'STUDIO' | 'HARDWARE_I2C' | 'BIBLIOTECA' | 'EDITOR_JSON'
+  const [activeTab, setActiveTab] = useState('STUDIO');
   const [modoEdicion, setModoEdicion] = useState(false);
   const [widgetEnEdicion, setWidgetEnEdicion] = useState(null);
 
-  // Chat de Control y Diálogo
   const [prompt, setPrompt] = useState('');
   const [historialChat, setHistorialChat] = useState([
     {
       id: 'init_msg',
       sender: 'ai',
-      texto: 'BioFleet SCADA Enterprise v2.0 listo. El motor de IA consulta dinámicamente tu pool de claves en Supabase con tolerancia a fallos. Describe cualquier sistema industrial o consulta el estado del equipo.'
+      texto: 'BioFleet SCADA Enterprise v2.0 listo. Gestión de API Keys en Supabase y control industrial HKL-EA8 activo.'
     }
   ]);
   const [compilando, setCompilando] = useState(false);
@@ -64,9 +62,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
   const [timerEjecutando, setTimerEjecutando] = useState(null);
   const timerIntervalRef = useRef(null);
 
-  // =========================================================================
-  // GESTIÓN VISUAL DEL POOL DE API KEYS EN SUPABASE (config_ai_keys)
-  // =========================================================================
+  // GESTIÓN DEL POOL DE CLAVES EN SUPABASE (config_ai_keys)
   const [showKeyModal, setShowKeyModal] = useState(false);
   const [keysList, setKeysList] = useState([]);
   const [loadingKeys, setLoadingKeys] = useState(false);
@@ -135,7 +131,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
     };
   }, []);
 
-  // Cargar Claves desde la tabla config_ai_keys de Supabase
+  // Cargar Claves desde Supabase
   const cargarClavesSupabase = async () => {
     setLoadingKeys(true);
     try {
@@ -158,7 +154,6 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
     cargarClavesSupabase();
   }, []);
 
-  // Cargar Biblioteca de Perfiles de Supabase
   const cargarBiblioteca = async () => {
     setLoadingLib(true);
     try {
@@ -190,7 +185,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
   }, [dDev.reles]);
 
   // =========================================================================
-  // GESTIÓN CRUD DE CLAVES EN SUPABASE
+  // GESTIÓN CRUD DE CLAVES CON CONFIRMACIÓN REAL EN SUPABASE
   // =========================================================================
   const handleInsertarClave = async (e) => {
     e.preventDefault();
@@ -198,13 +193,13 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
 
     try {
       const detectedProv = newKeyData.proveedor || detectarProveedorApiKey(newKeyData.api_key);
-      const { error } = await supabase.from('config_ai_keys').insert([{
+      const { data, error } = await supabase.from('config_ai_keys').insert([{
         proveedor: detectedProv,
         api_key: newKeyData.api_key.trim(),
         descripcion: newKeyData.descripcion.trim() || 'Clave de Inferencia',
         prioridad: Number(newKeyData.prioridad) || 1,
         activo: true
-      }]);
+      }]).select();
 
       if (error) throw error;
       setNewKeyData({ proveedor: 'GROQ', api_key: '', descripcion: '', prioridad: keysList.length + 1 });
@@ -216,34 +211,53 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
   };
 
   const handleToggleClaveActiva = async (item) => {
+    const nextActivo = !item.activo;
+    // Cambio optimista en pantalla
+    setKeysList(prev => prev.map(k => k.id === item.id ? { ...k, activo: nextActivo } : k));
+
     try {
       const { error } = await supabase
         .from('config_ai_keys')
-        .update({ activo: !item.activo })
+        .update({ activo: nextActivo })
         .eq('id', item.id);
 
       if (error) throw error;
       cargarClavesSupabase();
     } catch (err) {
-      alert('Error actualizando estado de clave: ' + err.message);
-    }
-  };
-
-  const handleEliminarClave = async (id, desc) => {
-    if (!confirm(`¿Eliminar la clave "${desc}" de Supabase?`)) return;
-    try {
-      const { error } = await supabase.from('config_ai_keys').delete().eq('id', id);
-      if (error) throw error;
-      setMsg('🗑️ Clave eliminada de Supabase.');
+      alert('Error actualizando estado en Supabase: ' + err.message);
       cargarClavesSupabase();
-    } catch (err) {
-      alert('Error eliminando clave: ' + err.message);
     }
   };
 
-  // =========================================================================
-  // EJECUCIÓN MULTI-ETAPA PASO A PASO EN LA PLACA FÍSICA Y EN LA WEB
-  // =========================================================================
+  // BORRADO REAL Y OPTIMISTA (Elimina de inmediato la fila en pantalla y confirma en DB)
+  const handleEliminarClave = async (id, desc) => {
+    if (!confirm(`¿Eliminar definitivamente la clave "${desc || 'seleccionada'}" de Supabase?`)) return;
+
+    // 1. Quitar visualmente de la lista de inmediato (0 ms)
+    setKeysList(prev => prev.filter(k => k.id !== id));
+
+    try {
+      // 2. Ejecutar borrado con .select() para obligar a Postgres a reportar
+      const { data, error } = await supabase
+        .from('config_ai_keys')
+        .delete()
+        .eq('id', id)
+        .select();
+
+      if (error) throw error;
+
+      if (!data || data.length === 0) {
+        throw new Error('Supabase no borró la fila (Verifica ejecutar el script de permisos en SQL Editor).');
+      }
+
+      setMsg('🗑️ Clave eliminada definitivamente de Supabase.');
+    } catch (err) {
+      alert('Aviso al eliminar en Supabase: ' + err.message);
+      cargarClavesSupabase(); // Restaurar si falló
+    }
+  };
+
+  // EJECUCIÓN MULTI-ETAPA
   const handleIniciarSecuenciaMultiPaso = async (widget) => {
     if (!cleanMac) {
       alert('Por favor selecciona una placa física en el selector.');
@@ -313,7 +327,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
         }
 
         setRelesLocales({});
-        setMsg('✅ Secuencia multi-etapa completada con éxito.');
+        setMsg('✅ Secuencia completada con éxito en la placa.');
       })();
     }
 
@@ -343,7 +357,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
     setMsg('🛑 Secuencia detenida.');
   };
 
-  // CONTROL MANUAL DIRECTO DE RELÉ
+  // CONTROL DIRECTO DE RELÉ
   const handleToggleRelayDirecto = (canal, currentState = null) => {
     if (!cleanMac) {
       alert('Por favor selecciona una placa física.');
@@ -530,7 +544,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
   return (
     <div className="space-y-4 font-mono text-xs select-none">
       
-      {/* 1. BARRA SUPERIOR CON EL GESTOR DE CLAVES CLOUD CONECTADO */}
+      {/* 1. BARRA SUPERIOR CON BOTÓN DE GESTOR DE CLAVES CLOUD */}
       <div className="ultra-glass p-4 rounded-2xl border border-amber-500/30 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
         <div className="flex items-center gap-3">
           <div className="p-2.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300">
@@ -544,14 +558,13 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
               </span>
             </h2>
             <p className="text-[11px] text-slate-300 font-sans">
-              Control industrial con rotación automática de claves de IA y cero credenciales en código.
+              La IA consulta dinámicamente tu base de datos de claves con rotación y failover automático.
             </p>
           </div>
         </div>
 
         {/* NAVEGACIÓN Y BOTÓN GESTOR DE CLAVES */}
         <div className="flex items-center gap-2 flex-wrap">
-          {/* BOTÓN GESTOR DE CLAVES EN SUPABASE */}
           <button
             onClick={() => { cargarClavesSupabase(); setShowKeyModal(true); }}
             className="px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 border transition-all bg-slate-900 border-amber-500/60 text-amber-300 hover:border-amber-400 hover:bg-slate-800 shadow-md shadow-amber-500/10"
@@ -736,7 +749,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                   ? `⏱️ SECUENCIA EN EJECUCIÓN: ${timerEjecutando.segundosRestantes}s RESTANTES` 
                   : modoEdicion 
                   ? '🛠️ Arrastra la barra superior para mover y la esquina para redimensionar' 
-                  : '👁️ Modo Operador: Control en tiempo real y supervisión'}
+                  : '👁️ Modo Operador: Control en tiempo real'}
               </span>
             </div>
 
@@ -1078,7 +1091,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
             </div>
 
             <p className="text-slate-300 text-[11px]">
-              El sistema prueba automáticamente las claves en orden de prioridad con failover instantáneo. Las claves residen cifradas en la nube.
+              El sistema prueba automáticamente las claves en orden de prioridad con failover instantáneo. Las claves residen en Supabase.
             </p>
 
             {/* TABLA DE CLAVES VIVAS EN SUPABASE */}
@@ -1182,7 +1195,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                   type="text"
                   value={newKeyData.descripcion}
                   onChange={(e) => setNewKeyData({ ...newKeyData, descripcion: e.target.value })}
-                  placeholder="Descripción de la clave (ej: Clave de respaldo Groq 2)..."
+                  placeholder="Descripción de la clave (ej: Clave Groq Respaldo)..."
                   className="flex-1 bg-slate-900 border border-slate-700 rounded p-1.5 text-white text-[10px] mr-2"
                 />
                 <button
