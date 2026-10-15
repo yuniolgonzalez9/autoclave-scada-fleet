@@ -38,7 +38,13 @@ import {
   BellRing, 
   ShieldAlert, 
   Layers,
-  Monitor
+  Monitor,
+  Check,
+  Radio,
+  Flame,
+  Wind,
+  Droplets,
+  Clock
 } from 'lucide-react';
 
 export default function DeviceDetailView({ 
@@ -79,7 +85,29 @@ export default function DeviceDetailView({
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [inspectedSession, setInspectedSession] = useState(null);
 
-  // Escáner I2C Real y Configuración de Chips
+  // Selector del Programa Clínico Activo (P1 a P6)
+  const [programaSeleccionado, setProgramaSeleccionado] = useState(1);
+
+  // ESTADOS DE BYPASSES DE BANCO DE PRUEBAS (Permite simular sensores físicamente ausentes)
+  const [bypasses, setBypasses] = useState({
+    puerta: true,
+    sello: true,
+    recamara: true,
+    caldera: true
+  });
+
+  // Datos en vivo desde la telemetría del ESP32 (Core 0 a 800ms)
+  const d = device?.datos || {};
+  const relesFisicos = d.reles || {};
+  const entradasFisicas = d.entradas || {};
+  const tempCamara = parseFloat(d.temp_camara !== undefined ? d.temp_camara : 25.0);
+  const presionBar = parseFloat(d.presion !== undefined ? d.presion : 0.0);
+  const f0Score = parseFloat(d.f0_score !== undefined ? d.f0_score : device?.f0Score || 0.0);
+  const segRestantes = d.seg_restantes || 0;
+  const faseEnVivo = d.fase || 'EN ESPERA';
+  const enCicloActivo = faseEnVivo !== 'EN ESPERA' && faseEnVivo !== 'CANCELADO' && faseEnVivo !== 'FINALIZADO CON EXITO';
+
+  // Escáner I2C Real
   const [scanningI2C, setScanningI2C] = useState(false);
   const [chipsDetectados, setChipsDetectados] = useState([]);
   const [selectedChipDir, setSelectedChipDir] = useState('0x24');
@@ -92,84 +120,44 @@ export default function DeviceDetailView({
   const [lcdRows, setLcdRows] = useState(cfgDeseada.lcd_rows || 2);
   const [addrRelays, setAddrRelays] = useState(cfgDeseada.addr_relays || '0x24');
   const [addrInputs, setAddrInputs] = useState(cfgDeseada.addr_inputs || '0x26');
-  const [addrAdc, setAddrAdc] = useState(cfgDeseada.addr_adc || '0x48');
 
   // Nombres libres y roles para las 8 Salidas
-  const [rolesReles, setRolesReles] = useState({
-    R1: isVehicle ? 'IGNICION_ON' : 'CALENTADOR',
-    R2: isVehicle ? 'STARTER_MOTOR' : 'BOMBA_VACIO',
-    R3: isVehicle ? 'INMOVILIZADOR' : 'MOTOR_AGITADOR',
-    R4: isVehicle ? 'SIRENA_LUCES' : 'PURGA_VAPOR',
-    R5: 'MANUAL', R6: 'MANUAL', R7: 'MANUAL', R8: 'MANUAL'
-  });
-
   const [nombresReles, setNombresReles] = useState({
-    R1: isVehicle ? 'Contacto Ignición' : 'Electroválvula Calentador',
-    R2: isVehicle ? 'Motor de Arranque (Start)' : 'Bomba de Vacío',
-    R3: isVehicle ? 'Corte Combustible' : 'Motor Agitador',
-    R4: isVehicle ? 'Sirena / Luces' : 'Electroválvula Purga',
-    R5: 'Salida 5', R6: 'Salida 6', R7: 'Salida 7', R8: 'Salida 8'
-  });
-
-  // Nombres libres y roles para las 8 Entradas
-  const [rolesEntradas, setRolesEntradas] = useState({
-    IN1: isVehicle ? 'SENSOR_FRENO' : 'SENSOR_PUERTA',
-    IN2: isVehicle ? 'ALTERNADOR_D' : 'PRESOSTATO',
-    IN3: isVehicle ? 'PUERTA_CABINA' : 'NIVEL_AGUA',
-    IN4: 'PARO_EMERGENCIA',
-    IN5: 'LIBRE', IN6: 'LIBRE', IN7: 'LIBRE', IN8: 'LIBRE'
-  });
-
-  const [nombresEntradas, setNombresEntradas] = useState({
-    IN1: isVehicle ? 'Pedal de Freno' : 'Microswitch Puerta',
-    IN2: isVehicle ? 'Alternador D+ 14V' : 'Presóstato Mecánico',
-    IN3: isVehicle ? 'Puerta Conductor' : 'Sonda Nivel Agua',
-    IN4: 'Pulsador Paro',
-    IN5: 'Entrada 5', IN6: 'Entrada 6', IN7: 'Entrada 7', IN8: 'Entrada 8'
+    R1: 'Cierre Sello', R2: 'Succión Sello', R3: 'Alivio Sello', R4: 'Bomba Agua',
+    R5: 'Resistencias Calor', R6: 'Bomba Vacío', R7: 'Purga / Desfogue', R8: 'Esterilizar'
   });
 
   const canEditHardware = userRole && !userRole.toLowerCase().includes('operador') && !userRole.toLowerCase().includes('cliente');
-  const tieneReportes = isAutoclave;
 
-  const d = device?.datos || {};
-  const cfg = d?.cfg || {};
-  const relesPlc = d?.reles || {};
-  const entradasPlc = d?.entradas || {};
-
-  // ODÓMETRO REAL & ENCLAVAMIENTO CRÍTICO AL 100%
-  const ciclos = Number(cfg.ciclos || device?.meta?.ciclosCompletados || 0);
-  const limite = Number(cfg.lim_mant || device?.meta?.limiteMantenimiento || 200);
-  const [alertaPct, setAlertaPct] = useState(Number(cfg.alerta_pct || 80));
-  const [savingAlerta, setSavingAlerta] = useState(false);
-
+  // Odómetro y Mantenimiento
+  const ciclos = Number(device?.meta?.ciclos_activos || d.cfg?.ciclos || 0);
+  const limite = Number(device?.meta?.limite_mantenimiento || d.cfg?.lim_mant || 300);
   const pctMant = Math.min(100, Math.round((ciclos / (limite || 1)) * 100));
-  const isBloqueado100 = Boolean(cfg.fuera_servicio || pctMant >= 100);
-  const isAlertaActiva = Boolean(cfg.alerta_mantenimiento || pctMant >= alertaPct);
+  const isBloqueado100 = Boolean(d.cfg?.fuera_servicio || pctMant >= 100);
+  const isAlertaActiva = Boolean(pctMant >= 80);
 
-  // Escuchar reporte I2C físico que emite el ESP32
+  // Escuchar reporte I2C físico emitido por el ESP32
   useEffect(() => {
     if (device?.i2cReport && device.i2cReport.chips) {
       setChipsDetectados(device.i2cReport.chips);
       setScanningI2C(false);
       setHalMsg(`¡Reporte físico recibido! ${device.i2cReport.total || device.i2cReport.chips.length} chips detectados en bus I2C.`);
-
-      supabase.from('diagnosticos_i2c').insert({
-        mac: device.mac,
-        dispositivos: device.i2cReport.chips,
-        total: device.i2cReport.total || device.i2cReport.chips.length,
-        created_at: new Date().toISOString()
-      }).then(({ error }) => {
-        if (error) console.warn('Nota diagnosticos_i2c:', error.message);
-      });
     }
   }, [device?.i2cReport]);
+
+  // Sincronizar bypasses si la telemetría los reporta
+  useEffect(() => {
+    if (d.bypasses) {
+      setBypasses(d.bypasses);
+    }
+  }, [d.bypasses]);
 
   useEffect(() => {
     localStorage.setItem('scada_detail_tab', activeTab);
   }, [activeTab]);
 
   const fetchMacLogs = async () => {
-    if (!device?.mac || !tieneReportes) return;
+    if (!device?.mac) return;
     setLoadingLogs(true);
     try {
       const { data, error } = await supabase
@@ -191,236 +179,141 @@ export default function DeviceDetailView({
     if (activeTab === 'historial') fetchMacLogs();
   }, [activeTab, device?.mac]);
 
-  const [spTemp, setSpTemp] = useState(cfg.sp_temp ?? 121.0);
-  const [tCiclo, setTCiclo] = useState(cfg.t_ciclo ?? 2);
-  const [pMax, setPMax] = useState(cfg.p_max ?? 2.60);
+  // =========================================================================
+  // OPERACIONES DE CONTROL CLÍNICO DIRECTO HACIA EL ESP32 (HANKERILA HKL-EA8)
+  // =========================================================================
 
-  // ACCIONES OPERATIVAS CON ENCLAVAMIENTO AL 100%
-  const requestStartCycle = () => {
+  // 1. INICIAR CICLO CLÍNICO (P1 a P6)
+  const handleIniciarCicloClinico = () => {
     if (isBloqueado100) {
-      alert('⛔ ACCIÓN DENEGADA: El equipo ha alcanzado el 100% de su vida útil y se encuentra FUERA DE SERVICIO por seguridad. Requiere mantenimiento preventivo.');
+      alert('⛔ ACCIÓN DENEGADA: Equipo fuera de servicio por mantenimiento preventivo alcanzado.');
       return;
     }
+
+    const progInfo = [
+      { id: 1, nombre: '134°C Instrumental Quirúrgico', tMeseta: '4m' },
+      { id: 2, nombre: '121°C Material Termolábil / Gomas', tMeseta: '15m' },
+      { id: 3, nombre: '134°C Ciclo Prion Extendido', tMeseta: '18m' },
+      { id: 4, nombre: '121°C Líquidos / Soluciones', tMeseta: '5m' },
+      { id: 5, nombre: 'Test Rápido de Cámara', tMeseta: '10m' },
+      { id: 6, nombre: 'Test Ultrarrápido de Banco (1 min)', tMeseta: '1m' }
+    ];
+
+    const sel = progInfo.find(p => p.id === programaSeleccionado) || progInfo[0];
+
     setConfirmModal({
       isOpen: true,
-      title: 'Iniciar Ciclo de Esterilización',
-      description: `¿Confirmas el inicio del protocolo térmico a ${spTemp}°C durante ${tCiclo} minutos? Se energizarán las resistencias calefactoras.`,
+      title: `Iniciar Ciclo P${sel.id}: ${sel.nombre}`,
+      description: `¿Confirmas arrancar el ciclo en la placa [${device.mac.slice(-4)}]? Se presurizará el sello, se ejecutarán las rampas térmicas y se acumulará letalidad F0.`,
       actionType: 'START',
-      onConfirm: () => sendCommand(device.mac, { cmd: 'INICIAR_CICLO' })
+      onConfirm: () => {
+        if (sendCommand) {
+          sendCommand(device.mac, {
+            cmd: 'INICIAR_CICLO',
+            programa: sel.id
+          });
+        }
+      }
     });
   };
 
-  const requestEmergencyStop = () => {
+  // 2. PARO DE EMERGENCIA
+  const handleParoEmergencia = () => {
     setConfirmModal({
       isOpen: true,
-      title: '¡PARO DE EMERGENCIA EN CÁMARA!',
-      description: 'Corte inmediato de calentadores y despresurización de vapor.',
+      title: '¡PARO DE EMERGENCIA / ABORTAR CICLO!',
+      description: `¿Confirmas desenergizar todas las salidas y despresurizar la cámara del equipo [${device.mac.slice(-4)}] de forma inmediata?`,
       actionType: 'STOP',
-      onConfirm: () => sendCommand(device.mac, { cmd: 'ABORTAR_CICLO' })
+      onConfirm: () => {
+        if (sendCommand) {
+          sendCommand(device.mac, { cmd: 'ABORTAR_CICLO' });
+        }
+      }
     });
   };
 
-  const requestResetAlarm = () => {
-    if (isBloqueado100) {
-      alert('⛔ El equipo continúa al 100% de uso. Debes reiniciar el odómetro para habilitar el servicio.');
+  // 3. RESTABLECER ALARMA
+  const handleRestablecerAlarma = () => {
+    if (sendCommand) {
+      sendCommand(device.mac, { cmd: 'RESET_ALARMA' });
+    }
+  };
+
+  // 4. CONMUTAR BYPASS DE SENSORES DE BANCO EN VIVO
+  const handleToggleBypass = (sensorKey) => {
+    const nextVal = !bypasses[sensorKey];
+    const nuevosBypasses = { ...bypasses, [sensorKey]: nextVal };
+    setBypasses(nuevosBypasses);
+
+    if (sendCommand) {
+      sendCommand(device.mac, {
+        cmd: 'SET_BYPASS',
+        ...nuevosBypasses
+      });
+    }
+  };
+
+  // 5. APERTURA SEGURA DE PUERTA
+  const handleAbrirPuertaSegura = () => {
+    if (presionBar > 0.05f) {
+      alert(`⛔ APERTURA BLOQUEADA: La cámara tiene presión residual (${presionBar.toFixed(2)} bar). Espera a que baje a 0.00 bar por seguridad.`);
       return;
     }
-    setConfirmModal({
-      isOpen: true,
-      title: 'Restablecer Código de Alarma',
-      description: '¿Confirmas que la anomalía física ha sido inspeccionada y resuelta en la cámara?',
-      actionType: 'RESET',
-      onConfirm: () => sendCommand(device.mac, { cmd: 'RESET_ALARMA' })
-    });
-  };
-
-  const requestStartVehicle = () => {
-    if (isBloqueado100) {
-      alert('⛔ VEHÍCULO BLOQUEADO: 100% de horas de uso alcanzado. Requiere mantenimiento preventivo.');
-      return;
+    if (sendCommand) {
+      sendCommand(device.mac, { cmd: 'CMD_ABRIR_PUERTA' });
     }
-    setConfirmModal({
-      isOpen: true,
-      title: '⚡ Iniciar Arranque Remoto',
-      description: `¿Confirmas encender la ignición y activar el starter de ${alias}?`,
-      actionType: 'START',
-      onConfirm: () => sendCommand(device.mac, { cmd: 'START_VEHICLE' })
-    });
   };
 
-  const requestStopVehicle = () => {
-    setConfirmModal({
-      isOpen: true,
-      title: '🛑 Corte de Motor / Inmovilizador',
-      description: `¿Confirmas cortar la ignición inmediatamente?`,
-      actionType: 'STOP',
-      onConfirm: () => sendCommand(device.mac, { cmd: 'STOP_VEHICLE' })
-    });
+  // 6. CIERRE / INFLADO DE SELLO
+  const handleCerrarSelloPuerta = () => {
+    if (sendCommand) {
+      sendCommand(device.mac, { cmd: 'CMD_CIERRE_PUERTA' });
+    }
   };
 
-  // Disparar Escaneo Físico Real
+  // 7. TOGGLE MANUAL DE RELÉ
+  const handleToggleManualRelay = (canal, currentState) => {
+    if (sendCommand) {
+      sendCommand(device.mac, {
+        cmd: 'SET_RELAY',
+        canal: canal,
+        val: !currentState
+      });
+    }
+  };
+
+  // 8. ESCANEAR I2C EN VIVO
   const handleScanI2C = () => {
     setScanningI2C(true);
-    setHalMsg('Enviando orden física SCAN_HARDWARE al Núcleo 1...');
-    sendCommand(device.mac, { cmd: 'SCAN_HARDWARE' });
-  };
-
-  // GUARDAR UMBRAL DE ALERTA (10% AL 100%) DE FORMA INMEDIATA
-  const handleGuardarUmbralAlerta = async () => {
-    setSavingAlerta(true);
-    const cmdPayload = {
-      cmd: 'SET_ALERTA_MANT',
-      alerta_pct: Number(alertaPct),
-      lim_mant: Number(limite)
-    };
-
-    // 1. Enviar orden al ESP32 por MQTT
-    sendCommand(device.mac, cmdPayload);
-
-    // 2. Persistir en Supabase 'asignaciones_equipos'
-    try {
-      await supabase.from('asignaciones_equipos').update({
-        config_deseada: {
-          ...(device.meta?.config_deseada || {}),
-          alerta_pct: Number(alertaPct),
-          lim_mant: Number(limite)
-        },
-        updated_at: new Date().toISOString()
-      }).eq('mac', device.mac);
-
-      // 3. Forzar actualización en memoria local de la web
-      if (device.datos && device.datos.cfg) {
-        device.datos.cfg.alerta_pct = Number(alertaPct);
-      }
-
-      setNvsMsg(`⚡ Umbral fijado al ${alertaPct}% y grabado en NVS del ESP32.`);
-      setTimeout(() => setNvsMsg(''), 3500);
-    } catch (e) {
-      console.warn('Error Supabase:', e.message);
-    } finally {
-      setSavingAlerta(false);
-    }
-  };
-
-  // DESPLEGAR PROGRAMACIÓN COMPLETA DE HARDWARE CON LCD Y REINICIO OPCIONAL
-  const handleDeployHalMap = async (debeReiniciar = false) => {
-    const payload = {
-      cmd: 'APPLY_HAL_MAP',
-      mac: device.mac,
-      tipo: tipoEquipo,
-      sp_temp: Number(spTemp),
-      t_ciclo: Number(tCiclo),
-      p_max: Number(pMax),
-      lim_mant: Number(limite),
-      alerta_pct: Number(alertaPct),
-      addr_lcd: addrLcd,
-      lcd_cols: Number(lcdCols),
-      lcd_rows: Number(lcdRows),
-      addr_relays: addrRelays,
-      addr_inputs: addrInputs,
-      addr_adc: addrAdc,
-      roles_reles: rolesReles,
-      nombres_reles: nombresReles,
-      roles_entradas: rolesEntradas,
-      nombres_entradas: nombresEntradas,
-      reiniciar: Boolean(debeReiniciar)
-    };
-
-    sendCommand(device.mac, payload);
-    setHalMsg(debeReiniciar ? '🔄 Orden de reinicio enviada para aplicar pantalla LCD limpia...' : '⚡ Programación de pines grabada en Flash LittleFS & NVS.');
-
-    try {
-      await supabase.from('asignaciones_equipos').update({
-        config_deseada: payload,
-        updated_at: new Date().toISOString()
-      }).eq('mac', device.mac);
-    } catch (e) {
-      console.warn(e);
-    }
-
-    setTimeout(() => setHalMsg(''), 4500);
-  };
-
-  const handleToggleManualRelay = (canal, currentState) => {
-    sendCommand(device.mac, {
-      cmd: 'SET_RELAY',
-      canal: canal,
-      val: !currentState
-    });
-  };
-
-  const [alias, setAlias] = useState(device?.meta?.alias || `EQUIPO [${device.mac.slice(-4)}]`);
-  const [cliente, setCliente] = useState(device?.meta?.cliente || 'Central Hospitalaria');
-  const [modelo, setModelo] = useState(device?.meta?.modelo || 'HKL-EA8 Modular');
-  const [guardandoFicha, setGuardandoFicha] = useState(false);
-
-  const [maintFecha, setMaintFecha] = useState('');
-  const [maintTipo, setMaintTipo] = useState('PREVENTIVO_GENERAL');
-  const [maintTecnico, setMaintTecnico] = useState('');
-  const [maintNotas, setMaintNotas] = useState('');
-
-  const handleGuardarFicha = async (e) => {
-    e.preventDefault();
-    setGuardandoFicha(true);
-    try {
-      const metaPayload = {
-        mac: device.mac,
-        alias,
-        cliente,
-        modelo,
-        updated_at: new Date().toISOString()
-      };
-      await supabase.from('asignaciones_equipos').upsert(metaPayload, { onConflict: 'mac' });
-      sendCommand(device.mac, { cmd: 'SET_META', ...metaPayload });
-      alert('Ficha guardada en Supabase Cloud');
-    } catch (err) {
-      alert('Error: ' + err.message);
-    } finally {
-      setGuardandoFicha(false);
-    }
-  };
-
-  const handleGuardarMantenimiento = async (e) => {
-    e.preventDefault();
-    try {
-      await supabase.from('mantenimientos_equipos').insert([{
-        mac: device.mac,
-        tipo_servicio: maintTipo,
-        tecnico_responsable: maintTecnico,
-        descripcion: `FECHA:${maintFecha} | ALERTA_${alertaPct}% | ${maintNotas}`,
-        ciclos_al_momento: ciclos,
-        created_at: new Date().toISOString()
-      }]);
-      alert('Mantenimiento agendado en Supabase Cloud');
-      setMaintNotas('');
-    } catch (err) {
-      alert('Error: ' + err.message);
+    setHalMsg('Enviando orden física SCAN_HARDWARE a la placa...');
+    if (sendCommand) {
+      sendCommand(device.mac, { cmd: 'SCAN_HARDWARE' });
     }
   };
 
   return (
-    <div className="flex flex-col gap-4 w-full font-mono text-xs">
+    <div className="flex flex-col gap-4 w-full font-mono text-xs select-none">
       
-      {/* BANNER ROJO DE BLOQUEO CRÍTICO AL 100% */}
+      {/* BANNER DE FUERA DE SERVICIO POR ODÓMETRO */}
       {isBloqueado100 && (
         <div className="bg-rose-600/90 border-2 border-rose-400 p-3.5 rounded-2xl text-white flex items-center justify-between shadow-2xl animate-pulse">
           <div className="flex items-center gap-2.5">
             <ShieldAlert className="w-6 h-6 text-yellow-300 shrink-0" />
             <div>
-              <p className="font-bold text-sm tracking-wider">🚨 EQUIPO FUERA DE SERVICIO // BLOQUEO POR MANTENIMIENTO ALCANZADO (100%)</p>
-              <p className="text-[11px] text-rose-200">El equipo ha cumplido su cuota máxima ({ciclos}/{limite} ciclos). Las salidas han sido desactivadas por seguridad.</p>
+              <p className="font-bold text-sm tracking-wider">🚨 EQUIPO FUERA DE SERVICIO // PROTOCOLO DE MANTENIMIENTO PREVENTIVO REQUERIDO</p>
+              <p className="text-[11px] text-rose-200">El equipo ha cumplido su intervalo operativo ({ciclos}/{limite} ciclos). Salidas inhibidas por seguridad clínica.</p>
             </div>
           </div>
           <button
             onClick={() => sendCommand(device.mac, { cmd: 'RESET_ODOMETRO' })}
             className="px-3 py-1.5 bg-white text-rose-700 hover:bg-slate-100 font-bold text-xs rounded-xl shadow-lg shrink-0 font-sans"
           >
-            Reactivar Equipo (Reset Odómetro)
+            Reautorizar Servicio (Reset Odómetro)
           </button>
         </div>
       )}
 
-      {/* Cabecera */}
+      {/* CABECERA PRINCIPAL */}
       <div className="ultra-glass p-4 rounded-2xl border border-cyan-500/30 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
         <div className="flex items-center gap-3">
           {!isKioskMode && (
@@ -435,33 +328,27 @@ export default function DeviceDetailView({
 
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-lg font-bold text-white tracking-wide">{alias.toUpperCase()}</h2>
-              <span className={`px-2 py-0.5 rounded text-[10px] font-bold border flex items-center gap-1 ${
-                isVehicle ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' : 
-                isPlc ? 'bg-purple-500/20 text-purple-300 border-purple-500/40' :
-                'bg-cyan-500/20 text-cyan-300 border-cyan-400'
-              }`}>
-                {isVehicle ? <Car className="w-3 h-3" /> : isPlc ? <Cpu className="w-3 h-3" /> : <Activity className="w-3 h-3" />}
-                {tipoEquipo}
+              <h2 className="text-base sm:text-lg font-bold text-white tracking-wide">
+                {device?.meta?.alias?.toUpperCase() || `EQUIPO [${device.mac.slice(-4)}]`}
+              </h2>
+              <span className="px-2 py-0.5 rounded text-[10px] font-bold border bg-cyan-500/20 text-cyan-300 border-cyan-400">
+                CLASE B CLÍNICO
               </span>
-
-              {isBloqueado100 ? (
-                <span className="px-2 py-0.5 rounded text-[10px] bg-rose-500/20 text-rose-300 border border-rose-500 font-bold">
-                  ⛔ FUERA DE SERVICIO (100%)
-                </span>
-              ) : isAlertaActiva ? (
-                <span className="px-2 py-0.5 rounded text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500 font-bold flex items-center gap-1">
-                  <BellRing className="w-3 h-3" /> PRE-AVISO MANTENIMIENTO ({pctMant}%)
-                </span>
-              ) : null}
+              <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                enCicloActivo 
+                  ? 'bg-amber-500/20 text-amber-300 border-amber-400 animate-pulse' 
+                  : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+              }`}>
+                {faseEnVivo}
+              </span>
             </div>
             <p className="text-xs text-cyan-300">
-              MAC: {device.mac} • {cliente} • {modelo}
+              MAC: {device.mac} • {device?.meta?.cliente || 'Central Hospitalaria'} • {device?.meta?.modelo || 'HKL-EA8 Industrial'}
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <ClinicalTooltip
             title={CLINICAL_HELP.btn_anclar_terminal.title}
             description={CLINICAL_HELP.btn_anclar_terminal.desc}
@@ -491,7 +378,7 @@ export default function DeviceDetailView({
         </div>
       </div>
 
-      {/* Pestañas de Navegación */}
+      {/* PESTAÑAS DE NAVEGACIÓN */}
       <div className="flex gap-2 overflow-x-auto pb-1 border-b border-slate-800">
         <button
           onClick={() => setActiveTab('sensores')}
@@ -499,8 +386,8 @@ export default function DeviceDetailView({
             activeTab === 'sensores' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white bg-slate-900/60'
           }`}
         >
-          {isVehicle ? <Car className="w-4 h-4" /> : isPlc ? <Cpu className="w-4 h-4" /> : <Activity className="w-4 h-4" />}
-          <span>{isVehicle ? 'Cockpit Vehicular' : isPlc ? 'Matriz I/O Soft-PLC' : 'Sensores & Esterilización'}</span>
+          <Activity className="w-4 h-4" />
+          <span>Cabina de Control & Ciclos</span>
         </button>
 
         {canEditHardware && (
@@ -511,258 +398,302 @@ export default function DeviceDetailView({
             }`}
           >
             <Cpu className="w-4 h-4" />
-            <span>Escáner I2C & Mapeo de Pines</span>
+            <span>Escáner I2C & Mapeo de Silicio</span>
           </button>
         )}
 
-        {canEditHardware && isAutoclave && (
-          <button
-            onClick={() => setActiveTab('nvs')}
-            className={`py-2 px-3.5 rounded-xl text-xs font-bold flex items-center gap-1.5 whitespace-nowrap transition-all ${
-              activeTab === 'nvs' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white bg-slate-900/60'
-            }`}
-          >
-            <Sliders className="w-4 h-4" />
-            <span>Ajustes NVS & Parámetros</span>
-          </button>
-        )}
-
-        {tieneReportes && (
-          <button
-            onClick={() => setActiveTab('historial')}
-            className={`py-2 px-3.5 rounded-xl text-xs font-bold flex items-center gap-1.5 whitespace-nowrap transition-all ${
-              activeTab === 'historial' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white bg-slate-900/60'
-            }`}
-          >
-            <History className="w-4 h-4" />
-            <span>Historial de Ciclos</span>
-          </button>
-        )}
+        <button
+          onClick={() => setActiveTab('historial')}
+          className={`py-2 px-3.5 rounded-xl text-xs font-bold flex items-center gap-1.5 whitespace-nowrap transition-all ${
+            activeTab === 'historial' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white bg-slate-900/60'
+          }`}
+        >
+          <History className="w-4 h-4" />
+          <span>Historial Clínico (ISO 17665)</span>
+        </button>
 
         {canEditHardware && (
-          <>
-            <button
-              onClick={() => setActiveTab('ficha')}
-              className={`py-2 px-3.5 rounded-xl text-xs font-bold flex items-center gap-1.5 whitespace-nowrap transition-all ${
-                activeTab === 'ficha' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white bg-slate-900/60'
-              }`}
-            >
-              <Building2 className="w-4 h-4" />
-              <span>Ficha Cliente</span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('mantenimiento')}
-              className={`py-2 px-3.5 rounded-xl text-xs font-bold flex items-center gap-1.5 whitespace-nowrap transition-all ${
-                activeTab === 'mantenimiento' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white bg-slate-900/60'
-              }`}
-            >
-              <Wrench className="w-4 h-4" />
-              <span>Mantenimiento & Odómetro</span>
-            </button>
-          </>
+          <button
+            onClick={() => setActiveTab('mantenimiento')}
+            className={`py-2 px-3.5 rounded-xl text-xs font-bold flex items-center gap-1.5 whitespace-nowrap transition-all ${
+              activeTab === 'mantenimiento' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white bg-slate-900/60'
+            }`}
+          >
+            <Wrench className="w-4 h-4" />
+            <span>Mantenimiento & Odómetro</span>
+          </button>
         )}
       </div>
 
-      {/* PESTAÑA PRINCIPAL ADAPTATIVA */}
+      {/* ========================================================================= */}
+      {/* 1. CABINA PRINCIPAL: CONTROL DE CICLOS, BYPASSES Y TELEMETRÍA EN VIVO     */}
+      {/* ========================================================================= */}
       {activeTab === 'sensores' && (
         <div className="space-y-4">
           
-          {/* MODO A: VEHÍCULO */}
-          {isVehicle && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <div className="ultra-glass p-3.5 rounded-xl border border-amber-500/30">
-                  <span className="text-[10px] text-amber-400 block mb-1">ESTADO DEL MOTOR</span>
-                  <p className="text-xl font-bold text-white truncate">{d?.fase || 'APAGADO'}</p>
-                  <span className="text-[10px] text-slate-400">Core 1 Soft-PLC</span>
-                </div>
+          {/* TARJETAS DE MAGNITUDES TERMODINÁMICAS EN TIEMPO REAL */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="ultra-glass p-3.5 rounded-xl border border-cyan-500/30 text-center">
+              <span className="text-[10px] font-mono text-cyan-400 block mb-1">TEMPERATURA CÁMARA</span>
+              <p className="text-2xl font-bold font-mono text-white">{tempCamara.toFixed(1)} °C</p>
+              <span className="text-[10px] text-slate-400">Sensor PT100 / A0</span>
+            </div>
 
-                <div className="ultra-glass p-3.5 rounded-xl border border-emerald-500/30">
-                  <span className="text-[10px] text-emerald-400 block mb-1">BATERÍA 12V</span>
-                  <p className="text-2xl font-bold text-emerald-300">{(d?.bateria_v || 12.6).toFixed(1)} V</p>
-                  <span className="text-[10px] text-slate-400">HKL-EA8 DC 12-24V</span>
-                </div>
+            <div className="ultra-glass p-3.5 rounded-xl border border-pink-500/30 text-center">
+              <span className="text-[10px] font-mono text-pink-400 block mb-1">PRESIÓN VAPOR</span>
+              <p className="text-2xl font-bold font-mono text-white">{presionBar.toFixed(2)} bar</p>
+              <span className="text-[10px] text-slate-400">Transductor / A1</span>
+            </div>
 
-                <div className="ultra-glass p-3.5 rounded-xl border border-cyan-500/30">
-                  <span className="text-[10px] text-cyan-400 block mb-1">ALTERNADOR (D+)</span>
-                  <p className="text-lg font-bold text-white">
-                    {entradasPlc.IN2 ? '🟢 CARGA 14V' : '⚪ PARADO'}
-                  </p>
-                  <span className="text-[10px] text-slate-400">Entrada IN2</span>
-                </div>
+            <div className="ultra-glass p-3.5 rounded-xl border border-emerald-500/30 text-center">
+              <span className="text-[10px] font-mono text-emerald-400 block mb-1">LETALIDAD (F0)</span>
+              <p className="text-2xl font-bold font-mono text-emerald-300">{f0Score.toFixed(1)} min</p>
+              <span className="text-[10px] text-emerald-400/80">Meta ISO ≥ 15m</span>
+            </div>
 
-                <div className="ultra-glass p-3.5 rounded-xl border border-indigo-500/30">
-                  <span className="text-[10px] text-indigo-400 block mb-1">ENLACE FÍSICO</span>
-                  <p className="text-lg font-bold text-white">RJ45 EN VIVO</p>
-                  <span className="text-[10px] text-slate-400">800ms Heartbeat</span>
+            <div className="ultra-glass p-3.5 rounded-xl border border-amber-500/30 text-center">
+              <span className="text-[10px] font-mono text-amber-400 block mb-1">TIEMPO RESTANTE</span>
+              <p className="text-2xl font-bold font-mono text-white">
+                {Math.floor(segRestantes / 60)}:{(segRestantes % 60).toString().padStart(2, '0')}
+              </p>
+              <span className="text-[10px] text-slate-400">Core 1 Clock</span>
+            </div>
+          </div>
+
+          {/* BARRA DE MANDO OPERATIVO Y DISPARO DE PROGRAMAS */}
+          <div className="ultra-glass p-4 rounded-xl border border-cyan-500/40 space-y-3">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-800 pb-2">
+              <span className="text-xs font-bold text-white flex items-center gap-1.5 uppercase">
+                <Flame className="w-4 h-4 text-amber-400" />
+                Mando de Operación de Ciclos:
+              </span>
+              <span className="text-[10px] text-slate-400">
+                Selecciona un programa clínico y pulsa iniciar
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Selector de Programas */}
+              <div className="sm:col-span-2">
+                <label className="text-slate-300 block text-[10px] mb-1">Programa Clínico Normativo (EN 13060):</label>
+                <select
+                  disabled={enCicloActivo}
+                  value={programaSeleccionado}
+                  onChange={(e) => setProgramaSeleccionado(Number(e.target.value))}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white font-bold text-xs focus:border-cyan-400 disabled:opacity-50"
+                >
+                  <option value={1}>P1: 134°C Instrumental Quirúrgico (4 min meseta, 3 min secado)</option>
+                  <option value={2}>P2: 121°C Material Termolábil / Gomas (15 min meseta, 5 min secado)</option>
+                  <option value={3}>P3: 134°C Ciclo Prion Inactivación Proteica (18 min meseta)</option>
+                  <option value={4}>P4: 121°C Líquidos / Soluciones Despresurización Lenta (5 min)</option>
+                  <option value={5}>P5: Test Rápido de Penetración (10 min)</option>
+                  <option value={6}>⚡ P6: Test Ultrarrápido de Banco (1 min meseta - Prueba de Mesa)</option>
+                </select>
+              </div>
+
+              {/* Botones de Control Iniciar / Parar */}
+              <div className="flex items-end gap-2">
+                {enCicloActivo ? (
+                  <button
+                    type="button"
+                    onClick={handleParoEmergencia}
+                    className="w-full py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-rose-600/30 animate-pulse"
+                  >
+                    <Square className="w-4 h-4 fill-white" />
+                    <span>PARO DE EMERGENCIA</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleIniciarCicloClinico}
+                    disabled={isBloqueado100}
+                    className="w-full py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:opacity-90 text-white font-bold rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/25 disabled:opacity-50"
+                  >
+                    <Play className="w-4 h-4 fill-white" />
+                    <span>INICIAR CICLO P{programaSeleccionado}</span>
+                  </button>
+                )}
+
+                {faseEnVivo === 'CANCELADO' && (
+                  <button
+                    type="button"
+                    onClick={handleRestablecerAlarma}
+                    className="p-2.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded-xl"
+                    title="Restablecer Alarma y volver a reposo"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Mandos de Puerta Neumática */}
+            <div className="flex items-center justify-between pt-2 border-t border-slate-800 text-[11px]">
+              <span className="text-slate-400">Control Neumático de Puerta:</span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleCerrarSelloPuerta}
+                  className="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 hover:border-cyan-400 text-slate-200 font-bold flex items-center gap-1"
+                >
+                  <Lock className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Inflar / Sellar Puerta</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAbrirPuertaSegura}
+                  className="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 hover:border-amber-400 text-slate-200 font-bold flex items-center gap-1"
+                >
+                  <Wind className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Apertura Despresurizada</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* PANEL DE BYPASSES Y SIMULACIÓN DE SENSORES EN VIVO */}
+          <div className="ultra-glass p-4 rounded-xl border border-amber-500/30 space-y-3">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+              <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5 uppercase">
+                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                Bypasses de Banco & Simulación de Sensores (Para Pruebas en Mesa):
+              </span>
+              <span className="text-[10px] text-slate-400">
+                Activa para simular que el sensor está físicamente conectado
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {/* Bypass Puerta */}
+              <div 
+                onClick={() => handleToggleBypass('puerta')}
+                className={`p-2.5 rounded-xl border cursor-pointer flex items-center justify-between transition-all ${
+                  bypasses.puerta 
+                    ? 'bg-emerald-950/40 border-emerald-500/60 text-emerald-300' 
+                    : 'bg-slate-950 border-slate-800 text-slate-500'
+                }`}
+              >
+                <div>
+                  <span className="font-bold text-[10px] block">SIMULAR PUERTA</span>
+                  <span className="text-[9px]">{bypasses.puerta ? '🟢 CERRADA (BYPASS)' : '⚪ FÍSICA'}</span>
+                </div>
+                <div className={`w-8 h-4 rounded-full border p-0.5 flex items-center ${bypasses.puerta ? 'justify-end bg-emerald-500/20 border-emerald-400' : 'justify-start bg-slate-900 border-slate-700'}`}>
+                  <span className={`w-3 h-3 rounded-full ${bypasses.puerta ? 'bg-emerald-400' : 'bg-slate-600'}`}></span>
                 </div>
               </div>
 
-              <div className="ultra-glass p-4 rounded-xl border border-amber-500/30 space-y-3">
-                <span className="text-xs font-bold text-amber-300 block uppercase">
-                  Mando de Control Remoto de Vehículo:
-                </span>
-                
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <button
-                    onClick={requestStartVehicle}
-                    disabled={isBloqueado100}
-                    className="py-3.5 px-4 bg-gradient-to-r from-emerald-500 to-teal-600 hover:opacity-90 font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/25 text-white disabled:opacity-40"
-                  >
-                    <Key className="w-4 h-4" />
-                    <span>⚡ ARRANQUE REMOTO (START)</span>
-                  </button>
+              {/* Bypass Sello */}
+              <div 
+                onClick={() => handleToggleBypass('sello')}
+                className={`p-2.5 rounded-xl border cursor-pointer flex items-center justify-between transition-all ${
+                  bypasses.sello 
+                    ? 'bg-emerald-950/40 border-emerald-500/60 text-emerald-300' 
+                    : 'bg-slate-950 border-slate-800 text-slate-500'
+                }`}
+              >
+                <div>
+                  <span className="font-bold text-[10px] block">SIMULAR SELLO</span>
+                  <span className="text-[9px]">{bypasses.sello ? '🟢 SELLADO OK' : '⚪ FÍSICO'}</span>
+                </div>
+                <div className={`w-8 h-4 rounded-full border p-0.5 flex items-center ${bypasses.sello ? 'justify-end bg-emerald-500/20 border-emerald-400' : 'justify-start bg-slate-900 border-slate-700'}`}>
+                  <span className={`w-3 h-3 rounded-full ${bypasses.sello ? 'bg-emerald-400' : 'bg-slate-600'}`}></span>
+                </div>
+              </div>
 
-                  <button
-                    onClick={() => handleToggleManualRelay(1, Boolean(relesPlc.R1))}
-                    disabled={isBloqueado100}
-                    className={`py-3.5 px-4 font-bold rounded-xl text-xs flex items-center justify-center gap-2 border transition-all disabled:opacity-40 ${
-                      relesPlc.R1 
-                        ? 'bg-amber-500/25 text-amber-300 border-amber-400 shadow-[0_0_12px_rgba(245,158,11,0.3)]' 
-                        : 'bg-slate-900 border-slate-700 text-slate-300 hover:border-amber-400'
-                    }`}
-                  >
-                    <Zap className="w-4 h-4" />
-                    <span>IGNICIÓN: {relesPlc.R1 ? 'CONECTADA (ON)' : 'CORTADA (OFF)'}</span>
-                  </button>
+              {/* Bypass Recámara */}
+              <div 
+                onClick={() => handleToggleBypass('recamara')}
+                className={`p-2.5 rounded-xl border cursor-pointer flex items-center justify-between transition-all ${
+                  bypasses.recamara 
+                    ? 'bg-emerald-950/40 border-emerald-500/60 text-emerald-300' 
+                    : 'bg-slate-950 border-slate-800 text-slate-500'
+                }`}
+              >
+                <div>
+                  <span className="font-bold text-[10px] block">PRESIÓN CÁMARA</span>
+                  <span className="text-[9px]">{bypasses.recamara ? '🟢 BYPASS ACTIVO' : '⚪ FÍSICO'}</span>
+                </div>
+                <div className={`w-8 h-4 rounded-full border p-0.5 flex items-center ${bypasses.recamara ? 'justify-end bg-emerald-500/20 border-emerald-400' : 'justify-start bg-slate-900 border-slate-700'}`}>
+                  <span className={`w-3 h-3 rounded-full ${bypasses.recamara ? 'bg-emerald-400' : 'bg-slate-600'}`}></span>
+                </div>
+              </div>
 
-                  <button
-                    onClick={requestStopVehicle}
-                    className="py-3.5 px-4 bg-rose-600 hover:bg-rose-500 font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg text-white"
-                  >
-                    <PowerOff className="w-4 h-4" />
-                    <span>🛑 CORTE MOTOR / INMOVILIZADOR</span>
-                  </button>
+              {/* Bypass Caldera */}
+              <div 
+                onClick={() => handleToggleBypass('caldera')}
+                className={`p-2.5 rounded-xl border cursor-pointer flex items-center justify-between transition-all ${
+                  bypasses.caldera 
+                    ? 'bg-emerald-950/40 border-emerald-500/60 text-emerald-300' 
+                    : 'bg-slate-950 border-slate-800 text-slate-500'
+                }`}
+              >
+                <div>
+                  <span className="font-bold text-[10px] block">VAPOR CALDERA</span>
+                  <span className="text-[9px]">{bypasses.caldera ? '🟢 LISTA (BYPASS)' : '⚪ FÍSICA'}</span>
+                </div>
+                <div className={`w-8 h-4 rounded-full border p-0.5 flex items-center ${bypasses.caldera ? 'justify-end bg-emerald-500/20 border-emerald-400' : 'justify-start bg-slate-900 border-slate-700'}`}>
+                  <span className={`w-3 h-3 rounded-full ${bypasses.caldera ? 'bg-emerald-400' : 'bg-slate-600'}`}></span>
                 </div>
               </div>
             </div>
-          )}
+          </div>
 
-          {/* MODO B: UNIVERSAL_PLC */}
-          {isPlc && (
-            <div className="space-y-4">
-              <div className="ultra-glass p-4 rounded-xl border border-purple-500/30 space-y-3">
-                <span className="text-xs font-bold text-purple-300 block uppercase">
-                  Matriz Soft-PLC: 8 Relés de Salida (Conmutación Interactiva HKL-EA8):
-                </span>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {[1, 2, 3, 4, 5, 6, 7, 8].map(ch => (
-                    <div key={ch} className="p-3 bg-slate-900/90 rounded-xl border border-slate-800 flex justify-between items-center">
-                      <div>
-                        <span className="text-white font-bold block">{nombresReles[`R${ch}`] || `Relé ${ch}`}</span>
-                        <span className="text-[10px] text-slate-400">{relesPlc[`R${ch}`] ? '🟢 ACTIVO' : '⚪ OFF'}</span>
-                      </div>
-                      <button
-                        onClick={() => handleToggleManualRelay(ch, Boolean(relesPlc[`R${ch}`]))}
-                        disabled={isBloqueado100}
-                        className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all disabled:opacity-40 ${
-                          relesPlc[`R${ch}`] ? 'bg-emerald-500 text-slate-950 shadow-[0_0_10px_#10b981]' : 'bg-slate-800 text-slate-300 hover:text-white'
-                        }`}
-                      >
-                        {relesPlc[`R${ch}`] ? 'ON' : 'OFF'}
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="ultra-glass p-4 rounded-xl border border-slate-800 space-y-3">
-                <span className="text-xs font-bold text-cyan-300 block uppercase">
-                  Lectura en Vivo de las 8 Entradas Optoacopladas (NPN/PNP):
-                </span>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {[1, 2, 3, 4, 5, 6, 7, 8].map(inNum => (
-                    <div key={inNum} className="p-2.5 bg-slate-950 rounded-lg border border-slate-800 flex justify-between items-center">
-                      <span className="text-slate-300">{nombresEntradas[`IN${inNum}`] || `Entrada IN${inNum}`}</span>
-                      <span className={`font-bold px-2 py-0.5 rounded text-[10px] ${
-                        entradasPlc[`IN${inNum}`] ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/40' : 'bg-slate-900 text-slate-500'
-                      }`}>
-                        {entradasPlc[`IN${inNum}`] ? 'CERRADO (1)' : 'ABIERTO (0)'}
+          {/* MATRIZ DE SUPERVISIÓN Y CONTROL MANUAL DE SALIDAS FÍSICAS (RELÉS R1 A R8) */}
+          <div className="ultra-glass p-4 rounded-xl border border-slate-800 space-y-3">
+            <span className="text-xs font-bold text-cyan-300 block uppercase">
+              Estado de Salidas Físicas HKL-EA8 (PCF8574 en 0x24):
+            </span>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {[1, 2, 3, 4, 5, 6, 7, 8].map(ch => {
+                const isActive = Boolean(relesFisicos[`R${ch}`]);
+                return (
+                  <div key={ch} className="p-2.5 bg-slate-950/90 rounded-xl border border-slate-800 flex justify-between items-center">
+                    <div>
+                      <span className="text-white font-bold block text-[11px] truncate max-w-[110px]">
+                        R{ch}: {nombresReles[`R${ch}`] || `Relé ${ch}`}
+                      </span>
+                      <span className="text-[9px] text-slate-400">
+                        {isActive ? '🟢 ENERGIZADO' : '⚪ DESACTIVADO'}
                       </span>
                     </div>
-                  ))}
-                </div>
-              </div>
+                    <button
+                      type="button"
+                      disabled={enCicloActivo}
+                      onClick={() => handleToggleManualRelay(ch, isActive)}
+                      className={`px-2.5 py-1 rounded text-[10px] font-bold transition-all disabled:opacity-40 ${
+                        isActive ? 'bg-emerald-500 text-slate-950 shadow-[0_0_10px_#10b981]' : 'bg-slate-800 text-slate-300 hover:text-white'
+                      }`}
+                    >
+                      {isActive ? 'ON' : 'OFF'}
+                    </button>
+                  </div>
+                );
+              })}
             </div>
-          )}
+          </div>
 
-          {/* MODO C: AUTOCLAVE CLÍNICO */}
-          {isAutoclave && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                <div className="ultra-glass p-3.5 rounded-xl border border-cyan-500/30">
-                  <span className="text-[10px] text-cyan-400 block mb-1">TEMPERATURA CÁMARA</span>
-                  <p className="text-2xl font-bold text-white">{(d?.temp_camara || 25.0).toFixed(1)} °C</p>
-                  <span className="text-[10px] text-slate-400">Setpoint: {spTemp}°C</span>
-                </div>
-
-                <div className="ultra-glass p-3.5 rounded-xl border border-pink-500/30">
-                  <span className="text-[10px] text-pink-400 block mb-1">PRESIÓN VAPOR</span>
-                  <p className="text-2xl font-bold text-white">{(d?.presion || 0.0).toFixed(2)} bar</p>
-                  <span className="text-[10px] text-slate-400">Límite: {pMax}b</span>
-                </div>
-
-                <div className="ultra-glass p-3.5 rounded-xl border border-emerald-500/30">
-                  <span className="text-[10px] text-emerald-400 block mb-1">LETALIDAD (F0)</span>
-                  <p className="text-2xl font-bold text-emerald-300">{(device.f0Score || 0.0).toFixed(1)} min</p>
-                  <span className="text-[10px] text-emerald-400/80">ISO 17665</span>
-                </div>
-
-                <div className="ultra-glass p-3.5 rounded-xl border border-amber-500/30">
-                  <span className="text-[10px] text-amber-400 block mb-1">FASE ACTUAL</span>
-                  <p className="text-lg font-bold text-white truncate">{d?.fase || 'ESPERA'}</p>
-                  <span className="text-[10px] text-slate-400">Restante: {Math.floor((d?.seg_restantes || 0)/60)}:{(d?.seg_restantes || 0)%60}</span>
-                </div>
-              </div>
-
-              <div className="flex gap-2.5">
-                <button
-                  onClick={requestStartCycle}
-                  disabled={isBloqueado100}
-                  className="py-3 px-4 bg-gradient-to-r from-cyan-500 to-blue-600 font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg text-white disabled:opacity-40"
-                >
-                  <Play className="w-4 h-4 fill-white" />
-                  <span>Iniciar Ciclo ({spTemp}°C)</span>
-                </button>
-
-                <button
-                  onClick={requestEmergencyStop}
-                  className="py-3 px-4 bg-rose-600 hover:bg-rose-500 font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg text-white"
-                >
-                  <Square className="w-4 h-4 fill-white" />
-                  <span>Paro de Emergencia</span>
-                </button>
-
-                <button
-                  onClick={requestResetAlarm}
-                  className="py-3 px-4 bg-slate-900 border border-slate-700 text-slate-300 rounded-xl text-xs"
-                >
-                  <RotateCcw className="w-4 h-4" />
-                </button>
-              </div>
-
-              <div className="ultra-glass p-4 rounded-2xl border border-cyan-500/30">
-                <h3 className="text-xs font-bold text-cyan-300 mb-3">CURVA TÉRMICA EN TIEMPO REAL (ESP32)</h3>
-                <SterilizationChart telemetryData={device.history || []} />
-              </div>
-            </div>
-          )}
+          {/* GRÁFICA TÉRMICA EN TIEMPO REAL */}
+          <div className="ultra-glass p-4 rounded-2xl border border-cyan-500/30">
+            <h3 className="text-xs font-bold text-cyan-300 mb-3">CURVA TÉRMICA & PRESIÓN EN TIEMPO REAL (ESP32)</h3>
+            <SterilizationChart telemetryData={device.history || []} />
+          </div>
 
         </div>
       )}
 
-      {/* PESTAÑA: ESCÁNER I2C REAL & CONFIGURACIÓN DE CHIPS CON ADOPCIÓN LCD */}
+      {/* ========================================================================= */}
+      {/* 2. PESTAÑA ESCÁNER I2C EN VIVO                                            */}
+      {/* ========================================================================= */}
       {activeTab === 'hal_scanner' && canEditHardware && (
         <div className="ultra-glass p-5 rounded-2xl border border-amber-500/30 space-y-4">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-amber-500/20 pb-3">
             <div>
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
                 <Cpu className="w-4 h-4 text-amber-400" />
-                Escáner I2C en Vivo & Configuración Integral de Chips Físicos
+                Escáner I2C en Vivo & Chips Físicos de Silicio
               </h3>
               <p className="text-[11px] text-slate-400 mt-0.5">
-                Toca cualquier chip detectado físicamente para configurarlo como Pantalla LCD (16x2 o 20x4), Relés o Entradas.
+                Barrido físico de direcciones 0x01 a 0x7F para verificar chips conectados a la placa.
               </p>
             </div>
 
@@ -772,403 +703,36 @@ export default function DeviceDetailView({
               className="py-2 px-3.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-xl flex items-center gap-1.5 shadow-lg shadow-amber-500/20"
             >
               <Search className={`w-3.5 h-3.5 ${scanningI2C ? 'animate-spin' : ''}`} />
-              <span>{scanningI2C ? 'Barrido Físico en Marcha...' : '🔍 Escanear Bus I2C en Vivo'}</span>
+              <span>{scanningI2C ? 'Barrido Físico en Marcha...' : '🔍 Escanear Bus I2C'}</span>
             </button>
           </div>
 
-          {halMsg && (
-            <div className="p-3 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 rounded-xl flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 shrink-0" />
-              <span>{halMsg}</span>
-            </div>
-          )}
-
-          {/* CHIPS FÍSICOS DETECTADOS SELECCIONABLES */}
-          {chipsDetectados.length > 0 && (
-            <div className="p-4 bg-slate-950/90 rounded-xl border border-amber-500/40 space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-amber-400 font-bold uppercase text-[11px] flex items-center gap-1.5">
-                  <Cpu className="w-4 h-4" />
-                  Chips I2C Físicos Detectados ({chipsDetectados.length}):
-                </span>
-                <span className="text-[10px] text-slate-400">Toca un chip para editar su comportamiento</span>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                {chipsDetectados.map(c => (
-                  <div 
-                    key={c.dir} 
-                    onClick={() => setSelectedChipDir(c.dir)}
-                    className={`p-3 rounded-xl border cursor-pointer transition-all ${
-                      selectedChipDir === c.dir 
-                        ? 'bg-amber-950/60 border-amber-400 shadow-lg shadow-amber-500/20' 
-                        : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
-                    }`}
-                  >
-                    <div className="flex justify-between items-center">
-                      <span className="text-amber-400 font-bold text-sm">{c.dir}</span>
-                      <span className="text-[9px] px-1.5 py-0.2 rounded bg-slate-800 text-cyan-300 font-bold">
-                        {selectedChipDir === c.dir ? 'CONFIGURANDO' : 'SELECCIONAR'}
-                      </span>
-                    </div>
-                    <p className="text-white text-xs font-semibold mt-1 font-sans">{c.desc || c.tipo}</p>
-                  </div>
-                ))}
-              </div>
-
-              {/* CONFIGURADOR DEL CHIP SELECCIONADO (CON OPCIÓN DE LCD 16x2 / 20x4) */}
-              <div className="p-3.5 bg-slate-900/90 rounded-xl border border-slate-800 space-y-3">
-                <div className="flex justify-between items-center border-b border-slate-800 pb-2">
-                  <span className="text-cyan-300 font-bold">
-                    Configurando Chip Físico en Dirección: <strong className="text-amber-400 text-sm">{selectedChipDir}</strong>
-                  </span>
-                  <span className="text-[10px] text-slate-400">Asigna la función que este chip ejecutará</span>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-slate-300 block mb-1">Función que cumplirá este Chip</label>
-                    <select
-                      value={
-                        selectedChipDir === addrLcd ? 'PANTALLA_LCD' :
-                        selectedChipDir === addrRelays ? 'SALIDAS_RELES' :
-                        selectedChipDir === addrInputs ? 'ENTRADAS_DIGITALES' :
-                        selectedChipDir === addrAdc ? 'ADC_ANALOGICO' : 'PANTALLA_LCD'
-                      }
-                      onChange={(e) => {
-                        const rol = e.target.value;
-                        if (rol === 'PANTALLA_LCD') setAddrLcd(selectedChipDir);
-                        else if (rol === 'SALIDAS_RELES') setAddrRelays(selectedChipDir);
-                        else if (rol === 'ENTRADAS_DIGITALES') setAddrInputs(selectedChipDir);
-                        else if (rol === 'ADC_ANALOGICO') setAddrAdc(selectedChipDir);
-                      }}
-                      className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2 text-cyan-300 font-bold"
-                    >
-                      <option value="PANTALLA_LCD">🖥️ Pantalla LCD Alfanumérica (16x2 o 20x4)</option>
-                      <option value="SALIDAS_RELES">⚡ Expansor 8 Relés de Potencia (Salidas)</option>
-                      <option value="ENTRADAS_DIGITALES">📥 Expansor 8 Entradas Optocopladas</option>
-                      <option value="ADC_ANALOGICO">📊 Conversor ADC Analógico (0-10V / 4-20mA)</option>
-                    </select>
-                  </div>
-
-                  {/* Geometría de Pantalla LCD */}
-                  <div>
-                    <label className="text-slate-300 block mb-1">Tamaño / Geometría de Pantalla LCD</label>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => { setAddrLcd(selectedChipDir); setLcdCols(16); setLcdRows(2); }}
-                        className={`flex-1 py-2 rounded-lg font-bold border transition-all ${
-                          addrLcd === selectedChipDir && lcdCols === 16 ? 'bg-amber-500 text-slate-950 border-amber-400' : 'bg-slate-950 text-slate-300 border-slate-700'
-                        }`}
-                      >
-                        16x2 Estándar
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => { setAddrLcd(selectedChipDir); setLcdCols(20); setLcdRows(4); }}
-                        className={`flex-1 py-2 rounded-lg font-bold border transition-all ${
-                          addrLcd === selectedChipDir && lcdCols === 20 ? 'bg-amber-500 text-slate-950 border-amber-400' : 'bg-slate-950 text-slate-300 border-slate-700'
-                        }`}
-                      >
-                        20x4 Grande
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="pt-2 flex justify-between items-center text-[11px] border-t border-slate-800">
-                  <span className="text-slate-400">¿Deseas reiniciar el microcontrolador para limpiar el bus I2C y encender la LCD?</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (confirm(`¿Confirmas configurar la LCD en ${selectedChipDir} (${lcdCols}x${lcdRows}) y reiniciar la placa?`)) {
-                        handleDeployHalMap(true);
-                      }
-                    }}
-                    className="px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 rounded-lg font-bold flex items-center gap-1.5"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                    <span>Guardar y Reiniciar Placa</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* PROGRAMACIÓN DE LAS 8 SALIDAS (CHIP 0x24) */}
-          <div className="p-4 bg-slate-900/90 rounded-xl border border-slate-800 space-y-3">
-            <span className="text-cyan-400 font-bold block uppercase tracking-wider text-[11px] flex items-center gap-2">
-              <Layers className="w-4 h-4" />
-              1. Programación de Salidas (Relés 1 a 8 - Chip {addrRelays}):
-            </span>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              {[1, 2, 3, 4, 5, 6, 7, 8].map(num => (
-                <div key={num} className="p-2.5 bg-slate-950 rounded-lg border border-slate-800 space-y-1.5">
-                  <div className="flex justify-between items-center">
-                    <span className="text-white font-bold text-xs">Salida R{num}:</span>
-                    <button
-                      type="button"
-                      onClick={() => handleToggleManualRelay(num, Boolean(relesPlc[`R${num}`]))}
-                      className={`px-2.5 py-0.5 rounded text-[10px] font-bold ${
-                        relesPlc[`R${num}`] ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-slate-400'
-                      }`}
-                    >
-                      {relesPlc[`R${num}`] ? 'PROBANDO (ON)' : 'TEST (OFF)'}
-                    </button>
-                  </div>
-
-                  <input
-                    type="text"
-                    value={nombresReles[`R${num}`] || ''}
-                    onChange={(e) => setNombresReles(prev => ({ ...prev, [`R${num}`]: e.target.value }))}
-                    placeholder="Escribe el nombre de esta salida (ej: Electroválvula Purga)..."
-                    className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white text-[11px] focus:outline-none focus:border-cyan-400 font-sans"
-                  />
-
-                  <select
-                    value={rolesReles[`R${num}`] || 'MANUAL'}
-                    onChange={(e) => setRolesReles(prev => ({ ...prev, [`R${num}`]: e.target.value }))}
-                    className="w-full bg-slate-900 text-cyan-300 border border-slate-700 rounded px-2 py-1 text-[11px]"
-                  >
-                    <option value="CALENTADOR">♨️ Calentador Vapor / Resistencias</option>
-                    <option value="BOMBA_VACIO">💨 Bomba de Vacío / Secado</option>
-                    <option value="MOTOR_AGITADOR">⚙️ Motor Agitador / Mezclador</option>
-                    <option value="PURGA_VAPOR">💧 Electroválvula de Purga / Escape</option>
-                    <option value="IGNICION_ON">🚗 Ignición Vehículo (ACC/ON)</option>
-                    <option value="STARTER_MOTOR">⚡ Starter Arranque (Pulso ms)</option>
-                    <option value="INMOVILIZADOR">🛑 Inmovilizador / Corte Bomba</option>
-                    <option value="SIRENA_LUCES">🚨 Sirena / Luces Auxiliares</option>
-                    <option value="MANUAL">⚪ Manual / Libre</option>
-                  </select>
+          {chipsDetectados.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
+              {chipsDetectados.map(c => (
+                <div key={c.dir} className="p-3 bg-slate-950 rounded-xl border border-amber-500/40">
+                  <span className="text-amber-400 font-bold text-sm block">{c.dir}</span>
+                  <span className="text-white text-xs font-semibold">{c.desc || 'Dispositivo I2C'}</span>
                 </div>
               ))}
             </div>
-          </div>
-
-          {/* PROGRAMACIÓN DE LAS 8 ENTRADAS (CHIP 0x26) */}
-          <div className="p-4 bg-slate-900/90 rounded-xl border border-slate-800 space-y-3">
-            <span className="text-emerald-400 font-bold block uppercase tracking-wider text-[11px] flex items-center gap-2">
-              <Layers className="w-4 h-4" />
-              2. Programación de Entradas Optoacopladas (IN1 a IN8 - Chip {addrInputs}):
-            </span>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              {[1, 2, 3, 4, 5, 6, 7, 8].map(num => (
-                <div key={num} className="p-2.5 bg-slate-950 rounded-lg border border-slate-800 space-y-1.5">
-                  <div className="flex justify-between items-center">
-                    <span className="text-white font-bold text-xs">Entrada IN{num}:</span>
-                    <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
-                      entradasPlc[`IN${num}`] ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-900 text-slate-500'
-                    }`}>
-                      {entradasPlc[`IN${num}`] ? 'CERRADA (1)' : 'ABIERTA (0)'}
-                    </span>
-                  </div>
-
-                  <input
-                    type="text"
-                    value={nombresEntradas[`IN${num}`] || ''}
-                    onChange={(e) => setNombresEntradas(prev => ({ ...prev, [`IN${num}`]: e.target.value }))}
-                    placeholder="Escribe el nombre del sensor (ej: Presóstato Cámara)..."
-                    className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-white text-[11px] focus:outline-none focus:border-emerald-400 font-sans"
-                  />
-
-                  <select
-                    value={rolesEntradas[`IN${num}`] || 'LIBRE'}
-                    onChange={(e) => setRolesEntradas(prev => ({ ...prev, [`IN${num}`]: e.target.value }))}
-                    className="w-full bg-slate-900 text-emerald-300 border border-slate-700 rounded px-2 py-1 text-[11px]"
-                  >
-                    <option value="SENSOR_PUERTA">🚪 Sensor Fin de Carrera Puerta</option>
-                    <option value="PRESOSTATO">🎚️ Presóstato de Seguridad</option>
-                    <option value="NIVEL_AGUA">💧 Sensor de Nivel de Agua</option>
-                    <option value="SENSOR_FRENO">🛑 Switch Pedal de Freno</option>
-                    <option value="ALTERNADOR_D">⚡ D+ Alternador 14V</option>
-                    <option value="PUERTA_CABINA">🚗 Puerta de Cabina / Chofer</option>
-                    <option value="PARO_EMERGENCIA">🚨 Pulsador Paro de Emergencia</option>
-                    <option value="LIBRE">⚪ Entrada Libre / Genérica</option>
-                  </select>
-                </div>
-              ))}
+          ) : (
+            <div className="p-8 text-center text-slate-500 bg-slate-950 rounded-xl border border-slate-800">
+              Presiona "Escanear Bus I2C" para consultar los chips físicos conectados al ESP32.
             </div>
-          </div>
-
-          <button
-            onClick={() => handleDeployHalMap(false)}
-            className="w-full py-3.5 bg-gradient-to-r from-amber-500 via-emerald-500 to-teal-500 hover:opacity-90 text-slate-950 font-bold rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20"
-          >
-            <Send className="w-4 h-4" />
-            <span>⚡ GRABAR PROGRAMACIÓN EN FLASH LITTLEFS & NVS DEL MICROCONTROLADOR</span>
-          </button>
+          )}
         </div>
       )}
 
-      {/* PESTAÑA: MANTENIMIENTO CON SLIDER DEL 10% AL 100% Y GUARDADO REAL */}
-      {activeTab === 'mantenimiento' && canEditHardware && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 space-y-4">
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              <Wrench className="w-4 h-4 text-cyan-400" />
-              Odómetro Clínico & Alertas Preventivas
-            </h3>
-
-            {nvsMsg && (
-              <div className="p-3 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 rounded-xl flex items-center gap-2">
-                <CheckCircle2 className="w-4 h-4 shrink-0" />
-                <span>{nvsMsg}</span>
-              </div>
-            )}
-
-            <div className="p-4 bg-slate-900/80 rounded-xl border border-slate-800 space-y-3">
-              <div className="flex justify-between text-xs text-slate-300">
-                <span>Ciclos Completados Reales:</span>
-                <span className="font-bold text-cyan-300">{ciclos} / {limite} ciclos</span>
-              </div>
-
-              <div className="w-full bg-slate-800 rounded-full h-3 overflow-hidden border border-slate-700">
-                <div
-                  className={`h-full ${
-                    pctMant >= 100 ? 'bg-rose-500' : 
-                    pctMant >= alertaPct ? 'bg-amber-400' : 'bg-emerald-400'
-                  }`}
-                  style={{ width: `${pctMant}%` }}
-                ></div>
-              </div>
-
-              <p className="text-[11px] text-slate-400">
-                Uso actual: <strong className={pctMant >= 100 ? 'text-rose-400' : pctMant >= alertaPct ? 'text-amber-400' : 'text-emerald-400'}>{pctMant}%</strong> del ciclo de vida.
-              </p>
-
-              {/* SLIDER CONFIGURABLE (10% AL 100%) CON GUARDADO REAL */}
-              <div className="pt-2 border-t border-slate-800 space-y-2">
-                <label className="text-slate-300 flex justify-between">
-                  <span>Disparar Alerta Preventiva en:</span>
-                  <span className="text-amber-300 font-bold">{alertaPct}% del Odómetro ({Math.round(limite * (alertaPct / 100))} ciclos)</span>
-                </label>
-                <input
-                  type="range"
-                  min="10"
-                  max="100"
-                  step="5"
-                  value={alertaPct}
-                  onChange={(e) => setAlertaPct(Number(e.target.value))}
-                  className="w-full accent-amber-400 cursor-pointer"
-                />
-                <span className="text-[10px] text-slate-500 block">
-                  Al alcanzar este porcentaje, la web y el bot de Telegram activarán la advertencia de mantenimiento preventivo.
-                </span>
-              </div>
-
-              <div className="flex gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={handleGuardarUmbralAlerta}
-                  disabled={savingAlerta}
-                  className="flex-1 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 text-white rounded-lg font-bold shadow-md"
-                >
-                  {savingAlerta ? 'Guardando...' : '💾 Guardar Umbral Alerta'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => sendCommand(device.mac, { cmd: 'RESET_ODOMETRO' })}
-                  className="py-2 px-3 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg font-bold"
-                >
-                  Reiniciar Odómetro
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <form onSubmit={handleGuardarMantenimiento} className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 space-y-3">
-            <h3 className="text-sm font-bold text-white">Agendar Servicio Preventivo</h3>
-            <input
-              type="date"
-              required
-              value={maintFecha}
-              onChange={(e) => setMaintFecha(e.target.value)}
-              className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white"
-            />
-            <input
-              type="text"
-              required
-              placeholder="Técnico responsable..."
-              value={maintTecnico}
-              onChange={(e) => setMaintTecnico(e.target.value)}
-              className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white"
-            />
-            <input
-              type="text"
-              placeholder="Notas u observaciones del servicio..."
-              value={maintNotas}
-              onChange={(e) => setMaintNotas(e.target.value)}
-              className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white"
-            />
-            <button
-              type="submit"
-              className="w-full py-2 bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold rounded-lg text-xs shadow-lg"
-            >
-              Agendar en Supabase Cloud
-            </button>
-          </form>
-        </div>
-      )}
-
-      {/* PESTAÑA: AJUSTES NVS */}
-      {activeTab === 'nvs' && canEditHardware && isAutoclave && (
-        <form onSubmit={(e) => { e.preventDefault(); handleDeployHalMap(false); }} className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 space-y-4">
-          <h3 className="text-sm font-bold text-white flex items-center gap-2 border-b border-cyan-500/20 pb-2">
-            <Sliders className="w-4 h-4 text-cyan-400" />
-            Parámetros Operacionales NVS Flash
-          </h3>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
-              <label className="text-slate-300 block mb-1">Temperatura Setpoint (°C)</label>
-              <input
-                type="number"
-                step="0.5"
-                value={spTemp}
-                onChange={(e) => setSpTemp(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-white"
-              />
-            </div>
-
-            <div>
-              <label className="text-slate-300 block mb-1">Tiempo de Meseta (min)</label>
-              <input
-                type="number"
-                value={tCiclo}
-                onChange={(e) => setTCiclo(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-white"
-              />
-            </div>
-
-            <div>
-              <label className="text-slate-300 block mb-1">Límite Sobrepresión (bar)</label>
-              <input
-                type="number"
-                step="0.05"
-                value={pMax}
-                onChange={(e) => setPMax(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-white"
-              />
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            className="w-full py-3 bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold rounded-xl shadow-lg"
-          >
-            Transmitir Parámetros a Flash NVS
-          </button>
-        </form>
-      )}
-
-      {/* PESTAÑA: HISTORIAL */}
-      {activeTab === 'historial' && tieneReportes && (
+      {/* ========================================================================= */}
+      {/* 3. PESTAÑA HISTORIAL CLÍNICO Y REPORTES (ISO 17665)                       */}
+      {/* ========================================================================= */}
+      {activeTab === 'historial' && (
         <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 space-y-4">
           <div className="flex justify-between items-center border-b border-cyan-500/20 pb-3">
             <h3 className="text-sm font-bold text-white flex items-center gap-2">
               <History className="w-4 h-4 text-cyan-400" />
-              Historial de Ciclos en la Nube [{device.mac}]
+              Expedientes de Esterilización en Supabase [{device.mac}]
             </h3>
             <button
               onClick={fetchMacLogs}
@@ -1184,26 +748,36 @@ export default function DeviceDetailView({
                 <tr>
                   <th className="p-3">FECHA</th>
                   <th className="p-3">ID SESIÓN</th>
-                  <th className="p-3">MÁXIMOS</th>
+                  <th className="p-3">PROGRAMA</th>
+                  <th className="p-3">PICO (T° / P)</th>
                   <th className="p-3">DIAGNÓSTICO</th>
-                  <th className="p-3 text-center">VER</th>
+                  <th className="p-3 text-center">CERTIFICADO</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 text-slate-300">
                 {loadingLogs ? (
-                  <tr><td colSpan="5" className="p-6 text-center text-slate-400">Consultando Supabase...</td></tr>
+                  <tr><td colSpan="6" className="p-8 text-center text-slate-400">Consultando Supabase...</td></tr>
                 ) : macLogs.length === 0 ? (
-                  <tr><td colSpan="5" className="p-6 text-center text-slate-400">Sin ciclos registrados aún.</td></tr>
+                  <tr><td colSpan="6" className="p-8 text-center text-slate-400">Sin ciclos registrados aún en la nube.</td></tr>
                 ) : (
                   macLogs.map((log) => (
                     <tr key={log.session_id} onClick={() => setInspectedSession(log)} className="hover:bg-slate-800/40 cursor-pointer">
-                      <td className="p-3 text-white">{new Date(log.created_at || log.fecha).toLocaleString()}</td>
+                      <td className="p-3 text-white">{new Date(log.created_at || log.fecha).toLocaleDateString()}</td>
                       <td className="p-3 text-cyan-400">{log.session_id}</td>
+                      <td className="p-3">{log.programa || '134°C'}</td>
                       <td className="p-3">T: {parseFloat(log.temp_max||0).toFixed(1)}°C | P: {parseFloat(log.pres_max||0).toFixed(2)}b</td>
-                      <td className="p-3">{log.diagnostico_principal || 'CONFORME'}</td>
+                      <td className="p-3">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                          (log.diagnostico_principal || '').includes('CONFORME') 
+                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' 
+                            : 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                        }`}>
+                          {log.diagnostico_principal || 'CONFORME'}
+                        </span>
+                      </td>
                       <td className="p-3 text-center">
-                        <button onClick={() => setInspectedSession(log)} className="p-1 bg-slate-800 rounded">
-                          <Eye className="w-3.5 h-3.5 text-cyan-300" />
+                        <button onClick={() => setInspectedSession(log)} className="p-1 bg-slate-800 hover:bg-slate-700 rounded text-cyan-300">
+                          <Eye className="w-3.5 h-3.5" />
                         </button>
                       </td>
                     </tr>
@@ -1215,58 +789,45 @@ export default function DeviceDetailView({
         </div>
       )}
 
-      {/* PESTAÑA: FICHA CLIENTE */}
-      {activeTab === 'ficha' && canEditHardware && (
-        <form onSubmit={handleGuardarFicha} className="ultra-glass p-6 rounded-2xl border border-cyan-500/30 space-y-4 max-w-xl">
-          <h3 className="text-sm font-bold text-white flex items-center gap-2">
-            <Building2 className="w-4 h-4 text-cyan-400" />
-            Ficha del Equipo & Asignación
+      {/* ========================================================================= */}
+      {/* 4. PESTAÑA MANTENIMIENTO & ODÓMETRO                                       */}
+      {activeTab === 'mantenimiento' && canEditHardware && (
+        <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 space-y-4 max-w-xl">
+          <h3 className="text-sm font-bold text-white flex items-center gap-2 border-b border-slate-800 pb-2">
+            <Wrench className="w-4 h-4 text-cyan-400" />
+            Odómetro Clínico & Intervalos de Servicio
           </h3>
 
-          <div>
-            <label className="block text-slate-300 mb-1">Alias del Dispositivo</label>
-            <input
-              type="text"
-              required
-              value={alias}
-              onChange={(e) => setAlias(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white"
-            />
-          </div>
+          <div className="p-4 bg-slate-900/80 rounded-xl border border-slate-800 space-y-3">
+            <div className="flex justify-between text-xs text-slate-300">
+              <span>Ciclos Completados Reales:</span>
+              <span className="font-bold text-cyan-300">{ciclos} / {limite} ciclos</span>
+            </div>
 
-          <div>
-            <label className="block text-slate-300 mb-1">Hospital / Base / Cliente</label>
-            <input
-              type="text"
-              required
-              value={cliente}
-              onChange={(e) => setCliente(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white"
-            />
-          </div>
+            <div className="w-full bg-slate-800 rounded-full h-3 overflow-hidden border border-slate-700">
+              <div
+                className={`h-full ${pctMant >= 100 ? 'bg-rose-500' : pctMant >= 80 ? 'bg-amber-400' : 'bg-emerald-400'}`}
+                style={{ width: `${pctMant}%` }}
+              />
+            </div>
 
-          <div>
-            <label className="block text-slate-300 mb-1">Modelo de Hardware</label>
-            <input
-              type="text"
-              required
-              value={modelo}
-              onChange={(e) => setModelo(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-white"
-            />
+            <div className="flex justify-between items-center pt-2 border-t border-slate-800">
+              <span className="text-[11px] text-slate-400">
+                Uso: <strong className={pctMant >= 100 ? 'text-rose-400' : 'text-emerald-400'}>{pctMant}%</strong> del ciclo de vida.
+              </span>
+              <button
+                type="button"
+                onClick={() => sendCommand(device.mac, { cmd: 'RESET_ODOMETRO' })}
+                className="px-3 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-lg text-[10px] font-bold"
+              >
+                Reiniciar Odómetro
+              </button>
+            </div>
           </div>
-
-          <button
-            type="submit"
-            disabled={guardandoFicha}
-            className="w-full py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold rounded-lg shadow-lg"
-          >
-            {guardandoFicha ? 'Guardando en Supabase...' : 'Guardar y Vincular en Nube'}
-          </button>
-        </form>
+        </div>
       )}
 
-      {/* Modales */}
+      {/* Modales Clínicos */}
       <SurgicalQRLabel isOpen={showQRModal} onClose={() => setShowQRModal(false)} deviceData={device} operatorName={operatorName} />
       <SessionDetailModal isOpen={inspectedSession !== null} onClose={() => setInspectedSession(null)} session={inspectedSession} />
       <ActionConfirmModal
@@ -1276,7 +837,7 @@ export default function DeviceDetailView({
         title={confirmModal.title}
         description={confirmModal.description}
         actionType={confirmModal.actionType}
-        deviceName={alias}
+        deviceName={device?.meta?.alias || device?.mac}
         operatorName={operatorName}
       />
     </div>
