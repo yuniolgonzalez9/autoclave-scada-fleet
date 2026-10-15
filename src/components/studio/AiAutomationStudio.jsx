@@ -35,34 +35,42 @@ import {
   OctagonAlert, 
   Radio,
   Check,
-  ShieldCheck
+  ShieldCheck,
+  Mic,
+  MicOff,
+  AlertTriangle
 } from 'lucide-react';
 
 const SNAP_GRID = 10;
-const GROQ_DEFAULT_API_KEY = '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';
 
 export default function AiAutomationStudio({ fleet = {}, sendCommand = null, initialDeviceMac = null }) {
-  const [activeTab, setActiveTab] = useState('STUDIO');
+  const [activeTab, setActiveTab] = useState('STUDIO'); // 'STUDIO' | 'HARDWARE_I2C' | 'BIBLIOTECA' | 'EDITOR_JSON'
   const [modoEdicion, setModoEdicion] = useState(false);
   const [widgetEnEdicion, setWidgetEnEdicion] = useState(null);
 
+  // Estados del Chat y Transcripción por Voz
   const [prompt, setPrompt] = useState('');
   const [historialChat, setHistorialChat] = useState([
     {
       id: 'init_msg',
       sender: 'ai',
-      texto: 'BioFleet SCADA Enterprise v2.0 listo. Gestión de API Keys en Supabase y control industrial HKL-EA8 activo.'
+      texto: 'BioFleet SCADA Enterprise v2.0 listo con transcripción por voz y control total. Puedes escribirme o usar el micrófono para dictarme cualquier instrucción de proceso o máquina.'
     }
   ]);
   const [compilando, setCompilando] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef(null);
   const chatBottomRef = useRef(null);
+
+  // Tarjeta de Confirmación de Acción Ejecutiva
+  const [accionPendiente, setAccionPendiente] = useState(null);
 
   // Estados Locales en Tiempo Real (0 ms de Lag)
   const [relesLocales, setRelesLocales] = useState({});
   const [timerEjecutando, setTimerEjecutando] = useState(null);
   const timerIntervalRef = useRef(null);
 
-  // GESTIÓN DEL POOL DE CLAVES EN SUPABASE (config_ai_keys)
+  // Gestión de Claves Cloud en Supabase (config_ai_keys)
   const [showKeyModal, setShowKeyModal] = useState(false);
   const [keysList, setKeysList] = useState([]);
   const [loadingKeys, setLoadingKeys] = useState(false);
@@ -104,7 +112,6 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
   const [chipsDetectados, setChipsDetectados] = useState([]);
   const [scanningI2C, setScanningI2C] = useState(false);
 
-  // Biblioteca Cloud
   const [perfilesGuardados, setPerfilesGuardados] = useState([]);
   const [loadingLib, setLoadingLib] = useState(false);
 
@@ -120,6 +127,48 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
     initialW: 0,
     initialH: 0
   });
+
+  // =========================================================================
+  // RECONOCIMIENTO DE VOZ NATIVO (SPEECH-TO-TEXT EN ESPAÑOL)
+  // =========================================================================
+  useEffect(() => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = true;
+      recognition.lang = 'es-ES';
+
+      recognition.onresult = (event) => {
+        const transcript = Array.from(event.results)
+          .map(r => r[0].transcript)
+          .join('');
+        setPrompt(transcript);
+      };
+
+      recognition.onend = () => setIsListening(false);
+      recognition.onerror = () => setIsListening(false);
+      recognitionRef.current = recognition;
+    }
+  }, []);
+
+  const toggleListening = () => {
+    if (!recognitionRef.current) {
+      alert('Tu navegador no soporta reconocimiento de voz nativo (Web Speech API). Te recomendamos Google Chrome o Microsoft Edge.');
+      return;
+    }
+    if (isListening) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    } else {
+      try {
+        recognitionRef.current.start();
+        setIsListening(true);
+      } catch (e) {
+        setIsListening(false);
+      }
+    }
+  };
 
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -185,7 +234,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
   }, [dDev.reles]);
 
   // =========================================================================
-  // GESTIÓN CRUD DE CLAVES CON CONFIRMACIÓN REAL EN SUPABASE
+  // GESTIÓN CRUD DE CLAVES EN SUPABASE
   // =========================================================================
   const handleInsertarClave = async (e) => {
     e.preventDefault();
@@ -193,7 +242,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
 
     try {
       const detectedProv = newKeyData.proveedor || detectarProveedorApiKey(newKeyData.api_key);
-      const { data, error } = await supabase.from('config_ai_keys').insert([{
+      const { error } = await supabase.from('config_ai_keys').insert([{
         proveedor: detectedProv,
         api_key: newKeyData.api_key.trim(),
         descripcion: newKeyData.descripcion.trim() || 'Clave de Inferencia',
@@ -212,7 +261,6 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
 
   const handleToggleClaveActiva = async (item) => {
     const nextActivo = !item.activo;
-    // Cambio optimista en pantalla
     setKeysList(prev => prev.map(k => k.id === item.id ? { ...k, activo: nextActivo } : k));
 
     try {
@@ -229,15 +277,11 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
     }
   };
 
-  // BORRADO REAL Y OPTIMISTA (Elimina de inmediato la fila en pantalla y confirma en DB)
   const handleEliminarClave = async (id, desc) => {
     if (!confirm(`¿Eliminar definitivamente la clave "${desc || 'seleccionada'}" de Supabase?`)) return;
-
-    // 1. Quitar visualmente de la lista de inmediato (0 ms)
     setKeysList(prev => prev.filter(k => k.id !== id));
 
     try {
-      // 2. Ejecutar borrado con .select() para obligar a Postgres a reportar
       const { data, error } = await supabase
         .from('config_ai_keys')
         .delete()
@@ -245,19 +289,40 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
         .select();
 
       if (error) throw error;
-
-      if (!data || data.length === 0) {
-        throw new Error('Supabase no borró la fila (Verifica ejecutar el script de permisos en SQL Editor).');
-      }
-
       setMsg('🗑️ Clave eliminada definitivamente de Supabase.');
     } catch (err) {
       alert('Aviso al eliminar en Supabase: ' + err.message);
-      cargarClavesSupabase(); // Restaurar si falló
+      cargarClavesSupabase();
     }
   };
 
-  // EJECUCIÓN MULTI-ETAPA
+  // =========================================================================
+  // EJECUCIÓN DE ACCIONES CONFIRMADAS POR EL OPERADOR
+  // =========================================================================
+  const handleEjecutarAccionConfirmada = (accion) => {
+    if (!accion) return;
+
+    if (accion.tipo === 'DESPLEGAR_HARDWARE') {
+      handleDesplegarADispositivo();
+    } else if (accion.tipo === 'INICIAR_CICLO') {
+      handleDispararRecetaAlCore1();
+    } else if (accion.tipo === 'PARO_EMERGENCIA') {
+      if (cleanMac && sendCommand) {
+        sendCommand(cleanMac, { cmd: 'ABORTAR_PROCESO', mac: cleanMac });
+      }
+      setRelesLocales({});
+      setMsg(`🚨 PARO DE EMERGENCIA CONFIRMADO EN [${cleanMac.slice(-4)}]`);
+    } else if (accion.tipo === 'CONMUTAR_RELE') {
+      const ch = accion.payload?.canal || 1;
+      handleToggleRelayDirecto(ch);
+    }
+
+    setAccionPendiente(null);
+  };
+
+  // =========================================================================
+  // EJECUCIÓN DE SECUENCIAS MULTI-PASO
+  // =========================================================================
   const handleIniciarSecuenciaMultiPaso = async (widget) => {
     if (!cleanMac) {
       alert('Por favor selecciona una placa física en el selector.');
@@ -357,7 +422,6 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
     setMsg('🛑 Secuencia detenida.');
   };
 
-  // CONTROL DIRECTO DE RELÉ
   const handleToggleRelayDirecto = (canal, currentState = null) => {
     if (!cleanMac) {
       alert('Por favor selecciona una placa física.');
@@ -386,6 +450,11 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
   // ENVIAR MENSAJE AL COPILOT
   const handleEnviarMensaje = async (e) => {
     if (e) e.preventDefault();
+    if (isListening && recognitionRef.current) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    }
+
     const textoUsuario = prompt.trim();
     if (!textoUsuario) return;
 
@@ -419,6 +488,15 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
         setRecetaActiva(res.receta);
       }
 
+      // Si la IA propone una acción física ejecutiva
+      if (res.accionPropuesta && res.accionPropuesta.tipo !== 'NINGUNA') {
+        if (res.accionPropuesta.requiere_confirmacion) {
+          setAccionPendiente(res.accionPropuesta);
+        } else {
+          handleEjecutarAccionConfirmada(res.accionPropuesta);
+        }
+      }
+
       setPerfilNombre(res.titulo || perfilNombre);
       setTipoEquipo(res.tipo || tipoEquipo);
 
@@ -429,7 +507,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
       setJsonRaw(JSON.stringify(res, null, 2));
       setMsg(`✨ ${res.titulo}`);
     } catch (err) {
-      console.error('Error al consultar IA:', err);
+      console.error('Error en consulta:', err);
       setHistorialChat(prev => [
         ...prev,
         { id: `ai_err_${Date.now()}`, sender: 'ai', texto: `⚠️ ${err.message}` }
@@ -544,7 +622,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
   return (
     <div className="space-y-4 font-mono text-xs select-none">
       
-      {/* 1. BARRA SUPERIOR CON BOTÓN DE GESTOR DE CLAVES CLOUD */}
+      {/* 1. BARRA SUPERIOR CON ACCESO AL POOL DE CLAVES CLOUD */}
       <div className="ultra-glass p-4 rounded-2xl border border-amber-500/30 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
         <div className="flex items-center gap-3">
           <div className="p-2.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300">
@@ -558,7 +636,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
               </span>
             </h2>
             <p className="text-[11px] text-slate-300 font-sans">
-              La IA consulta dinámicamente tu base de datos de claves con rotación y failover automático.
+              Control industrial con reconocimiento de voz en vivo y rotación automática de claves.
             </p>
           </div>
         </div>
@@ -639,16 +717,49 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
         </div>
       )}
 
-      {/* 2. CHAT DE CONTROL Y LIENZO */}
+      {/* 2. CHAT DE CONTROL CON DICTADO POR VOZ Y TARJETA DE CONFIRMACIÓN */}
       {activeTab === 'STUDIO' && (
         <div className="space-y-4">
           
+          {/* TARJETA DE ACCIÓN FÍSICA PENDIENTE DE CONFIRMACIÓN */}
+          {accionPendiente && (
+            <div className="p-4 rounded-2xl bg-amber-500/20 border-2 border-amber-400 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xl animate-pulse">
+              <div className="flex items-center gap-2.5">
+                <AlertTriangle className="w-6 h-6 text-amber-300 shrink-0" />
+                <div>
+                  <span className="font-bold text-xs uppercase tracking-wider block text-amber-300">
+                    Confirmación de Seguridad Requerida:
+                  </span>
+                  <p className="text-xs text-white">
+                    {accionPendiente.mensaje_confirmacion || `¿Confirmas ejecutar la acción [${accionPendiente.tipo}] en la placa física [${cleanMac.slice(-4)}]?`}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setAccionPendiente(null)}
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 text-slate-300 text-xs font-bold hover:text-white"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleEjecutarAccionConfirmada(accionPendiente)}
+                  className="px-3 py-1.5 rounded-lg bg-amber-500 text-slate-950 text-xs font-bold shadow-lg hover:bg-amber-400"
+                >
+                  Confirmar y Ejecutar
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* CONSOLA DE DIÁLOGO */}
           <div className="ultra-glass p-4 rounded-2xl border border-amber-500/30 space-y-3">
             <div className="flex justify-between items-center border-b border-slate-800 pb-2">
               <span className="text-amber-300 font-bold uppercase text-[11px] flex items-center gap-1.5">
                 <Bot className="w-4 h-4 text-emerald-400" />
-                Diálogo con el Ingeniero IA:
+                Diálogo con el Ingeniero IA (Escribe o habla por el micrófono):
               </span>
               <button
                 type="button"
@@ -678,14 +789,33 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
               <div ref={chatBottomRef} />
             </div>
 
-            <form onSubmit={handleEnviarMensaje} className="flex gap-2 pt-1">
+            {/* FORMULARIO CON MICRÓFONO INTEGRADO */}
+            <form onSubmit={handleEnviarMensaje} className="flex items-center gap-2 pt-1">
               <input
                 type="text"
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
-                placeholder="Escribe tu consulta o requerimiento (ej: 'Hazme una auditoría de este equipo' o 'prende R1 por 5 segundos')..."
-                className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-sans text-xs focus:outline-none focus:border-amber-400"
+                placeholder={isListening ? '🎙️ Escuchando tu voz... habla con naturalidad' : 'Escribe o presiona el micrófono para hablar...'}
+                className={`flex-1 bg-slate-950 border rounded-xl px-3 py-2 text-white font-sans text-xs focus:outline-none transition-all ${
+                  isListening ? 'border-rose-500 ring-2 ring-rose-500/30 animate-pulse placeholder-rose-300' : 'border-slate-700 focus:border-amber-400'
+                }`}
               />
+
+              {/* BOTÓN DEL MICRÓFONO */}
+              <button
+                type="button"
+                onClick={toggleListening}
+                title={isListening ? 'Detener dictado' : 'Hablar por micrófono'}
+                className={`p-2 rounded-xl border transition-all shrink-0 ${
+                  isListening 
+                    ? 'bg-rose-600 text-white border-rose-400 shadow-lg shadow-rose-500/30 animate-bounce' 
+                    : 'bg-slate-900 border-slate-700 text-slate-300 hover:text-white hover:border-amber-400'
+                }`}
+              >
+                {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+              </button>
+
+              {/* BOTÓN DE ENVIAR */}
               <button
                 type="submit"
                 disabled={compilando || !prompt.trim()}
@@ -756,7 +886,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
             {widgets.length === 0 ? (
               <div className="py-16 border-2 border-dashed border-slate-800 rounded-xl text-center text-slate-500 space-y-2">
                 <Sparkles className="w-8 h-8 mx-auto text-amber-500/40 animate-pulse" />
-                <p>Escribe tu instrucción en el diálogo para generar los controles.</p>
+                <p>Usa el micrófono o el cuadro de texto para pedir a la IA que cree los controles.</p>
               </div>
             ) : (
               <div
@@ -850,6 +980,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                                 />
                               </div>
 
+                              {/* Desglose de cada etapa */}
                               {w.pasos && w.pasos.length > 0 && (
                                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-1">
                                   {w.pasos.map((paso, pIdx) => {
@@ -1074,9 +1205,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* 6. MODAL ADMINISTRADOR DEL POOL DE CLAVES EN SUPABASE (config_ai_keys)     */}
-      {/* ========================================================================= */}
+      {/* 6. MODAL ADMINISTRADOR DEL POOL DE CLAVES EN SUPABASE */}
       {showKeyModal && (
         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
           <div className="ultra-glass border-2 border-amber-500/60 p-6 rounded-2xl max-w-2xl w-full space-y-4 shadow-2xl font-mono text-xs">
@@ -1094,7 +1223,6 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
               El sistema prueba automáticamente las claves en orden de prioridad con failover instantáneo. Las claves residen en Supabase.
             </p>
 
-            {/* TABLA DE CLAVES VIVAS EN SUPABASE */}
             <div className="border border-slate-800 rounded-xl overflow-hidden max-h-48 overflow-y-auto">
               <table className="w-full text-left text-[11px]">
                 <thead className="bg-slate-950 text-cyan-400 border-b border-slate-800">
@@ -1149,7 +1277,6 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
               </table>
             </div>
 
-            {/* FORMULARIO PARA INSERTAR NUEVA CLAVE DIRECTO A SUPABASE */}
             <form onSubmit={handleInsertarClave} className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
               <span className="text-amber-400 font-bold block text-[10px] uppercase">
                 + Agregar Nueva API Key a Supabase:
@@ -1195,7 +1322,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                   type="text"
                   value={newKeyData.descripcion}
                   onChange={(e) => setNewKeyData({ ...newKeyData, descripcion: e.target.value })}
-                  placeholder="Descripción de la clave (ej: Clave Groq Respaldo)..."
+                  placeholder="Descripción de la clave..."
                   className="flex-1 bg-slate-900 border border-slate-700 rounded p-1.5 text-white text-[10px] mr-2"
                 />
                 <button
