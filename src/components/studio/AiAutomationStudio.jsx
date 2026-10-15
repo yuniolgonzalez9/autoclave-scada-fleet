@@ -33,23 +33,27 @@ import {
   Clock, 
   Timer, 
   OctagonAlert, 
-  Radio 
+  Radio,
+  Check,
+  ShieldCheck,
+  ToggleLeft,
+  ToggleRight
 } from 'lucide-react';
 
 const SNAP_GRID = 10;
-const GROQ_DEFAULT_API_KEY = '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';
 
 export default function AiAutomationStudio({ fleet = {}, sendCommand = null, initialDeviceMac = null }) {
-  const [activeTab, setActiveTab] = useState('STUDIO');
+  const [activeTab, setActiveTab] = useState('STUDIO'); // 'STUDIO' | 'HARDWARE_I2C' | 'BIBLIOTECA' | 'EDITOR_JSON'
   const [modoEdicion, setModoEdicion] = useState(false);
   const [widgetEnEdicion, setWidgetEnEdicion] = useState(null);
 
+  // Chat de Control y Diálogo
   const [prompt, setPrompt] = useState('');
   const [historialChat, setHistorialChat] = useState([
     {
       id: 'init_msg',
       sender: 'ai',
-      texto: 'BioFleet SCADA Enterprise v2.0 listo. Puedes pedirme auditorías, secuencias, temporizadores o modificar cualquier parámetro en vivo.'
+      texto: 'BioFleet SCADA Enterprise v2.0 listo. El motor de IA consulta dinámicamente tu pool de claves en Supabase con tolerancia a fallos. Describe cualquier sistema industrial o consulta el estado del equipo.'
     }
   ]);
   const [compilando, setCompilando] = useState(false);
@@ -60,10 +64,18 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
   const [timerEjecutando, setTimerEjecutando] = useState(null);
   const timerIntervalRef = useRef(null);
 
-  // GESTIÓN DINÁMICA DE LA API KEY CON MODAL
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('biofleet_ai_key') || GROQ_DEFAULT_API_KEY);
+  // =========================================================================
+  // GESTIÓN VISUAL DEL POOL DE API KEYS EN SUPABASE (config_ai_keys)
+  // =========================================================================
   const [showKeyModal, setShowKeyModal] = useState(false);
-  const [keyInputTemp, setKeyInputTemp] = useState('');
+  const [keysList, setKeysList] = useState([]);
+  const [loadingKeys, setLoadingKeys] = useState(false);
+  const [newKeyData, setNewKeyData] = useState({
+    proveedor: 'GROQ',
+    api_key: '',
+    descripcion: 'Clave Primaria',
+    prioridad: 1
+  });
 
   // Perfil, Dashboard y Receta FSM
   const [perfilActivoId, setPerfilActivoId] = useState(null);
@@ -96,6 +108,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
   const [chipsDetectados, setChipsDetectados] = useState([]);
   const [scanningI2C, setScanningI2C] = useState(false);
 
+  // Biblioteca Cloud
   const [perfilesGuardados, setPerfilesGuardados] = useState([]);
   const [loadingLib, setLoadingLib] = useState(false);
 
@@ -122,6 +135,30 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
     };
   }, []);
 
+  // Cargar Claves desde la tabla config_ai_keys de Supabase
+  const cargarClavesSupabase = async () => {
+    setLoadingKeys(true);
+    try {
+      const { data, error } = await supabase
+        .from('config_ai_keys')
+        .select('*')
+        .order('prioridad', { ascending: true });
+
+      if (!error && data) {
+        setKeysList(data);
+      }
+    } catch (e) {
+      console.warn('Error cargando claves:', e);
+    } finally {
+      setLoadingKeys(false);
+    }
+  };
+
+  useEffect(() => {
+    cargarClavesSupabase();
+  }, []);
+
+  // Cargar Biblioteca de Perfiles de Supabase
   const cargarBiblioteca = async () => {
     setLoadingLib(true);
     try {
@@ -152,20 +189,61 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
     }
   }, [dDev.reles]);
 
-  // GUARDAR CLAVE DESDE EL MODAL
-  const handleGuardarApiKey = () => {
-    const clean = keyInputTemp.trim();
-    if (!clean) {
-      alert('Por favor introduce una clave válida.');
-      return;
+  // =========================================================================
+  // GESTIÓN CRUD DE CLAVES EN SUPABASE
+  // =========================================================================
+  const handleInsertarClave = async (e) => {
+    e.preventDefault();
+    if (!newKeyData.api_key.trim()) return alert('Introduce una API Key válida.');
+
+    try {
+      const detectedProv = newKeyData.proveedor || detectarProveedorApiKey(newKeyData.api_key);
+      const { error } = await supabase.from('config_ai_keys').insert([{
+        proveedor: detectedProv,
+        api_key: newKeyData.api_key.trim(),
+        descripcion: newKeyData.descripcion.trim() || 'Clave de Inferencia',
+        prioridad: Number(newKeyData.prioridad) || 1,
+        activo: true
+      }]);
+
+      if (error) throw error;
+      setNewKeyData({ proveedor: 'GROQ', api_key: '', descripcion: '', prioridad: keysList.length + 1 });
+      setMsg('✅ Clave agregada a Supabase Cloud.');
+      cargarClavesSupabase();
+    } catch (err) {
+      alert('Error guardando clave en Supabase: ' + err.message);
     }
-    setApiKey(clean);
-    localStorage.setItem('biofleet_ai_key', clean);
-    setShowKeyModal(false);
-    setMsg(`✅ API Key actualizada y conectada (${detectarProveedorApiKey(clean)}).`);
   };
 
-  // EJECUCIÓN MULTI-ETAPA
+  const handleToggleClaveActiva = async (item) => {
+    try {
+      const { error } = await supabase
+        .from('config_ai_keys')
+        .update({ activo: !item.activo })
+        .eq('id', item.id);
+
+      if (error) throw error;
+      cargarClavesSupabase();
+    } catch (err) {
+      alert('Error actualizando estado de clave: ' + err.message);
+    }
+  };
+
+  const handleEliminarClave = async (id, desc) => {
+    if (!confirm(`¿Eliminar la clave "${desc}" de Supabase?`)) return;
+    try {
+      const { error } = await supabase.from('config_ai_keys').delete().eq('id', id);
+      if (error) throw error;
+      setMsg('🗑️ Clave eliminada de Supabase.');
+      cargarClavesSupabase();
+    } catch (err) {
+      alert('Error eliminando clave: ' + err.message);
+    }
+  };
+
+  // =========================================================================
+  // EJECUCIÓN MULTI-ETAPA PASO A PASO EN LA PLACA FÍSICA Y EN LA WEB
+  // =========================================================================
   const handleIniciarSecuenciaMultiPaso = async (widget) => {
     if (!cleanMac) {
       alert('Por favor selecciona una placa física en el selector.');
@@ -235,7 +313,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
         }
 
         setRelesLocales({});
-        setMsg('✅ Secuencia completada con éxito en la placa.');
+        setMsg('✅ Secuencia multi-etapa completada con éxito.');
       })();
     }
 
@@ -311,8 +389,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
         hardwareInfo: targetDev?.meta?.config_deseada || targetDev?.datos?.cfg || { tipo: 'AUTOCLAVE' },
         widgetsActuales: widgets,
         recetaActual: recetaActiva,
-        telemetriaActual: { reles: relesLocales, fase: dDev.fase, adc: adcFisico },
-        apiKey
+        telemetriaActual: { reles: relesLocales, fase: dDev.fase, adc: adcFisico }
       });
 
       setHistorialChat(prev => [
@@ -448,12 +525,12 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
     }
   };
 
-  const proveedorActual = apiKey ? detectarProveedorApiKey(apiKey) : 'GROQ';
+  const totalClavesActivas = keysList.filter(k => k.activo).length;
 
   return (
     <div className="space-y-4 font-mono text-xs select-none">
       
-      {/* 1. BARRA SUPERIOR CON BOTÓN PARA MODIFICAR LA CLAVE */}
+      {/* 1. BARRA SUPERIOR CON EL GESTOR DE CLAVES CLOUD CONECTADO */}
       <div className="ultra-glass p-4 rounded-2xl border border-amber-500/30 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
         <div className="flex items-center gap-3">
           <div className="p-2.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300">
@@ -463,25 +540,25 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
             <h2 className="text-base font-bold text-white flex items-center gap-2">
               BioFleet SCADA Enterprise v2.0
               <span className="px-2 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[9px] flex items-center gap-1">
-                <Timer className="w-3 h-3" /> NORMALIZADOR ACTIVO
+                <ShieldCheck className="w-3 h-3" /> POOL SUPABASE: {totalClavesActivas} ACTIVAS
               </span>
             </h2>
             <p className="text-[11px] text-slate-300 font-sans">
-              La IA ve, agrega, modifica y elimina controles de pantalla sin errores de formato.
+              Control industrial con rotación automática de claves de IA y cero credenciales en código.
             </p>
           </div>
         </div>
 
-        {/* NAVEGACIÓN Y BOTÓN DE API KEY RESTAURADO */}
+        {/* NAVEGACIÓN Y BOTÓN GESTOR DE CLAVES */}
         <div className="flex items-center gap-2 flex-wrap">
-          {/* BOTÓN MAESTRO DE MODIFICAR / CAMBIAR API KEY */}
+          {/* BOTÓN GESTOR DE CLAVES EN SUPABASE */}
           <button
-            onClick={() => { setKeyInputTemp(apiKey); setShowKeyModal(true); }}
+            onClick={() => { cargarClavesSupabase(); setShowKeyModal(true); }}
             className="px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 border transition-all bg-slate-900 border-amber-500/60 text-amber-300 hover:border-amber-400 hover:bg-slate-800 shadow-md shadow-amber-500/10"
-            title="Modificar o Cambiar la API Key de la IA"
+            title="Administrar Pool de API Keys en Supabase"
           >
             <Key className="w-3.5 h-3.5 text-amber-400" />
-            <span>🔑 Modificar Clave IA ({proveedorActual})</span>
+            <span>🔑 Claves Cloud ({totalClavesActivas})</span>
           </button>
 
           <div className="flex p-0.5 bg-slate-950 border border-slate-800 rounded-xl">
@@ -593,7 +670,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                 type="text"
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
-                placeholder="Escribe tu requerimiento o consulta técnica..."
+                placeholder="Escribe tu consulta o requerimiento (ej: 'Hazme una auditoría de este equipo' o 'prende R1 por 5 segundos')..."
                 className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-sans text-xs focus:outline-none focus:border-amber-400"
               />
               <button
@@ -659,7 +736,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                   ? `⏱️ SECUENCIA EN EJECUCIÓN: ${timerEjecutando.segundosRestantes}s RESTANTES` 
                   : modoEdicion 
                   ? '🛠️ Arrastra la barra superior para mover y la esquina para redimensionar' 
-                  : '👁️ Modo Operador: Puedes interactuar o pedirle a la IA que modifique cualquier widget'}
+                  : '👁️ Modo Operador: Control en tiempo real y supervisión'}
               </span>
             </div>
 
@@ -743,7 +820,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                           className="flex-1 p-3 flex flex-col justify-center overflow-hidden" 
                           onPointerDown={(e) => e.stopPropagation()}
                         >
-                          {/* WIDGET TEMPORIZADOR MULTI-ETAPA (SIN NaNs) */}
+                          {/* WIDGET TEMPORIZADOR MULTI-ETAPA */}
                           {w.tipo === 'SEQUENCE_TIMER' && (
                             <div className="flex flex-col justify-between h-full space-y-2">
                               <div className="flex items-center justify-between">
@@ -984,52 +1061,146 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
         </div>
       )}
 
-      {/* 6. MODAL FLOTANTE PARA CAMBIAR LA API KEY DE FORMA INMEDIATA */}
+      {/* ========================================================================= */}
+      {/* 6. MODAL ADMINISTRADOR DEL POOL DE CLAVES EN SUPABASE (config_ai_keys)     */}
+      {/* ========================================================================= */}
       {showKeyModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="ultra-glass border-2 border-amber-500/60 p-6 rounded-2xl max-w-md w-full space-y-4 shadow-2xl font-mono text-xs">
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="ultra-glass border-2 border-amber-500/60 p-6 rounded-2xl max-w-2xl w-full space-y-4 shadow-2xl font-mono text-xs">
             <div className="flex justify-between items-center border-b border-slate-800 pb-2">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
                 <Key className="w-4 h-4 text-amber-400" />
-                Configurar API Key de IA (Groq / OpenAI / Gemini)
+                Pool de API Keys en Supabase Cloud (`config_ai_keys`)
               </h3>
               <button onClick={() => setShowKeyModal(false)} className="text-slate-400 hover:text-white">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <p className="text-slate-300 leading-relaxed text-[11px]">
-              Introduce o actualiza tu clave para que el motor neuronal procese requerimientos complejos en tiempo real:
+            <p className="text-slate-300 text-[11px]">
+              El sistema prueba automáticamente las claves en orden de prioridad con failover instantáneo. Las claves residen cifradas en la nube.
             </p>
 
-            <div>
-              <label className="text-slate-300 block mb-1 font-bold">Pega tu API Key activa:</label>
-              <input
-                type="text"
-                value={keyInputTemp}
-                onChange={(e) => setKeyInputTemp(e.target.value)}
-                placeholder="gsk_... o sk-... o AIza..."
-                className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs font-mono focus:border-amber-400 focus:outline-none"
-              />
-              <span className="text-[10px] text-slate-500 mt-1 block">
-                Proveedor detectado: <strong className="text-cyan-300">{detectarProveedorApiKey(keyInputTemp)}</strong>
-              </span>
+            {/* TABLA DE CLAVES VIVAS EN SUPABASE */}
+            <div className="border border-slate-800 rounded-xl overflow-hidden max-h-48 overflow-y-auto">
+              <table className="w-full text-left text-[11px]">
+                <thead className="bg-slate-950 text-cyan-400 border-b border-slate-800">
+                  <tr>
+                    <th className="p-2 text-center w-12">Prio</th>
+                    <th className="p-2">Proveedor</th>
+                    <th className="p-2">Descripción</th>
+                    <th className="p-2">Clave (Máscara)</th>
+                    <th className="p-2 text-center">Estado</th>
+                    <th className="p-2 text-center">Acción</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800 bg-slate-900/60 text-slate-300">
+                  {loadingKeys ? (
+                    <tr><td colSpan="6" className="p-4 text-center text-slate-400">Consultando Supabase...</td></tr>
+                  ) : keysList.length === 0 ? (
+                    <tr><td colSpan="6" className="p-4 text-center text-slate-500">No hay claves registradas en la tabla.</td></tr>
+                  ) : (
+                    keysList.map((k) => (
+                      <tr key={k.id} className="hover:bg-slate-800/40">
+                        <td className="p-2 text-center font-bold text-amber-400">{k.prioridad}</td>
+                        <td className="p-2 font-bold text-white">{k.proveedor}</td>
+                        <td className="p-2 text-slate-400">{k.descripcion || '--'}</td>
+                        <td className="p-2 font-mono text-[10px] text-cyan-300">
+                          {k.api_key.substring(0, 8)}...{k.api_key.slice(-4)}
+                        </td>
+                        <td className="p-2 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleClaveActiva(k)}
+                            className={`px-2 py-0.5 rounded text-[9px] font-bold ${
+                              k.activo ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40' : 'bg-slate-800 text-slate-500'
+                            }`}
+                          >
+                            {k.activo ? 'ACTIVA' : 'PAUSADA'}
+                          </button>
+                        </td>
+                        <td className="p-2 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleEliminarClave(k.id, k.descripcion)}
+                            className="p-1 text-slate-400 hover:text-rose-400 rounded"
+                            title="Eliminar de Supabase"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
 
-            <div className="flex gap-2 pt-2">
+            {/* FORMULARIO PARA INSERTAR NUEVA CLAVE DIRECTO A SUPABASE */}
+            <form onSubmit={handleInsertarClave} className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
+              <span className="text-amber-400 font-bold block text-[10px] uppercase">
+                + Agregar Nueva API Key a Supabase:
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                <div>
+                  <label className="block text-slate-400 text-[9px] mb-0.5">Proveedor</label>
+                  <select
+                    value={newKeyData.proveedor}
+                    onChange={(e) => setNewKeyData({ ...newKeyData, proveedor: e.target.value })}
+                    className="w-full bg-slate-900 border border-slate-700 rounded p-1.5 text-white"
+                  >
+                    <option value="GROQ">Groq LPU</option>
+                    <option value="OPENAI">OpenAI</option>
+                    <option value="OPENROUTER">OpenRouter</option>
+                    <option value="GEMINI">Gemini</option>
+                  </select>
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-slate-400 text-[9px] mb-0.5">API Key (gsk_... / sk-...)</label>
+                  <input
+                    type="password"
+                    required
+                    value={newKeyData.api_key}
+                    onChange={(e) => setNewKeyData({ ...newKeyData, api_key: e.target.value })}
+                    placeholder="Pega la clave aquí..."
+                    className="w-full bg-slate-900 border border-slate-700 rounded p-1.5 text-white font-mono text-[10px]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-400 text-[9px] mb-0.5">Prioridad (1, 2...)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={newKeyData.prioridad}
+                    onChange={(e) => setNewKeyData({ ...newKeyData, prioridad: Number(e.target.value) })}
+                    className="w-full bg-slate-900 border border-slate-700 rounded p-1.5 text-white text-center"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-between items-center pt-1">
+                <input
+                  type="text"
+                  value={newKeyData.descripcion}
+                  onChange={(e) => setNewKeyData({ ...newKeyData, descripcion: e.target.value })}
+                  placeholder="Descripción de la clave (ej: Clave de respaldo Groq 2)..."
+                  className="flex-1 bg-slate-900 border border-slate-700 rounded p-1.5 text-white text-[10px] mr-2"
+                />
+                <button
+                  type="submit"
+                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-[10px] shadow"
+                >
+                  Guardar en Supabase
+                </button>
+              </div>
+            </form>
+
+            <div className="flex justify-end pt-2 border-t border-slate-800">
               <button
                 type="button"
                 onClick={() => setShowKeyModal(false)}
-                className="flex-1 py-2 bg-slate-800 text-slate-300 rounded-xl font-bold"
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl text-xs"
               >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={handleGuardarApiKey}
-                className="flex-1 py-2 bg-amber-500 text-slate-950 font-bold rounded-xl shadow-lg hover:bg-amber-400"
-              >
-                Guardar y Activar
+                Cerrar Ventana
               </button>
             </div>
           </div>
