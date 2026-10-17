@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import SterilizationChart from '../graphics/SterilizationChart';
 import SurgicalQRLabel from '../labels/SurgicalQRLabel';
 import SessionDetailModal from '../reports/SessionDetailModal';
@@ -8,44 +8,34 @@ import { CLINICAL_HELP } from '../../utils/clinicalDictionary';
 import { supabase } from '../../services/supabase';
 import { 
   Activity, 
-  Thermometer, 
-  Gauge, 
-  Zap, 
+  Flame, 
+  Wind, 
+  Lock, 
+  ShieldCheck, 
+  ShieldAlert, 
   Play, 
   Square, 
   RotateCcw, 
-  Sliders, 
-  Building2, 
-  History, 
-  Wrench, 
-  QrCode, 
-  CheckCircle2, 
-  AlertTriangle, 
   ChevronLeft, 
   Pin, 
   PinOff, 
-  Eye, 
-  Send, 
-  Sparkles, 
-  Lock, 
-  Power, 
-  ShieldCheck, 
-  Car, 
-  Key, 
+  QrCode, 
+  History, 
+  Wrench, 
   Cpu, 
   Search, 
-  PowerOff, 
-  BellRing, 
-  ShieldAlert, 
-  Layers,
-  Monitor,
-  Check,
-  Radio,
-  Flame,
-  Wind,
-  Droplets,
-  Clock
+  Eye 
 } from 'lucide-react';
+
+// Catálogo normativo de programas clínicos (EN 13060)
+const PROGRAMAS_CLINICOS = [
+  { id: 1, nombre: '134°C Instrumental Quirúrgico (4 min meseta, 3 min secado)' },
+  { id: 2, nombre: '121°C Material Termolábil / Gomas (15 min meseta, 5 min secado)' },
+  { id: 3, nombre: '134°C Ciclo Prion Inactivación Proteica (18 min meseta)' },
+  { id: 4, nombre: '121°C Líquidos / Soluciones Despresurización Lenta (5 min)' },
+  { id: 5, nombre: 'Test Rápido de Penetración (10 min)' },
+  { id: 6, nombre: '⚡ P6: Test Ultrarrápido de Banco (1 min meseta - Prueba de Mesa)' }
+];
 
 export default function DeviceDetailView({ 
   device, 
@@ -58,7 +48,6 @@ export default function DeviceDetailView({
 }) {
   const [activeTab, setActiveTab] = useState(() => localStorage.getItem('scada_detail_tab') || 'sensores');
   const [showQRModal, setShowQRModal] = useState(false);
-  const [nvsMsg, setNvsMsg] = useState('');
 
   // Identificación del tipo de máquina
   const tipoEquipo = (
@@ -68,11 +57,7 @@ export default function DeviceDetailView({
     'AUTOCLAVE'
   ).toUpperCase();
 
-  const isVehicle = tipoEquipo === 'VEHICULO';
-  const isPlc = tipoEquipo === 'UNIVERSAL_PLC' || tipoEquipo === 'PLC_GENERICO';
-  const isAutoclave = !isVehicle && !isPlc;
-
-  // Modal de Confirmación Operativa
+  // Modal de Confirmación Operativa (FDA 21 CFR Part 11)
   const [confirmModal, setConfirmModal] = useState({
     isOpen: false,
     title: '',
@@ -85,10 +70,10 @@ export default function DeviceDetailView({
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [inspectedSession, setInspectedSession] = useState(null);
 
-  // Selector del Programa Clínico Activo (P1 a P6)
+  // Programa Clínico Activo
   const [programaSeleccionado, setProgramaSeleccionado] = useState(1);
 
-  // ESTADOS DE BYPASSES DE BANCO DE PRUEBAS (Permite simular sensores físicamente ausentes)
+  // Bypasses de Banco de Pruebas
   const [bypasses, setBypasses] = useState({
     puerta: true,
     sello: true,
@@ -96,13 +81,12 @@ export default function DeviceDetailView({
     caldera: true
   });
 
-  // Datos en vivo desde la telemetría del ESP32 (Core 0 a 800ms)
+  // Telemetría en vivo del ESP32
   const d = device?.datos || {};
   const relesFisicos = d.reles || {};
-  const entradasFisicas = d.entradas || {};
   const tempCamara = parseFloat(d.temp_camara !== undefined ? d.temp_camara : 25.0);
   const presionBar = parseFloat(d.presion !== undefined ? d.presion : 0.0);
-  const f0Score = parseFloat(d.f0_score !== undefined ? d.f0_score : device?.f0Score || 0.0);
+  const f0Score = parseFloat(d.f0_score !== undefined ? d.f0_score : (device?.f0Score || 0.0));
   const segRestantes = d.seg_restantes || 0;
   const faseEnVivo = d.fase || 'EN ESPERA';
   const enCicloActivo = faseEnVivo !== 'EN ESPERA' && faseEnVivo !== 'CANCELADO' && faseEnVivo !== 'FINALIZADO CON EXITO';
@@ -110,42 +94,30 @@ export default function DeviceDetailView({
   // Escáner I2C Real
   const [scanningI2C, setScanningI2C] = useState(false);
   const [chipsDetectados, setChipsDetectados] = useState([]);
-  const [selectedChipDir, setSelectedChipDir] = useState('0x24');
-  const [halMsg, setHalMsg] = useState('');
 
-  // Direcciones y parámetros de hardware I2C
-  const cfgDeseada = device?.meta?.config_deseada || {};
-  const [addrLcd, setAddrLcd] = useState(cfgDeseada.addr_lcd || '0x27');
-  const [lcdCols, setLcdCols] = useState(cfgDeseada.lcd_cols || 16);
-  const [lcdRows, setLcdRows] = useState(cfgDeseada.lcd_rows || 2);
-  const [addrRelays, setAddrRelays] = useState(cfgDeseada.addr_relays || '0x24');
-  const [addrInputs, setAddrInputs] = useState(cfgDeseada.addr_inputs || '0x26');
-
-  // Nombres libres y roles para las 8 Salidas
-  const [nombresReles, setNombresReles] = useState({
+  // Nombres para las 8 Salidas
+  const [nombresReles] = useState({
     R1: 'Cierre Sello', R2: 'Succión Sello', R3: 'Alivio Sello', R4: 'Bomba Agua',
     R5: 'Resistencias Calor', R6: 'Bomba Vacío', R7: 'Purga / Desfogue', R8: 'Esterilizar'
   });
 
-  const canEditHardware = userRole && !userRole.toLowerCase().includes('operador') && !userRole.toLowerCase().includes('cliente');
+  const canEditHardware = Boolean(userRole && !userRole.toLowerCase().includes('operador') && !userRole.toLowerCase().includes('cliente'));
 
-  // Odómetro y Mantenimiento
+  // Odómetro y Mantenimiento Seguro
   const ciclos = Number(device?.meta?.ciclos_activos || d.cfg?.ciclos || 0);
-  const limite = Number(device?.meta?.limite_mantenimiento || d.cfg?.lim_mant || 300);
-  const pctMant = Math.min(100, Math.round((ciclos / (limite || 1)) * 100));
+  const limite = Math.max(1, Number(device?.meta?.limite_mantenimiento || d.cfg?.lim_mant || 300));
+  const pctMant = Math.min(100, Math.round((ciclos / limite) * 100));
   const isBloqueado100 = Boolean(d.cfg?.fuera_servicio || pctMant >= 100);
-  const isAlertaActiva = Boolean(pctMant >= 80);
 
-  // Escuchar reporte I2C físico emitido por el ESP32
+  // Sincronizar reporte I2C si la placa lo envía
   useEffect(() => {
-    if (device?.i2cReport && device.i2cReport.chips) {
+    if (device?.i2cReport?.chips) {
       setChipsDetectados(device.i2cReport.chips);
       setScanningI2C(false);
-      setHalMsg(`¡Reporte físico recibido! ${device.i2cReport.total || device.i2cReport.chips.length} chips detectados en bus I2C.`);
     }
   }, [device?.i2cReport]);
 
-  // Sincronizar bypasses si la telemetría los reporta
+  // Sincronizar bypasses desde telemetría
   useEffect(() => {
     if (d.bypasses) {
       setBypasses(d.bypasses);
@@ -156,7 +128,7 @@ export default function DeviceDetailView({
     localStorage.setItem('scada_detail_tab', activeTab);
   }, [activeTab]);
 
-  const fetchMacLogs = async () => {
+  const fetchMacLogs = useCallback(async () => {
     if (!device?.mac) return;
     setLoadingLogs(true);
     try {
@@ -169,42 +141,33 @@ export default function DeviceDetailView({
 
       if (!error && data) setMacLogs(data);
     } catch (e) {
-      console.warn(e);
+      console.warn('[DEVICE DETAIL] Error cargando bitácora:', e);
     } finally {
       setLoadingLogs(false);
     }
-  };
+  }, [device?.mac]);
 
   useEffect(() => {
     if (activeTab === 'historial') fetchMacLogs();
-  }, [activeTab, device?.mac]);
+  }, [activeTab, fetchMacLogs]);
 
   // =========================================================================
-  // OPERACIONES DE CONTROL CLÍNICO DIRECTO HACIA EL ESP32 (HANKERILA HKL-EA8)
+  // CONTROL DIRECTO AL ESP32
   // =========================================================================
 
-  // 1. INICIAR CICLO CLÍNICO (P1 a P6)
+  // 1. Iniciar Ciclo
   const handleIniciarCicloClinico = () => {
     if (isBloqueado100) {
       alert('⛔ ACCIÓN DENEGADA: Equipo fuera de servicio por mantenimiento preventivo alcanzado.');
       return;
     }
 
-    const progInfo = [
-      { id: 1, nombre: '134°C Instrumental Quirúrgico', tMeseta: '4m' },
-      { id: 2, nombre: '121°C Material Termolábil / Gomas', tMeseta: '15m' },
-      { id: 3, nombre: '134°C Ciclo Prion Extendido', tMeseta: '18m' },
-      { id: 4, nombre: '121°C Líquidos / Soluciones', tMeseta: '5m' },
-      { id: 5, nombre: 'Test Rápido de Cámara', tMeseta: '10m' },
-      { id: 6, nombre: 'Test Ultrarrápido de Banco (1 min)', tMeseta: '1m' }
-    ];
-
-    const sel = progInfo.find(p => p.id === programaSeleccionado) || progInfo[0];
+    const sel = PROGRAMAS_CLINICOS.find(p => p.id === programaSeleccionado) || PROGRAMAS_CLINICOS[0];
 
     setConfirmModal({
       isOpen: true,
-      title: `Iniciar Ciclo P${sel.id}: ${sel.nombre}`,
-      description: `¿Confirmas arrancar el ciclo en la placa [${device.mac.slice(-4)}]? Se presurizará el sello, se ejecutarán las rampas térmicas y se acumulará letalidad F0.`,
+      title: `Iniciar Ciclo P${sel.id}`,
+      description: `¿Confirmas arrancar el programa en la placa [${device.mac.slice(-4)}]? Se presurizará el sello e iniciará la integración F0.`,
       actionType: 'START',
       onConfirm: () => {
         if (sendCommand) {
@@ -217,12 +180,12 @@ export default function DeviceDetailView({
     });
   };
 
-  // 2. PARO DE EMERGENCIA
+  // 2. Paro de Emergencia
   const handleParoEmergencia = () => {
     setConfirmModal({
       isOpen: true,
       title: '¡PARO DE EMERGENCIA / ABORTAR CICLO!',
-      description: `¿Confirmas desenergizar todas las salidas y despresurizar la cámara del equipo [${device.mac.slice(-4)}] de forma inmediata?`,
+      description: `¿Confirmas desenergizar salidas y despresurizar la cámara de [${device.mac.slice(-4)}] inmediatamente?`,
       actionType: 'STOP',
       onConfirm: () => {
         if (sendCommand) {
@@ -232,14 +195,14 @@ export default function DeviceDetailView({
     });
   };
 
-  // 3. RESTABLECER ALARMA
+  // 3. Restablecer Alarma
   const handleRestablecerAlarma = () => {
     if (sendCommand) {
       sendCommand(device.mac, { cmd: 'RESET_ALARMA' });
     }
   };
 
-  // 4. CONMUTAR BYPASS DE SENSORES DE BANCO EN VIVO
+  // 4. Conmutar Bypass de Sensores
   const handleToggleBypass = (sensorKey) => {
     const nextVal = !bypasses[sensorKey];
     const nuevosBypasses = { ...bypasses, [sensorKey]: nextVal };
@@ -253,9 +216,9 @@ export default function DeviceDetailView({
     }
   };
 
-  // 5. APERTURA SEGURA DE PUERTA
+  // 5. Apertura Segura de Puerta (Corrección de sintaxis 0.05f -> 0.05)
   const handleAbrirPuertaSegura = () => {
-    if (presionBar > 0.05f) {
+    if (presionBar > 0.05) {
       alert(`⛔ APERTURA BLOQUEADA: La cámara tiene presión residual (${presionBar.toFixed(2)} bar). Espera a que baje a 0.00 bar por seguridad.`);
       return;
     }
@@ -264,28 +227,27 @@ export default function DeviceDetailView({
     }
   };
 
-  // 6. CIERRE / INFLADO DE SELLO
+  // 6. Cierre / Inflado de Sello
   const handleCerrarSelloPuerta = () => {
     if (sendCommand) {
       sendCommand(device.mac, { cmd: 'CMD_CIERRE_PUERTA' });
     }
   };
 
-  // 7. TOGGLE MANUAL DE RELÉ
+  // 7. Toggle Manual de Relé
   const handleToggleManualRelay = (canal, currentState) => {
     if (sendCommand) {
       sendCommand(device.mac, {
         cmd: 'SET_RELAY',
-        canal: canal,
+        canal,
         val: !currentState
       });
     }
   };
 
-  // 8. ESCANEAR I2C EN VIVO
+  // 8. Escaneo I2C
   const handleScanI2C = () => {
     setScanningI2C(true);
-    setHalMsg('Enviando orden física SCAN_HARDWARE a la placa...');
     if (sendCommand) {
       sendCommand(device.mac, { cmd: 'SCAN_HARDWARE' });
     }
@@ -294,26 +256,26 @@ export default function DeviceDetailView({
   return (
     <div className="flex flex-col gap-4 w-full font-mono text-xs select-none">
       
-      {/* BANNER DE FUERA DE SERVICIO POR ODÓMETRO */}
+      {/* Banner de Fuera de Servicio */}
       {isBloqueado100 && (
         <div className="bg-rose-600/90 border-2 border-rose-400 p-3.5 rounded-2xl text-white flex items-center justify-between shadow-2xl animate-pulse">
           <div className="flex items-center gap-2.5">
             <ShieldAlert className="w-6 h-6 text-yellow-300 shrink-0" />
             <div>
-              <p className="font-bold text-sm tracking-wider">🚨 EQUIPO FUERA DE SERVICIO // PROTOCOLO DE MANTENIMIENTO PREVENTIVO REQUERIDO</p>
-              <p className="text-[11px] text-rose-200">El equipo ha cumplido su intervalo operativo ({ciclos}/{limite} ciclos). Salidas inhibidas por seguridad clínica.</p>
+              <p className="font-bold text-sm tracking-wider">🚨 EQUIPO FUERA DE SERVICIO // MANTENIMIENTO PREVENTIVO REQUERIDO</p>
+              <p className="text-[11px] text-rose-200">Límite operativo alcanzado ({ciclos}/{limite} ciclos). Salidas inhibidas.</p>
             </div>
           </div>
           <button
             onClick={() => sendCommand(device.mac, { cmd: 'RESET_ODOMETRO' })}
             className="px-3 py-1.5 bg-white text-rose-700 hover:bg-slate-100 font-bold text-xs rounded-xl shadow-lg shrink-0 font-sans"
           >
-            Reautorizar Servicio (Reset Odómetro)
+            Reset Odómetro
           </button>
         </div>
       )}
 
-      {/* CABECERA PRINCIPAL */}
+      {/* Cabecera Principal */}
       <div className="ultra-glass p-4 rounded-2xl border border-cyan-500/30 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
         <div className="flex items-center gap-3">
           {!isKioskMode && (
@@ -332,7 +294,7 @@ export default function DeviceDetailView({
                 {device?.meta?.alias?.toUpperCase() || `EQUIPO [${device.mac.slice(-4)}]`}
               </h2>
               <span className="px-2 py-0.5 rounded text-[10px] font-bold border bg-cyan-500/20 text-cyan-300 border-cyan-400">
-                CLASE B CLÍNICO
+                {tipoEquipo}
               </span>
               <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
                 enCicloActivo 
@@ -343,7 +305,7 @@ export default function DeviceDetailView({
               </span>
             </div>
             <p className="text-xs text-cyan-300">
-              MAC: {device.mac} • {device?.meta?.cliente || 'Central Hospitalaria'} • {device?.meta?.modelo || 'HKL-EA8 Industrial'}
+              MAC: {device.mac} • {device?.meta?.cliente || 'Central Hospitalaria'}
             </p>
           </div>
         </div>
@@ -378,7 +340,7 @@ export default function DeviceDetailView({
         </div>
       </div>
 
-      {/* PESTAÑAS DE NAVEGACIÓN */}
+      {/* Pestañas */}
       <div className="flex gap-2 overflow-x-auto pb-1 border-b border-slate-800">
         <button
           onClick={() => setActiveTab('sensores')}
@@ -398,7 +360,7 @@ export default function DeviceDetailView({
             }`}
           >
             <Cpu className="w-4 h-4" />
-            <span>Escáner I2C & Mapeo de Silicio</span>
+            <span>Escáner I2C & Silicio</span>
           </button>
         )}
 
@@ -425,13 +387,11 @@ export default function DeviceDetailView({
         )}
       </div>
 
-      {/* ========================================================================= */}
-      {/* 1. CABINA PRINCIPAL: CONTROL DE CICLOS, BYPASSES Y TELEMETRÍA EN VIVO     */}
-      {/* ========================================================================= */}
+      {/* 1. CABINA DE CONTROL */}
       {activeTab === 'sensores' && (
         <div className="space-y-4">
           
-          {/* TARJETAS DE MAGNITUDES TERMODINÁMICAS EN TIEMPO REAL */}
+          {/* Indicadores en Vivo */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="ultra-glass p-3.5 rounded-xl border border-cyan-500/30 text-center">
               <span className="text-[10px] font-mono text-cyan-400 block mb-1">TEMPERATURA CÁMARA</span>
@@ -460,7 +420,7 @@ export default function DeviceDetailView({
             </div>
           </div>
 
-          {/* BARRA DE MANDO OPERATIVO Y DISPARO DE PROGRAMAS */}
+          {/* Mando de Ciclos */}
           <div className="ultra-glass p-4 rounded-xl border border-cyan-500/40 space-y-3">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-800 pb-2">
               <span className="text-xs font-bold text-white flex items-center gap-1.5 uppercase">
@@ -468,12 +428,11 @@ export default function DeviceDetailView({
                 Mando de Operación de Ciclos:
               </span>
               <span className="text-[10px] text-slate-400">
-                Selecciona un programa clínico y pulsa iniciar
+                Selecciona un programa normativo e inicia la secuencia
               </span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {/* Selector de Programas */}
               <div className="sm:col-span-2">
                 <label className="text-slate-300 block text-[10px] mb-1">Programa Clínico Normativo (EN 13060):</label>
                 <select
@@ -482,16 +441,12 @@ export default function DeviceDetailView({
                   onChange={(e) => setProgramaSeleccionado(Number(e.target.value))}
                   className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white font-bold text-xs focus:border-cyan-400 disabled:opacity-50"
                 >
-                  <option value={1}>P1: 134°C Instrumental Quirúrgico (4 min meseta, 3 min secado)</option>
-                  <option value={2}>P2: 121°C Material Termolábil / Gomas (15 min meseta, 5 min secado)</option>
-                  <option value={3}>P3: 134°C Ciclo Prion Inactivación Proteica (18 min meseta)</option>
-                  <option value={4}>P4: 121°C Líquidos / Soluciones Despresurización Lenta (5 min)</option>
-                  <option value={5}>P5: Test Rápido de Penetración (10 min)</option>
-                  <option value={6}>⚡ P6: Test Ultrarrápido de Banco (1 min meseta - Prueba de Mesa)</option>
+                  {PROGRAMAS_CLINICOS.map((p) => (
+                    <option key={p.id} value={p.id}>P{p.id}: {p.nombre}</option>
+                  ))}
                 </select>
               </div>
 
-              {/* Botones de Control Iniciar / Parar */}
               <div className="flex items-end gap-2">
                 {enCicloActivo ? (
                   <button
@@ -519,7 +474,7 @@ export default function DeviceDetailView({
                     type="button"
                     onClick={handleRestablecerAlarma}
                     className="p-2.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded-xl"
-                    title="Restablecer Alarma y volver a reposo"
+                    title="Restablecer Alarma"
                   >
                     <RotateCcw className="w-4 h-4" />
                   </button>
@@ -527,7 +482,7 @@ export default function DeviceDetailView({
               </div>
             </div>
 
-            {/* Mandos de Puerta Neumática */}
+            {/* Puerta Neumática */}
             <div className="flex items-center justify-between pt-2 border-t border-slate-800 text-[11px]">
               <span className="text-slate-400">Control Neumático de Puerta:</span>
               <div className="flex gap-2">
@@ -551,97 +506,55 @@ export default function DeviceDetailView({
             </div>
           </div>
 
-          {/* PANEL DE BYPASSES Y SIMULACIÓN DE SENSORES EN VIVO */}
+          {/* Bypasses de Banco */}
           <div className="ultra-glass p-4 rounded-xl border border-amber-500/30 space-y-3">
             <div className="flex justify-between items-center border-b border-slate-800 pb-2">
               <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5 uppercase">
                 <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                Bypasses de Banco & Simulación de Sensores (Para Pruebas en Mesa):
+                Bypasses de Banco & Simulación de Sensores:
               </span>
               <span className="text-[10px] text-slate-400">
-                Activa para simular que el sensor está físicamente conectado
+                Simula presencia física en mesa de prueba
               </span>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {/* Bypass Puerta */}
-              <div 
-                onClick={() => handleToggleBypass('puerta')}
-                className={`p-2.5 rounded-xl border cursor-pointer flex items-center justify-between transition-all ${
-                  bypasses.puerta 
-                    ? 'bg-emerald-950/40 border-emerald-500/60 text-emerald-300' 
-                    : 'bg-slate-950 border-slate-800 text-slate-500'
-                }`}
-              >
-                <div>
-                  <span className="font-bold text-[10px] block">SIMULAR PUERTA</span>
-                  <span className="text-[9px]">{bypasses.puerta ? '🟢 CERRADA (BYPASS)' : '⚪ FÍSICA'}</span>
-                </div>
-                <div className={`w-8 h-4 rounded-full border p-0.5 flex items-center ${bypasses.puerta ? 'justify-end bg-emerald-500/20 border-emerald-400' : 'justify-start bg-slate-900 border-slate-700'}`}>
-                  <span className={`w-3 h-3 rounded-full ${bypasses.puerta ? 'bg-emerald-400' : 'bg-slate-600'}`}></span>
-                </div>
-              </div>
+              {['puerta', 'sello', 'recamara', 'caldera'].map((key) => {
+                const isActive = Boolean(bypasses[key]);
+                const labels = {
+                  puerta: 'SIMULAR PUERTA',
+                  sello: 'SIMULAR SELLO',
+                  recamara: 'PRESIÓN CÁMARA',
+                  caldera: 'VAPOR CALDERA'
+                };
 
-              {/* Bypass Sello */}
-              <div 
-                onClick={() => handleToggleBypass('sello')}
-                className={`p-2.5 rounded-xl border cursor-pointer flex items-center justify-between transition-all ${
-                  bypasses.sello 
-                    ? 'bg-emerald-950/40 border-emerald-500/60 text-emerald-300' 
-                    : 'bg-slate-950 border-slate-800 text-slate-500'
-                }`}
-              >
-                <div>
-                  <span className="font-bold text-[10px] block">SIMULAR SELLO</span>
-                  <span className="text-[9px]">{bypasses.sello ? '🟢 SELLADO OK' : '⚪ FÍSICO'}</span>
-                </div>
-                <div className={`w-8 h-4 rounded-full border p-0.5 flex items-center ${bypasses.sello ? 'justify-end bg-emerald-500/20 border-emerald-400' : 'justify-start bg-slate-900 border-slate-700'}`}>
-                  <span className={`w-3 h-3 rounded-full ${bypasses.sello ? 'bg-emerald-400' : 'bg-slate-600'}`}></span>
-                </div>
-              </div>
-
-              {/* Bypass Recámara */}
-              <div 
-                onClick={() => handleToggleBypass('recamara')}
-                className={`p-2.5 rounded-xl border cursor-pointer flex items-center justify-between transition-all ${
-                  bypasses.recamara 
-                    ? 'bg-emerald-950/40 border-emerald-500/60 text-emerald-300' 
-                    : 'bg-slate-950 border-slate-800 text-slate-500'
-                }`}
-              >
-                <div>
-                  <span className="font-bold text-[10px] block">PRESIÓN CÁMARA</span>
-                  <span className="text-[9px]">{bypasses.recamara ? '🟢 BYPASS ACTIVO' : '⚪ FÍSICO'}</span>
-                </div>
-                <div className={`w-8 h-4 rounded-full border p-0.5 flex items-center ${bypasses.recamara ? 'justify-end bg-emerald-500/20 border-emerald-400' : 'justify-start bg-slate-900 border-slate-700'}`}>
-                  <span className={`w-3 h-3 rounded-full ${bypasses.recamara ? 'bg-emerald-400' : 'bg-slate-600'}`}></span>
-                </div>
-              </div>
-
-              {/* Bypass Caldera */}
-              <div 
-                onClick={() => handleToggleBypass('caldera')}
-                className={`p-2.5 rounded-xl border cursor-pointer flex items-center justify-between transition-all ${
-                  bypasses.caldera 
-                    ? 'bg-emerald-950/40 border-emerald-500/60 text-emerald-300' 
-                    : 'bg-slate-950 border-slate-800 text-slate-500'
-                }`}
-              >
-                <div>
-                  <span className="font-bold text-[10px] block">VAPOR CALDERA</span>
-                  <span className="text-[9px]">{bypasses.caldera ? '🟢 LISTA (BYPASS)' : '⚪ FÍSICA'}</span>
-                </div>
-                <div className={`w-8 h-4 rounded-full border p-0.5 flex items-center ${bypasses.caldera ? 'justify-end bg-emerald-500/20 border-emerald-400' : 'justify-start bg-slate-900 border-slate-700'}`}>
-                  <span className={`w-3 h-3 rounded-full ${bypasses.caldera ? 'bg-emerald-400' : 'bg-slate-600'}`}></span>
-                </div>
-              </div>
+                return (
+                  <div 
+                    key={key}
+                    onClick={() => handleToggleBypass(key)}
+                    className={`p-2.5 rounded-xl border cursor-pointer flex items-center justify-between transition-all ${
+                      isActive 
+                        ? 'bg-emerald-950/40 border-emerald-500/60 text-emerald-300' 
+                        : 'bg-slate-950 border-slate-800 text-slate-500'
+                    }`}
+                  >
+                    <div>
+                      <span className="font-bold text-[10px] block">{labels[key]}</span>
+                      <span className="text-[9px]">{isActive ? '🟢 ACTIVO' : '⚪ FÍSICO'}</span>
+                    </div>
+                    <div className={`w-8 h-4 rounded-full border p-0.5 flex items-center ${isActive ? 'justify-end bg-emerald-500/20 border-emerald-400' : 'justify-start bg-slate-900 border-slate-700'}`}>
+                      <span className={`w-3 h-3 rounded-full ${isActive ? 'bg-emerald-400' : 'bg-slate-600'}`}></span>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
-          {/* MATRIZ DE SUPERVISIÓN Y CONTROL MANUAL DE SALIDAS FÍSICAS (RELÉS R1 A R8) */}
+          {/* Matriz de Salidas (Relés) */}
           <div className="ultra-glass p-4 rounded-xl border border-slate-800 space-y-3">
             <span className="text-xs font-bold text-cyan-300 block uppercase">
-              Estado de Salidas Físicas HKL-EA8 (PCF8574 en 0x24):
+              Estado de Salidas Físicas HKL-EA8 (0x24):
             </span>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {[1, 2, 3, 4, 5, 6, 7, 8].map(ch => {
@@ -672,18 +585,16 @@ export default function DeviceDetailView({
             </div>
           </div>
 
-          {/* GRÁFICA TÉRMICA EN TIEMPO REAL */}
+          {/* Gráfica Térmica */}
           <div className="ultra-glass p-4 rounded-2xl border border-cyan-500/30">
-            <h3 className="text-xs font-bold text-cyan-300 mb-3">CURVA TÉRMICA & PRESIÓN EN TIEMPO REAL (ESP32)</h3>
+            <h3 className="text-xs font-bold text-cyan-300 mb-3 uppercase">Curva Térmica & Presión en Tiempo Real (ESP32)</h3>
             <SterilizationChart telemetryData={device.history || []} />
           </div>
 
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* 2. PESTAÑA ESCÁNER I2C EN VIVO                                            */}
-      {/* ========================================================================= */}
+      {/* 2. ESCÁNER I2C */}
       {activeTab === 'hal_scanner' && canEditHardware && (
         <div className="ultra-glass p-5 rounded-2xl border border-amber-500/30 space-y-4">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-amber-500/20 pb-3">
@@ -693,7 +604,7 @@ export default function DeviceDetailView({
                 Escáner I2C en Vivo & Chips Físicos de Silicio
               </h3>
               <p className="text-[11px] text-slate-400 mt-0.5">
-                Barrido físico de direcciones 0x01 a 0x7F para verificar chips conectados a la placa.
+                Barrido físico de direcciones 0x01 a 0x7F en el Núcleo 1 del ESP32.
               </p>
             </div>
 
@@ -718,15 +629,13 @@ export default function DeviceDetailView({
             </div>
           ) : (
             <div className="p-8 text-center text-slate-500 bg-slate-950 rounded-xl border border-slate-800">
-              Presiona "Escanear Bus I2C" para consultar los chips físicos conectados al ESP32.
+              Presiona "Escanear Bus I2C" para consultar los chips físicos conectados al bus I2C del ESP32.
             </div>
           )}
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* 3. PESTAÑA HISTORIAL CLÍNICO Y REPORTES (ISO 17665)                       */}
-      {/* ========================================================================= */}
+      {/* 3. HISTORIAL CLÍNICO */}
       {activeTab === 'historial' && (
         <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 space-y-4">
           <div className="flex justify-between items-center border-b border-cyan-500/20 pb-3">
@@ -765,7 +674,7 @@ export default function DeviceDetailView({
                       <td className="p-3 text-white">{new Date(log.created_at || log.fecha).toLocaleDateString()}</td>
                       <td className="p-3 text-cyan-400">{log.session_id}</td>
                       <td className="p-3">{log.programa || '134°C'}</td>
-                      <td className="p-3">T: {parseFloat(log.temp_max||0).toFixed(1)}°C | P: {parseFloat(log.pres_max||0).toFixed(2)}b</td>
+                      <td className="p-3">T: {parseFloat(log.temp_max || 0).toFixed(1)}°C | P: {parseFloat(log.pres_max || 0).toFixed(2)}b</td>
                       <td className="p-3">
                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
                           (log.diagnostico_principal || '').includes('CONFORME') 
@@ -789,8 +698,7 @@ export default function DeviceDetailView({
         </div>
       )}
 
-      {/* ========================================================================= */}
-      {/* 4. PESTAÑA MANTENIMIENTO & ODÓMETRO                                       */}
+      {/* 4. MANTENIMIENTO */}
       {activeTab === 'mantenimiento' && canEditHardware && (
         <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 space-y-4 max-w-xl">
           <h3 className="text-sm font-bold text-white flex items-center gap-2 border-b border-slate-800 pb-2">
@@ -827,7 +735,7 @@ export default function DeviceDetailView({
         </div>
       )}
 
-      {/* Modales Clínicos */}
+      {/* Modales */}
       <SurgicalQRLabel isOpen={showQRModal} onClose={() => setShowQRModal(false)} deviceData={device} operatorName={operatorName} />
       <SessionDetailModal isOpen={inspectedSession !== null} onClose={() => setInspectedSession(null)} session={inspectedSession} />
       <ActionConfirmModal
