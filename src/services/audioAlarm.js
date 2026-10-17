@@ -1,71 +1,163 @@
-// =========================================================================
-// MOTOR DE SIRENA INDUSTRIAL BIOMÉDICA CON DESBLOQUEO AUTOMÁTICO
-// =========================================================================
+/**
+ * =========================================================================
+ * MOTOR DE SIRENA INDUSTRIAL BIOMÉDICA & SÍNTESIS DE AUDIO PURO
+ * =========================================================================
+ * No requiere archivos MP3/WAV externos (100% sintetizado por Web Audio API).
+ * Cumple con normativas de alarmas de emergencia y bypass de autoplay.
+ */
+
 let audioCtx = null;
+let masterGain = null;
 let sirenaInterval = null;
 let sirenaActiva = false;
 
-// Desbloquear audio en el primer toque del usuario en la pantalla
-export const initAudioUnlock = () => {
-  const unlock = () => {
-    if (!audioCtx) {
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+// Obtiene o inicializa de forma segura el contexto de audio
+function getAudioContext() {
+  if (typeof window === 'undefined') return null;
+
+  if (!audioCtx) {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (AudioContextClass) {
+      audioCtx = new AudioContextClass();
+      masterGain = audioCtx.createGain();
+      masterGain.connect(audioCtx.destination);
     }
-    if (audioCtx.state === 'suspended') {
-      audioCtx.resume();
+  }
+
+  if (audioCtx && audioCtx.state === 'suspended') {
+    audioCtx.resume().catch(() => {});
+  }
+
+  return audioCtx;
+}
+
+/**
+ * Desbloquea el motor de audio en la primera interacción física del usuario
+ */
+export const initAudioUnlock = () => {
+  if (typeof window === 'undefined') return;
+
+  const unlock = () => {
+    const ctx = getAudioContext();
+    if (ctx && ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
     }
     window.removeEventListener('click', unlock);
     window.removeEventListener('touchstart', unlock);
+    window.removeEventListener('keydown', unlock);
   };
-  window.addEventListener('click', unlock);
-  window.addEventListener('touchstart', unlock);
+
+  window.addEventListener('click', unlock, { passive: true });
+  window.addEventListener('touchstart', unlock, { passive: true });
+  window.addEventListener('keydown', unlock, { passive: true });
 };
 
+/**
+ * Emite una ráfaga modulada en diente de sierra (850 Hz <-> 1250 Hz)
+ */
 function sonarRafagaAlarma() {
   try {
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const ctx = getAudioContext();
+    if (!ctx || !masterGain || !sirenaActiva) return;
 
-    const t = audioCtx.currentTime;
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
+    const t = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const burstGain = ctx.createGain();
 
+    // Rampa de frecuencia agresiva de sirena industrial
     osc.type = 'sawtooth';
     osc.frequency.setValueAtTime(850, t);
     osc.frequency.exponentialRampToValueAtTime(1250, t + 0.25);
-    osc.frequency.exponentialRampToValueAtTime(850, t + 0.5);
+    osc.frequency.exponentialRampToValueAtTime(850, t + 0.50);
     osc.frequency.exponentialRampToValueAtTime(1250, t + 0.75);
-    osc.frequency.exponentialRampToValueAtTime(850, t + 1.0);
+    osc.frequency.exponentialRampToValueAtTime(850, t + 1.00);
 
-    gain.gain.setValueAtTime(0.75, t);
-    gain.gain.setValueAtTime(0.75, t + 1.0);
-    gain.gain.exponentialRampToValueAtTime(0.01, t + 1.25);
+    // Envolvente de volumen (Attack / Decay)
+    burstGain.gain.setValueAtTime(0.70, t);
+    burstGain.gain.setValueAtTime(0.70, t + 1.00);
+    burstGain.gain.exponentialRampToValueAtTime(0.001, t + 1.25);
 
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
+    osc.connect(burstGain);
+    burstGain.connect(masterGain);
+
     osc.start(t);
     osc.stop(t + 1.25);
   } catch (e) {
-    console.warn('[AUDIO] Restricción de reproducción:', e);
+    console.warn('[AUDIO] Restricción de síntesis:', e);
   }
 }
 
+/**
+ * Inicia el bucle de sirena de emergencia
+ */
 export const startIndustrialSiren = () => {
   if (sirenaActiva) return;
   sirenaActiva = true;
+
+  const ctx = getAudioContext();
+  if (ctx && masterGain) {
+    masterGain.gain.setValueAtTime(1.0, ctx.currentTime);
+  }
+
   sonarRafagaAlarma();
+
+  if (sirenaInterval) clearInterval(sirenaInterval);
   sirenaInterval = setInterval(() => {
     if (sirenaActiva) {
       sonarRafagaAlarma();
     } else {
       clearInterval(sirenaInterval);
+      sirenaInterval = null;
     }
-  }, 1400);
+  }, 1350);
 };
 
+/**
+ * Silencia la sirena de inmediato (Corte instantáneo en 0ms)
+ */
 export const stopIndustrialSiren = () => {
   sirenaActiva = false;
-  if (sirenaInterval) clearInterval(sirenaInterval);
+  if (sirenaInterval) {
+    clearInterval(sirenaInterval);
+    sirenaInterval = null;
+  }
+
+  // Corta el audio en el milisegundo exacto
+  if (audioCtx && masterGain) {
+    try {
+      masterGain.gain.setValueAtTime(0.0, audioCtx.currentTime);
+    } catch (_) {}
+  }
 };
 
+/**
+ * Verifica si la sirena está sonando actualmente
+ */
 export const isSirenPlaying = () => sirenaActiva;
+
+/**
+ * Beep corto de confirmación para acciones exitosas (QR, conmutación de relé)
+ */
+export const playConfirmBeep = () => {
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+
+    const t = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(1200, t);
+    osc.frequency.exponentialRampToValueAtTime(1800, t + 0.08);
+
+    gain.gain.setValueAtTime(0.3, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start(t);
+    osc.stop(t + 0.12);
+  } catch (_) {}
+};
