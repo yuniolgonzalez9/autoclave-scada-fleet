@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   ExternalLink, 
@@ -9,8 +9,7 @@ import {
   RotateCcw, 
   QrCode, 
   Copy, 
-  X,
-  Sliders
+  X 
 } from 'lucide-react';
 
 export default function ContextMenu({ 
@@ -30,14 +29,15 @@ export default function ContextMenu({
   const menuRef = useRef(null);
 
   // Cerrar al hacer clic afuera o presionar Escape
+  const handleKeyDown = useCallback((e) => {
+    if (e.key === 'Escape') onClose();
+  }, [onClose]);
+
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (menuRef.current && !menuRef.current.contains(e.target)) {
         onClose();
       }
-    };
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape') onClose();
     };
 
     if (isOpen) {
@@ -48,15 +48,15 @@ export default function ContextMenu({
       window.removeEventListener('mousedown', handleClickOutside);
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, handleKeyDown]);
 
-  if (!isOpen || !device) return null;
+  if (!isOpen || !device || typeof document === 'undefined') return null;
 
   // Evitar que el menú se salga de los bordes de la pantalla
   const menuWidth = 240;
   const menuHeight = 360;
-  const adjustedX = Math.min(position.x, window.innerWidth - menuWidth - 10);
-  const adjustedY = Math.min(position.y, window.innerHeight - menuHeight - 10);
+  const adjustedX = Math.max(10, Math.min(position?.x || 10, window.innerWidth - menuWidth - 15));
+  const adjustedY = Math.max(10, Math.min(position?.y || 10, window.innerHeight - menuHeight - 15));
 
   // Abrir en Nueva Pestaña independiente
   const handleOpenNewTab = () => {
@@ -65,18 +65,34 @@ export default function ContextMenu({
     onClose();
   };
 
-  // Copiar MAC
+  // Copiar MAC (Con soporte para redes locales HTTP y HTTPS)
   const handleCopyMac = () => {
-    navigator.clipboard.writeText(device.mac).catch(() => {});
-    alert(`MAC [${device.mac}] copiada al portapapeles.`);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(device.mac).catch(() => fallbackCopy(device.mac));
+    } else {
+      fallbackCopy(device.mac);
+    }
     onClose();
+  };
+
+  const fallbackCopy = (text) => {
+    try {
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-9999px';
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+    } catch (_) {}
   };
 
   return createPortal(
     <div 
       ref={menuRef}
       style={{ left: `${adjustedX}px`, top: `${adjustedY}px` }}
-      className="fixed z-[999999] w-60 ultra-glass border-2 border-cyan-400/60 rounded-2xl shadow-[0_15px_50px_rgba(0,0,0,0.9)] p-2 font-mono text-xs backdrop-blur-2xl animate-in fade-in zoom-in-95 duration-100 select-none"
+      className="fixed z-[99999] w-60 ultra-glass border-2 border-cyan-400/60 rounded-2xl shadow-[0_15px_50px_rgba(0,0,0,0.9)] p-2 font-mono text-xs backdrop-blur-2xl select-none"
       onClick={(e) => e.stopPropagation()}
       onContextMenu={(e) => e.preventDefault()}
     >
@@ -86,7 +102,11 @@ export default function ContextMenu({
           <p className="font-bold text-white text-[11px] truncate">{device.meta?.alias || `AUTOCLAVE [${device.mac.slice(-4)}]`}</p>
           <p className="text-[9px] text-cyan-300 font-mono truncate">{device.mac}</p>
         </div>
-        <button onClick={onClose} className="text-slate-400 hover:text-white p-1">
+        <button 
+          type="button" 
+          onClick={onClose} 
+          className="text-slate-400 hover:text-white p-1"
+        >
           <X className="w-3.5 h-3.5" />
         </button>
       </div>
@@ -94,6 +114,7 @@ export default function ContextMenu({
       <div className="space-y-0.5">
         {/* Abrir en Nueva Pestaña */}
         <button
+          type="button"
           onClick={handleOpenNewTab}
           className="w-full px-2.5 py-1.5 rounded-lg text-left text-slate-200 hover:bg-cyan-500/20 hover:text-white flex items-center gap-2 transition-colors"
         >
@@ -103,15 +124,17 @@ export default function ContextMenu({
 
         {/* Entrar a Control Total */}
         <button
+          type="button"
           onClick={() => { onOpenDetail(device.mac); onClose(); }}
-          className="w-full px-2.5 py-1.5 rounded-lg text-left text-slate-200 hover:bg-cyan-500/20 hover:text-white flex items-center gap-2 transition-colors"
+          className="w-full px-2.5 py-1.5 rounded-lg text-left text-slate-200 hover:bg-cyan-500/20 hover:text-white flex items-center gap-2 transition-colors font-bold"
         >
           <Activity className="w-3.5 h-3.5 text-cyan-400" />
           <span>Entrar a Control Total</span>
         </button>
 
-        {/* Anclar Terminal */}
+        {/* Anclar Terminal Fija */}
         <button
+          type="button"
           onClick={() => { onToggleKiosk(device.mac); onClose(); }}
           className="w-full px-2.5 py-1.5 rounded-lg text-left text-slate-200 hover:bg-cyan-500/20 hover:text-white flex items-center gap-2 transition-colors"
         >
@@ -122,6 +145,7 @@ export default function ContextMenu({
         {/* Asignar a Cliente / Usuario (Admin) */}
         {isAdmin && (
           <button
+            type="button"
             onClick={() => { onOpenAssignModal(device); onClose(); }}
             className="w-full px-2.5 py-1.5 rounded-lg text-left text-slate-200 hover:bg-cyan-500/20 hover:text-white flex items-center gap-2 transition-colors"
           >
@@ -132,10 +156,11 @@ export default function ContextMenu({
 
         <div className="my-1 border-t border-slate-800"></div>
 
-        {/* Acciones de Hardware Rápido (Técnico / Admin) */}
+        {/* Pruebas de Hardware Rápido (Técnico / Admin) */}
         {canEditHardware && (
           <>
             <button
+              type="button"
               onClick={() => { onTestMotor(device.mac); onClose(); }}
               className="w-full px-2.5 py-1.5 rounded-lg text-left text-slate-200 hover:bg-cyan-500/20 hover:text-white flex items-center gap-2 transition-colors"
             >
@@ -144,6 +169,7 @@ export default function ContextMenu({
             </button>
 
             <button
+              type="button"
               onClick={() => { onResetAlarm(device.mac); onClose(); }}
               className="w-full px-2.5 py-1.5 rounded-lg text-left text-slate-200 hover:bg-cyan-500/20 hover:text-white flex items-center gap-2 transition-colors"
             >
@@ -155,6 +181,7 @@ export default function ContextMenu({
 
         {/* Generar QR Quirúrgico */}
         <button
+          type="button"
           onClick={() => { onOpenQR(device); onClose(); }}
           className="w-full px-2.5 py-1.5 rounded-lg text-left text-slate-200 hover:bg-cyan-500/20 hover:text-white flex items-center gap-2 transition-colors"
         >
@@ -164,6 +191,7 @@ export default function ContextMenu({
 
         {/* Copiar MAC */}
         <button
+          type="button"
           onClick={handleCopyMac}
           className="w-full px-2.5 py-1.5 rounded-lg text-left text-slate-400 hover:bg-slate-800 hover:text-white flex items-center gap-2 transition-colors"
         >
