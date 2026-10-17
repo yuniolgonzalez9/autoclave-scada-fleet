@@ -1,34 +1,28 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import ClinicalTooltip from '../common/ClinicalTooltip';
 import { CLINICAL_HELP } from '../../utils/clinicalDictionary';
-import { supabase } from '../../services/supabase';
-import { desplegarPerfilJsonFota } from '../../services/fotaJsonService';
+import { desplegarPerfilJsonFota } from '../../services/fotaService';
 import { 
   Rocket, 
   Upload, 
   CheckCircle2, 
-  AlertTriangle, 
   Loader2, 
   FileCode, 
   Layers, 
-  Send, 
-  Server, 
-  Sparkles,
-  Check, 
-  X
+  Send 
 } from 'lucide-react';
 
-export default function FotaHubView({ fleet, sendCommand }) {
+export default function FotaHubView({ fleet = {}, sendCommand }) {
   const [fotaMode, setFotaMode] = useState('JSON'); // 'JSON' o 'BIN'
   
   // Parámetros Binario C++
   const [fotaVersion, setFotaVersion] = useState('v8.0');
   const [fotaUrl, setFotaUrl] = useState('https://raw.githubusercontent.com/yuniolgonzalez9/autoclave-scada-fleet/main/firmwares/firmware.bin');
   
-  // Parámetros JSON (Supabase Storage + LittleFS)
+  // Parámetros Manifiesto JSON (Supabase Storage + LittleFS)
   const [perfilNombre, setPerfilNombre] = useState('Manifiesto_Industrial_Base');
   const [tipoEquipo, setTipoEquipo] = useState('UNIVERSAL_PLC');
-  const [jsonText, setJsonText] = useState(JSON.stringify({
+  const [jsonText, setJsonText] = useState(() => JSON.stringify({
     version: "2.0",
     dispositivo: "HKL-EA8 Universal",
     tipo: "UNIVERSAL_PLC",
@@ -49,16 +43,20 @@ export default function FotaHubView({ fleet, sendCommand }) {
   const [statusMsg, setStatusMsg] = useState('');
   const [jsonError, setJsonError] = useState('');
 
-  const macList = Object.keys(fleet);
-  const filteredMacs = macList.filter((mac) => {
-    const isOnline = Date.now() - (fleet[mac]?.lastSeen || 0) < 18000;
-    if (filterOnline === 'ONLINE') return isOnline;
-    if (filterOnline === 'OFFLINE') return !isOnline;
-    return true;
-  });
+  const macList = useMemo(() => Object.keys(fleet || {}), [fleet]);
+
+  const filteredMacs = useMemo(() => {
+    const now = Date.now();
+    return macList.filter((mac) => {
+      const isOnline = (now - (fleet[mac]?.lastSeen || 0)) < 15000;
+      if (filterOnline === 'ONLINE') return isOnline;
+      if (filterOnline === 'OFFLINE') return !isOnline;
+      return true;
+    });
+  }, [macList, fleet, filterOnline]);
 
   const toggleSelectAll = () => {
-    const allSelected = filteredMacs.every((mac) => selectedTargets[mac]);
+    const allSelected = filteredMacs.length > 0 && filteredMacs.every((mac) => selectedTargets[mac]);
     const nextState = {};
     filteredMacs.forEach((mac) => { nextState[mac] = !allSelected; });
     setSelectedTargets(nextState);
@@ -75,7 +73,7 @@ export default function FotaHubView({ fleet, sendCommand }) {
   };
 
   const handleFileUpload = (e) => {
-    const file = e.target.files[0];
+    const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -83,9 +81,10 @@ export default function FotaHubView({ fleet, sendCommand }) {
       setPerfilNombre(file.name.replace('.json', ''));
     };
     reader.readAsText(file);
+    e.target.value = ''; // Permite cargar el mismo archivo si fue editado
   };
 
-  // Despliegue de Binario .BIN
+  // 1. Despliegue de Binario C++ (.BIN)
   const handleExecuteFotaBin = () => {
     const targets = filteredMacs.filter((mac) => selectedTargets[mac]);
     if (targets.length === 0) {
@@ -93,26 +92,28 @@ export default function FotaHubView({ fleet, sendCommand }) {
       return;
     }
 
-    if (!confirm(`¿Confirmas la transmisión de firmware binario hacia ${targets.length} equipo(s)?`)) return;
+    if (!confirm(`¿Confirmas la transmisión de firmware binario (${fotaVersion}) hacia ${targets.length} equipo(s)?`)) return;
 
     setTransmitting(true);
     setStatusMsg(`Transmitiendo orden FOTA (.BIN) hacia ${targets.length} equipo(s)...`);
 
     targets.forEach((mac) => {
-      sendCommand(mac, {
-        cmd: 'TRIGGER_FOTA',
-        url: fotaUrl,
-        version: fotaVersion
-      });
+      if (sendCommand) {
+        sendCommand(mac, {
+          cmd: 'TRIGGER_FOTA',
+          url: fotaUrl.trim(),
+          version: fotaVersion.trim()
+        });
+      }
     });
 
     setTimeout(() => {
       setTransmitting(false);
-      setStatusMsg(`¡Orden FOTA (.BIN) transmitida con éxito vía MQTT!`);
-    }, 2000);
+      setStatusMsg(`¡Orden FOTA (.BIN) transmitida con éxito vía MQTT hacia ${targets.length} equipo(s)!`);
+    }, 1500);
   };
 
-  // Despliegue de Manifiesto JSON a Supabase Storage y LittleFS
+  // 2. Despliegue de Manifiesto JSON (Supabase Storage + LittleFS)
   const handleExecuteFotaJson = async () => {
     if (jsonError) {
       alert('Corrige los errores de sintaxis del JSON antes de desplegar.');
@@ -133,12 +134,12 @@ export default function FotaHubView({ fleet, sendCommand }) {
       return;
     }
 
-    if (!confirm(`¿Confirmas subir este manifiesto a Supabase Storage y desplegarlo en LittleFS para ${targets.length} equipo(s)?`)) {
+    if (!confirm(`¿Confirmas subir este manifiesto a Supabase Storage y grabarlo en Flash LittleFS en ${targets.length} equipo(s)?`)) {
       return;
     }
 
     setTransmitting(true);
-    setStatusMsg(`Subiendo archivo a Supabase Storage...`);
+    setStatusMsg(`Subiendo manifiesto a Supabase Storage...`);
 
     try {
       for (const mac of targets) {
@@ -153,7 +154,7 @@ export default function FotaHubView({ fleet, sendCommand }) {
         if (!result.success) throw new Error(result.error);
       }
 
-      setStatusMsg(`¡Manifiesto subido a Supabase Storage y transmitido a Flash LittleFS en ${targets.length} equipo(s)!`);
+      setStatusMsg(`¡Manifiesto subido y transmitido a Flash LittleFS en ${targets.length} equipo(s)!`);
     } catch (err) {
       setStatusMsg(`Error durante el despliegue: ${err.message}`);
     } finally {
@@ -162,7 +163,7 @@ export default function FotaHubView({ fleet, sendCommand }) {
   };
 
   return (
-    <div className="space-y-4 font-mono text-xs">
+    <div className="space-y-4 font-mono text-xs select-none">
       
       {/* Cabecera */}
       <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
@@ -172,7 +173,7 @@ export default function FotaHubView({ fleet, sendCommand }) {
             FOTA Cloud Hub Enterprise
           </h2>
           <p className="text-xs text-slate-300 mt-0.5 font-sans">
-            Despliegue y actualización remota de software binario (.BIN) y manifiestos de configuración (.JSON LittleFS)
+            Actualización remota de software binario (.BIN) y manifiestos de hardware (.JSON LittleFS)
           </p>
         </div>
 
@@ -213,11 +214,10 @@ export default function FotaHubView({ fleet, sendCommand }) {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         
-        {/* PANEL IZQUIERDO: CONFIGURADOR DEL PAQUETE */}
+        {/* PANEL IZQUIERDO: CONFIGURADOR */}
         <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 space-y-4">
           
           {fotaMode === 'JSON' ? (
-            /* MODO MANIFIESTO JSON A SUPABASE STORAGE Y LITTLEFS */
             <>
               <div className="flex justify-between items-center border-b border-cyan-500/20 pb-2">
                 <h3 className="text-sm font-bold text-amber-300 flex items-center gap-2">
@@ -260,7 +260,7 @@ export default function FotaHubView({ fleet, sendCommand }) {
               <div>
                 <label className="block text-slate-300 mb-1 flex justify-between">
                   <span>Estructura JSON (Se graba en LittleFS vía Supabase Storage):</span>
-                  {jsonError && <span className="text-rose-400 font-bold">{jsonError}</span>}
+                  {jsonError && <span className="text-rose-400 font-bold text-[10px]">{jsonError}</span>}
                 </label>
                 <textarea
                   rows={14}
@@ -273,11 +273,10 @@ export default function FotaHubView({ fleet, sendCommand }) {
 
               <div className="p-2.5 rounded-xl bg-slate-950/60 border border-slate-800 text-slate-400 text-[10px] space-y-1">
                 <p>🔹 Este archivo se almacena en el bucket <strong>'firmwares'</strong> de Supabase Storage.</p>
-                <p>🔹 El microcontrolador descarga el archivo por HTTPS y lo graba en su partición interna Flash.</p>
+                <p>🔹 El microcontrolador descarga el archivo por HTTPS y lo graba en su partición Flash LittleFS.</p>
               </div>
             </>
           ) : (
-            /* MODO BINARIO C++ */
             <>
               <h3 className="text-sm font-bold text-white flex items-center gap-2 border-b border-cyan-500/20 pb-2">
                 <Layers className="w-4 h-4 text-cyan-400" />
@@ -290,7 +289,7 @@ export default function FotaHubView({ fleet, sendCommand }) {
                   type="text"
                   value={fotaVersion}
                   onChange={(e) => setFotaVersion(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-cyan-400"
+                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-cyan-400 font-bold"
                 />
               </div>
 
@@ -300,21 +299,21 @@ export default function FotaHubView({ fleet, sendCommand }) {
                   type="text"
                   value={fotaUrl}
                   onChange={(e) => setFotaUrl(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-cyan-400"
+                  className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-cyan-400 font-mono"
                 />
               </div>
 
               <div className="p-4 rounded-xl border border-dashed border-slate-700 bg-slate-950/40 text-center">
                 <Upload className="w-6 h-6 text-cyan-400 mx-auto mb-2" />
                 <p className="text-xs text-slate-300 font-sans font-semibold">Binario C++ con Doble Partición OTA</p>
-                <p className="text-[10px] text-slate-500 mt-1">El ESP32 validará la integridad antes de reiniciar y cuenta con rollback seguro si falla.</p>
+                <p className="text-[10px] text-slate-500 mt-1">El ESP32 valida la integridad SHA-256 antes de reiniciar y cuenta con rollback automático si falla.</p>
               </div>
             </>
           )}
 
         </div>
 
-        {/* PANEL DERECHO: EQUIPOS DESTINO Y TRANSMISIÓN */}
+        {/* PANEL DERECHO: EQUIPOS DESTINO */}
         <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 space-y-4 flex flex-col justify-between">
           <div>
             <div className="flex justify-between items-center mb-3">
@@ -323,18 +322,21 @@ export default function FotaHubView({ fleet, sendCommand }) {
               </h3>
               <div className="flex gap-1.5">
                 <button
+                  type="button"
                   onClick={() => setFilterOnline('ALL')}
                   className={`px-2 py-1 rounded text-[10px] ${filterOnline === 'ALL' ? 'bg-cyan-500 text-slate-950 font-bold' : 'bg-slate-900 text-slate-400'}`}
                 >
                   TODOS
                 </button>
                 <button
+                  type="button"
                   onClick={() => setFilterOnline('ONLINE')}
                   className={`px-2 py-1 rounded text-[10px] ${filterOnline === 'ONLINE' ? 'bg-emerald-500 text-slate-950 font-bold' : 'bg-slate-900 text-slate-400'}`}
                 >
                   ONLINE
                 </button>
                 <button
+                  type="button"
                   onClick={toggleSelectAll}
                   className="px-2 py-1 bg-amber-500/20 text-amber-300 rounded text-[10px] font-bold"
                 >
@@ -351,8 +353,8 @@ export default function FotaHubView({ fleet, sendCommand }) {
               ) : (
                 filteredMacs.map((mac) => {
                   const dev = fleet[mac];
-                  const isOnline = Date.now() - (dev?.lastSeen || 0) < 18000;
-                  const checked = !!selectedTargets[mac];
+                  const isOnline = (Date.now() - (dev?.lastSeen || 0)) < 15000;
+                  const checked = Boolean(selectedTargets[mac]);
                   const devTipo = dev?.meta?.tipo || 'UNIVERSAL_PLC';
 
                   return (
@@ -380,7 +382,7 @@ export default function FotaHubView({ fleet, sendCommand }) {
                         </div>
                       </div>
 
-                      <span className={`px-2 py-0.5 rounded text-[10px] border ${
+                      <span className={`px-2 py-0.5 rounded text-[10px] border font-bold ${
                         isOnline ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
                       }`}>
                         {isOnline ? 'ONLINE' : 'OFFLINE'}
@@ -392,7 +394,7 @@ export default function FotaHubView({ fleet, sendCommand }) {
             </div>
           </div>
 
-          {/* BOTÓN MAESTRO DE ACCIÓN */}
+          {/* Botón Maestro */}
           <div>
             {fotaMode === 'JSON' ? (
               <button
@@ -408,12 +410,16 @@ export default function FotaHubView({ fleet, sendCommand }) {
                 ) : (
                   <>
                     <Send className="w-4 h-4" />
-                    <span>⚡ SUBIR A SUPABASE STORAGE Y DESPLEGAR A LITTLEFS</span>
+                    <span>⚡ SUBIR A STORAGE Y DESPLEGAR A LITTLEFS</span>
                   </>
                 )}
               </button>
             ) : (
-              <ClinicalTooltip title={CLINICAL_HELP.btn_fota_trigger.title} description={CLINICAL_HELP.btn_fota_trigger.desc} badge={CLINICAL_HELP.btn_fota_trigger.badge}>
+              <ClinicalTooltip 
+                title={CLINICAL_HELP.btn_fota_trigger?.title || 'FOTA Binario'} 
+                description={CLINICAL_HELP.btn_fota_trigger?.desc || 'Despliegue OTA de binario C++ compilado'} 
+                badge={CLINICAL_HELP.btn_fota_trigger?.badge || 'OTA'}
+              >
                 <button
                   onClick={handleExecuteFotaBin}
                   disabled={transmitting}
