@@ -1,16 +1,48 @@
-import React from 'react';
+import React, { useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { 
-  AlertTriangle, 
   ShieldCheck, 
   Check, 
-  X, 
   Flame, 
   RotateCcw, 
-  Square,
-  Lock,
-  UserCheck
+  Square, 
+  UserCheck,
+  AlertTriangle,
+  X
 } from 'lucide-react';
+
+/**
+ * Función Criptográfica para Sellar Reportes y Comandos con Hash SHA-256
+ * Compatible con HTTPS (Web Crypto API) y con redes locales HTTP (Fallback FNV-1a)
+ */
+export async function generateClinicalHash(dataString = '') {
+  const str = String(dataString);
+
+  // 1. Entorno seguro HTTPS / Localhost
+  if (typeof window !== 'undefined' && window.crypto && window.crypto.subtle) {
+    try {
+      const encoder = new TextEncoder();
+      const data = encoder.encode(str);
+      const hashBuffer = await window.crypto.subtle.digest('SHA-256', data);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('').substring(0, 32).toUpperCase();
+    } catch (_) {}
+  }
+
+  // 2. Fallback matemático de dispersión para intranets hospitalarias sin certificado SSL
+  let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  const part1 = (h1 >>> 0).toString(16).padStart(8, '0');
+  const part2 = (h2 >>> 0).toString(16).padStart(8, '0');
+  const timestampPart = Date.now().toString(16).slice(-8);
+  return `${part1}${part2}${timestampPart}`.substring(0, 32).toUpperCase();
+}
 
 export default function ActionConfirmModal({
   isOpen,
@@ -22,7 +54,19 @@ export default function ActionConfirmModal({
   deviceName = 'AUTOCLAVE',
   operatorName = 'Operador Activo'
 }) {
-  if (!isOpen) return null;
+  // Manejador de Escape para cancelar
+  const handleKeyDown = useCallback((e) => {
+    if (e.key === 'Escape') onClose();
+  }, [onClose]);
+
+  useEffect(() => {
+    if (isOpen) {
+      window.addEventListener('keydown', handleKeyDown);
+    }
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, handleKeyDown]);
+
+  if (!isOpen || typeof document === 'undefined') return null;
 
   const getThemeConfig = () => {
     switch (actionType) {
@@ -30,7 +74,7 @@ export default function ActionConfirmModal({
         return {
           icon: <Flame className="w-8 h-8 text-cyan-400" />,
           border: 'border-cyan-500/60',
-          btnBg: 'bg-gradient-to-r from-cyan-500 to-blue-600',
+          btnBg: 'bg-gradient-to-r from-cyan-500 to-blue-600 hover:opacity-90',
           btnText: 'Confirmar & Iniciar Ciclo',
           badge: 'ORDEN DE MARCHA'
         };
@@ -64,9 +108,14 @@ export default function ActionConfirmModal({
   const config = getThemeConfig();
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999999] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className={`w-full max-w-md ultra-glass border-2 ${config.border} rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.9)] p-6 space-y-4 font-mono text-xs text-left animate-in fade-in zoom-in-95 duration-150`}>
-        
+    <div 
+      className="fixed inset-0 z-[99999] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 select-none"
+      onClick={onClose}
+    >
+      <div 
+        className={`w-full max-w-md ultra-glass border-2 ${config.border} rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.9)] p-6 space-y-4 font-mono text-xs text-left`}
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Cabecera */}
         <div className="flex items-start gap-3">
           <div className="p-2.5 rounded-xl bg-slate-900 border border-white/10 shrink-0">
@@ -86,6 +135,13 @@ export default function ActionConfirmModal({
               Equipo: <strong>{deviceName}</strong>
             </p>
           </div>
+          <button 
+            type="button" 
+            onClick={onClose} 
+            className="text-slate-400 hover:text-white p-1"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
 
         <p className="text-slate-300 font-sans text-xs leading-relaxed">
@@ -102,17 +158,17 @@ export default function ActionConfirmModal({
             <span className="text-white font-bold">{operatorName}</span>
           </div>
           <div className="flex justify-between items-center text-[9px] text-slate-500">
-            <span>Hora del Registro:</span>
+            <span>Hora de Registro:</span>
             <span>{new Date().toLocaleTimeString()}</span>
           </div>
         </div>
 
-        {/* Botones */}
+        {/* Botones de Confirmación */}
         <div className="flex gap-2 pt-1">
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold"
+            className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold transition-all"
           >
             Cancelar
           </button>
@@ -122,7 +178,7 @@ export default function ActionConfirmModal({
               onConfirm();
               onClose();
             }}
-            className={`flex-1 py-2.5 ${config.btnBg} text-white rounded-xl font-bold flex items-center justify-center gap-1.5 shadow-lg active:scale-95`}
+            className={`flex-1 py-2.5 ${config.btnBg} text-white rounded-xl font-bold flex items-center justify-center gap-1.5 shadow-lg active:scale-95 transition-all`}
           >
             <Check className="w-4 h-4" />
             <span>{config.btnText}</span>
@@ -133,23 +189,4 @@ export default function ActionConfirmModal({
     </div>,
     document.body
   );
-}
-
-// Función Criptográfica para Sellar Reportes Clínicos con Hash SHA-256
-export async function generateClinicalHash(dataString) {
-  try {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(dataString);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('').substring(0, 32).toUpperCase();
-  } catch (e) {
-    // Fallback matemático
-    let hash = 0;
-    for (let i = 0; i < dataString.length; i++) {
-      hash = ((hash << 5) - hash) + dataString.charCodeAt(i);
-      hash |= 0;
-    }
-    return Math.abs(hash).toString(16).padStart(16, '0').toUpperCase();
-  }
 }
