@@ -17,14 +17,15 @@ html, body {
   overflow-x: hidden !important;
   position: relative;
   background-color: #030712;
-  font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   color: #ffffff;
   -webkit-tap-highlight-color: transparent;
   touch-action: pan-y;
+  overscroll-behavior-y: none; /* Evita pull-to-refresh accidental en Android */
 }
 
 code, .font-mono {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: 'JetBrains Mono', monospace, Courier;
 }
 
 /* =========================================================================
@@ -33,7 +34,7 @@ code, .font-mono {
 @keyframes androidViewEnter {
   0% {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(6px);
   }
   100% {
     opacity: 1;
@@ -42,11 +43,13 @@ code, .font-mono {
 }
 
 .android-view-transition {
-  animation: androidViewEnter 0.22s cubic-bezier(0.2, 0.9, 0.3, 1) forwards;
+  animation: androidViewEnter 0.18s cubic-bezier(0.2, 0.9, 0.3, 1) forwards;
+  will-change: transform, opacity;
 }
 
 button:active, .btn-touch:active {
-  transform: scale(0.96);
+  transform: scale(0.97);
+  transition: transform 0.05s ease;
 }
 
 /* =========================================================================
@@ -77,16 +80,17 @@ button:active, .btn-touch:active {
 }
 
 /* =========================================================================
-   3. ULTRA-GLASS CRISTAL REAL (0% A 100%)
+   3. ULTRA-GLASS CRISTAL REAL CON ACELERACIÓN GPU
    ========================================================================= */
 .ultra-glass {
   background-color: rgb(var(--glass-bg) / var(--glass-opacity)) !important;
-  backdrop-filter: blur(calc(var(--glass-opacity) * 16px + 2px)) !important;
-  -webkit-backdrop-filter: blur(calc(var(--glass-opacity) * 16px + 2px)) !important;
+  backdrop-filter: blur(calc(var(--glass-opacity) * 14px + 2px)) !important;
+  -webkit-backdrop-filter: blur(calc(var(--glass-opacity) * 14px + 2px)) !important;
   border: 1.5px solid var(--card-border) !important;
   box-shadow: 0 8px 32px 0 rgba(0, 0, 0, calc(var(--glass-opacity) * 0.6)), 
-              inset 0 1px 0 rgba(255, 255, 255, 0.15);
+              inset 0 1px 0 rgba(255, 255, 255, 0.12);
   transition: background-color 0.2s ease, border-color 0.2s ease;
+  transform: translateZ(0); /* Fuerza capa de aceleración por GPU */
 }
 
 .ultra-glass:hover {
@@ -96,16 +100,26 @@ button:active, .btn-touch:active {
 .glass-cell {
   background-color: rgb(var(--glass-bg) / calc(var(--glass-opacity) * 0.75 + 0.1)) !important;
   backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+/* Fallback para navegadores o GPUs que deshabilitan backdrop-filter */
+@supports not (backdrop-filter: blur(10px)) {
+  .ultra-glass {
+    background-color: rgb(15 23 42 / 0.96) !important;
+  }
+}
+
 /* =========================================================================
-   4. RAYITA LÁSER SPEEDTEST BLINDADA (OVERFLOW: HIDDEN ESTRICTO)
+   4. RAYITA LÁSER SPEEDTEST BLINDADA (OVERFLOW ESTRICTO)
    ========================================================================= */
 .speedtest-laser-header {
   position: relative;
-  overflow: hidden !important; /* Evita que el láser estire la pantalla en Android */
+  overflow: hidden !important;
+  contain: paint; /* Evita que el navegador estire el layout hacia los lados */
 }
+
 .speedtest-laser-header::before {
   content: '';
   position: absolute;
@@ -116,7 +130,7 @@ button:active, .btn-touch:active {
   background: var(--laser-gradient);
   box-shadow: var(--laser-glow);
   z-index: 50;
-  animation: laserBeam 3s linear infinite;
+  animation: laserBeam 3.2s linear infinite;
   pointer-events: none;
 }
 
@@ -125,7 +139,47 @@ button:active, .btn-touch:active {
   100% { transform: translateX(200%); }
 }
 
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: rgba(10, 10, 20, 0.7); }
-::-webkit-scrollbar-thumb { background: rgba(0, 243, 255, 0.35); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(0, 243, 255, 0.7); }
+/* =========================================================================
+   5. BARRAS DE SCROLL PERSONALIZADAS CROSS-BROWSER
+   ========================================================================= */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 243, 255, 0.35) rgba(10, 10, 20, 0.7);
+}
+
+::-webkit-scrollbar { 
+  width: 6px; 
+  height: 6px; 
+}
+::-webkit-scrollbar-track { 
+  background: rgba(10, 10, 20, 0.7); 
+}
+::-webkit-scrollbar-thumb { 
+  background: rgba(0, 243, 255, 0.35); 
+  border-radius: 3px; 
+}
+::-webkit-scrollbar-thumb:hover { 
+  background: rgba(0, 243, 255, 0.7); 
+}
+
+/* =========================================================================
+   6. REGLAS LIMPIAS PARA IMPRESIÓN MÉDICA OFICIAL (CTRL + P)
+   ========================================================================= */
+@media print {
+  body {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+  }
+  .speedtest-laser-header::before,
+  nav,
+  button,
+  #scada-background {
+    display: none !important;
+  }
+  .ultra-glass {
+    background-color: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    color: #000000 !important;
+  }
+}
