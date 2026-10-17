@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 
 export default function ClinicalTooltip({ 
@@ -11,68 +11,96 @@ export default function ClinicalTooltip({
   position = 'bottom' 
 }) {
   const [visible, setVisible] = useState(false);
-  const [coords, setCoords] = useState({ top: 0, left: 0 });
+  const [coords, setCoords] = useState({ top: 0, left: 0, actualPos: position });
   const triggerRef = useRef(null);
   const timerRef = useRef(null);
+  const rafRef = useRef(null);
 
-  // Calcula la posición exacta en pantalla sin importar scroll ni contenedores padres
-  const updateCoords = () => {
+  // Calcula posición sin forzar reflow continuo
+  const updateCoords = useCallback(() => {
     if (!triggerRef.current) return;
     const rect = triggerRef.current.getBoundingClientRect();
     const tooltipWidth = 280;
+    const tooltipHeight = 120; // Estimación segura de altura
 
+    let actualPos = position;
     let top = rect.bottom + 8;
-    if (position === 'top') {
-      top = rect.top - 8;
+
+    // Auto-Flip si se sale por la parte inferior de la pantalla
+    if (position === 'bottom' && (top + tooltipHeight > window.innerHeight - 10)) {
+      actualPos = 'top';
+      top = rect.top - tooltipHeight - 8;
+    } else if (position === 'top') {
+      top = rect.top - tooltipHeight - 8;
+      if (top < 10) {
+        actualPos = 'bottom';
+        top = rect.bottom + 8;
+      }
     }
 
-    // Centrar con respecto al botón y evitar que se salga por los bordes de la pantalla
+    // Centrado horizontal con márgenes de seguridad en pantalla
     let left = rect.left + rect.width / 2 - tooltipWidth / 2;
     left = Math.max(12, Math.min(left, window.innerWidth - tooltipWidth - 12));
 
-    setCoords({ top, left });
-  };
+    setCoords({ top, left, actualPos });
+  }, [position]);
 
   const handleMouseEnter = () => {
-    updateCoords();
+    if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {
       updateCoords();
       setVisible(true);
-    }, 200);
+    }, 180);
   };
 
   const handleMouseLeave = () => {
-    clearTimeout(timerRef.current);
+    if (timerRef.current) clearTimeout(timerRef.current);
     setVisible(false);
   };
 
   const handleTouchStart = () => {
-    updateCoords();
+    if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {
       updateCoords();
       setVisible(true);
-    }, 350);
+    }, 300);
   };
 
   const handleTouchEnd = () => {
-    clearTimeout(timerRef.current);
+    if (timerRef.current) clearTimeout(timerRef.current);
     if (visible) {
-      setTimeout(() => setVisible(false), 3000);
+      timerRef.current = setTimeout(() => setVisible(false), 2500);
     }
   };
 
-  // Mantener posición firme si el usuario hace scroll
+  // Ocultar suavemente al hacer scroll para no recalcular la pantalla
   useEffect(() => {
-    if (visible) {
-      const handleReposition = () => updateCoords();
-      window.addEventListener('scroll', handleReposition, true);
-      window.addEventListener('resize', handleReposition);
-      return () => {
-        window.removeEventListener('scroll', handleReposition, true);
-        window.removeEventListener('resize', handleReposition);
-      };
-    }
+    if (!visible) return;
+
+    const handleScrollOrResize = () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(() => {
+        setVisible(false);
+      });
+    };
+
+    window.addEventListener('scroll', handleScrollOrResize, { passive: true, capture: true });
+    window.addEventListener('resize', handleScrollOrResize, { passive: true });
+
+    return () => {
+      window.removeEventListener('scroll', handleScrollOrResize, { capture: true });
+      window.removeEventListener('resize', handleScrollOrResize);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
   }, [visible]);
+
+  // Limpieza al desmontar
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, []);
 
   return (
     <div 
@@ -85,11 +113,11 @@ export default function ClinicalTooltip({
     >
       {children}
 
-      {/* Renderizado en la raíz del documento: NUNCA queda por debajo de nada */}
+      {/* Montado en raíz de documento con portal */}
       {visible && typeof document !== 'undefined' && createPortal(
         <div 
           style={{ top: `${coords.top}px`, left: `${coords.left}px` }}
-          className="fixed z-[9999999] pointer-events-none w-[280px] p-3.5 rounded-2xl ultra-glass border-2 border-cyan-400 shadow-[0_20px_50px_rgba(0,0,0,0.95)] backdrop-blur-2xl animate-in fade-in zoom-in-95 duration-150 text-left select-none"
+          className="fixed z-[99999] pointer-events-none w-[280px] p-3.5 rounded-2xl ultra-glass border-2 border-cyan-400 shadow-[0_20px_50px_rgba(0,0,0,0.95)] backdrop-blur-2xl animate-in fade-in zoom-in-95 duration-100 text-left select-none"
         >
           <div className="flex items-center justify-between gap-1.5 border-b border-cyan-500/30 pb-1.5 mb-2">
             <span className="font-mono text-xs font-bold text-white tracking-wide uppercase truncate">
@@ -106,7 +134,7 @@ export default function ClinicalTooltip({
             {description}
           </p>
 
-          {/* Detalles enriquecidos (Ficha del usuario, IP, hospital) */}
+          {/* Ficha enriquecida */}
           {extraDetails && (
             <div className="my-2 py-1.5 border-t border-b border-white/10 text-[10px] font-mono space-y-1">
               {extraDetails}
