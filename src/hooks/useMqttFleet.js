@@ -1,36 +1,48 @@
-import { useState, useEffect, useRef } from 'react';
-import { connectMqttFleet } from '../services/mqttClient';
-import { accumulateF0 } from '../utils/f0Formulas';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { connectMqttFleet } from '../services/mqttFleet';
+import { accumulateF0 } from '../utils/f0Calculator';
 import { supabase } from '../services/supabase';
 
 const CACHE_KEY = 'biofleet_fleet_cache_v2';
+const PERSIST_INTERVAL_MS = 4000; // Guarda en sessionStorage cada 4s, no cada 800ms
 
 export function useMqttFleet() {
-  // Carga inicial en 0ms desde la memoria rápida de sesión
+  // 1. Carga inicial en 0ms desde sessionStorage
   const [fleet, setFleet] = useState(() => {
     try {
       const cached = sessionStorage.getItem(CACHE_KEY);
       if (cached) return JSON.parse(cached);
-    } catch (e) {}
+    } catch (e) {
+      console.warn('[CACHE] Error leyendo caché local:', e);
+    }
     return {};
   });
 
-  // ARRANQUE OPTIMISTA EN TRUE: Sale verde desde el fotograma 0 (igual que Supabase)
   const [mqttConnected, setMqttConnected] = useState(true);
   const sendCommandRef = useRef(null);
+  const fleetRef = useRef(fleet);
+  fleetRef.current = fleet;
 
-  // Persistir en memoria rápida de sesión periódicamente
+  // 2. Persistencia periódica inteligente (Evita congelar el navegador con JSON.stringify)
   useEffect(() => {
-    try {
-      if (Object.keys(fleet).length > 0) {
-        sessionStorage.setItem(CACHE_KEY, JSON.stringify(fleet));
+    const timer = setInterval(() => {
+      try {
+        const currentData = fleetRef.current;
+        if (Object.keys(currentData).length > 0) {
+          sessionStorage.setItem(CACHE_KEY, JSON.stringify(currentData));
+        }
+      } catch (e) {
+        console.warn('[CACHE] Error persistiendo sesión:', e);
       }
-    } catch (e) {}
-  }, [fleet]);
+    }, PERSIST_INTERVAL_MS);
 
-  // 1. Cargar equipos desde Supabase
+    return () => clearInterval(timer);
+  }, []);
+
+  // 3. Cargar inventario registrado desde Supabase
   useEffect(() => {
     let isMounted = true;
+
     const loadRegisteredDevices = async () => {
       try {
         const { data, error } = await supabase
@@ -39,54 +51,55 @@ export function useMqttFleet() {
 
         if (!error && data && data.length > 0 && isMounted) {
           setFleet((prev) => {
-            const initialFleet = { ...prev };
+            const nextFleet = { ...prev };
+            const now = Date.now();
+
             data.forEach((item) => {
               const rawMac = item.mac || item.Mac || '';
-              const devMac = rawMac.toUpperCase().replace(/[:\-]/g, '');
-              
-              if (devMac) {
-                const configDeseada = item.config_deseada || {};
-                const tipoCalculado = configDeseada.tipo || item.tipo || 'AUTOCLAVE';
-                const existing = initialFleet[devMac] || {};
+              const cleanMac = rawMac.toUpperCase().replace(/[:\-]/g, '');
+              if (!cleanMac) return;
 
-                initialFleet[devMac] = {
-                  mac: devMac,
-                  // ARRANQUE VERDE: Inicia con la hora actual para que nunca parpadee en rojo al dar F5
-                  lastSeen: existing.lastSeen || Date.now(),
-                  datos: {
-                    temp_camara: existing.datos?.temp_camara ?? 25.0,
-                    presion: existing.datos?.presion ?? 0.0,
-                    motor: existing.datos?.motor ?? false,
-                    calentador: existing.datos?.calentador ?? false,
-                    vacio: existing.datos?.vacio ?? false,
-                    fase: existing.datos?.fase || 'ESPERA',
-                    tipo: tipoCalculado,
-                    seg_restantes: existing.datos?.seg_restantes ?? 0,
-                    reles: existing.datos?.reles || { R1: 0, R2: 0, R3: 0, R4: 0, R5: 0, R6: 0, R7: 0, R8: 0 },
-                    entradas: existing.datos?.entradas || { IN1: 0, IN2: 0, IN3: 0, IN4: 0, IN5: 0, IN6: 0, IN7: 0, IN8: 0 },
-                    cfg: { 
-                      ciclos: Number(item.ciclos || existing.datos?.cfg?.ciclos || 0), 
-                      lim_mant: Number(item.limite || existing.datos?.cfg?.lim_mant || 200),
-                      alerta_pct: Number(configDeseada.alerta_pct || 80),
-                      sp_temp: configDeseada.sp_temp || 121.0,
-                      t_ciclo: configDeseada.t_ciclo || 2
-                    }
-                  },
-                  esquema: existing.esquema || null,
-                  i2cReport: existing.i2cReport || null,
-                  hwProfile: existing.hwProfile || null,
-                  logicaAck: existing.logicaAck || null,
-                  meta: { ...item, mac: devMac, tipo: tipoCalculado },
-                  f0Score: existing.f0Score || 0.0,
-                  history: existing.history || []
-                };
-              }
+              const configDeseada = item.config_deseada || {};
+              const tipoCalculado = (configDeseada.tipo || item.tipo || 'AUTOCLAVE').toUpperCase();
+              const existing = nextFleet[cleanMac] || {};
+
+              nextFleet[cleanMac] = {
+                mac: cleanMac,
+                lastSeen: existing.lastSeen || now,
+                datos: {
+                  temp_camara: existing.datos?.temp_camara ?? 25.0,
+                  presion: existing.datos?.presion ?? 0.0,
+                  motor: existing.datos?.motor ?? false,
+                  calentador: existing.datos?.calentador ?? false,
+                  vacio: existing.datos?.vacio ?? false,
+                  fase: existing.datos?.fase || 'ESPERA',
+                  tipo: tipoCalculado,
+                  seg_restantes: existing.datos?.seg_restantes ?? 0,
+                  reles: existing.datos?.reles || { R1: 0, R2: 0, R3: 0, R4: 0, R5: 0, R6: 0, R7: 0, R8: 0 },
+                  entradas: existing.datos?.entradas || { IN1: 0, IN2: 0, IN3: 0, IN4: 0, IN5: 0, IN6: 0, IN7: 0, IN8: 0 },
+                  cfg: {
+                    ciclos: Number(item.ciclos || existing.datos?.cfg?.ciclos || 0),
+                    lim_mant: Number(item.limite || existing.datos?.cfg?.lim_mant || 200),
+                    alerta_pct: Number(configDeseada.alerta_pct || 80),
+                    sp_temp: Number(configDeseada.sp_temp || 121.0),
+                    t_ciclo: Number(configDeseada.t_ciclo || 2)
+                  }
+                },
+                esquema: existing.esquema || null,
+                i2cReport: existing.i2cReport || null,
+                hwProfile: existing.hwProfile || null,
+                logicaAck: existing.logicaAck || null,
+                meta: { ...item, mac: cleanMac, tipo: tipoCalculado },
+                f0Score: existing.f0Score || 0.0,
+                history: existing.history || []
+              };
             });
-            return initialFleet;
+
+            return nextFleet;
           });
         }
       } catch (err) {
-        console.warn('[SUPABASE] Carga inicial:', err);
+        console.warn('[SUPABASE] Carga de inventario inicial:', err);
       }
     };
 
@@ -94,7 +107,39 @@ export function useMqttFleet() {
     return () => { isMounted = false; };
   }, []);
 
-  // 2. Conexión MQTT
+  // 4. Procesador asíncrono seguro para reportes clínicos de ciclo (Fuera de setFleet)
+  const persistSessionReport = useCallback(async (cleanMac, payload, currentMeta) => {
+    try {
+      const ciclosAcum = Number(payload?.ciclos_acumulados || payload?.ciclos || 0);
+      const sessionId = payload?.session_id || `SES-${cleanMac}-${Date.now()}`;
+
+      await supabase.from('reportes_autoclaves').upsert({
+        session_id: sessionId,
+        mac: cleanMac,
+        alias: currentMeta?.alias || cleanMac,
+        cliente: currentMeta?.cliente || 'Central Hospitalaria',
+        modelo: currentMeta?.modelo || 'Clase B',
+        programa: payload?.programa || '134°C INSTRUMENTAL',
+        hora_encendido: payload?.hora_encendido || '00:00:00',
+        inicio_ciclo: payload?.inicio_ciclo || payload?.hora_encendido || '00:00:00',
+        hora_apagado: payload?.hora_apagado || '00:00:00',
+        duracion_total_seg: Number(payload?.duracion_total_seg || 0),
+        ciclos_acumulados: ciclosAcum,
+        limite_mantenimiento: Number(payload?.limite_mantenimiento || 200),
+        temp_max: parseFloat(payload?.temp_max || 0),
+        pres_max: parseFloat(payload?.pres_max || 0),
+        conteo_alarmas: Number(payload?.conteo_alarmas || 0),
+        diagnostico_principal: payload?.diagnostico_principal || 'CICLO CONFORME',
+        fase_final: payload?.fase_final || 'FINALIZADO',
+        ciclos_detalle: payload?.ciclos_detalle || payload?.fases_desglose || [],
+        eventos: payload?.eventos || []
+      }, { onConflict: 'session_id' });
+    } catch (e) {
+      console.warn('[SUPABASE] Error registrando reporte forense:', e);
+    }
+  }, []);
+
+  // 5. Conexión centralizada MQTT
   useEffect(() => {
     const { client, sendCommand } = connectMqttFleet(
       ({ mac, channel, payload, isRetained }) => {
@@ -121,46 +166,45 @@ export function useMqttFleet() {
             lastSeen: isFreshStream ? Date.now() : (currentDev.lastSeen || Date.now())
           };
 
-          // TELEMETRÍA EN VIVO (800ms)
+          // INGESTA DE TELEMETRÍA (800ms)
           if (channel === 'telemetria') {
             updated.datos = {
               ...(currentDev.datos || {}),
               ...(payload || {})
             };
 
-            const currentTemp = parseFloat(payload?.temp_camara || 25.0);
-            
-            if (payload?.fase === 'ESTERILIZANDO') {
+            const currentTemp = parseFloat(payload?.temp_camara ?? 25.0);
+            const currentPres = parseFloat(payload?.presion ?? 0.0);
+
+            // Integración F0
+            if (payload?.fase === 'ESTERILIZANDO' || payload?.fase === 'MESETA') {
               updated.f0Score = accumulateF0(currentDev.f0Score || 0, currentTemp, 2);
             } else if (payload?.fase === 'ESPERA' || payload?.fase === 'APAGADO') {
               updated.f0Score = 0.0;
             }
 
+            // Buffer histórico acotado a 30 muestras
             const nowTime = new Date().toTimeString().slice(3, 8);
             const newPoint = {
               time: nowTime,
               temperature: currentTemp,
-              pressure: parseFloat(payload?.presion || 0.0)
+              pressure: currentPres
             };
-            const newHistory = [...(currentDev.history || []), newPoint];
-            if (newHistory.length > 30) newHistory.shift();
-            updated.history = newHistory;
+
+            const prevHistory = currentDev.history || [];
+            updated.history = prevHistory.length >= 30 
+              ? [...prevHistory.slice(1), newPoint]
+              : [...prevHistory, newPoint];
           }
 
-          // ACK FÍSICO DE LÓGICA FOTA
           if (channel === 'logica') {
-            updated.logicaAck = {
-              ...payload,
-              timestamp: Date.now()
-            };
+            updated.logicaAck = { ...payload, timestamp: Date.now() };
           }
 
-          // ESCÁNER I2C REAL
           if (channel === 'i2c_report' || channel === 'hardware_scan') {
             updated.i2cReport = payload;
           }
 
-          // PERFIL HARDWARE
           if (channel === 'hw_profile') {
             updated.hwProfile = payload;
           }
@@ -170,42 +214,16 @@ export function useMqttFleet() {
           }
 
           if (channel === 'meta') {
-            updated.meta = Object.assign(updated.meta || {}, payload, { mac: cleanMac });
+            updated.meta = Object.assign({}, currentDev.meta || {}, payload, { mac: cleanMac });
           }
 
-          // REPORTES DE AUDITORÍA
           if (channel === 'reporte_paquete') {
             const ciclosAcum = Number(payload?.ciclos_acumulados || payload?.ciclos || 0);
             if (!updated.datos.cfg) updated.datos.cfg = {};
             updated.datos.cfg.ciclos = ciclosAcum;
 
-            (async () => {
-              try {
-                await supabase.from('reportes_autoclaves').upsert({
-                  session_id: payload?.session_id || `SES-${cleanMac}-${Date.now()}`,
-                  mac: cleanMac,
-                  alias: updated.meta?.alias || cleanMac,
-                  cliente: updated.meta?.cliente || 'Central Hospitalaria',
-                  modelo: updated.meta?.modelo || 'Clase B',
-                  programa: payload?.programa || '134°C INSTRUMENTAL',
-                  hora_encendido: payload?.hora_encendido || '00:00:00',
-                  inicio_ciclo: payload?.inicio_ciclo || payload?.hora_encendido || '00:00:00',
-                  hora_apagado: payload?.hora_apagado || '00:00:00',
-                  duracion_total_seg: Number(payload?.duracion_total_seg || 0),
-                  ciclos_acumulados: ciclosAcum,
-                  limite_mantenimiento: Number(payload?.limite_mantenimiento || 200),
-                  temp_max: parseFloat(payload?.temp_max || 0),
-                  pres_max: parseFloat(payload?.pres_max || 0),
-                  conteo_alarmas: Number(payload?.conteo_alarmas || 0),
-                  diagnostico_principal: payload?.diagnostico_principal || 'CICLO CONFORME',
-                  fase_final: payload?.fase_final || 'FINALIZADO',
-                  ciclos_detalle: payload?.ciclos_detalle || payload?.fases_desglose || [],
-                  eventos: payload?.eventos || []
-                }, { onConflict: 'session_id' });
-              } catch (e) {
-                console.warn('[SUPABASE] Error guardando paquete:', e);
-              }
-            })();
+            // Despachar guardado en segundo plano
+            persistSessionReport(cleanMac, payload, updated.meta);
           }
 
           return { ...prevFleet, [cleanMac]: updated };
@@ -215,11 +233,13 @@ export function useMqttFleet() {
     );
 
     sendCommandRef.current = sendCommand;
-    return () => { if (client) client.end(); };
-  }, []);
+    return () => { 
+      if (client) client.end(); 
+    };
+  }, [persistSessionReport]);
 
-  // 3. Envío de órdenes optimista
-  const sendDeviceCommand = (mac, cmd) => {
+  // 6. Envío optimista de comandos hacia actuadores y LittleFS
+  const sendDeviceCommand = useCallback((mac, cmd) => {
     const cleanMac = (mac || '').toUpperCase().replace(/[:\-]/g, '');
     if (!cleanMac) return;
 
@@ -229,6 +249,7 @@ export function useMqttFleet() {
       setFleet((prev) => {
         const dev = prev[cleanMac];
         if (!dev) return prev;
+
         const newDatos = { ...dev.datos };
         const newCfg = { ...(dev.datos?.cfg || {}) };
 
@@ -264,35 +285,27 @@ export function useMqttFleet() {
           newDatos.reles = currentReles;
         }
 
-        let nextLogicaAck = dev.logicaAck;
-        if (cmd.cmd === 'APPLY_LOGICA_SECUENCIA') {
-          nextLogicaAck = null;
-        }
-
         return {
           ...prev,
-          [cleanMac]: { 
-            ...dev, 
+          [cleanMac]: {
+            ...dev,
             datos: { ...newDatos, cfg: newCfg },
-            logicaAck: nextLogicaAck 
+            logicaAck: cmd.cmd === 'APPLY_LOGICA_SECUENCIA' ? null : dev.logicaAck
           }
         };
       });
 
-      (async () => {
-        try {
-          if (!cmd.cmd || cmd.cmd === 'APPLY_HAL_MAP' || cmd.cmd === 'SET_ALERTA_MANT') {
-            await supabase.from('asignaciones_equipos').update({
-              config_deseada: cmd,
-              updated_at: new Date().toISOString()
-            }).eq('mac', cleanMac);
-          }
-        } catch (e) {
-          console.warn('[SUPABASE] Error actualizando config_deseada:', e);
-        }
-      })();
+      // Sincronización asíncrona segura con Postgres
+      if (!cmd.cmd || cmd.cmd === 'APPLY_HAL_MAP' || cmd.cmd === 'SET_ALERTA_MANT') {
+        supabase.from('asignaciones_equipos').update({
+          config_deseada: cmd,
+          updated_at: new Date().toISOString()
+        }).eq('mac', cleanMac).then(() => {}).catch(err => {
+          console.warn('[SUPABASE] Error actualizando config_deseada:', err);
+        });
+      }
     }
-  };
+  }, []);
 
   return { fleet, mqttConnected, sendDeviceCommand };
 }
