@@ -15,15 +15,15 @@ PUEDES OPERAR, MODIFICAR O RECONFIGURAR CUALQUIER COSA:
 1. HARDWARE Y PERIFÉRICOS (HKL-EA8):
    - Relés R1 a R8 en I2C 0x24 (Actuadores de potencia).
    - Entradas IN1 a IN8 en 0x26 (Sensores y enclavamientos).
-   - Canales ADC A0 a A3 en 0x48 (ADS1115 con Jack CT 3.5mm para medición de corriente y sensores analógicos).
+   - Canales ADC A0 a A3 en 0x48 (ADS1115: sensores analógicos y corriente).
    - Pantalla LCD 0x27 (Mensajes locales en tiempo real).
 2. RECONFIGURACIÓN DE PARÁMETROS ("config_deseada"):
-   - Puedes modificar tiempos de esterilización, secado, pulsos de vacío, límites de mantenimiento, calibraciones del sensor CT y nombres de funciones.
+   - Modifica tiempos de esterilización, secado, pulsos de vacío, límites de mantenimiento y nombres de funciones.
 3. ACCIONES EJECUTIVAS SOBRE LA PLACA FÍSICA:
-   - Si el usuario te pide una acción operativa directa (ej: "inicia el ciclo P1", "haz un paro de emergencia", "despliega esta configuración a la placa", "activa el relé 3"), genera en "accion_propuesta" el comando exacto.
+   - Si el usuario pide una acción operativa directa (ej: "inicia el ciclo P1", "haz un paro de emergencia", "activa el relé 3"), genera en "accion_propuesta" el comando exacto.
    - Si la acción implica movimiento físico, encendido de calor o cambios de memoria, marca "requiere_confirmacion": true y describe en "mensaje_confirmacion" qué sucederá físicamente para que el usuario confirme.
 4. CONTROL DEL LIENZO SCADA:
-   - Puedes agregar, quitar o remodelar cualquier widget ('SEQUENCE_TIMER', 'ACTION_BUTTON', 'SWITCH_TOGGLE', 'MOMENTARY_BUTTON', 'EMERGENCY_STOP', 'ROTARY_SELECTOR', 'GAUGE_RADIAL', 'VALUE_CARD', 'LEVEL_TANK', 'STATUS_LED').
+   - Agrega, quita o remodela widgets ('SEQUENCE_TIMER', 'ACTION_BUTTON', 'SWITCH_TOGGLE', 'MOMENTARY_BUTTON', 'EMERGENCY_STOP', 'ROTARY_SELECTOR', 'GAUGE_RADIAL', 'VALUE_CARD', 'LEVEL_TANK', 'STATUS_LED').
 
 ESTRUCTURA DE RESPUESTA OBLIGATORIA (JSON PURO):
 {
@@ -33,7 +33,7 @@ ESTRUCTURA DE RESPUESTA OBLIGATORIA (JSON PURO):
   "accion_propuesta": {
     "tipo": "NINGUNA" | "DESPLEGAR_HARDWARE" | "INICIAR_CICLO" | "PARO_EMERGENCIA" | "CONMUTAR_RELE",
     "requiere_confirmacion": true | false,
-    "mensaje_confirmacion": "¿Confirmas encender las resistencias y arrancar el ciclo en la placa física?",
+    "mensaje_confirmacion": "¿Confirmas la operación en la placa física?",
     "payload": {}
   },
   "receta": {
@@ -50,10 +50,18 @@ ESTRUCTURA DE RESPUESTA OBLIGATORIA (JSON PURO):
 }
 `;
 
+// Caché en memoria para evitar llamadas redundantes de modelos
+const modelCache = new Map();
+const CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutos
+
+/**
+ * Sanitiza y repara respuestas JSON generadas por LLMs
+ */
 function sanitizarJson(textoCrudo) {
   if (!textoCrudo) return null;
   let limpio = textoCrudo.trim();
 
+  // Remueve bloques Markdown ```json y ```
   if (limpio.includes('```')) {
     limpio = limpio.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
   }
@@ -62,17 +70,30 @@ function sanitizarJson(textoCrudo) {
   const fin = limpio.lastIndexOf('}');
 
   if (inicio !== -1 && fin !== -1 && fin > inicio) {
+    let fragmento = limpio.substring(inicio, fin + 1);
+    
+    // Remueve comas finales inválidas antes de llaves o corchetes de cierre
+    fragmento = fragmento.replace(/,\s*([}\]])/g, '$1');
+
     try {
-      return JSON.parse(limpio.substring(inicio, fin + 1));
+      return JSON.parse(fragmento);
     } catch (_) {
-      return null;
+      try {
+        // Intento secundario básico
+        return JSON.parse(limpio.substring(inicio, fin + 1));
+      } catch (e) {
+        return null;
+      }
     }
   }
   return null;
 }
 
+/**
+ * Detecta el proveedor según el prefijo de la clave
+ */
 export function detectarProveedorApiKey(key = '') {
-  const k = key.trim();
+  const k = (key || '').trim();
   if (k.startsWith('gsk_')) return 'GROQ';
   if (k.startsWith('sk-or-')) return 'OPENROUTER';
   if (k.startsWith('sk-')) return 'OPENAI';
@@ -80,40 +101,63 @@ export function detectarProveedorApiKey(key = '') {
   return 'GROQ';
 }
 
-async function resolverModeloGroqActivo(apiKey) {
-  const res = await fetch('https://api.groq.com/openai/v1/models', {
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json'
+/**
+ * Resuelve el modelo más veloz y capaz según el proveedor
+ */
+async function resolverModeloProveedor(proveedor, apiKey) {
+  const prov = (proveedor || 'GROQ').toUpperCase();
+  const cacheKey = `${prov}_${apiKey.slice(-6)}`;
+  const cached = modelCache.get(cacheKey);
+
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+    return cached.model;
+  }
+
+  if (prov === 'OPENAI') {
+    return 'gpt-4o-mini';
+  }
+
+  if (prov === 'OPENROUTER') {
+    return 'meta-llama/llama-3.3-70b-instruct';
+  }
+
+  // Por defecto Groq
+  try {
+    const res = await fetch('https://api.groq.com/openai/v1/models', {
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      const modelos = (data.data || []).map(m => m.id);
+
+      const candidatos = modelos.filter(id => 
+        !id.includes('whisper') && 
+        !id.includes('guard') && 
+        !id.includes('vision')
+      );
+
+      const preferido = 
+        candidatos.find(id => id.includes('llama-3.3-70b')) ||
+        candidatos.find(id => id.includes('llama-3.1-70b')) ||
+        candidatos.find(id => id.includes('llama-3.1-8b')) ||
+        candidatos[0] || 
+        'llama-3.3-70b-versatile';
+
+      modelCache.set(cacheKey, { model: preferido, timestamp: Date.now() });
+      return preferido;
     }
-  });
+  } catch (_) {}
 
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`[Groq API HTTP ${res.status}]: ${errText}`);
-  }
-
-  const data = await res.json();
-  const modelos = (data.data || []).map(m => m.id);
-
-  const candidatos = modelos.filter(id => 
-    !id.includes('whisper') && 
-    !id.includes('guard') && 
-    !id.includes('orpheus')
-  );
-
-  if (candidatos.length === 0) {
-    throw new Error('No se encontraron modelos de chat activos en Groq.');
-  }
-
-  const preferido = candidatos.find(id => id.includes('gpt-oss-120b')) ||
-                    candidatos.find(id => id.includes('gpt-oss-20b')) ||
-                    candidatos.find(id => id.includes('qwen')) ||
-                    candidatos[0];
-
-  return preferido;
+  return 'llama-3.3-70b-versatile';
 }
 
+/**
+ * Obtiene el pool ordenado de claves activas desde Supabase
+ */
 async function obtenerPoolDeClavesSupabase() {
   try {
     const { data, error } = await supabase
@@ -143,7 +187,7 @@ async function obtenerPoolDeClavesSupabase() {
 }
 
 /**
- * FUNCIÓN PRINCIPAL EXPORTADA CON CONTROL TOTAL
+ * FUNCIÓN PRINCIPAL EXPORTADA CON CONTROL TOTAL Y ROTACIÓN DE CLAVES
  */
 export async function conversarYCompilarConIA({ 
   prompt, 
@@ -165,7 +209,7 @@ export async function conversarYCompilarConIA({
   }
 
   if (poolClaves.length === 0) {
-    throw new Error('No hay API Keys activas en Supabase (tabla config_ai_keys).');
+    throw new Error('No hay API Keys activas en Supabase (tabla config_ai_keys) ni clave local.');
   }
 
   const contextPayload = {
@@ -188,9 +232,14 @@ export async function conversarYCompilarConIA({
 
   for (const itemClave of poolClaves) {
     try {
-      const modelo = await resolverModeloGroqActivo(itemClave.api_key);
+      const prov = (itemClave.proveedor || detectarProveedorApiKey(itemClave.api_key)).toUpperCase();
+      const modelo = await resolverModeloProveedor(prov, itemClave.api_key);
 
-      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      let endpointUrl = 'https://api.groq.com/openai/v1/chat/completions';
+      if (prov === 'OPENAI') endpointUrl = 'https://api.openai.com/v1/chat/completions';
+      if (prov === 'OPENROUTER') endpointUrl = 'https://openrouter.ai/api/v1/chat/completions';
+
+      const response = await fetch(endpointUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -210,15 +259,16 @@ export async function conversarYCompilarConIA({
         const parseado = sanitizarJson(rawText);
 
         if (parseado) {
-          // Registrar éxito en Supabase
+          // Registrar éxito en Supabase sin bloquear el hilo
           if (itemClave.id && itemClave.id !== 'local_override' && itemClave.id !== 'manual') {
             supabase.from('config_ai_keys').update({
               ultimo_uso: new Date().toISOString(),
               fallos_consecutivos: 0,
               ultimo_error: null
-            }).eq('id', itemClave.id).then(() => {});
+            }).eq('id', itemClave.id).then(() => {}).catch(() => {});
           }
 
+          // Disposición espacial inteligente de widgets en el lienzo
           let curX = 20;
           let curY = 20;
           const dashboardWidgets = (parseado.dashboard || widgetsActuales).map((w, idx) => {
@@ -262,7 +312,7 @@ export async function conversarYCompilarConIA({
         supabase.from('config_ai_keys').update({
           fallos_consecutivos: (itemClave.fallos_consecutivos || 0) + 1,
           ultimo_error: err.message
-        }).eq('id', itemClave.id).then(() => {});
+        }).eq('id', itemClave.id).then(() => {}).catch(() => {});
       }
     }
   }
