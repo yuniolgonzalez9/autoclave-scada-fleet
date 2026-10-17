@@ -47,22 +47,28 @@ export default function LoginModal() {
     setStatusType(null);
   };
 
-  // Iniciar Sesión Real
+  // Iniciar Sesión
   const handleLogin = async (e) => {
     e.preventDefault();
     resetMessages();
+
+    if (!identifier.trim() || !password.trim()) {
+      setErrorMsg('Introduce tu usuario y contraseña.');
+      return;
+    }
+
     setSubmitting(true);
 
     try {
-      await loginWithCredentials(identifier, password);
+      await loginWithCredentials(identifier.trim(), password.trim());
     } catch (err) {
       const msg = err.message || '';
       if (msg.includes('ESTADO_PENDIENTE')) {
         setStatusType('PENDIENTE');
-        setErrorMsg('Su solicitud de acceso está en revisión. El Administrador debe aprobar su cuenta antes de ingresar.');
+        setErrorMsg('Tu solicitud está en revisión. La Dirección Biomédica debe aprobar tu cuenta.');
       } else if (msg.includes('ESTADO_INACTIVO')) {
         setStatusType('INACTIVO');
-        setErrorMsg('Acceso Desactivado / No Autorizado. Su usuario ha sido inhabilitado.');
+        setErrorMsg('Acceso inhabilitado o suspendido.');
       } else {
         setStatusType('GENERIC');
         setErrorMsg(msg || 'Credenciales no válidas.');
@@ -76,17 +82,27 @@ export default function LoginModal() {
   const handleRegisterRequest = async (e) => {
     e.preventDefault();
     resetMessages();
+
+    if (reqUsuario.trim().length < 3) {
+      setErrorMsg('El usuario debe tener al menos 3 caracteres.');
+      return;
+    }
+    if (reqPassword.trim().length < 4) {
+      setErrorMsg('La contraseña propuesta debe tener al menos 4 caracteres.');
+      return;
+    }
+
     setSubmitting(true);
 
     try {
       await requestUserAccess({
-        usuario: reqUsuario,
-        nombre_completo: reqNombre,
-        email: reqEmail,
+        usuario: reqUsuario.trim(),
+        nombre_completo: reqNombre.trim(),
+        email: reqEmail.trim(),
         departamento: reqDepto,
-        password: reqPassword
+        password: reqPassword.trim()
       });
-      setSuccessMsg('¡Solicitud enviada con éxito! Su cuenta está en revisión. La Dirección Biomédica ha sido notificada.');
+      setSuccessMsg('¡Solicitud enviada con éxito! Tu cuenta está en revisión por la Administración.');
       setReqNombre('');
       setReqUsuario('');
       setReqEmail('');
@@ -98,14 +114,20 @@ export default function LoginModal() {
     }
   };
 
-  // Recuperar Contraseña / Datos
+  // Recuperar Contraseña
   const handleRecovery = async (e) => {
     e.preventDefault();
     resetMessages();
+
+    if (!recoveryEmail.trim()) {
+      setErrorMsg('Introduce tu correo electrónico registrado.');
+      return;
+    }
+
     setSubmitting(true);
 
     try {
-      const result = await requestPasswordRecovery(recoveryEmail);
+      const result = await requestPasswordRecovery(recoveryEmail.trim());
       setSuccessMsg(result.message);
       setRecoveryEmail('');
     } catch (err) {
@@ -116,8 +138,8 @@ export default function LoginModal() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[75vh] px-4 w-full">
-      <div className="ultra-glass p-8 md:p-10 rounded-2xl shadow-2xl max-w-md w-full border border-cyan-500/40 relative backdrop-blur-xl">
+    <div className="flex flex-col items-center justify-center min-h-[75vh] px-4 w-full select-none font-mono">
+      <div className="ultra-glass p-7 md:p-10 rounded-2xl shadow-2xl max-w-md w-full border border-cyan-500/40 relative backdrop-blur-xl">
         
         {/* Cabecera */}
         <div className="text-center mb-6">
@@ -125,10 +147,10 @@ export default function LoginModal() {
             <ShieldCheck className="w-8 h-8" />
           </div>
           <h2 className="text-xl font-bold text-white tracking-wide uppercase">
-            Plataforma Central de Telemetría
+            Plataforma Central SCADA
           </h2>
-          <p className="text-xs text-cyan-300/80 mt-1 font-mono">
-            Control de Activos Biomédicos & Supervisión Clínica
+          <p className="text-xs text-cyan-300/80 mt-1 font-sans">
+            Supervisión Biomédica, Vehicular & Industrial
           </p>
         </div>
 
@@ -148,14 +170,14 @@ export default function LoginModal() {
             ) : (
               <AlertCircle className="w-5 h-5 shrink-0 text-rose-400 mt-0.5" />
             )}
-            <span className="leading-relaxed">{errorMsg}</span>
+            <span className="leading-relaxed font-sans">{errorMsg}</span>
           </div>
         )}
 
         {successMsg && (
           <div className="mb-5 p-3.5 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs flex items-start gap-2.5">
             <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-400 mt-0.5" />
-            <span className="leading-relaxed">{successMsg}</span>
+            <span className="leading-relaxed font-sans">{successMsg}</span>
           </div>
         )}
 
@@ -164,7 +186,7 @@ export default function LoginModal() {
           <div>
             <form onSubmit={handleLogin} className="space-y-4">
               <div>
-                <label className="block text-xs font-mono text-slate-300 mb-1.5 flex justify-between">
+                <label className="block text-xs text-slate-300 mb-1.5 flex justify-between">
                   <span>Usuario o Correo Registrado</span>
                   <span className="text-[10px] text-cyan-400 font-semibold">Acceso Autorizado</span>
                 </label>
@@ -173,9 +195,10 @@ export default function LoginModal() {
                   <input
                     type="text"
                     required
+                    autoComplete="username"
                     value={identifier}
                     onChange={(e) => setIdentifier(e.target.value)}
-                    placeholder="Ej: superadmin o usuario@hospital.com"
+                    placeholder="superadmin o usuario@hospital.com"
                     className="w-full pl-9 pr-3 py-2 bg-slate-900/80 border border-slate-700/80 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400 transition-colors"
                   />
                 </div>
@@ -183,11 +206,11 @@ export default function LoginModal() {
 
               <div>
                 <div className="flex justify-between items-center mb-1.5">
-                  <label className="text-xs font-mono text-slate-300">Contraseña de Seguridad</label>
+                  <label className="text-xs text-slate-300">Contraseña de Seguridad</label>
                   <button
                     type="button"
                     onClick={() => { setMode('recovery'); resetMessages(); }}
-                    className="text-[11px] text-cyan-400 hover:text-cyan-300 font-mono transition-colors"
+                    className="text-[11px] text-cyan-400 hover:text-cyan-300 transition-colors"
                   >
                     ¿Olvidaste tu contraseña?
                   </button>
@@ -197,6 +220,7 @@ export default function LoginModal() {
                   <input
                     type="password"
                     required
+                    autoComplete="current-password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••••••"
@@ -208,7 +232,7 @@ export default function LoginModal() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="w-full py-2.5 px-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-semibold rounded-lg text-sm shadow-lg shadow-cyan-500/25 transition-all flex items-center justify-center gap-2 disabled:opacity-50 mt-1"
+                className="w-full py-2.5 px-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-semibold rounded-lg text-sm shadow-lg shadow-cyan-500/25 transition-all flex items-center justify-center gap-2 disabled:opacity-50 mt-1 active:scale-95"
               >
                 {submitting ? (
                   <>
@@ -245,19 +269,20 @@ export default function LoginModal() {
                 <HelpCircle className="w-4 h-4 text-cyan-400" />
                 Recuperación Oficial de Acceso
               </h3>
-              <p className="text-xs text-slate-300 leading-relaxed">
-                Ingresa tu correo electrónico registrado. Por protocolo hospitalario, se enviará una alerta de seguridad inmediata al Administrador para validar tu identidad.
+              <p className="text-xs text-slate-300 leading-relaxed font-sans">
+                Ingresa tu correo registrado. Se enviará una alerta de seguridad al canal de la Dirección Biomédica para validar tu identidad.
               </p>
             </div>
 
             <form onSubmit={handleRecovery} className="space-y-4">
               <div>
-                <label className="block text-xs font-mono text-slate-300 mb-1.5">Correo Electrónico del Usuario</label>
+                <label className="block text-xs text-slate-300 mb-1.5">Correo Electrónico</label>
                 <div className="relative">
                   <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
                   <input
                     type="email"
                     required
+                    autoComplete="email"
                     value={recoveryEmail}
                     onChange={(e) => setRecoveryEmail(e.target.value)}
                     placeholder="usuario@hospital.com"
@@ -269,7 +294,7 @@ export default function LoginModal() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="w-full py-2.5 px-4 bg-gradient-to-r from-amber-500 to-orange-600 hover:opacity-90 text-white font-semibold rounded-lg text-sm shadow-lg shadow-orange-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                className="w-full py-2.5 px-4 bg-gradient-to-r from-amber-500 to-orange-600 hover:opacity-90 text-white font-semibold rounded-lg text-sm shadow-lg shadow-orange-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50 active:scale-95"
               >
                 {submitting ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -297,31 +322,31 @@ export default function LoginModal() {
           <div>
             <form onSubmit={handleRegisterRequest} className="space-y-3">
               <div>
-                <label className="block text-[11px] font-mono text-slate-300 mb-1">Nombre Completo</label>
+                <label className="block text-[11px] text-slate-300 mb-1">Nombre Completo</label>
                 <input
                   type="text"
                   required
                   value={reqNombre}
                   onChange={(e) => setReqNombre(e.target.value)}
                   placeholder="Ej: Lic. Carlos Pérez"
-                  className="w-full px-3 py-1.5 bg-slate-900/80 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-cyan-400"
+                  className="w-full px-3 py-1.5 bg-slate-900/80 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-cyan-400 font-sans"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-[11px] font-mono text-slate-300 mb-1">Usuario Deseado</label>
+                  <label className="block text-[11px] text-slate-300 mb-1">Usuario Deseado</label>
                   <input
                     type="text"
                     required
                     value={reqUsuario}
                     onChange={(e) => setReqUsuario(e.target.value)}
-                    placeholder="carlos_rumed"
+                    placeholder="carlos_ceye"
                     className="w-full px-3 py-1.5 bg-slate-900/80 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-cyan-400"
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] font-mono text-slate-300 mb-1">Correo de Contacto</label>
+                  <label className="block text-[11px] text-slate-300 mb-1">Correo de Contacto</label>
                   <input
                     type="email"
                     required
@@ -334,11 +359,11 @@ export default function LoginModal() {
               </div>
 
               <div>
-                <label className="block text-[11px] font-mono text-slate-300 mb-1">Departamento / Área</label>
+                <label className="block text-[11px] text-slate-300 mb-1">Departamento / Área</label>
                 <select
                   value={reqDepto}
                   onChange={(e) => setReqDepto(e.target.value)}
-                  className="w-full px-3 py-1.5 bg-slate-900/80 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-cyan-400"
+                  className="w-full px-3 py-1.5 bg-slate-900/80 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-cyan-400 font-sans"
                 >
                   <option value="Central de Esterilización (CEYE/RUMED)">Central de Esterilización (CEYE/RUMED)</option>
                   <option value="Quirófanos & Cirugía">Quirófanos & Cirugía</option>
@@ -348,13 +373,14 @@ export default function LoginModal() {
               </div>
 
               <div>
-                <label className="block text-[11px] font-mono text-slate-300 mb-1">Contraseña Propuesta</label>
+                <label className="block text-[11px] text-slate-300 mb-1">Contraseña Propuesta</label>
                 <input
                   type="password"
                   required
+                  autoComplete="new-password"
                   value={reqPassword}
                   onChange={(e) => setReqPassword(e.target.value)}
-                  placeholder="Mínimo 6 caracteres"
+                  placeholder="Mínimo 4 caracteres"
                   className="w-full px-3 py-1.5 bg-slate-900/80 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-cyan-400"
                 />
               </div>
@@ -362,7 +388,7 @@ export default function LoginModal() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="w-full py-2 px-4 bg-gradient-to-r from-emerald-500 to-teal-600 hover:opacity-90 text-white font-semibold rounded-lg text-xs shadow-md transition-all flex items-center justify-center gap-2 mt-2"
+                className="w-full py-2 px-4 bg-gradient-to-r from-emerald-500 to-teal-600 hover:opacity-90 text-white font-semibold rounded-lg text-xs shadow-md transition-all flex items-center justify-center gap-2 mt-2 active:scale-95"
               >
                 {submitting ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
