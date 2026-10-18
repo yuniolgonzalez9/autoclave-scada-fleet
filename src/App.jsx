@@ -1,7 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import ReactDOM from 'react-dom/client';
-import './styles/globals.css';
-
+import React, { useState, useEffect, useRef } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import LoginModal from './components/auth/LoginModal';
 import UserManagementModal from './components/admin/UserManagementModal';
@@ -25,17 +22,25 @@ import { supabase } from './services/supabase';
 import { 
   Activity, 
   Flame, 
+  FileText, 
+  Rocket, 
+  Building2, 
   ChevronRight, 
   Volume2, 
+  VolumeX, 
   Bell, 
   Clock, 
+  Pin, 
+  PinOff, 
   Unlock, 
   Shield, 
-  Sparkles,
+  Database, 
+  User as UserIcon,
   Car,
+  Key,
   Cpu,
-  Building2,
-  Rocket
+  Sparkles,
+  Wand2
 } from 'lucide-react';
 
 function ScadaAppContent() {
@@ -47,18 +52,17 @@ function ScadaAppContent() {
   useEffect(() => {
     const checkSupabase = async () => {
       try {
-        const { error } = await supabase.from('usuarios_scada').select('id').limit(1);
+        const { error } = await supabase.from('usuarios_scada').select('*').limit(1);
         setSupabaseConnected(!error && navigator.onLine);
       } catch (e) {
         setSupabaseConnected(false);
       }
     };
     checkSupabase();
-    const timer = setInterval(checkSupabase, 15000);
+    const timer = setInterval(checkSupabase, 8000);
     return () => clearInterval(timer);
   }, []);
 
-  // Preferencias visuales
   const [currentTheme, setCurrentTheme] = useState(() => localStorage.getItem('scada_theme') || 'tactical');
   const [currentBg, setCurrentBg] = useState(() => localStorage.getItem('scada_bg') || 'circuit-pcb');
   const [opacity, setOpacity] = useState(() => Number(localStorage.getItem('scada_transparency')) || 82);
@@ -69,7 +73,6 @@ function ScadaAppContent() {
 
   const [cloudDiagType, setCloudDiagType] = useState(null);
 
-  // Kiosk & Navegación
   const [kioskMac, setKioskMac] = useState(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const directKiosk = urlParams.get('kiosk');
@@ -96,7 +99,9 @@ function ScadaAppContent() {
   const [healthFilter, setHealthFilter] = useState(() => sessionStorage.getItem('scada_tab_health_filter') || 'ALL');
 
   useEffect(() => {
-    if (!kioskMac) sessionStorage.setItem('scada_tab_active_section', activeSection);
+    if (!kioskMac) {
+      sessionStorage.setItem('scada_tab_active_section', activeSection);
+    }
   }, [activeSection, kioskMac]);
 
   useEffect(() => {
@@ -110,7 +115,7 @@ function ScadaAppContent() {
     sessionStorage.setItem('scada_tab_health_filter', healthFilter);
   }, [healthFilter]);
 
-  const toggleKioskMode = useCallback((macToKiosk = null) => {
+  const toggleKioskMode = (macToKiosk = null) => {
     if (kioskMac) {
       sessionStorage.removeItem('scada_tab_kiosk_mac');
       setKioskMac(null);
@@ -128,16 +133,13 @@ function ScadaAppContent() {
         setActiveSection('detalle');
       }
     }
-  }, [kioskMac, selectedMac]);
+  };
 
-  // Modales
   const [contextMenu, setContextMenu] = useState({ isOpen: false, position: { x: 0, y: 0 }, device: null });
   const [assignModal, setAssignModal] = useState({ isOpen: false, device: null });
   const [qrModalDevice, setQrModalDevice] = useState(null);
-  const [showAdminModal, setShowAdminModal] = useState(false);
-  const [sirenActive, setSirenActive] = useState(false);
 
-  const handleDeviceContextMenu = useCallback((e, dev) => {
+  const handleDeviceContextMenu = (e, dev) => {
     e.preventDefault();
     e.stopPropagation();
     setContextMenu({
@@ -145,15 +147,42 @@ function ScadaAppContent() {
       position: { x: e.clientX, y: e.clientY },
       device: dev
     });
+  };
+
+  const [showAdminModal, setShowAdminModal] = useState(false);
+  const [sirenActive, setSirenActive] = useState(false);
+
+  const [currentTime, setCurrentTime] = useState(Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
+    return () => clearInterval(timer);
   }, []);
 
-  // Reloj de inactividad
   const [showTimeoutModal, setShowTimeoutModal] = useState(false);
   const [countdown, setCountdown] = useState(60);
   const idleTimerRef = useRef(null);
   const countdownIntervalRef = useRef(null);
 
-  const resetIdleTimer = useCallback(() => {
+  const isAdmin = profile?.rol?.toLowerCase().includes('admin') || profile?.rol?.toLowerCase().includes('director');
+  const canEditHardware = isAdmin || profile?.rol?.toLowerCase().includes('tecnico');
+  const isOperator = profile?.rol?.toLowerCase().includes('operador') || profile?.rol?.toLowerCase().includes('cliente');
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', currentTheme);
+    localStorage.setItem('scada_theme', currentTheme);
+  }, [currentTheme]);
+
+  useEffect(() => {
+    const alpha = (opacity / 100).toFixed(2);
+    document.documentElement.style.setProperty('--glass-opacity', alpha);
+    localStorage.setItem('scada_transparency', opacity);
+  }, [opacity]);
+
+  useEffect(() => {
+    localStorage.setItem('scada_bg', currentBg);
+  }, [currentBg]);
+
+  const resetIdleTimer = () => {
     if (!user) return;
     clearTimeout(idleTimerRef.current);
     if (!showTimeoutModal) {
@@ -162,7 +191,7 @@ function ScadaAppContent() {
         setCountdown(60);
       }, 14 * 60 * 1000);
     }
-  }, [user, showTimeoutModal]);
+  };
 
   useEffect(() => {
     if (showTimeoutModal) {
@@ -184,78 +213,45 @@ function ScadaAppContent() {
   }, [showTimeoutModal, logout]);
 
   useEffect(() => {
-    const events = ['mousemove', 'mousedown', 'keydown', 'touchstart'];
+    const events = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll'];
     const handleActivity = () => resetIdleTimer();
+    events.forEach((evt) => window.removeEventListener(evt, handleActivity));
     events.forEach((evt) => window.addEventListener(evt, handleActivity, { passive: true }));
     resetIdleTimer();
     return () => {
       events.forEach((evt) => window.removeEventListener(evt, handleActivity));
       clearTimeout(idleTimerRef.current);
     };
-  }, [resetIdleTimer]);
+  }, [user]);
 
-  const userRole = (profile?.rol || '').toLowerCase();
-  const isAdmin = userRole.includes('admin') || userRole.includes('director');
-  const canEditHardware = isAdmin || userRole.includes('tecnico');
-  const isOperator = userRole.includes('operador') || userRole.includes('cliente');
-
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', currentTheme);
-    localStorage.setItem('scada_theme', currentTheme);
-  }, [currentTheme]);
-
-  useEffect(() => {
-    const alpha = (opacity / 100).toFixed(2);
-    document.documentElement.style.setProperty('--glass-opacity', alpha);
-    localStorage.setItem('scada_transparency', opacity);
-  }, [opacity]);
-
-  useEffect(() => {
-    localStorage.setItem('scada_bg', currentBg);
-  }, [currentBg]);
-
-  // Vigilante optimizado de sirena
-  const alarmasNotificadasRef = useRef(new Set());
+  // Vigilante de Sirena Industrial
   useEffect(() => {
     let hasCriticalAlarm = false;
-    const macs = Object.keys(fleet);
-
-    for (const mac of macs) {
+    Object.keys(fleet).forEach((mac) => {
       const dev = fleet[mac];
-      const alarmCod = dev?.datos?.alarma_cod;
-
-      if (alarmCod && alarmCod > 0) {
+      if (dev?.datos?.alarma_cod && dev?.datos?.alarma_cod > 0) {
         hasCriticalAlarm = true;
-
-        if (!alarmasNotificadasRef.current.has(mac)) {
-          alarmasNotificadasRef.current.add(mac);
-          sendCriticalAlarmWithButtons({
-            mac,
-            alias: dev?.meta?.alias || mac,
-            temp: parseFloat(dev?.datos?.temp_camara || 0),
-            pres: parseFloat(dev?.datos?.presion || 0),
-            fase: dev?.datos?.fase || 'CRÍTICA',
-            errorMsg: dev?.datos?.alarma_msg || 'Alarma en cámara'
-          });
-        }
-      } else {
-        alarmasNotificadasRef.current.delete(mac);
+        sendCriticalAlarmWithButtons({
+          mac,
+          alias: dev?.meta?.alias || mac,
+          temp: parseFloat(dev?.datos?.temp_camara || 0),
+          pres: parseFloat(dev?.datos?.presion || 0),
+          fase: dev?.datos?.fase || 'CRÍTICA',
+          errorMsg: dev?.datos?.alarma_msg || 'Alarma en cámara'
+        });
       }
-    }
+    });
 
     if (hasCriticalAlarm && !sirenActive) {
       startIndustrialSiren();
       setSirenActive(true);
-    } else if (!hasCriticalAlarm && sirenActive) {
-      stopIndustrialSiren();
-      setSirenActive(false);
     }
   }, [fleet, sirenActive]);
 
-  const handleSilenceSiren = useCallback(() => {
+  const handleSilenceSiren = () => {
     stopIndustrialSiren();
     setSirenActive(false);
-  }, []);
+  };
 
   useEffect(() => {
     const channel = supabase
@@ -270,67 +266,66 @@ function ScadaAppContent() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [handleSilenceSiren]);
+  }, []);
 
-  const allowedDevices = useMemo(() => {
-    const macKeys = Object.keys(fleet);
-    if (isAdmin) return macKeys.map((k) => fleet[k]);
+  const bgObj = WALLPAPERS_LIST.find((b) => b.id === currentBg) || WALLPAPERS_LIST[0];
 
-    const userHospital = (profile?.departamento || '').toLowerCase().trim();
-    const currentUsername = (profile?.usuario || profile?.user || user?.email || '').toLowerCase().trim();
-    const userAuthMacs = (profile?.equipos_autorizados || '').toUpperCase().split(',').map((x) => x.trim());
-
-    return macKeys
-      .map((k) => fleet[k])
-      .filter((dev) => {
-        if (!dev) return false;
-        if (userAuthMacs.includes(dev.mac)) return true;
-        const devAssignedUser = (dev?.meta?.usuario_asignado || '').toLowerCase().trim();
-        if (devAssignedUser && devAssignedUser === currentUsername) return true;
-        const devHospital = (dev?.meta?.cliente || '').toLowerCase().trim();
-        if (userHospital && devHospital && (devHospital.includes(userHospital) || userHospital.includes(devHospital))) return true;
-        return false;
-      });
-  }, [fleet, isAdmin, profile, user]);
-
-  const getDeviceHealthData = useCallback((dev) => {
+  const getDeviceHealthData = (dev) => {
     if (!dev || !dev.lastSeen || dev.lastSeen === 0) {
       return { status: 'OFFLINE', text: 'DESCONECTADO', timeAgo: 'Sin señal', colorClass: 'bg-rose-500/15 text-rose-400 border-rose-500/30' };
     }
-    const diffSegundos = Math.max(0, Math.floor((Date.now() - dev.lastSeen) / 1000));
+    const diffSegundos = Math.floor((currentTime - dev.lastSeen) / 1000);
 
-    if (diffSegundos <= 5) {
+    if (diffSegundos <= 4) {
       return { status: 'ONLINE', text: '100% ONLINE', timeAgo: diffSegundos === 0 ? 'En vivo' : `Hace ${diffSegundos}s`, colorClass: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' };
-    } else if (diffSegundos <= 10) {
+    } else if (diffSegundos <= 8) {
       return { status: 'LATENCY', text: 'LATENCIA', timeAgo: `Hace ${diffSegundos}s`, colorClass: 'bg-amber-500/15 text-amber-300 border-amber-500/30' };
     } else {
       const mins = Math.floor(diffSegundos / 60);
       return { status: 'OFFLINE', text: 'DESCONECTADO', timeAgo: mins > 0 ? `Hace ${mins}m` : `Hace ${diffSegundos}s`, colorClass: 'bg-rose-500/15 text-rose-400 border-rose-500/30' };
     }
-  }, []);
+  };
 
-  const { countOn, countLat, countOff, filteredDevices } = useMemo(() => {
-    let cOn = 0, cLat = 0, cOff = 0;
-    const filtered = [];
+  const macKeys = Object.keys(fleet);
 
-    for (const dev of allowedDevices) {
-      const health = getDeviceHealthData(dev);
-      if (health.status === 'ONLINE') cOn++;
-      else if (health.status === 'LATENCY') cLat++;
-      else cOff++;
+  // Aislamiento Multi-Tenant
+  const allowedDevices = macKeys
+    .map((k) => fleet[k])
+    .filter((dev) => {
+      if (isAdmin) return true;
 
-      if (healthFilter === 'ALL' || healthFilter === health.status) {
-        filtered.push(dev);
-      }
-    }
+      const userHospital = (profile?.departamento || '').toLowerCase().trim();
+      const devHospital = (dev?.meta?.cliente || '').toLowerCase().trim();
+      const devAssignedUser = (dev?.meta?.usuario_asignado || '').toLowerCase().trim();
+      const currentUsername = (profile?.usuario || profile?.user || user?.email || '').toLowerCase().trim();
+      const userAuthMacs = (profile?.equipos_autorizados || '').toUpperCase().split(',').map((x) => x.trim());
 
-    return { countOn: cOn, countLat: cLat, countOff: cOff, filteredDevices: filtered };
-  }, [allowedDevices, healthFilter, getDeviceHealthData]);
+      if (userAuthMacs.includes(dev.mac)) return true;
+      if (devAssignedUser) return devAssignedUser === currentUsername;
+      if (userHospital && devHospital) return devHospital.includes(userHospital) || userHospital.includes(devHospital);
+
+      return false;
+    });
+
+  let countOn = 0, countLat = 0, countOff = 0;
+  allowedDevices.forEach((dev) => {
+    const health = getDeviceHealthData(dev);
+    if (health.status === 'ONLINE') countOn++;
+    else if (health.status === 'LATENCY') countLat++;
+    else countOff++;
+  });
+
+  const filteredDevices = allowedDevices.filter((dev) => {
+    const health = getDeviceHealthData(dev);
+    if (healthFilter === 'ONLINE') return health.status === 'ONLINE';
+    if (healthFilter === 'LATENCY') return health.status === 'LATENCY';
+    if (healthFilter === 'OFFLINE') return health.status === 'OFFLINE';
+    return true;
+  });
 
   const inspectingMacToUse = kioskMac || selectedMac;
-  const inspectingDevice = useMemo(() => {
-    if (inspectingMacToUse) {
-      return fleet[inspectingMacToUse] || {
+  const inspectingDevice = inspectingMacToUse 
+    ? (fleet[inspectingMacToUse] || {
         mac: inspectingMacToUse,
         lastSeen: 0,
         datos: {
@@ -344,12 +339,8 @@ function ScadaAppContent() {
         meta: { alias: `EQUIPO [${inspectingMacToUse.slice(-4)}]`, cliente: 'Conectando a la red...', modelo: 'Universal' },
         f0Score: 0.0,
         history: []
-      };
-    }
-    return filteredDevices[0] || null;
-  }, [inspectingMacToUse, fleet, filteredDevices]);
-
-  const bgObj = useMemo(() => WALLPAPERS_LIST.find((b) => b.id === currentBg) || WALLPAPERS_LIST[0], [currentBg]);
+      })
+    : (filteredDevices[0] || null);
 
   if (loading) {
     return (
@@ -360,16 +351,16 @@ function ScadaAppContent() {
     );
   }
 
-  const displayName = profile?.nombre || profile?.usuario || user?.email?.split('@')[0] || 'ADMIN';
+  const displayName = profile?.nombre || profile?.usuario || profile?.user || user?.email?.split('@')[0] || 'ADMIN';
   const displayRole = profile?.rol || 'SUPERADMIN';
-  const displayUser = profile?.usuario || user?.email?.split('@')[0] || 'admin';
+  const displayUser = profile?.usuario || profile?.user || user?.email?.split('@')[0] || 'admin';
   const displayHospital = profile?.departamento || 'Central Hospitalaria';
   const displayAuthMacs = profile?.equipos_autorizados ? profile.equipos_autorizados : 'Flota Completa (Root)';
 
   return (
-    <div className="min-h-screen w-full relative pb-20 md:pb-6 flex flex-col overflow-x-hidden font-mono">
+    <div className="min-h-screen w-full relative pb-20 md:pb-6 flex flex-col overflow-x-hidden">
       
-      {/* Fondo Fijo */}
+      {/* Fondo fijo visible */}
       <div 
         id="scada-background"
         className="fixed inset-0 z-0 pointer-events-none bg-cover bg-center bg-no-repeat transition-[background-image] duration-500"
@@ -401,7 +392,7 @@ function ScadaAppContent() {
           </div>
         )}
 
-        {/* Header Superior */}
+        {/* Header */}
         <header className="speedtest-laser-header border-b border-cyan-500/20 bg-slate-950/80 backdrop-blur-md px-3 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between sticky top-0 z-40 w-full">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <div className="p-1.5 sm:p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 shrink-0">
@@ -434,10 +425,10 @@ function ScadaAppContent() {
               </button>
             )}
 
-            {/* MQTT Health */}
+            {/* MQTT */}
             <ClinicalTooltip
               title="Broker MQTT (HiveMQ Cloud)"
-              description={isAdmin ? "⚡ Click para abrir la Consola de Recursos y Latencia MQTT." : "Transmisión continua por WebSockets (puerto seguro 8884)."}
+              description={isAdmin ? "⚡ Click para abrir la Consola de Recursos y Latencia MQTT." : "Transmisión bidireccional continua por WebSockets (puerto seguro 8884)."}
               badge="WSS 8884"
               shortcut={isAdmin ? "CLICK PARA AUDITAR" : "EN TIEMPO REAL"}
               position="bottom"
@@ -457,10 +448,10 @@ function ScadaAppContent() {
               </button>
             </ClinicalTooltip>
 
-            {/* Supabase Health */}
+            {/* Supabase */}
             <ClinicalTooltip
               title="Base de Datos Supabase Cloud"
-              description={isAdmin ? "⚡ Click para abrir el Inventario de Registros, Tablas y Latencia DB." : "Persistencia Postgres en tiempo real."}
+              description={isAdmin ? "⚡ Click para abrir el Inventario de Registros, Tablas y Latencia DB." : "Canal central de persistencia Postgres en tiempo real para sesiones."}
               badge="POSTGRES REST"
               shortcut={isAdmin ? "CLICK PARA AUDITAR" : "EN LÍNEA"}
               position="bottom"
@@ -500,6 +491,10 @@ function ScadaAppContent() {
                       <span className="text-slate-400">Clínica / Depto:</span>
                       <span className="text-white truncate max-w-[130px] font-sans">{displayHospital}</span>
                     </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-400">Equipos Asignados:</span>
+                      <span className="text-purple-300 truncate max-w-[130px]">{displayAuthMacs}</span>
+                    </div>
                   </div>
                 }
                 shortcut="SESIÓN ACTIVA"
@@ -521,7 +516,7 @@ function ScadaAppContent() {
               </ClinicalTooltip>
             )}
 
-            {/* Notificaciones Admin */}
+            {/* Notificaciones */}
             {user && isAdmin && (
               <button
                 onClick={() => setShowAdminModal(true)}
@@ -537,7 +532,7 @@ function ScadaAppContent() {
               </button>
             )}
 
-            {/* Ajustes */}
+            {/* Engranaje */}
             {user && (
               <div className="shrink-0">
                 <GearMenu
@@ -556,27 +551,32 @@ function ScadaAppContent() {
           </div>
         </header>
 
-        {/* Barra de Navegación PC */}
+        {/* DOCK PC CON ACCESO DIRECTO A AI STUDIO (PRESERVA MAC ACTIVA) */}
         {user && !kioskMac && !isOperator && (
           <div className="hidden md:flex items-center gap-2 px-6 py-2 bg-slate-950/60 border-b border-cyan-500/10">
-            <button
-              onClick={() => { setActiveSection('flota'); setSelectedMac(null); }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
-                activeSection === 'flota' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              ⚡ Flota en Vivo ({allowedDevices.length})
-            </button>
+            <ClinicalTooltip title={CLINICAL_HELP.nav_flota.title} description={CLINICAL_HELP.nav_flota.desc} badge={CLINICAL_HELP.nav_flota.badge}>
+              <button
+                onClick={() => { setActiveSection('flota'); setSelectedMac(null); }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
+                  activeSection === 'flota' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                ⚡ Flota en Vivo ({allowedDevices.length})
+              </button>
+            </ClinicalTooltip>
 
-            <button
-              onClick={() => { setActiveSection('gestion'); setSelectedMac(null); }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
-                activeSection === 'gestion' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              🏢 Gestión Flota
-            </button>
+            <ClinicalTooltip title={CLINICAL_HELP.nav_gestion.title} description={CLINICAL_HELP.nav_gestion.desc} badge={CLINICAL_HELP.nav_gestion.badge}>
+              <button
+                onClick={() => { setActiveSection('gestion'); setSelectedMac(null); }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
+                  activeSection === 'gestion' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                🏢 Gestión Flota
+              </button>
+            </ClinicalTooltip>
 
+            {/* BOTÓN DIRECTO: ✨ AI STUDIO (PRESERVA LA PLACA QUE ESTÉS EDITANDO) */}
             <button
               onClick={() => setActiveSection('studio')}
               className={`px-3.5 py-1.5 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 transition-all ${
@@ -589,32 +589,38 @@ function ScadaAppContent() {
               <span>✨ AI Studio</span>
             </button>
 
-            <button
-              onClick={() => { setActiveSection('usuarios'); setSelectedMac(null); }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
-                activeSection === 'usuarios' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              🛡️ Personal
-            </button>
+            <ClinicalTooltip title={CLINICAL_HELP.nav_usuarios.title} description={CLINICAL_HELP.nav_usuarios.desc} badge={CLINICAL_HELP.nav_usuarios.badge}>
+              <button
+                onClick={() => { setActiveSection('usuarios'); setSelectedMac(null); }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
+                  activeSection === 'usuarios' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                🛡️ Personal
+              </button>
+            </ClinicalTooltip>
 
-            <button
-              onClick={() => { setActiveSection('fota'); setSelectedMac(null); }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
-                activeSection === 'fota' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              🚀 FOTA Hub
-            </button>
+            <ClinicalTooltip title={CLINICAL_HELP.nav_fota.title} description={CLINICAL_HELP.nav_fota.desc} badge={CLINICAL_HELP.nav_fota.badge}>
+              <button
+                onClick={() => { setActiveSection('fota'); setSelectedMac(null); }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
+                  activeSection === 'fota' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                🚀 FOTA Hub
+              </button>
+            </ClinicalTooltip>
 
-            <button
-              onClick={() => { setActiveSection('auditoria'); setSelectedMac(null); }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
-                activeSection === 'auditoria' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              📋 Auditoría Supabase
-            </button>
+            <ClinicalTooltip title={CLINICAL_HELP.nav_auditoria.title} description={CLINICAL_HELP.nav_auditoria.desc} badge={CLINICAL_HELP.nav_auditoria.badge}>
+              <button
+                onClick={() => { setActiveSection('auditoria'); setSelectedMac(null); }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
+                  activeSection === 'auditoria' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                📋 Auditoría Supabase
+              </button>
+            </ClinicalTooltip>
           </div>
         )}
 
@@ -631,13 +637,14 @@ function ScadaAppContent() {
                 device={inspectingDevice}
                 onBack={() => { setActiveSection('flota'); setSelectedMac(null); }}
                 sendCommand={sendDeviceCommand}
-                operatorName={displayName}
-                userRole={displayRole}
+                operatorName={profile?.nombre || user?.email}
+                userRole={profile?.rol || 'Super Administrador'}
                 isKioskMode={Boolean(kioskMac)}
                 onToggleKiosk={() => toggleKioskMode(inspectingMacToUse)}
               />
             ) : (
               <>
+                {/* 1. SECCIÓN FLOTA ADAPTATIVA */}
                 {activeSection === 'flota' && (
                   <div className="space-y-4">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
@@ -652,41 +659,49 @@ function ScadaAppContent() {
                       </div>
 
                       <div className="flex gap-2 overflow-x-auto w-full sm:w-auto pb-1">
-                        <button
-                          onClick={() => setHealthFilter('ONLINE')}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
-                            healthFilter === 'ONLINE' ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-md' : 'bg-slate-900/80 border-slate-700 text-emerald-400'
-                          }`}
-                        >
-                          🟢 ONLINE ({countOn})
-                        </button>
+                        <ClinicalTooltip title={CLINICAL_HELP.filter_online.title} description={CLINICAL_HELP.filter_online.desc} badge={CLINICAL_HELP.filter_online.badge}>
+                          <button
+                            onClick={() => setHealthFilter('ONLINE')}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
+                              healthFilter === 'ONLINE' ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-md' : 'bg-slate-900/80 border-slate-700 text-emerald-400'
+                            }`}
+                          >
+                            🟢 ONLINE ({countOn})
+                          </button>
+                        </ClinicalTooltip>
 
-                        <button
-                          onClick={() => setHealthFilter('LATENCY')}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
-                            healthFilter === 'LATENCY' ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md' : 'bg-slate-900/80 border-slate-700 text-amber-300'
-                          }`}
-                        >
-                          🟡 LATENCIA ({countLat})
-                        </button>
+                        <ClinicalTooltip title={CLINICAL_HELP.filter_latency.title} description={CLINICAL_HELP.filter_latency.desc} badge={CLINICAL_HELP.filter_latency.badge}>
+                          <button
+                            onClick={() => setHealthFilter('LATENCY')}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
+                              healthFilter === 'LATENCY' ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md' : 'bg-slate-900/80 border-slate-700 text-amber-300'
+                            }`}
+                          >
+                            🟡 LATENCIA ({countLat})
+                          </button>
+                        </ClinicalTooltip>
 
-                        <button
-                          onClick={() => setHealthFilter('OFFLINE')}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
-                            healthFilter === 'OFFLINE' ? 'bg-rose-500 text-white border-rose-400 shadow-md' : 'bg-slate-900/80 border-slate-700 text-rose-400'
-                          }`}
-                        >
-                          🔴 OFFLINE ({countOff})
-                        </button>
+                        <ClinicalTooltip title={CLINICAL_HELP.filter_offline.title} description={CLINICAL_HELP.filter_offline.desc} badge={CLINICAL_HELP.filter_offline.badge}>
+                          <button
+                            onClick={() => setHealthFilter('OFFLINE')}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
+                              healthFilter === 'OFFLINE' ? 'bg-rose-500 text-white border-rose-400 shadow-md' : 'bg-slate-900/80 border-slate-700 text-rose-400'
+                            }`}
+                          >
+                            🔴 OFFLINE ({countOff})
+                          </button>
+                        </ClinicalTooltip>
 
-                        <button
-                          onClick={() => setHealthFilter('ALL')}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
-                            healthFilter === 'ALL' ? 'bg-cyan-500 text-slate-950 border-cyan-400 shadow-md' : 'bg-slate-900/80 border-slate-700 text-slate-300'
-                          }`}
-                        >
-                          🌐 TODOS ({allowedDevices.length})
-                        </button>
+                        <ClinicalTooltip title={CLINICAL_HELP.filter_all.title} description={CLINICAL_HELP.filter_all.desc} badge={CLINICAL_HELP.filter_all.badge}>
+                          <button
+                            onClick={() => setHealthFilter('ALL')}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
+                              healthFilter === 'ALL' ? 'bg-cyan-500 text-slate-950 border-cyan-400 shadow-md' : 'bg-slate-900/80 border-slate-700 text-slate-300'
+                            }`}
+                          >
+                            🌐 TODOS ({allowedDevices.length})
+                          </button>
+                        </ClinicalTooltip>
                       </div>
                     </div>
 
@@ -713,8 +728,8 @@ function ScadaAppContent() {
                           const cCount = Number(dDev?.cfg?.ciclos || dev?.meta?.ciclosCompletados || 0);
                           const cLim = Number(dDev?.cfg?.lim_mant || dev?.meta?.limiteMantenimiento || 200);
 
-                          const tempNum = parseFloat(dDev.temp_camara ?? 25.0);
-                          const presNum = parseFloat(dDev.presion ?? 0.0);
+                          const tempNum = parseFloat(dDev.temp_camara || 25);
+                          const presNum = parseFloat(dDev.presion || 0);
 
                           return (
                             <div
@@ -740,6 +755,11 @@ function ScadaAppContent() {
                                       </span>
                                     </div>
                                     <p className="text-[11px] text-slate-400 font-mono mt-0.5">{dev.meta?.cliente || 'Cliente'} • {dev.mac}</p>
+                                    {dev.meta?.usuario_asignado && (
+                                      <span className="text-[9px] text-purple-300 font-mono block">
+                                        👤 Asignado a: {dev.meta.usuario_asignado}
+                                      </span>
+                                    )}
                                   </div>
                                   
                                   <div className="text-right">
@@ -757,36 +777,58 @@ function ScadaAppContent() {
                                   </div>
                                 </div>
 
+                                {/* TARJETAS ADAPTATIVAS */}
                                 {isVeh ? (
-                                  <div className="grid grid-cols-2 gap-2 my-3">
-                                    <div className="p-2.5 rounded-xl glass-cell text-center w-full">
-                                      <span className="text-[10px] font-mono text-emerald-400 block">BATERÍA 12V</span>
-                                      <span className="text-xl font-bold font-mono text-emerald-300">
-                                        {(dDev.bateria_v || 12.6).toFixed(1)} V
+                                  <>
+                                    <div className="grid grid-cols-2 gap-2 my-3">
+                                      <div className="p-2.5 rounded-xl glass-cell text-center w-full">
+                                        <span className="text-[10px] font-mono text-emerald-400 block">BATERÍA 12V</span>
+                                        <span className="text-xl font-bold font-mono text-emerald-300">
+                                          {(dDev.bateria_v || 12.6).toFixed(1)} V
+                                        </span>
+                                      </div>
+
+                                      <div className="p-2.5 rounded-xl glass-cell text-center w-full">
+                                        <span className="text-[10px] font-mono text-amber-400 block">ESTADO MOTOR</span>
+                                        <span className="text-sm font-bold font-mono text-white truncate block mt-1">
+                                          {dDev.fase || 'APAGADO'}
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    <div className="flex justify-between items-center text-[10px] font-mono p-1.5 bg-slate-900/60 rounded-lg border border-slate-800 mb-3">
+                                      <span className="text-slate-400">Ignición:</span>
+                                      <span className={dDev.reles?.R1 ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
+                                        {dDev.reles?.R1 ? '🟢 ON' : '⚪ OFF'}
+                                      </span>
+                                      <span className="text-slate-400 ml-2">Alternador:</span>
+                                      <span className={dDev.entradas?.IN2 ? 'text-emerald-400 font-bold' : 'text-slate-500'}>
+                                        {dDev.entradas?.IN2 ? '🟢 14V CARGA' : '⚪ PARADO'}
                                       </span>
                                     </div>
-                                    <div className="p-2.5 rounded-xl glass-cell text-center w-full">
-                                      <span className="text-[10px] font-mono text-amber-400 block">ESTADO</span>
-                                      <span className="text-sm font-bold font-mono text-white truncate block mt-1">
-                                        {dDev.fase || 'APAGADO'}
-                                      </span>
-                                    </div>
-                                  </div>
+                                  </>
                                 ) : isPlc ? (
-                                  <div className="grid grid-cols-2 gap-2 my-3 font-mono">
-                                    <div className="p-2.5 rounded-xl glass-cell text-center w-full">
-                                      <span className="text-[10px] text-cyan-400 block">RELÉS</span>
-                                      <span className="text-xl font-bold text-white">
-                                        {Object.values(dDev.reles || {}).filter(Boolean).length} / 8
-                                      </span>
+                                  <>
+                                    <div className="grid grid-cols-2 gap-2 my-3 font-mono">
+                                      <div className="p-2.5 rounded-xl glass-cell text-center w-full">
+                                        <span className="text-[10px] text-cyan-400 block">RELÉS ACTIVOS</span>
+                                        <span className="text-xl font-bold text-white">
+                                          {Object.values(dDev.reles || {}).filter(Boolean).length} / 8
+                                        </span>
+                                      </div>
+
+                                      <div className="p-2.5 rounded-xl glass-cell text-center w-full">
+                                        <span className="text-[10px] text-emerald-400 block">ENTRADAS ON</span>
+                                        <span className="text-xl font-bold text-white">
+                                          {Object.values(dDev.entradas || {}).filter(Boolean).length} / 8
+                                        </span>
+                                      </div>
                                     </div>
-                                    <div className="p-2.5 rounded-xl glass-cell text-center w-full">
-                                      <span className="text-[10px] text-emerald-400 block">ENTRADAS</span>
-                                      <span className="text-xl font-bold text-white">
-                                        {Object.values(dDev.entradas || {}).filter(Boolean).length} / 8
-                                      </span>
+
+                                    <div className="p-1.5 bg-slate-900/60 rounded-lg border border-slate-800 text-[10px] font-mono text-center text-slate-400 mb-3">
+                                      SOFT-PLC DETERMINISTA • RJ45 EN LÍNEA
                                     </div>
-                                  </div>
+                                  </>
                                 ) : (
                                   <>
                                     <div className="grid grid-cols-2 gap-2 my-3">
@@ -796,6 +838,7 @@ function ScadaAppContent() {
                                           {isNaN(tempNum) ? '25.0' : tempNum.toFixed(1)}°C
                                         </span>
                                       </div>
+
                                       <div className="p-2.5 rounded-xl glass-cell text-center w-full">
                                         <span className="text-[10px] font-mono text-pink-400 block">PRESIÓN</span>
                                         <span className="text-xl font-bold font-mono text-white">
@@ -804,23 +847,27 @@ function ScadaAppContent() {
                                       </div>
                                     </div>
 
-                                    <div className="space-y-1 mb-3 w-full">
-                                      <div className="flex justify-between text-[10px] font-mono text-slate-400">
-                                        <span>Odómetro: {cCount}/{cLim} ciclos</span>
-                                        <span>{Math.round((cCount / (cLim || 1)) * 100)}%</span>
+                                    <ClinicalTooltip title={CLINICAL_HELP.card_odometro.title} description={CLINICAL_HELP.card_odometro.desc} badge="VIDA ÚTIL">
+                                      <div className="space-y-1 mb-3 w-full">
+                                        <div className="flex justify-between text-[10px] font-mono text-slate-400">
+                                          <span>Odómetro: {cCount}/{cLim} ciclos</span>
+                                          <span>{Math.round((cCount / (cLim || 1)) * 100)}%</span>
+                                        </div>
+                                        <div className="w-full bg-slate-800/80 rounded-full h-1.5 overflow-hidden">
+                                          <div className="bg-emerald-400 h-full" style={{ width: `${Math.min(100, (cCount / (cLim || 1)) * 100)}%` }}></div>
+                                        </div>
                                       </div>
-                                      <div className="w-full bg-slate-800/80 rounded-full h-1.5 overflow-hidden">
-                                        <div className="bg-emerald-400 h-full" style={{ width: `${Math.min(100, (cCount / (cLim || 1)) * 100)}%` }}></div>
-                                      </div>
-                                    </div>
+                                    </ClinicalTooltip>
                                   </>
                                 )}
                               </div>
 
-                              <div className="pt-3 border-t border-white/10 flex items-center justify-between text-xs font-mono text-cyan-400 font-bold w-full">
-                                <span>ENTRAR A CABINA DE CONTROL</span>
-                                <ChevronRight className="w-4 h-4" />
-                              </div>
+                              <ClinicalTooltip title={CLINICAL_HELP.card_control_total.title} description={CLINICAL_HELP.card_control_total.desc} badge="ENTRAR">
+                                <div className="pt-3 border-t border-white/10 flex items-center justify-between text-xs font-mono text-cyan-400 font-bold w-full">
+                                  <span>ENTRAR A CABINA DE CONTROL</span>
+                                  <ChevronRight className="w-4 h-4" />
+                                </div>
+                              </ClinicalTooltip>
                             </div>
                           );
                         })
@@ -829,6 +876,7 @@ function ScadaAppContent() {
                   </div>
                 )}
 
+                {/* 2. GESTIÓN FLOTA */}
                 {activeSection === 'gestion' && (
                   <FleetManagementView
                     fleet={fleet}
@@ -837,6 +885,7 @@ function ScadaAppContent() {
                   />
                 )}
 
+                {/* 3. SECCIÓN NUEVA: ✨ AI AUTOMATION STUDIO & WIDGET DESIGNER */}
                 {activeSection === 'studio' && (
                   <AiAutomationStudio
                     fleet={fleet}
@@ -845,6 +894,7 @@ function ScadaAppContent() {
                   />
                 )}
 
+                {/* 4. PERSONAL */}
                 {activeSection === 'usuarios' && (
                   <UserManagementView
                     fleet={fleet}
@@ -852,10 +902,12 @@ function ScadaAppContent() {
                   />
                 )}
 
+                {/* 5. FOTA */}
                 {activeSection === 'fota' && (
                   <FotaHubView fleet={fleet} sendCommand={sendDeviceCommand} />
                 )}
 
+                {/* 6. AUDITORÍA */}
                 {activeSection === 'auditoria' && (
                   <ClinicalAuditView />
                 )}
@@ -865,7 +917,7 @@ function ScadaAppContent() {
           </main>
         )}
 
-        {/* Barra Inferior Celular */}
+        {/* BARRA INFERIOR CELULAR CON BOTÓN STUDIO (PRESERVA MAC ACTIVA) */}
         {user && !kioskMac && (
           <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-slate-950/90 border-t border-cyan-500/30 backdrop-blur-xl flex items-center justify-around z-50 px-2">
             <button
@@ -888,6 +940,7 @@ function ScadaAppContent() {
               <span>Gestión</span>
             </button>
 
+            {/* BOTÓN STUDIO EN CELULAR */}
             <button
               onClick={() => setActiveSection('studio')}
               className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-[10px] font-mono ${
@@ -928,22 +981,22 @@ function ScadaAppContent() {
                 <Clock className="w-8 h-8" />
               </div>
               <h3 className="text-base font-bold text-white uppercase">Sesión por Expirar</h3>
-              <p className="text-slate-300 leading-relaxed font-sans">
-                Por protocolo, tu sesión se cerrará en <strong className="text-cyan-300 text-sm">{countdown}s</strong>.
+              <p className="text-slate-300 leading-relaxed">
+                Por protocolo de seguridad, tu turno se cerrará en <strong className="text-cyan-300 text-sm">{countdown}s</strong> debido a inactividad.
               </p>
               <div className="flex gap-2 pt-2">
                 <button onClick={logout} className="flex-1 py-2 bg-slate-800 text-slate-300 rounded-xl font-bold">
-                  Cerrar
+                  Cerrar Turno
                 </button>
                 <button onClick={() => { setShowTimeoutModal(false); resetIdleTimer(); }} className="flex-1 py-2 bg-cyan-600 text-white rounded-xl font-bold shadow-lg">
-                  Continuar
+                  Seguir Conectado
                 </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* Modales Auxiliares */}
+        {/* Diagnóstico Cloud */}
         <CloudDiagnosticsModal
           isOpen={Boolean(cloudDiagType)}
           onClose={() => setCloudDiagType(null)}
@@ -953,6 +1006,7 @@ function ScadaAppContent() {
           supabaseConnected={supabaseConnected}
         />
 
+        {/* Menú Contextual */}
         <ContextMenu
           isOpen={contextMenu.isOpen}
           position={contextMenu.position}
@@ -971,6 +1025,7 @@ function ScadaAppContent() {
           onOpenQR={(dev) => setQrModalDevice(dev)}
         />
 
+        {/* Modal de Asignación con sendCommand conectado */}
         <DeviceAssignmentModal
           isOpen={assignModal.isOpen}
           onClose={() => setAssignModal({ isOpen: false, device: null })}
@@ -985,13 +1040,15 @@ function ScadaAppContent() {
           }}
         />
 
+        {/* Modal QR */}
         <SurgicalQRLabel
           isOpen={qrModalDevice !== null}
           onClose={() => setQrModalDevice(null)}
           deviceData={qrModalDevice}
-          operatorName={displayName}
+          operatorName={profile?.nombre || user?.email}
         />
 
+        {/* Modal Personal */}
         <UserManagementModal 
           isOpen={showAdminModal} 
           onClose={() => setShowAdminModal(false)} 
@@ -1006,15 +1063,5 @@ export default function App() {
     <AuthProvider>
       <ScadaAppContent />
     </AuthProvider>
-  );
-}
-
-// AUTO-MONTAJE DIRECTO EN EL DOM (Elimina para siempre la necesidad de main.jsx)
-const rootElement = document.getElementById('root');
-if (rootElement) {
-  ReactDOM.createRoot(rootElement).render(
-    <React.StrictMode>
-      <App />
-    </React.StrictMode>
   );
 }
