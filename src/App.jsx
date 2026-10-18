@@ -39,6 +39,7 @@ function ScadaAppContent() {
   const { user, profile, loading, pendingRequests, logout } = useAuth();
   const { fleet, mqttConnected, sendDeviceCommand } = useMqttFleet();
 
+  // Verificación periódica de conexión con Supabase (cada 15s)
   const [supabaseConnected, setSupabaseConnected] = useState(true);
   useEffect(() => {
     const checkSupabase = async () => {
@@ -54,6 +55,7 @@ function ScadaAppContent() {
     return () => clearInterval(timer);
   }, []);
 
+  // Preferencias visuales
   const [currentTheme, setCurrentTheme] = useState(() => localStorage.getItem('scada_theme') || 'tactical');
   const [currentBg, setCurrentBg] = useState(() => localStorage.getItem('scada_bg') || 'circuit-pcb');
   const [opacity, setOpacity] = useState(() => Number(localStorage.getItem('scada_transparency')) || 82);
@@ -64,6 +66,7 @@ function ScadaAppContent() {
 
   const [cloudDiagType, setCloudDiagType] = useState(null);
 
+  // Kiosk & Navegación
   const [kioskMac, setKioskMac] = useState(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const directKiosk = urlParams.get('kiosk');
@@ -124,6 +127,7 @@ function ScadaAppContent() {
     }
   }, [kioskMac, selectedMac]);
 
+  // Modales
   const [contextMenu, setContextMenu] = useState({ isOpen: false, position: { x: 0, y: 0 }, device: null });
   const [assignModal, setAssignModal] = useState({ isOpen: false, device: null });
   const [qrModalDevice, setQrModalDevice] = useState(null);
@@ -140,6 +144,7 @@ function ScadaAppContent() {
     });
   }, []);
 
+  // Reloj de inactividad
   const [showTimeoutModal, setShowTimeoutModal] = useState(false);
   const [countdown, setCountdown] = useState(60);
   const idleTimerRef = useRef(null);
@@ -206,6 +211,7 @@ function ScadaAppContent() {
     localStorage.setItem('scada_bg', currentBg);
   }, [currentBg]);
 
+  // Vigilante optimizado de sirena
   const alarmasNotificadasRef = useRef(new Set());
   useEffect(() => {
     let hasCriticalAlarm = false;
