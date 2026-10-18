@@ -10,31 +10,29 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="theme-color" content="#030712" />
     
-    <!-- Favicon SVG Nativo Incrustado -->
+    <!-- Favicon SVG Nativo Incrustado (Cero 404) -->
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2300f3ff' stroke-width='2'><path d='M22 12h-4l-3 9L9 3l-3 9H2'/></svg>" />
     <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23030712' stroke='%2300f3ff' stroke-width='2'><rect width='24' height='24' rx='5' fill='%23030712'/><path d='M22 12h-4l-3 9L9 3l-3 9H2'/></svg>" />
     
-    <!-- Fuentes Oficiales -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
   </head>
   <body class="bg-[#030712] text-slate-100 min-h-screen antialiased overflow-x-hidden selection:bg-cyan-500/30 selection:text-cyan-300">
     <div id="root"></div>
-
-    <!-- ARRANCAR DIRECTAMENTE DESDE App.jsx (SIN main.jsx) -->
-    <script type="module" src="/src/App.jsx"></script>
+    <script type="module" src="/src/main.jsx"></script>
 
     <!-- DETECTOR DE ACTUALIZACIONES AUTOMÁTICAS Y PURGA DE CACHÉ -->
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', function() {
           navigator.serviceWorker.register('/sw.js').then(function(reg) {
+            // Revisar si hay una versión nueva compilada en Vercel
             reg.onupdatefound = function() {
               var newWorker = reg.installing;
               newWorker.onstatechange = function() {
                 if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                  console.log('[BIOFLEET OS] Nueva versión detectada. Actualizando...');
+                  console.log('[BIOFLEET OS] Nueva versión detectada. Actualizando interfaz...');
                   window.location.reload();
                 }
               };
