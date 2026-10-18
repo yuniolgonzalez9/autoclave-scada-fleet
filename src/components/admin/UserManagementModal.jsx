@@ -25,7 +25,7 @@ export default function UserManagementModal({ isOpen, onClose }) {
   const [successInfo, setSuccessInfo] = useState('');
   const [adminTab, setAdminTab] = useState('usuarios'); // 'usuarios' | 'bitacora'
 
-  // Cierre con Escape
+  // Cierre con tecla Escape
   const handleKeyDown = useCallback((e) => {
     if (e.key === 'Escape') onClose();
   }, [onClose]);
@@ -63,31 +63,34 @@ export default function UserManagementModal({ isOpen, onClose }) {
     }
   }, [isOpen, fetchAllUsers, fetchAuditLogs]);
 
-  if (!isOpen || typeof document === 'undefined') return null;
+  // HOOKS REUBICADOS ARRIBA: Se ejecutan siempre de forma incondicional
+  const pendingList = useMemo(() => usersList.filter(u => u.estado === 'PENDIENTE'), [usersList]);
+  const activeList = useMemo(() => usersList.filter(u => u.estado !== 'PENDIENTE'), [usersList]);
 
-  const handleApprove = async (user) => {
-    const targetId = user.id || user.user || user.usuario;
-    const roleToAssign = selectedRole[user.id] || 'OPERADOR';
+  // Manejadores de aprobación / rechazo / claves
+  const handleApprove = async (u) => {
+    const targetId = u.user || u.usuario || u.id;
+    const roleToAssign = selectedRole[u.id || u.user || u.usuario] || 'OPERADOR';
     await updateUserStatus(targetId, 'ACTIVO', roleToAssign);
     await fetchAllUsers();
   };
 
-  const handleReject = async (user) => {
-    const targetId = user.id || user.user || user.usuario;
+  const handleReject = async (u) => {
+    const targetId = u.user || u.usuario || u.id;
     await updateUserStatus(targetId, 'RECHAZADO');
     await fetchAllUsers();
   };
 
-  const handleToggleActive = async (user) => {
-    const targetId = user.id || user.user || user.usuario;
-    const newStatus = (user.estado === 'ACTIVO') ? 'INACTIVO' : 'ACTIVO';
+  const handleToggleActive = async (u) => {
+    const targetId = u.user || u.usuario || u.id;
+    const newStatus = (u.estado === 'ACTIVO') ? 'INACTIVO' : 'ACTIVO';
     await updateUserStatus(targetId, newStatus);
     await fetchAllUsers();
   };
 
   const handleConfirmPasswordReset = async () => {
     if (!resetPromptUser || !tempPass.trim()) return;
-    const targetId = resetPromptUser.id || resetPromptUser.user || resetPromptUser.usuario;
+    const targetId = resetPromptUser.user || resetPromptUser.usuario || resetPromptUser.id;
     try {
       await resetUserPassword(targetId, tempPass);
       setSuccessInfo(`Contraseña de [${resetPromptUser.usuario || resetPromptUser.user}] actualizada.`);
@@ -99,8 +102,8 @@ export default function UserManagementModal({ isOpen, onClose }) {
     }
   };
 
-  const pendingList = useMemo(() => usersList.filter(u => u.estado === 'PENDIENTE'), [usersList]);
-  const activeList = useMemo(() => usersList.filter(u => u.estado !== 'PENDIENTE'), [usersList]);
+  // Salida condicional segura (SOLO DESPUÉS DE TODOS LOS HOOKS)
+  if (!isOpen || typeof document === 'undefined') return null;
 
   return createPortal(
     <div 
@@ -172,7 +175,7 @@ export default function UserManagementModal({ isOpen, onClose }) {
               {resetPromptUser && (
                 <div className="p-4 bg-slate-900 border border-amber-500/50 rounded-xl space-y-3">
                   <p className="text-xs text-amber-300 font-bold">
-                    Asignar Nueva Contraseña a: {resetPromptUser.nombre || resetPromptUser.usuario} ({resetPromptUser.usuario || resetPromptUser.user})
+                    Asignar Nueva Contraseña a: {resetPromptUser.nombre || resetPromptUser.usuario || resetPromptUser.user} ({resetPromptUser.usuario || resetPromptUser.user})
                   </p>
                   <div className="flex gap-2">
                     <input
@@ -216,46 +219,49 @@ export default function UserManagementModal({ isOpen, onClose }) {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {pendingList.map((req) => (
-                      <div key={req.id || req.user} className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                        <div>
-                          <p className="text-sm font-bold text-white">{req.nombre || req.user}</p>
-                          <p className="text-xs text-cyan-400">
-                            Usuario: <strong>{req.usuario || req.user}</strong> | Correo: {req.email || 'Sin correo'}
-                          </p>
-                          <p className="text-[11px] text-slate-300 font-sans mt-0.5">Área: {req.departamento || 'General'}</p>
+                    {pendingList.map((req) => {
+                      const reqKey = req.user || req.usuario || req.id;
+                      return (
+                        <div key={reqKey} className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                          <div>
+                            <p className="text-sm font-bold text-white">{req.nombre || req.user}</p>
+                            <p className="text-xs text-cyan-400">
+                              Usuario: <strong>{req.usuario || req.user}</strong> | Correo: {req.email || 'Sin correo'}
+                            </p>
+                            <p className="text-[11px] text-slate-300 font-sans mt-0.5">Área: {req.departamento || 'General'}</p>
+                          </div>
+
+                          <div className="flex items-center gap-2 w-full md:w-auto">
+                            <select
+                              defaultValue="OPERADOR"
+                              onChange={(e) => setSelectedRole({ ...selectedRole, [reqKey]: e.target.value })}
+                              className="bg-slate-900 border border-cyan-500/40 text-xs text-cyan-300 rounded-lg px-2.5 py-1.5 focus:outline-none font-bold"
+                            >
+                              <option value="OPERADOR">Operador de Esterilización</option>
+                              <option value="TECNICO">Ingeniero de Mantenimiento</option>
+                              <option value="DIRECTOR">Director Biomédico</option>
+                            </select>
+
+                            <button
+                              type="button"
+                              onClick={() => handleApprove(req)}
+                              className="p-1.5 bg-emerald-500/20 hover:bg-emerald-500/40 border border-emerald-500 text-emerald-300 rounded-lg text-xs font-medium flex items-center gap-1 shadow"
+                            >
+                              <Check className="w-4 h-4" />
+                              <span>Aprobar</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleReject(req)}
+                              className="p-1.5 bg-rose-500/20 hover:bg-rose-500/40 border border-rose-500 text-rose-300 rounded-lg text-xs font-medium"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
                         </div>
-
-                        <div className="flex items-center gap-2 w-full md:w-auto">
-                          <select
-                            defaultValue="OPERADOR"
-                            onChange={(e) => setSelectedRole({ ...selectedRole, [req.id]: e.target.value })}
-                            className="bg-slate-900 border border-cyan-500/40 text-xs text-cyan-300 rounded-lg px-2.5 py-1.5 focus:outline-none font-bold"
-                          >
-                            <option value="OPERADOR">Operador de Esterilización</option>
-                            <option value="TECNICO">Ingeniero de Mantenimiento</option>
-                            <option value="DIRECTOR">Director Biomédico</option>
-                          </select>
-
-                          <button
-                            type="button"
-                            onClick={() => handleApprove(req)}
-                            className="p-1.5 bg-emerald-500/20 hover:bg-emerald-500/40 border border-emerald-500 text-emerald-300 rounded-lg text-xs font-medium flex items-center gap-1 shadow"
-                          >
-                            <Check className="w-4 h-4" />
-                            <span>Aprobar</span>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => handleReject(req)}
-                            className="p-1.5 bg-rose-500/20 hover:bg-rose-500/40 border border-rose-500 text-rose-300 rounded-lg text-xs font-medium"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -272,8 +278,9 @@ export default function UserManagementModal({ isOpen, onClose }) {
                 <div className="space-y-2">
                   {activeList.map((usr) => {
                     const isActive = usr.estado === 'ACTIVO';
+                    const usrKey = usr.user || usr.usuario || usr.id;
                     return (
-                      <div key={usr.id || usr.user} className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between">
+                      <div key={usrKey} className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between">
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-bold text-white">{usr.nombre || usr.usuario || usr.user}</span>
