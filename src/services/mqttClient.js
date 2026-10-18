@@ -1,32 +1,50 @@
 import mqtt from 'mqtt';
 
-const BROKER_URL = 'wss://d15a5980139147d99bb9e2ad3825e62e.s1.eu.hivemq.cloud:8884/mqtt';
-const MQTT_USER = 'admin_autoclave';
-const MQTT_PASS = '24331973';
+const BROKER_URL = import.meta.env.VITE_MQTT_BROKER_URL || 'wss://d15a5980139147d99bb9e2ad3825e62e.s1.eu.hivemq.cloud:8884/mqtt';
+const MQTT_USER = import.meta.env.VITE_MQTT_USER || 'admin_autoclave';
+const MQTT_PASS = import.meta.env.VITE_MQTT_PASS || '24331973';
 
-// =========================================================================
-// MULTIPLEXOR INSTANTÁNEO (FAST-ELECTION BROADCASTCHANNEL)
-// Conexión inmediata a HiveMQ sin retrasos artificiales de temporizador
-// =========================================================================
+const CHANNEL_NAME = 'scada_hivemq_mesh_v2';
+
+const TOPICS_SUBSCRIPTION = [
+  'autoclave_med_2026/+/telemetria',
+  'autoclave_med_2026/+/esquema',
+  'autoclave_med_2026/+/meta',
+  'autoclave_med_2026/+/reporte_paquete',
+  'autoclave_med_2026/+/alerta_critica',
+  'autoclave_med_2026/+/i2c_report',
+  'autoclave_med_2026/+/hardware_scan',
+  'autoclave_med_2026/+/hw_profile',
+  'autoclave_med_2026/+/logica/ack'
+];
 
 export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
   const tabId = 'TAB_' + Math.random().toString(36).substring(2, 9);
-  const CHANNEL_NAME = 'scada_hivemq_mesh_v2';
   
   let broadcast = null;
   let isLeader = false;
   let leaderHeartbeatTimer = null;
   let checkLeaderTimer = null;
+  let fastCheckTimer = null;
   let lastLeaderPulse = 0;
   let mqttClient = null;
+  let isDestroyed = false;
 
   const hasBroadcastSupport = typeof window !== 'undefined' && 'BroadcastChannel' in window;
   if (hasBroadcastSupport) {
-    broadcast = new BroadcastChannel(CHANNEL_NAME);
+    try {
+      broadcast = new BroadcastChannel(CHANNEL_NAME);
+    } catch (e) {}
   }
 
+  const clearLeaderTimers = () => {
+    if (leaderHeartbeatTimer) clearInterval(leaderHeartbeatTimer);
+    if (checkLeaderTimer) clearInterval(checkLeaderTimer);
+    if (fastCheckTimer) clearTimeout(fastCheckTimer);
+  };
+
   const startMqttConnection = () => {
-    if (mqttClient) return;
+    if (mqttClient || isDestroyed) return;
 
     const clientId = 'SCADA_' + Math.random().toString(36).substring(2, 10);
     
@@ -35,37 +53,29 @@ export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
       username: MQTT_USER,
       password: MQTT_PASS,
       clean: true,
-      keepalive: 15,          // Ping cada 15s para evitar cortes de balanceador
+      keepalive: 20,
       reschedulePings: true,
       connectTimeout: 8000,
-      reconnectPeriod: 2000
+      reconnectPeriod: 2500
     });
 
     mqttClient.on('connect', () => {
-      console.log('[MQTT] Conexión instantánea activa con HiveMQ Cloud');
+      if (isDestroyed) {
+        mqttClient.end(true);
+        return;
+      }
       if (onStatusChange) onStatusChange(true);
 
-      // Suscripciones maestras
-      mqttClient.subscribe('autoclave_med_2026/+/telemetria');
-      mqttClient.subscribe('autoclave_med_2026/+/esquema');
-      mqttClient.subscribe('autoclave_med_2026/+/meta');
-      mqttClient.subscribe('autoclave_med_2026/+/reporte_paquete');
-      mqttClient.subscribe('autoclave_med_2026/+/alerta_critica');
-      mqttClient.subscribe('autoclave_med_2026/+/i2c_report');
-      mqttClient.subscribe('autoclave_med_2026/+/hardware_scan');
-      mqttClient.subscribe('autoclave_med_2026/+/hw_profile');
-      mqttClient.subscribe('autoclave_med_2026/+/logica/ack');
+      TOPICS_SUBSCRIPTION.forEach((top) => {
+        mqttClient.subscribe(top, { qos: 1 });
+      });
 
       if (broadcast) {
         broadcast.postMessage({ type: 'STATUS_UPDATE', status: true });
       }
     });
 
-    mqttClient.on('error', (err) => {
-      console.warn('[MQTT ERROR]', err?.message || err);
-      if (err && err.message && err.message.includes('Keepalive timeout')) {
-        try { mqttClient.reconnect(); } catch (e) {}
-      }
+    mqttClient.on('error', () => {
       if (onStatusChange) onStatusChange(false);
       if (broadcast) broadcast.postMessage({ type: 'STATUS_UPDATE', status: false });
     });
@@ -81,6 +91,8 @@ export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
     });
 
     mqttClient.on('message', (topic, message, packet) => {
+      if (isDestroyed) return;
+
       try {
         const payload = JSON.parse(message.toString());
         const parts = topic.split('/');
@@ -95,26 +107,32 @@ export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
         if (broadcast) {
           broadcast.postMessage({ type: 'INCOMING_MQTT', packetData });
         }
-      } catch (e) {
-        console.warn('[MQTT PARSE ERROR]', e);
-      }
+      } catch (e) {}
     });
   };
 
   const electAsLeader = () => {
-    if (isLeader) return;
+    if (isLeader || isDestroyed) return;
     isLeader = true;
     startMqttConnection();
 
+    clearLeaderTimers();
     leaderHeartbeatTimer = setInterval(() => {
-      if (broadcast) {
+      if (broadcast && !isDestroyed) {
         broadcast.postMessage({ type: 'LEADER_PULSE', leaderId: tabId });
       }
     }, 1000);
   };
 
-  if (hasBroadcastSupport) {
+  const handleBeforeUnload = () => {
+    if (isLeader && broadcast) {
+      broadcast.postMessage({ type: 'LEADER_CLOSING', leaderId: tabId });
+    }
+  };
+
+  if (hasBroadcastSupport && broadcast) {
     broadcast.onmessage = (event) => {
+      if (isDestroyed) return;
       const msg = event.data;
       if (!msg) return;
 
@@ -127,9 +145,9 @@ export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
         if (onMessageReceived) onMessageReceived(msg.packetData);
       }
 
-      if (msg.type === 'FORWARD_COMMAND' && isLeader && mqttClient && mqttClient.connected) {
+      if (msg.type === 'FORWARD_COMMAND' && isLeader && mqttClient?.connected) {
         const { topic, payloadStr, shouldRetain } = msg;
-        mqttClient.publish(topic, payloadStr, { qos: 1, retain: shouldRetain });
+        mqttClient.publish(topic, payloadStr, { qos: 1, retain: Boolean(shouldRetain) });
       }
 
       if (msg.type === 'STATUS_UPDATE' && !isLeader) {
@@ -141,37 +159,33 @@ export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
       }
     };
 
-    // COMPROBACIÓN ULTRA-RÁPIDA (80ms en lugar de 1200ms)
-    setTimeout(() => {
-      if (Date.now() - lastLeaderPulse > 400) {
+    fastCheckTimer = setTimeout(() => {
+      if (!isDestroyed && Date.now() - lastLeaderPulse > 400) {
         electAsLeader();
       }
-    }, 80);
+    }, 90);
 
     checkLeaderTimer = setInterval(() => {
-      if (!isLeader && Date.now() - lastLeaderPulse > 2200) {
+      if (!isDestroyed && !isLeader && Date.now() - lastLeaderPulse > 2200) {
         electAsLeader();
       }
     }, 1200);
 
-    window.addEventListener('beforeunload', () => {
-      if (isLeader && broadcast) {
-        broadcast.postMessage({ type: 'LEADER_CLOSING', leaderId: tabId });
-      }
-    });
-
+    window.addEventListener('beforeunload', handleBeforeUnload);
   } else {
     electAsLeader();
   }
 
   const sendCommand = (mac, cmdObject, forceRetain = null) => {
-    const cleanMac = mac.toUpperCase();
+    const cleanMac = (mac || '').toUpperCase().replace(/[:\-]/g, '');
+    if (!cleanMac) return;
+
     const topic = `autoclave_med_2026/${cleanMac}/config`;
     const isInstantTrigger = Boolean(cmdObject.cmd);
     const shouldRetain = forceRetain !== null ? forceRetain : !isInstantTrigger;
     const payloadStr = JSON.stringify(cmdObject);
 
-    if (isLeader && mqttClient && mqttClient.connected) {
+    if (isLeader && mqttClient?.connected) {
       mqttClient.publish(topic, payloadStr, { qos: 1, retain: shouldRetain });
     } else if (broadcast) {
       broadcast.postMessage({
