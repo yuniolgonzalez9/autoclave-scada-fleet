@@ -21,7 +21,7 @@ html, body {
   color: #ffffff;
   -webkit-tap-highlight-color: transparent;
   touch-action: pan-y;
-  overscroll-behavior-y: none; /* Evita pull-to-refresh accidental en Android */
+  overscroll-behavior-y: none; /* Evita recargas o rebotes accidentales en Android/iOS */
 }
 
 code, .font-mono {
@@ -53,7 +53,7 @@ button:active, .btn-touch:active {
 }
 
 /* =========================================================================
-   2. TEMAS VISUALES OSCUROS
+   2. TEMAS VISUALES OSCUROS (TACTICAL / CYBER / HYBRID)
    ========================================================================= */
 [data-theme="tactical"] {
   --glass-bg: 10 16 30;
@@ -90,7 +90,7 @@ button:active, .btn-touch:active {
   box-shadow: 0 8px 32px 0 rgba(0, 0, 0, calc(var(--glass-opacity) * 0.6)), 
               inset 0 1px 0 rgba(255, 255, 255, 0.12);
   transition: background-color 0.2s ease, border-color 0.2s ease;
-  transform: translateZ(0); /* Fuerza capa de aceleración por GPU */
+  transform: translateZ(0); /* Aceleración por GPU */
 }
 
 .ultra-glass:hover {
@@ -104,7 +104,7 @@ button:active, .btn-touch:active {
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-/* Fallback para navegadores o GPUs que deshabilitan backdrop-filter */
+/* Fallback para navegadores antiguos o modos de ahorro de energía */
 @supports not (backdrop-filter: blur(10px)) {
   .ultra-glass {
     background-color: rgb(15 23 42 / 0.96) !important;
@@ -117,7 +117,7 @@ button:active, .btn-touch:active {
 .speedtest-laser-header {
   position: relative;
   overflow: hidden !important;
-  contain: paint; /* Evita que el navegador estire el layout hacia los lados */
+  contain: paint; /* Evita que el haz láser ensanche la pantalla horizontalmente */
 }
 
 .speedtest-laser-header::before {
@@ -163,7 +163,7 @@ button:active, .btn-touch:active {
 }
 
 /* =========================================================================
-   6. REGLAS LIMPIAS PARA IMPRESIÓN MÉDICA OFICIAL (CTRL + P)
+   6. REGLAS PARA IMPRESIÓN MÉDICA OFICIAL (CTRL + P / CERTIFICADOS)
    ========================================================================= */
 @media print {
   body {
