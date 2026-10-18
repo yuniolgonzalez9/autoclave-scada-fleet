@@ -27,9 +27,6 @@ code, .font-mono {
   font-family: 'JetBrains Mono', monospace;
 }
 
-/* =========================================================================
-   1. TRANSICIONES FLUIDAS Y RESPUESTA TÁCTIL
-   ========================================================================= */
 @keyframes androidViewEnter {
   0% {
     opacity: 0;
@@ -49,9 +46,6 @@ button:active, .btn-touch:active {
   transform: scale(0.96);
 }
 
-/* =========================================================================
-   2. TEMAS VISUALES OSCUROS
-   ========================================================================= */
 [data-theme="tactical"] {
   --glass-bg: 10 16 30;
   --accent-color: #00f3ff;
@@ -76,9 +70,6 @@ button:active, .btn-touch:active {
   --laser-glow: 0 0 20px rgba(0, 255, 136, 0.65), 0 0 12px rgba(245, 158, 11, 0.4);
 }
 
-/* =========================================================================
-   3. ULTRA-GLASS CRISTAL REAL (0% A 100%)
-   ========================================================================= */
 .ultra-glass {
   background-color: rgb(var(--glass-bg) / var(--glass-opacity)) !important;
   backdrop-filter: blur(calc(var(--glass-opacity) * 16px + 2px)) !important;
@@ -100,12 +91,9 @@ button:active, .btn-touch:active {
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-/* =========================================================================
-   4. RAYITA LÁSER SPEEDTEST BLINDADA (OVERFLOW: HIDDEN ESTRICTO)
-   ========================================================================= */
 .speedtest-laser-header {
   position: relative;
-  overflow: hidden !important; /* Evita que el láser estire la pantalla en Android */
+  overflow: hidden !important;
 }
 
 .speedtest-laser-header::before {
@@ -127,9 +115,6 @@ button:active, .btn-touch:active {
   100% { transform: translateX(200%); }
 }
 
-/* =========================================================================
-   5. BARRAS DE SCROLL PERSONALIZADAS
-   ========================================================================= */
 * {
   scrollbar-width: thin;
   scrollbar-color: rgba(0, 243, 255, 0.35) rgba(10, 10, 20, 0.7);
