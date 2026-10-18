@@ -1,7 +1,6 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
 :root {
   --glass-opacity: 0.82;
   --glass-bg: 15 23 42;
