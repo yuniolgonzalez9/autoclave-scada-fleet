@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { conversarYCompilarConIA, detectarProveedorApiKey } from '../../services/aiStudioService';
 
 const SYSTEM_PROMPT_AUTORIDAD_TOTAL = `
 Eres el Ingeniero Director de Automatización, SCADA y Sistemas Físicos de BioFleet OS v2.0 Enterprise.
