@@ -1,20 +1,17 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { connectMqttFleet } from '../services/mqttFleet';
-import { accumulateF0 } from '../utils/f0Calculator';
+import { connectMqttFleet } from '../services/mqttClient';
+import { accumulateF0 } from '../utils/f0Formulas';
 import { supabase } from '../services/supabase';
 
 const CACHE_KEY = 'biofleet_fleet_cache_v2';
-const PERSIST_INTERVAL_MS = 4000; // Guarda en sessionStorage cada 4s, no cada 800ms
+const PERSIST_INTERVAL_MS = 4000;
 
 export function useMqttFleet() {
-  // 1. Carga inicial en 0ms desde sessionStorage
   const [fleet, setFleet] = useState(() => {
     try {
       const cached = sessionStorage.getItem(CACHE_KEY);
       if (cached) return JSON.parse(cached);
-    } catch (e) {
-      console.warn('[CACHE] Error leyendo caché local:', e);
-    }
+    } catch (e) {}
     return {};
   });
 
@@ -23,7 +20,6 @@ export function useMqttFleet() {
   const fleetRef = useRef(fleet);
   fleetRef.current = fleet;
 
-  // 2. Persistencia periódica inteligente (Evita congelar el navegador con JSON.stringify)
   useEffect(() => {
     const timer = setInterval(() => {
       try {
@@ -31,18 +27,14 @@ export function useMqttFleet() {
         if (Object.keys(currentData).length > 0) {
           sessionStorage.setItem(CACHE_KEY, JSON.stringify(currentData));
         }
-      } catch (e) {
-        console.warn('[CACHE] Error persistiendo sesión:', e);
-      }
+      } catch (e) {}
     }, PERSIST_INTERVAL_MS);
 
     return () => clearInterval(timer);
   }, []);
 
-  // 3. Cargar inventario registrado desde Supabase
   useEffect(() => {
     let isMounted = true;
-
     const loadRegisteredDevices = async () => {
       try {
         const { data, error } = await supabase
@@ -98,16 +90,13 @@ export function useMqttFleet() {
             return nextFleet;
           });
         }
-      } catch (err) {
-        console.warn('[SUPABASE] Carga de inventario inicial:', err);
-      }
+      } catch (err) {}
     };
 
     loadRegisteredDevices();
     return () => { isMounted = false; };
   }, []);
 
-  // 4. Procesador asíncrono seguro para reportes clínicos de ciclo (Fuera de setFleet)
   const persistSessionReport = useCallback(async (cleanMac, payload, currentMeta) => {
     try {
       const ciclosAcum = Number(payload?.ciclos_acumulados || payload?.ciclos || 0);
@@ -134,12 +123,9 @@ export function useMqttFleet() {
         ciclos_detalle: payload?.ciclos_detalle || payload?.fases_desglose || [],
         eventos: payload?.eventos || []
       }, { onConflict: 'session_id' });
-    } catch (e) {
-      console.warn('[SUPABASE] Error registrando reporte forense:', e);
-    }
+    } catch (e) {}
   }, []);
 
-  // 5. Conexión centralizada MQTT
   useEffect(() => {
     const { client, sendCommand } = connectMqttFleet(
       ({ mac, channel, payload, isRetained }) => {
@@ -166,7 +152,6 @@ export function useMqttFleet() {
             lastSeen: isFreshStream ? Date.now() : (currentDev.lastSeen || Date.now())
           };
 
-          // INGESTA DE TELEMETRÍA (800ms)
           if (channel === 'telemetria') {
             updated.datos = {
               ...(currentDev.datos || {}),
@@ -176,14 +161,12 @@ export function useMqttFleet() {
             const currentTemp = parseFloat(payload?.temp_camara ?? 25.0);
             const currentPres = parseFloat(payload?.presion ?? 0.0);
 
-            // Integración F0
             if (payload?.fase === 'ESTERILIZANDO' || payload?.fase === 'MESETA') {
               updated.f0Score = accumulateF0(currentDev.f0Score || 0, currentTemp, 2);
             } else if (payload?.fase === 'ESPERA' || payload?.fase === 'APAGADO') {
               updated.f0Score = 0.0;
             }
 
-            // Buffer histórico acotado a 30 muestras
             const nowTime = new Date().toTimeString().slice(3, 8);
             const newPoint = {
               time: nowTime,
@@ -222,7 +205,6 @@ export function useMqttFleet() {
             if (!updated.datos.cfg) updated.datos.cfg = {};
             updated.datos.cfg.ciclos = ciclosAcum;
 
-            // Despachar guardado en segundo plano
             persistSessionReport(cleanMac, payload, updated.meta);
           }
 
@@ -238,7 +220,6 @@ export function useMqttFleet() {
     };
   }, [persistSessionReport]);
 
-  // 6. Envío optimista de comandos hacia actuadores y LittleFS
   const sendDeviceCommand = useCallback((mac, cmd) => {
     const cleanMac = (mac || '').toUpperCase().replace(/[:\-]/g, '');
     if (!cleanMac) return;
@@ -295,14 +276,11 @@ export function useMqttFleet() {
         };
       });
 
-      // Sincronización asíncrona segura con Postgres
       if (!cmd.cmd || cmd.cmd === 'APPLY_HAL_MAP' || cmd.cmd === 'SET_ALERTA_MANT') {
         supabase.from('asignaciones_equipos').update({
           config_deseada: cmd,
           updated_at: new Date().toISOString()
-        }).eq('mac', cleanMac).then(() => {}).catch(err => {
-          console.warn('[SUPABASE] Error actualizando config_deseada:', err);
-        });
+        }).eq('mac', cleanMac).then(() => {}).catch(() => {});
       }
     }
   }, []);
