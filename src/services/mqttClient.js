@@ -34,7 +34,9 @@ export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
   if (hasBroadcastSupport) {
     try {
       broadcast = new BroadcastChannel(CHANNEL_NAME);
-    } catch (e) {}
+    } catch (e) {
+      console.warn('[MQTT MESH] BroadcastChannel no soportado:', e);
+    }
   }
 
   const clearLeaderTimers = () => {
