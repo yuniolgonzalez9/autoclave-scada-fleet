@@ -11,7 +11,9 @@ export function useMqttFleet() {
     try {
       const cached = sessionStorage.getItem(CACHE_KEY);
       if (cached) return JSON.parse(cached);
-    } catch (e) {}
+    } catch (e) {
+      console.warn('[CACHE] Error leyendo caché local:', e);
+    }
     return {};
   });
 
@@ -27,7 +29,9 @@ export function useMqttFleet() {
         if (Object.keys(currentData).length > 0) {
           sessionStorage.setItem(CACHE_KEY, JSON.stringify(currentData));
         }
-      } catch (e) {}
+      } catch (e) {
+        console.warn('[CACHE] Error persistiendo sesión:', e);
+      }
     }, PERSIST_INTERVAL_MS);
 
     return () => clearInterval(timer);
@@ -35,6 +39,7 @@ export function useMqttFleet() {
 
   useEffect(() => {
     let isMounted = true;
+
     const loadRegisteredDevices = async () => {
       try {
         const { data, error } = await supabase
@@ -90,7 +95,9 @@ export function useMqttFleet() {
             return nextFleet;
           });
         }
-      } catch (err) {}
+      } catch (err) {
+        console.warn('[SUPABASE] Carga de inventario:', err);
+      }
     };
 
     loadRegisteredDevices();
@@ -123,7 +130,9 @@ export function useMqttFleet() {
         ciclos_detalle: payload?.ciclos_detalle || payload?.fases_desglose || [],
         eventos: payload?.eventos || []
       }, { onConflict: 'session_id' });
-    } catch (e) {}
+    } catch (e) {
+      console.warn('[SUPABASE] Error registrando reporte forense:', e);
+    }
   }, []);
 
   useEffect(() => {
