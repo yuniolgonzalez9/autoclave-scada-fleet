@@ -96,6 +96,7 @@ button:active, .btn-touch:active {
 .glass-cell {
   background-color: rgb(var(--glass-bg) / calc(var(--glass-opacity) * 0.75 + 0.1)) !important;
   backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
@@ -106,6 +107,7 @@ button:active, .btn-touch:active {
   position: relative;
   overflow: hidden !important; /* Evita que el láser estire la pantalla en Android */
 }
+
 .speedtest-laser-header::before {
   content: '';
   position: absolute;
@@ -123,6 +125,14 @@ button:active, .btn-touch:active {
 @keyframes laserBeam {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(200%); }
+}
+
+/* =========================================================================
+   5. BARRAS DE SCROLL PERSONALIZADAS
+   ========================================================================= */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 243, 255, 0.35) rgba(10, 10, 20, 0.7);
 }
 
 ::-webkit-scrollbar { width: 6px; height: 6px; }
