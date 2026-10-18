@@ -361,7 +361,6 @@ function ScadaAppContent() {
   const displayRole = profile?.rol || 'SUPERADMIN';
   const displayUser = profile?.usuario || user?.email?.split('@')[0] || 'admin';
   const displayHospital = profile?.departamento || 'Central Hospitalaria';
-  const displayAuthMacs = profile?.equipos_autorizados ? profile.equipos_autorizados : 'Flota Completa (Root)';
 
   return (
     <div className="min-h-screen w-full relative pb-20 md:pb-6 flex flex-col overflow-x-hidden font-mono">
