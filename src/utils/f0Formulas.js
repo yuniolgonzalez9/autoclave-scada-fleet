@@ -30,10 +30,10 @@ export const evaluateCycleStatus = (f0 = 0, temp = 25, pressure = 0, phase = 'ES
   const cleanPhase = String(phase).toUpperCase();
 
   if (tempNum > 138.5 || presNum > 2.65) {
-    return { status: 'ALARMA_CRITICA', label: 'ALARMA: LÍMITES EXCEDIDOS' };
+    return { status: 'ALARMA_CRITICA', label: 'ALARMA: LÍMITES CRÍTICOS EXCEDIDOS' };
   }
   if (f0Num >= F0_TARGET_MIN && (cleanPhase === 'SECADO' || cleanPhase === 'FINALIZADO CON EXITO')) {
-    return { status: 'VALIDADO_EXITOSO', label: `ESTERILIZACIÓN CONFORME (F0 ≥ 15)` };
+    return { status: 'VALIDADO_EXITOSO', label: `ESTERILIZACIÓN CONFORME (F0 ≥ 15 min)` };
   }
   if (cleanPhase.includes('ESTERILIZ') || cleanPhase.includes('MESETA')) {
     return { status: 'EN_MESETA_TERMICA', label: 'ESTERILIZANDO (F0 EN CURSO)' };
