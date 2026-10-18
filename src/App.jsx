@@ -44,7 +44,6 @@ function ScadaAppContent() {
     let isMounted = true;
     const checkSupabase = async () => {
       try {
-        // Consultamos la columna real de usuarios_scada
         const { error } = await supabase.from('usuarios_scada').select('user').limit(1);
         if (isMounted) {
           setSupabaseConnected(!error && navigator.onLine);
@@ -134,7 +133,7 @@ function ScadaAppContent() {
     }
   }, [kioskMac, selectedMac]);
 
-  // Modales
+  // Modales y Menú Contextual
   const [contextMenu, setContextMenu] = useState({ isOpen: false, position: { x: 0, y: 0 }, device: null });
   const [assignModal, setAssignModal] = useState({ isOpen: false, device: null });
   const [qrModalDevice, setQrModalDevice] = useState(null);
@@ -946,14 +945,16 @@ function ScadaAppContent() {
           </div>
         )}
 
-        <CloudDiagnosticsModal
-          isOpen={Boolean(cloudDiagType)}
-          onClose={() => setCloudDiagType(null)}
-          type={cloudDiagType || 'hivemq'}
-          fleet={fleet}
-          mqttConnected={mqttConnected}
-          supabaseConnected={supabaseConnected}
-        />
+        {Boolean(cloudDiagType) && (
+          <CloudDiagnosticsModal
+            isOpen={Boolean(cloudDiagType)}
+            onClose={() => setCloudDiagType(null)}
+            type={cloudDiagType || 'hivemq'}
+            fleet={fleet}
+            mqttConnected={mqttConnected}
+            supabaseConnected={supabaseConnected}
+          />
+        )}
 
         <ContextMenu
           isOpen={contextMenu.isOpen}
@@ -973,31 +974,37 @@ function ScadaAppContent() {
           onOpenQR={(dev) => setQrModalDevice(dev)}
         />
 
-        <DeviceAssignmentModal
-          isOpen={assignModal.isOpen}
-          onClose={() => setAssignModal({ isOpen: false, device: null })}
-          device={assignModal.device}
-          sendCommand={sendDeviceCommand}
-          onAssignmentUpdated={(updatedMeta) => {
-            if (fleet[updatedMeta.mac]) {
-              fleet[updatedMeta.mac].meta = Object.assign(fleet[updatedMeta.mac].meta || {}, updatedMeta);
-              if (!fleet[updatedMeta.mac].datos) fleet[updatedMeta.mac].datos = {};
-              fleet[updatedMeta.mac].datos.tipo = updatedMeta.config_deseada?.tipo || updatedMeta.tipo;
-            }
-          }}
-        />
+        {assignModal.isOpen && (
+          <DeviceAssignmentModal
+            isOpen={assignModal.isOpen}
+            onClose={() => setAssignModal({ isOpen: false, device: null })}
+            device={assignModal.device}
+            sendCommand={sendDeviceCommand}
+            onAssignmentUpdated={(updatedMeta) => {
+              if (fleet[updatedMeta.mac]) {
+                fleet[updatedMeta.mac].meta = Object.assign(fleet[updatedMeta.mac].meta || {}, updatedMeta);
+                if (!fleet[updatedMeta.mac].datos) fleet[updatedMeta.mac].datos = {};
+                fleet[updatedMeta.mac].datos.tipo = updatedMeta.config_deseada?.tipo || updatedMeta.tipo;
+              }
+            }}
+          />
+        )}
 
-        <SurgicalQRLabel
-          isOpen={qrModalDevice !== null}
-          onClose={() => setQrModalDevice(null)}
-          deviceData={qrModalDevice}
-          operatorName={displayName}
-        />
+        {qrModalDevice !== null && (
+          <SurgicalQRLabel
+            isOpen={qrModalDevice !== null}
+            onClose={() => setQrModalDevice(null)}
+            deviceData={qrModalDevice}
+            operatorName={displayName}
+          />
+        )}
 
-        <UserManagementModal 
-          isOpen={showAdminModal} 
-          onClose={() => setShowAdminModal(false)} 
-        />
+        {showAdminModal && (
+          <UserManagementModal 
+            isOpen={showAdminModal} 
+            onClose={() => setShowAdminModal(false)} 
+          />
+        )}
       </div>
     </div>
   );
