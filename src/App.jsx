@@ -14,7 +14,6 @@ import ClinicalTooltip from './components/common/ClinicalTooltip';
 import ContextMenu from './components/common/ContextMenu';
 import DeviceAssignmentModal from './components/admin/DeviceAssignmentModal';
 import SurgicalQRLabel from './components/labels/SurgicalQRLabel';
-import { CLINICAL_HELP } from './utils/clinicalDictionary';
 import { useMqttFleet } from './hooks/useMqttFleet';
 import { startIndustrialSiren, stopIndustrialSiren, initAudioUnlock } from './services/audioAlarm';
 import { sendCriticalAlarmWithButtons } from './services/telegram';
@@ -39,20 +38,28 @@ function ScadaAppContent() {
   const { user, profile, loading, pendingRequests, logout } = useAuth();
   const { fleet, mqttConnected, sendDeviceCommand } = useMqttFleet();
 
-  // Verificación periódica de conexión con Supabase (cada 15s)
+  // Verificación periódica de conexión con Supabase (cada 15s) usando la columna "user"
   const [supabaseConnected, setSupabaseConnected] = useState(true);
   useEffect(() => {
+    let isMounted = true;
     const checkSupabase = async () => {
       try {
-        const { error } = await supabase.from('usuarios_scada').select('id').limit(1);
-        setSupabaseConnected(!error && navigator.onLine);
+        // Consultamos la columna real de usuarios_scada
+        const { error } = await supabase.from('usuarios_scada').select('user').limit(1);
+        if (isMounted) {
+          setSupabaseConnected(!error && navigator.onLine);
+        }
       } catch (e) {
-        setSupabaseConnected(false);
+        if (isMounted) setSupabaseConnected(false);
       }
     };
+
     checkSupabase();
     const timer = setInterval(checkSupabase, 15000);
-    return () => clearInterval(timer);
+    return () => {
+      isMounted = false;
+      clearInterval(timer);
+    };
   }, []);
 
   // Preferencias visuales
@@ -274,7 +281,7 @@ function ScadaAppContent() {
     if (isAdmin) return macKeys.map((k) => fleet[k]);
 
     const userHospital = (profile?.departamento || '').toLowerCase().trim();
-    const currentUsername = (profile?.usuario || profile?.user || user?.email || '').toLowerCase().trim();
+    const currentUsername = (profile?.user || profile?.usuario || user?.email || '').toLowerCase().trim();
     const userAuthMacs = (profile?.equipos_autorizados || '').toUpperCase().split(',').map((x) => x.trim());
 
     return macKeys
@@ -357,9 +364,9 @@ function ScadaAppContent() {
     );
   }
 
-  const displayName = profile?.nombre || profile?.usuario || user?.email?.split('@')[0] || 'ADMIN';
+  const displayName = profile?.nombre || profile?.user || profile?.usuario || user?.email?.split('@')[0] || 'ADMIN';
   const displayRole = profile?.rol || 'SUPERADMIN';
-  const displayUser = profile?.usuario || user?.email?.split('@')[0] || 'admin';
+  const displayUser = profile?.user || profile?.usuario || user?.email?.split('@')[0] || 'admin';
   const displayHospital = profile?.departamento || 'Central Hospitalaria';
 
   return (
