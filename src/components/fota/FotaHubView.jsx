@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import ClinicalTooltip from '../common/ClinicalTooltip';
 import { CLINICAL_HELP } from '../../utils/clinicalDictionary';
-import { desplegarPerfilJsonFota } from '../../services/fotaService';
+import { desplegarPerfilJsonFota } from '../../services/fotaJsonService';
 import { 
   Rocket, 
   Upload, 
