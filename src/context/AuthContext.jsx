@@ -5,9 +5,6 @@ import { sendTelegramAlert } from '../services/telegram';
 const AuthContext = createContext({});
 const SESSION_STORAGE_KEY = 'biofleet_enterprise_session';
 
-/**
- * Normaliza cualquier fila de 'usuarios_scada' a un objeto estándar predecible
- */
 function normalizeUserProfile(raw = {}) {
   const username = (raw.user || raw.usuario || raw.email?.split('@')[0] || '').toLowerCase().trim();
   const pass = raw.pass || raw.password || raw.clave || '';
@@ -40,7 +37,6 @@ export const AuthProvider = ({ children }) => {
   const [pendingRequests, setPendingRequests] = useState([]);
   const [recoveryRequests, setRecoveryRequests] = useState([]);
 
-  // Cargar solicitudes pendientes (Solo para administradores)
   const loadPendingRequests = useCallback(async () => {
     try {
       const { data: pendings, error: errPend } = await supabase
@@ -52,7 +48,6 @@ export const AuthProvider = ({ children }) => {
         setPendingRequests(pendings.map(normalizeUserProfile));
       }
 
-      // Consulta de recuperación tolerante a nombres de columna fecha_hora / created_at
       try {
         const { data: recoveries } = await supabase
           .from('auditoria_accesos')
@@ -68,7 +63,6 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
-  // Carga inicial de sesión guardada
   useEffect(() => {
     const stored = localStorage.getItem(SESSION_STORAGE_KEY);
     if (stored) {
@@ -89,7 +83,6 @@ export const AuthProvider = ({ children }) => {
     setLoading(false);
   }, [loadPendingRequests]);
 
-  // 1. INICIAR SESIÓN CON CREDENCIALES
   const loginWithCredentials = async (userOrEmail, passwordInput) => {
     const cleanId = (userOrEmail || '').trim().toLowerCase();
     const cleanPass = (passwordInput || '').trim();
@@ -98,7 +91,6 @@ export const AuthProvider = ({ children }) => {
       throw new Error('Introduce tu usuario y contraseña.');
     }
 
-    // Credencial Maestra de Contingencia Root
     if (
       (cleanId === 'superadmin' || cleanId === 'admin' || cleanId === 'yuniol0220@gmail.com' || cleanId === 'yuniolgonzalez9@gmail.com') &&
       cleanPass === '24331973'
@@ -120,14 +112,12 @@ export const AuthProvider = ({ children }) => {
       return masterUser;
     }
 
-    // Consulta específica y optimizada (No descarga toda la tabla a memoria)
     let { data: users, error } = await supabase
       .from('usuarios_scada')
       .select('*')
       .or(`user.eq.${cleanId},usuario.eq.${cleanId},email.eq.${cleanId}`)
       .limit(1);
 
-    // Si falló por nombre de columna compuesto, intentamos búsqueda por email o user
     if (error || !users || users.length === 0) {
       const fallbackQuery = await supabase
         .from('usuarios_scada')
@@ -169,7 +159,6 @@ export const AuthProvider = ({ children }) => {
       await loadPendingRequests();
     }
 
-    // Registro forense de login exitoso
     try {
       await supabase.from('auditoria_accesos').insert([{
         usuario: matchedUser.user,
@@ -181,7 +170,6 @@ export const AuthProvider = ({ children }) => {
     return matchedUser;
   };
 
-  // 2. RECUPERACIÓN DE CONTRASEÑA
   const requestPasswordRecovery = async (emailInput) => {
     const cleanEmail = (emailInput || '').trim().toLowerCase();
     if (!cleanEmail) throw new Error('Por favor introduce un correo válido.');
@@ -189,4 +177,153 @@ export const AuthProvider = ({ children }) => {
     if (cleanEmail === 'yuniol0220@gmail.com' || cleanEmail === 'yuniolgonzalez9@gmail.com') {
       await sendTelegramAlert(
         `🛡️ <b>RECUPERACIÓN MAESTRA</b>\n\n` +
-        `👤 <b>Superadmin:</b> Francisco Gonzalez
+        `👤 <b>Superadmin:</b> Francisco Gonzalez\n` +
+        `🔑 <b>Clave de Emergencia:</b> <code>24331973</code>`
+      );
+      return {
+        isMaster: true,
+        message: 'Credencial Maestra detectada. El PIN ha sido enviado a tu Telegram.'
+      };
+    }
+
+    const { data: users } = await supabase
+      .from('usuarios_scada')
+      .select('*')
+      .eq('email', cleanEmail)
+      .limit(1);
+
+    if (!users || users.length === 0) {
+      await sendTelegramAlert(
+        `🚨 <b>ALERTA DE SEGURIDAD</b>\n\nIntento de recuperación con correo no registrado: <code>${cleanEmail}</code>`
+      );
+      return {
+        isMaster: false,
+        message: 'Si el correo existe en la base clínica, se ha notificado a la Administración.'
+      };
+    }
+
+    const targetUser = normalizeUserProfile(users[0]);
+
+    try {
+      await supabase.from('auditoria_accesos').insert([{
+        usuario: targetUser.user,
+        evento: 'SOLICITUD_RECUPERACION_PENDIENTE'
+      }]);
+    } catch (_) {}
+
+    await sendTelegramAlert(
+      `🔔 <b>SOLICITUD DE RECUPERACIÓN</b>\n\n` +
+      `👤 <b>Personal:</b> ${targetUser.nombre}\n` +
+      `🆔 <b>Usuario:</b> <code>${targetUser.user}</code>\n` +
+      `🔑 <b>Clave Registrada:</b> <code>${targetUser.pass}</code>`
+    );
+
+    await loadPendingRequests();
+
+    return {
+      isMaster: false,
+      message: 'Solicitud enviada a la Dirección Biomédica.'
+    };
+  };
+
+  const resetUserPassword = async (userIdOrUsername, newTempPassword) => {
+    const cleanPass = newTempPassword.trim();
+    if (cleanPass.length < 4) throw new Error('Mínimo 4 caracteres.');
+
+    const updatePayload = { pass: cleanPass, password: cleanPass };
+
+    let { error } = await supabase
+      .from('usuarios_scada')
+      .update(updatePayload)
+      .eq('id', userIdOrUsername);
+
+    if (error) {
+      const retry = await supabase
+        .from('usuarios_scada')
+        .update(updatePayload)
+        .or(`user.eq.${userIdOrUsername},usuario.eq.${userIdOrUsername}`);
+
+      if (retry.error) throw retry.error;
+    }
+  };
+
+  const requestUserAccess = async ({ usuario, nombre_completo, email, departamento, password }) => {
+    const cleanUser = usuario.trim().toLowerCase();
+    const cleanPass = password.trim();
+
+    const insertPayload = {
+      user: cleanUser,
+      usuario: cleanUser,
+      nombre: (nombre_completo || cleanUser).trim(),
+      email: (email || '').trim().toLowerCase(),
+      departamento: departamento || 'Central de Esterilización',
+      rol: 'OPERADOR',
+      pass: cleanPass,
+      password: cleanPass,
+      estado: 'PENDIENTE'
+    };
+
+    const { data, error } = await supabase
+      .from('usuarios_scada')
+      .insert([insertPayload])
+      .select();
+
+    if (error) throw new Error(error.message);
+
+    await sendTelegramAlert(
+      `🆕 <b>NUEVA SOLICITUD DE ACCESO</b>\n\n` +
+      `👤 <b>Nombre:</b> ${nombre_completo}\n` +
+      `🆔 <b>Usuario:</b> <code>${cleanUser}</code>\n` +
+      `🏥 <b>Área:</b> ${departamento}`
+    );
+
+    return data;
+  };
+
+  const updateUserStatus = async (userIdOrUsername, nuevoEstado, nuevoRol = null) => {
+    const updatePayload = { estado: nuevoEstado };
+    if (nuevoRol) updatePayload.rol = nuevoRol;
+
+    let { error } = await supabase
+      .from('usuarios_scada')
+      .update(updatePayload)
+      .eq('id', userIdOrUsername);
+
+    if (error) {
+      await supabase
+        .from('usuarios_scada')
+        .update(updatePayload)
+        .or(`user.eq.${userIdOrUsername},usuario.eq.${userIdOrUsername}`);
+    }
+
+    await loadPendingRequests();
+  };
+
+  const logout = () => {
+    localStorage.removeItem(SESSION_STORAGE_KEY);
+    sessionStorage.clear();
+    setUser(null);
+    setProfile(null);
+  };
+
+  return (
+    <AuthContext.Provider value={{
+      user,
+      profile,
+      loading,
+      pendingRequests,
+      recoveryRequests,
+      loadPendingRequests,
+      loginWithCredentials,
+      requestPasswordRecovery,
+      resetUserPassword,
+      requestUserAccess,
+      updateUserStatus,
+      logout
+    }}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+export const useAuth = () => useContext(AuthContext);
