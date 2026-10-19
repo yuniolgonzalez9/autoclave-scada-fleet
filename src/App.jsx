@@ -642,16 +642,44 @@ function ScadaAppContent() {
               <>
                 {activeSection === 'flota' && (
                   <div className="space-y-4">
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                      <div>
-                        <h2 className="text-base md:text-lg font-bold font-mono flex items-center gap-2">
-                          <Flame className="w-5 h-5 text-cyan-400" />
-                          Monitor de Flota ({allowedDevices.length})
-                        </h2>
-                        <p className="text-[10px] text-slate-400 font-mono mt-0.5">
-                          👉 Haz <strong>clic derecho</strong> en cualquier equipo para opciones rápidas.
-                        </p>
+                    <section className="fleet-overview flex flex-col lg:flex-row lg:items-center justify-between gap-5 px-4 py-4 sm:px-5 sm:py-5 rounded-xl">
+                      <div className="relative z-10 flex items-start gap-3">
+                        <div className="fleet-overview-mark flex items-center justify-center w-11 h-11 rounded-lg shrink-0">
+                          <Activity className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-[9px] tracking-[0.18em] font-bold text-cyan-300/80 uppercase">Biofleet / Operaciones</span>
+                            <span className="fleet-overview-live"><span /> EN VIVO</span>
+                          </div>
+                          <h2 className="text-lg sm:text-xl font-bold text-white leading-tight">Centro de flota</h2>
+                          <p className="text-[10px] text-slate-400 mt-1">Supervisión biomédica · Vista general de activos</p>
+                        </div>
                       </div>
+
+                      <div className="relative z-10 grid grid-cols-3 gap-2 sm:gap-3 lg:min-w-[390px]">
+                        <div className="fleet-overview-stat">
+                          <span className="fleet-overview-stat-label">Conectados</span>
+                          <span className="fleet-overview-stat-value text-emerald-300">{countOn}</span>
+                          <span className="fleet-overview-stat-foot">de {allowedDevices.length} activos</span>
+                        </div>
+                        <div className="fleet-overview-stat">
+                          <span className="fleet-overview-stat-label">Con latencia</span>
+                          <span className="fleet-overview-stat-value text-amber-300">{countLat}</span>
+                          <span className="fleet-overview-stat-foot">requieren atención</span>
+                        </div>
+                        <div className="fleet-overview-stat">
+                          <span className="fleet-overview-stat-label">Sin señal</span>
+                          <span className="fleet-overview-stat-value text-rose-300">{countOff}</span>
+                          <span className="fleet-overview-stat-foot">fuera de línea</span>
+                        </div>
+                      </div>
+                    </section>
+
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <p className="text-[10px] text-slate-400 font-mono">
+                        Selecciona un equipo para abrir su ficha; clic derecho para acciones rápidas.
+                      </p>
 
                       <div className="flex gap-2 overflow-x-auto w-full sm:w-auto pb-1">
                         <button
