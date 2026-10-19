@@ -110,6 +110,112 @@ button:active, .btn-touch:active {
   pointer-events: none;
 }
 
+.fleet-overview {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border: 1px solid rgba(103, 232, 249, 0.2);
+  background:
+    radial-gradient(circle at 82% 12%, rgba(6, 182, 212, 0.12), transparent 32%),
+    linear-gradient(112deg, rgba(8, 17, 32, 0.96), rgba(8, 23, 32, 0.86));
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.2), inset 0 1px rgba(255, 255, 255, 0.04);
+}
+
+.fleet-overview::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image:
+    linear-gradient(rgba(103, 232, 249, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(103, 232, 249, 0.045) 1px, transparent 1px);
+  background-size: 24px 24px;
+  mask-image: linear-gradient(90deg, transparent, #000 50%, #000);
+  pointer-events: none;
+}
+
+.fleet-overview::after {
+  content: '';
+  position: absolute;
+  top: 18px;
+  bottom: 18px;
+  left: 0;
+  width: 2px;
+  background: linear-gradient(180deg, transparent, #22d3ee 30%, #34d399 75%, transparent);
+  box-shadow: 0 0 14px rgba(34, 211, 238, 0.45);
+}
+
+.fleet-overview-mark {
+  color: #67e8f9;
+  border: 1px solid rgba(103, 232, 249, 0.26);
+  background: linear-gradient(145deg, rgba(6, 182, 212, 0.18), rgba(15, 23, 42, 0.55));
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.08), 0 0 22px rgba(6, 182, 212, 0.08);
+}
+
+.fleet-overview-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #6ee7b7;
+  font: 700 8px/1 'JetBrains Mono', monospace;
+  letter-spacing: 0.08em;
+}
+
+.fleet-overview-live span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #34d399;
+  box-shadow: 0 0 9px rgba(52, 211, 153, 0.8);
+  animation: fleetSignal 1.8s ease-in-out infinite;
+}
+
+.fleet-overview-stat {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  padding-left: 12px;
+  border-left: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.fleet-overview-stat-label,
+.fleet-overview-stat-foot {
+  color: #94a3b8;
+  font: 500 9px/1.4 'JetBrains Mono', monospace;
+}
+
+.fleet-overview-stat-value {
+  margin: 3px 0 1px;
+  font: 700 23px/1 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.fleet-overview-stat-foot {
+  font-size: 8px;
+  color: #64748b;
+}
+
+@keyframes fleetSignal {
+  50% { opacity: 0.45; }
+}
+
+@media (max-width: 640px) {
+  .fleet-overview-stat {
+    padding-left: 8px;
+  }
+
+  .fleet-overview-stat-value {
+    font-size: 20px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fleet-overview-live span {
+    animation: none;
+  }
+}
+
 @keyframes laserBeam {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(200%); }
