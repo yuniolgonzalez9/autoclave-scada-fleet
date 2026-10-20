@@ -254,7 +254,7 @@ export default function DeviceDetailView({
   };
 
   return (
-    <div className="flex flex-col gap-4 w-full font-mono text-xs select-none">
+    <div className="device-detail-view flex flex-col gap-4 w-full font-mono text-xs select-none">
       
       {/* Banner de Fuera de Servicio */}
       {isBloqueado100 && (
