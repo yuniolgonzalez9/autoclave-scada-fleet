@@ -298,7 +298,7 @@ export default function UserManagementView({ fleet = {}, onFleetUpdated }) {
   const activeList = useMemo(() => usersList.filter((u) => u.estado !== 'PENDIENTE'), [usersList]);
 
   return (
-    <div className="space-y-4 font-mono text-xs select-none">
+    <div className="user-management-view space-y-4 font-mono text-xs select-none">
       
       {/* Cabecera */}
       <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
