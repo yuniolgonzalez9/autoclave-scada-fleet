@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import LoginModal from './components/auth/LoginModal';
 import UserManagementModal from './components/admin/UserManagementModal';
 import UserManagementView from './components/admin/UserManagementView';
+import AuthUserManagementView from './components/admin/AuthUserManagementView';
 import CloudDiagnosticsModal from './components/admin/CloudDiagnosticsModal';
 import DeviceDetailView from './components/dashboard/DeviceDetailView';
 import ClinicalAuditView from './components/reports/ClinicalAuditView';
@@ -14,7 +15,9 @@ import ClinicalTooltip from './components/common/ClinicalTooltip';
 import ContextMenu from './components/common/ContextMenu';
 import DeviceAssignmentModal from './components/admin/DeviceAssignmentModal';
 import SurgicalQRLabel from './components/labels/SurgicalQRLabel';
+import NotificationsPanel from './components/common/NotificationsPanel';
 import { useMqttFleet } from './hooks/useMqttFleet';
+import { useAccountAppearance } from './hooks/useAccountAppearance';
 import { startIndustrialSiren, stopIndustrialSiren, initAudioUnlock } from './services/audioAlarm';
 import { sendCriticalAlarmWithButtons } from './services/telegram';
 import { supabase } from './services/supabase';
@@ -31,12 +34,34 @@ import {
   Car,
   Cpu,
   Building2,
-  Rocket
+  Rocket,
+  Search,
+  ArrowDownAZ,
+  X
 } from 'lucide-react';
 
+const APP_SECTIONS = new Set(['flota', 'gestion', 'studio', 'usuarios', 'fota', 'auditoria', 'detalle']);
+
+function getInitialActiveSection() {
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('mac') || urlParams.get('kiosk') || sessionStorage.getItem('scada_tab_kiosk_mac')) {
+    return 'detalle';
+  }
+
+  const savedSection = localStorage.getItem('scada_active_section') || sessionStorage.getItem('scada_tab_active_section');
+  return APP_SECTIONS.has(savedSection) ? savedSection : 'flota';
+}
+
 function ScadaAppContent() {
-  const { user, profile, loading, pendingRequests, logout } = useAuth();
+  const { user, profile, loading, pendingRequests, logout, authMode } = useAuth();
   const { fleet, mqttConnected, sendDeviceCommand } = useMqttFleet();
+  const { appearance, setAppearance, syncStatus: appearanceSyncStatus } = useAccountAppearance(profile, authMode);
+  const currentTheme = appearance.theme;
+  const currentBg = appearance.background;
+  const opacity = appearance.opacity;
+  const setCurrentTheme = (theme) => setAppearance((current) => ({ ...current, theme }));
+  const setCurrentBg = (background) => setAppearance((current) => ({ ...current, background }));
+  const setOpacity = (nextOpacity) => setAppearance((current) => ({ ...current, opacity: nextOpacity }));
 
   // Verificación periódica de conexión con Supabase (cada 15s) usando la columna "user"
   const [supabaseConnected, setSupabaseConnected] = useState(true);
@@ -61,11 +86,6 @@ function ScadaAppContent() {
     };
   }, []);
 
-  // Preferencias visuales
-  const [currentTheme, setCurrentTheme] = useState(() => localStorage.getItem('scada_theme') || 'tactical');
-  const [currentBg, setCurrentBg] = useState(() => localStorage.getItem('scada_bg') || 'circuit-pcb');
-  const [opacity, setOpacity] = useState(() => Number(localStorage.getItem('scada_transparency')) || 82);
-
   useEffect(() => {
     initAudioUnlock();
   }, []);
@@ -85,33 +105,51 @@ function ScadaAppContent() {
     const directMac = urlParams.get('mac') || urlParams.get('kiosk');
     if (directMac) return directMac.toUpperCase().replace(/[:\-]/g, '');
     if (sessionStorage.getItem('scada_tab_kiosk_mac')) return sessionStorage.getItem('scada_tab_kiosk_mac');
-    return sessionStorage.getItem('scada_tab_selected_mac') || null;
+    return localStorage.getItem('scada_selected_mac') || sessionStorage.getItem('scada_tab_selected_mac') || null;
   });
 
-  const [activeSection, setActiveSection] = useState(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('mac') || urlParams.get('kiosk') || sessionStorage.getItem('scada_tab_kiosk_mac')) {
-      return 'detalle';
-    }
-    return sessionStorage.getItem('scada_tab_active_section') || 'flota';
-  });
+  const [activeSection, setActiveSection] = useState(getInitialActiveSection);
+  const [visitedSections, setVisitedSections] = useState(() => new Set([activeSection]));
 
   const [healthFilter, setHealthFilter] = useState(() => sessionStorage.getItem('scada_tab_health_filter') || 'ALL');
+  const [fleetSearch, setFleetSearch] = useState(() => sessionStorage.getItem('scada_fleet_search') || '');
+  const [fleetSort, setFleetSort] = useState(() => sessionStorage.getItem('scada_fleet_sort') || 'STATUS');
 
   useEffect(() => {
-    if (!kioskMac) sessionStorage.setItem('scada_tab_active_section', activeSection);
+    if (APP_SECTIONS.has(activeSection) && !kioskMac) {
+      sessionStorage.setItem('scada_tab_active_section', activeSection);
+      localStorage.setItem('scada_active_section', activeSection);
+    }
   }, [activeSection, kioskMac]);
 
   useEffect(() => {
-    if (!kioskMac) {
-      if (selectedMac) sessionStorage.setItem('scada_tab_selected_mac', selectedMac);
-      else sessionStorage.removeItem('scada_tab_selected_mac');
+    if (APP_SECTIONS.has(activeSection)) {
+      setVisitedSections((current) => current.has(activeSection) ? current : new Set([...current, activeSection]));
+    }
+  }, [activeSection]);
+
+  useEffect(() => {
+    if (kioskMac) return;
+    if (selectedMac) {
+      sessionStorage.setItem('scada_tab_selected_mac', selectedMac);
+      localStorage.setItem('scada_selected_mac', selectedMac);
+    } else {
+      sessionStorage.removeItem('scada_tab_selected_mac');
+      localStorage.removeItem('scada_selected_mac');
     }
   }, [selectedMac, kioskMac]);
 
   useEffect(() => {
     sessionStorage.setItem('scada_tab_health_filter', healthFilter);
   }, [healthFilter]);
+
+  useEffect(() => {
+    sessionStorage.setItem('scada_fleet_search', fleetSearch);
+  }, [fleetSearch]);
+
+  useEffect(() => {
+    sessionStorage.setItem('scada_fleet_sort', fleetSort);
+  }, [fleetSort]);
 
   const toggleKioskMode = useCallback((macToKiosk = null) => {
     if (kioskMac) {
@@ -138,6 +176,8 @@ function ScadaAppContent() {
   const [assignModal, setAssignModal] = useState({ isOpen: false, device: null });
   const [qrModalDevice, setQrModalDevice] = useState(null);
   const [showAdminModal, setShowAdminModal] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [notificationsCleared, setNotificationsCleared] = useState(false);
   const [sirenActive, setSirenActive] = useState(false);
 
   const handleDeviceContextMenu = useCallback((e, dev) => {
@@ -204,18 +244,12 @@ function ScadaAppContent() {
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', currentTheme);
-    localStorage.setItem('scada_theme', currentTheme);
   }, [currentTheme]);
 
   useEffect(() => {
     const alpha = (opacity / 100).toFixed(2);
     document.documentElement.style.setProperty('--glass-opacity', alpha);
-    localStorage.setItem('scada_transparency', opacity);
   }, [opacity]);
-
-  useEffect(() => {
-    localStorage.setItem('scada_bg', currentBg);
-  }, [currentBg]);
 
   // Vigilante optimizado de sirena
   const alarmasNotificadasRef = useRef(new Set());
@@ -315,6 +349,7 @@ function ScadaAppContent() {
   const { countOn, countLat, countOff, filteredDevices } = useMemo(() => {
     let cOn = 0, cLat = 0, cOff = 0;
     const filtered = [];
+    const query = fleetSearch.trim().toLocaleLowerCase();
 
     for (const dev of allowedDevices) {
       const health = getDeviceHealthData(dev);
@@ -322,13 +357,36 @@ function ScadaAppContent() {
       else if (health.status === 'LATENCY') cLat++;
       else cOff++;
 
-      if (healthFilter === 'ALL' || healthFilter === health.status) {
+      const matchesStatus = healthFilter === 'ALL' || healthFilter === health.status;
+      const searchableFields = [
+        dev?.meta?.alias,
+        dev?.meta?.cliente,
+        dev?.meta?.tipo,
+        dev?.mac,
+        dev?.datos?.tipo,
+        dev?.datos?.fase,
+        health.status,
+        health.text
+      ];
+      const matchesSearch = !query || searchableFields.some((value) => String(value || '').toLocaleLowerCase().includes(query));
+
+      if (matchesStatus && matchesSearch) {
         filtered.push(dev);
       }
     }
 
+    filtered.sort((a, b) => {
+      const nameA = String(a?.meta?.alias || a?.mac || '').toLocaleLowerCase();
+      const nameB = String(b?.meta?.alias || b?.mac || '').toLocaleLowerCase();
+      if (fleetSort === 'NAME') return nameA.localeCompare(nameB, 'es');
+      if (fleetSort === 'RECENT') return Number(b?.lastSeen || 0) - Number(a?.lastSeen || 0) || nameA.localeCompare(nameB, 'es');
+
+      const statusRank = { ONLINE: 0, LATENCY: 1, OFFLINE: 2 };
+      return statusRank[getDeviceHealthData(a).status] - statusRank[getDeviceHealthData(b).status] || nameA.localeCompare(nameB, 'es');
+    });
+
     return { countOn: cOn, countLat: cLat, countOff: cOff, filteredDevices: filtered };
-  }, [allowedDevices, healthFilter, getDeviceHealthData]);
+  }, [allowedDevices, healthFilter, fleetSearch, fleetSort, getDeviceHealthData]);
 
   const inspectingMacToUse = kioskMac || selectedMac;
   const inspectingDevice = useMemo(() => {
@@ -369,16 +427,19 @@ function ScadaAppContent() {
   const displayHospital = profile?.departamento || 'Central Hospitalaria';
 
   return (
-    <div className="min-h-screen w-full relative pb-20 md:pb-6 flex flex-col overflow-x-hidden font-mono">
-      
+    <div className="app-shell min-h-screen w-full relative pb-20 lg:pb-6 flex flex-col overflow-x-hidden font-mono">
+
+      {/* Fondo de Partículas Animadas */}
+      <div className="particle-background" />
+
       {/* Fondo Fijo */}
-      <div 
+      <div
         id="scada-background"
         className="fixed inset-0 z-0 pointer-events-none bg-cover bg-center bg-no-repeat transition-[background-image] duration-500"
         style={{
           backgroundImage: currentBg === 'oled'
             ? 'radial-gradient(circle at 50% -5%, rgba(139, 92, 246, 0.25) 0%, transparent 55%), radial-gradient(circle at 100% 100%, rgba(0, 243, 255, 0.18) 0%, transparent 50%)'
-            : bgObj?.url 
+            : bgObj?.url
             ? `linear-gradient(to bottom, rgba(4, 7, 18, 0.30), rgba(4, 7, 18, 0.60)), url('${bgObj.url}')`
             : 'none',
           backgroundColor: '#030712'
@@ -389,14 +450,14 @@ function ScadaAppContent() {
 
         {/* Banner de Emergencia */}
         {sirenActive && (
-          <div className="bg-rose-600 px-3 sm:px-4 py-2 flex items-center justify-between text-white font-bold text-xs shadow-2xl animate-pulse sticky top-0 z-50">
+          <div className="bg-rose-600 px-3 sm:px-4 py-2 flex items-center justify-between text-white font-bold text-xs shadow-2xl animate-pulse sticky top-0 z-50 alert-wave">
             <div className="flex items-center gap-2 truncate">
-              <Volume2 className="w-4 h-4 animate-bounce shrink-0" />
-              <span className="truncate">🚨 ALARMA CRÍTICA // SIRENA INDUSTRIAL EN BUCLE</span>
+              <Volume2 className="w-4 h-4 animate-bounce shrink-0 icon-glow" />
+              <span className="truncate neon-text">🚨 ALARMA CRÍTICA // SIRENA INDUSTRIAL EN BUCLE</span>
             </div>
             <button
               onClick={handleSilenceSiren}
-              className="px-2.5 py-1 bg-white text-rose-700 hover:bg-slate-100 rounded-lg text-xs font-black shrink-0 ml-2 shadow-lg"
+              className="px-2.5 py-1 bg-white text-rose-700 hover:bg-slate-100 rounded-lg text-xs font-black shrink-0 ml-2 shadow-lg btn-glow-effect"
             >
               SILENCIAR
             </button>
@@ -404,14 +465,18 @@ function ScadaAppContent() {
         )}
 
         {/* Header Superior */}
-        <header className="speedtest-laser-header border-b border-cyan-500/20 bg-slate-950/80 backdrop-blur-md px-3 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between sticky top-0 z-40 w-full">
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            <div className="p-1.5 sm:p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 shrink-0">
+        <header className="header-shell speedtest-laser-header border-b border-cyan-500/20 px-3 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between sticky top-0 z-40 w-full glass-shine">
+          <svg className="header-laser-orbit" viewBox="0 0 1440 100" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+            <path className="header-laser-orbit-glow" d="M12 2 H1428 Q1438 2 1438 12 V88 Q1438 98 1428 98 H12 Q2 98 2 88 V12 Q2 2 12 2" pathLength="1000" />
+            <path className="header-laser-orbit-core" d="M12 2 H1428 Q1438 2 1438 12 V88 Q1438 98 1428 98 H12 Q2 98 2 88 V12 Q2 2 12 2" pathLength="1000" />
+          </svg>
+          <div className="brand-lockup flex items-center gap-2 sm:gap-3 min-w-0">
+            <div className="brand-emitter p-1.5 sm:p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 shrink-0">
               <Activity className="w-5 h-5 sm:w-6 sm:h-6 animate-pulse" />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 truncate">
-                <h1 className="text-sm sm:text-base md:text-lg font-bold tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-fuchsia-400 to-emerald-400 truncate">
+                <h1 className="brand-wordmark text-sm sm:text-base md:text-lg font-bold tracking-wider truncate">
                   BIOFLEET OS™
                 </h1>
                 <span className="text-[9px] sm:text-[10px] font-mono px-1 py-0.2 rounded bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 shrink-0">
@@ -424,7 +489,7 @@ function ScadaAppContent() {
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0 ml-2">
+          <div className="header-actions flex items-center gap-1.5 sm:gap-2.5 shrink-0 ml-2">
             {kioskMac && (
               <button
                 onClick={() => toggleKioskMode(null)}
@@ -435,52 +500,6 @@ function ScadaAppContent() {
                 <span className="hidden sm:inline">DESANCLAR [{kioskMac.slice(-4)}]</span>
               </button>
             )}
-
-            {/* MQTT Health */}
-            <ClinicalTooltip
-              title="Broker MQTT (HiveMQ Cloud)"
-              description={isAdmin ? "⚡ Click para abrir la Consola de Recursos y Latencia MQTT." : "Transmisión continua por WebSockets (puerto seguro 8884)."}
-              badge="WSS 8884"
-              shortcut={isAdmin ? "CLICK PARA AUDITAR" : "EN TIEMPO REAL"}
-              position="bottom"
-            >
-              <button
-                onClick={() => { if (isAdmin) setCloudDiagType('hivemq'); }}
-                className={`inline-flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-full text-[10px] font-mono font-bold border transition-all ${
-                  isAdmin ? 'cursor-pointer hover:scale-105 active:scale-95' : 'cursor-help'
-                } ${
-                  mqttConnected 
-                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20' 
-                    : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
-                }`}
-              >
-                <span className={`w-2 h-2 rounded-full shrink-0 ${mqttConnected ? 'bg-emerald-400 animate-ping' : 'bg-rose-400'}`}></span>
-                <span className="hidden sm:inline">{mqttConnected ? 'HIVEMQ 8884' : 'OFFLINE'}</span>
-              </button>
-            </ClinicalTooltip>
-
-            {/* Supabase Health */}
-            <ClinicalTooltip
-              title="Base de Datos Supabase Cloud"
-              description={isAdmin ? "⚡ Click para abrir el Inventario de Registros, Tablas y Latencia DB." : "Persistencia Postgres en tiempo real."}
-              badge="POSTGRES REST"
-              shortcut={isAdmin ? "CLICK PARA AUDITAR" : "EN LÍNEA"}
-              position="bottom"
-            >
-              <button
-                onClick={() => { if (isAdmin) setCloudDiagType('supabase'); }}
-                className={`inline-flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-full text-[10px] font-mono font-bold border transition-all ${
-                  isAdmin ? 'cursor-pointer hover:scale-105 active:scale-95' : 'cursor-help'
-                } ${
-                  supabaseConnected 
-                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20' 
-                    : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
-                }`}
-              >
-                <span className={`w-2 h-2 rounded-full shrink-0 ${supabaseConnected ? 'bg-emerald-400 animate-ping' : 'bg-rose-400'}`}></span>
-                <span className="hidden sm:inline">{supabaseConnected ? 'SUPABASE NUBE' : 'SIN RED'}</span>
-              </button>
-            </ClinicalTooltip>
 
             {/* Chip Usuario */}
             {user && (
@@ -507,15 +526,15 @@ function ScadaAppContent() {
                 shortcut="SESIÓN ACTIVA"
                 position="bottom"
               >
-                <div className="flex items-center gap-2 bg-slate-900/90 px-2 sm:px-3 py-1 rounded-xl border border-slate-700/80 shadow-inner hover:border-cyan-400/50 transition-colors cursor-help">
-                  <div className="w-6 h-6 rounded-lg bg-cyan-500/20 border border-cyan-400/50 text-cyan-300 flex items-center justify-center font-bold text-xs uppercase shrink-0">
+                <div className="user-chip ultra-glass flex items-center gap-2 px-2 sm:px-3 py-1.5 rounded-xl border border-cyan-500/30 shadow-sm hover:border-cyan-400/60 transition-all cursor-help group">
+                  <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-600/20 border border-cyan-400/40 text-cyan-300 flex items-center justify-center font-bold text-xs uppercase shrink-0 group-hover:scale-105 transition-transform">
                     {displayName[0]}
                   </div>
                   <div className="text-left hidden sm:block">
                     <p className="text-xs font-bold text-white leading-tight truncate max-w-[110px]">
                       {displayName}
                     </p>
-                    <p className="text-[9px] text-cyan-400 font-mono leading-none font-semibold">
+                    <p className="text-[9px] text-cyan-400 font-mono leading-none font-semibold tracking-wide">
                       {displayRole}
                     </p>
                   </div>
@@ -523,18 +542,21 @@ function ScadaAppContent() {
               </ClinicalTooltip>
             )}
 
-            {/* Notificaciones Admin */}
-            {user && isAdmin && (
+            {/* Notificaciones */}
+            {user && (
               <button
-                onClick={() => setShowAdminModal(true)}
-                className="relative p-1.5 sm:p-2 rounded-xl bg-slate-900 border border-amber-500/40 text-amber-300 shrink-0"
-                title="Personal y Aprobaciones"
+                onClick={() => setShowNotifications(!showNotifications)}
+                className="relative p-1.5 sm:p-2 rounded-xl bg-slate-900/90 border border-cyan-500/40 text-cyan-300 shrink-0 ultra-glass hover:bg-cyan-500/20 transition-all group"
+                title="Notificaciones"
               >
-                <Bell className="w-4 h-4 sm:w-5 sm:h-5" />
-                {pendingRequests.length > 0 && (
-                  <span className="absolute -top-1 -right-1 px-1.5 py-0.2 rounded-full bg-amber-500 text-slate-950 text-[9px] font-bold">
+                <Bell className={`w-4 h-4 sm:w-5 sm:h-5 ${pendingRequests.length > 0 && !notificationsCleared ? 'animate-[ring_2s_ease-in-out_infinite]' : ''}`} />
+                {pendingRequests.length > 0 && !notificationsCleared && (
+                  <span className="absolute -top-1 -right-1 px-1.5 py-0.2 rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 text-slate-950 text-[9px] font-bold status-indicator animate-bounce shadow-[0_0_12px_rgba(34,211,238,0.6)]">
                     {pendingRequests.length}
                   </span>
+                )}
+                {pendingRequests.length > 0 && !notificationsCleared && (
+                  <div className="absolute inset-0 rounded-xl bg-cyan-500/10 animate-pulse"></div>
                 )}
               </button>
             )}
@@ -552,6 +574,7 @@ function ScadaAppContent() {
                   onLogout={logout}
                   kioskMac={kioskMac}
                   onUnlockKiosk={() => toggleKioskMode(null)}
+                  onOpenDiagnostics={isAdmin ? () => setCloudDiagType('hivemq') : null}
                 />
               </div>
             )}
@@ -560,20 +583,20 @@ function ScadaAppContent() {
 
         {/* Barra de Navegación PC */}
         {user && !kioskMac && !isOperator && (
-          <div className="hidden md:flex items-center gap-2 px-6 py-2 bg-slate-950/60 border-b border-cyan-500/10">
+          <div className="fleet-main-nav hidden lg:flex items-center gap-2 px-6 py-2 border-b">
             <button
-              onClick={() => { setActiveSection('flota'); setSelectedMac(null); }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
-                activeSection === 'flota' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
+              onClick={() => setActiveSection('flota')}
+              className={`fleet-nav-pill px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
+                activeSection === 'flota' ? 'fleet-nav-pill--active text-slate-950' : 'text-slate-400 hover:text-white'
               }`}
             >
               ⚡ Flota en Vivo ({allowedDevices.length})
             </button>
 
             <button
-              onClick={() => { setActiveSection('gestion'); setSelectedMac(null); }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
-                activeSection === 'gestion' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
+              onClick={() => setActiveSection('gestion')}
+              className={`fleet-nav-pill px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
+                activeSection === 'gestion' ? 'fleet-nav-pill--active text-slate-950' : 'text-slate-400 hover:text-white'
               }`}
             >
               🏢 Gestión Flota
@@ -581,9 +604,9 @@ function ScadaAppContent() {
 
             <button
               onClick={() => setActiveSection('studio')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 transition-all ${
+              className={`fleet-nav-pill px-3.5 py-1.5 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 transition-all ${
                 activeSection === 'studio' 
-                  ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/30' 
+                  ? 'fleet-nav-pill--active text-slate-950' 
                   : 'text-amber-400 hover:text-white bg-slate-900/60 border border-amber-500/30'
               }`}
             >
@@ -592,27 +615,27 @@ function ScadaAppContent() {
             </button>
 
             <button
-              onClick={() => { setActiveSection('usuarios'); setSelectedMac(null); }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
-                activeSection === 'usuarios' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
+              onClick={() => setActiveSection('usuarios')}
+              className={`fleet-nav-pill px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
+                activeSection === 'usuarios' ? 'fleet-nav-pill--active text-slate-950' : 'text-slate-400 hover:text-white'
               }`}
             >
               🛡️ Personal
             </button>
 
             <button
-              onClick={() => { setActiveSection('fota'); setSelectedMac(null); }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
-                activeSection === 'fota' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
+              onClick={() => setActiveSection('fota')}
+              className={`fleet-nav-pill px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
+                activeSection === 'fota' ? 'fleet-nav-pill--active text-slate-950' : 'text-slate-400 hover:text-white'
               }`}
             >
               🚀 FOTA Hub
             </button>
 
             <button
-              onClick={() => { setActiveSection('auditoria'); setSelectedMac(null); }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
-                activeSection === 'auditoria' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'text-slate-400 hover:text-white'
+              onClick={() => setActiveSection('auditoria')}
+              className={`fleet-nav-pill px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
+                activeSection === 'auditoria' ? 'fleet-nav-pill--active text-slate-950' : 'text-slate-400 hover:text-white'
               }`}
             >
               📋 Auditoría Supabase
@@ -628,74 +651,134 @@ function ScadaAppContent() {
         ) : (
           <main className="flex-1 p-3 md:p-6 max-w-7xl mx-auto w-full flex flex-col gap-4 android-view-transition">
             
-            {(kioskMac || activeSection === 'detalle') && inspectingDevice ? (
-              <DeviceDetailView
-                device={inspectingDevice}
-                onBack={() => { setActiveSection('flota'); setSelectedMac(null); }}
-                sendCommand={sendDeviceCommand}
-                operatorName={displayName}
-                userRole={displayRole}
-                isKioskMode={Boolean(kioskMac)}
-                onToggleKiosk={() => toggleKioskMode(inspectingMacToUse)}
-              />
-            ) : (
-              <>
-                {activeSection === 'flota' && (
-                  <div className="space-y-4">
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                      <div>
-                        <h2 className="text-base md:text-lg font-bold font-mono flex items-center gap-2">
-                          <Flame className="w-5 h-5 text-cyan-400" />
-                          Monitor de Flota ({allowedDevices.length})
-                        </h2>
-                        <p className="text-[10px] text-slate-400 font-mono mt-0.5">
-                          👉 Haz <strong>clic derecho</strong> en cualquier equipo para opciones rápidas.
-                        </p>
+            <>
+              {inspectingDevice && (kioskMac || selectedMac) && (visitedSections.has('detalle') || activeSection === 'detalle' || kioskMac) && (
+                <div className="app-view-panel" hidden={!(kioskMac || activeSection === 'detalle')}>
+                  <DeviceDetailView
+                    key={inspectingMacToUse}
+                    device={inspectingDevice}
+                    onBack={() => { setActiveSection('flota'); setSelectedMac(null); }}
+                    sendCommand={sendDeviceCommand}
+                    operatorName={displayName}
+                    userRole={displayRole}
+                    isKioskMode={Boolean(kioskMac)}
+                    onToggleKiosk={() => toggleKioskMode(inspectingMacToUse)}
+                  />
+                </div>
+              )}
+
+                {(visitedSections.has('flota') || activeSection === 'flota') && (
+                  <div className="app-view-panel" hidden={activeSection !== 'flota'}>
+                    <div className="space-y-4">
+                    <section className="fleet-overview flex flex-col lg:flex-row lg:items-center justify-between gap-5 px-4 py-4 sm:px-5 sm:py-5 rounded-xl">
+                      <div className="relative z-10 flex items-start gap-3">
+                        <div className="fleet-overview-mark flex items-center justify-center w-11 h-11 rounded-lg shrink-0">
+                          <Activity className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-[9px] tracking-[0.18em] font-bold text-cyan-300/80 uppercase">Biofleet / Operaciones</span>
+                            <span className="fleet-overview-live"><span /> EN VIVO</span>
+                          </div>
+                          <h2 className="text-lg sm:text-xl font-bold text-white leading-tight">Centro de flota</h2>
+                          <p className="text-[10px] text-slate-400 mt-1">Supervisión biomédica · Vista general de activos</p>
+                        </div>
                       </div>
 
-                      <div className="flex gap-2 overflow-x-auto w-full sm:w-auto pb-1">
+                      <div className="relative z-10 grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 lg:min-w-[480px]">
                         <button
-                          onClick={() => setHealthFilter('ONLINE')}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
-                            healthFilter === 'ONLINE' ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-md' : 'bg-slate-900/80 border-slate-700 text-emerald-400'
-                          }`}
+                          type="button"
+                          aria-label={`Filtrar equipos conectados: ${countOn}`}
+                          aria-pressed={healthFilter === 'ONLINE'}
+                          onClick={() => setHealthFilter((current) => current === 'ONLINE' ? 'ALL' : 'ONLINE')}
+                          className={`fleet-overview-stat fleet-overview-stat-button scale-3d ${healthFilter === 'ONLINE' ? 'fleet-overview-stat--active' : ''}`}
                         >
-                          🟢 ONLINE ({countOn})
+                          <span className="fleet-overview-stat-label">Conectados</span>
+                          <span className="fleet-overview-stat-value text-emerald-300">{countOn}</span>
+                          <span className="fleet-overview-stat-foot">de {allowedDevices.length} activos</span>
                         </button>
-
                         <button
-                          onClick={() => setHealthFilter('LATENCY')}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
-                            healthFilter === 'LATENCY' ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md' : 'bg-slate-900/80 border-slate-700 text-amber-300'
-                          }`}
+                          type="button"
+                          aria-label={`Filtrar equipos con latencia: ${countLat}`}
+                          aria-pressed={healthFilter === 'LATENCY'}
+                          onClick={() => setHealthFilter((current) => current === 'LATENCY' ? 'ALL' : 'LATENCY')}
+                          className={`fleet-overview-stat fleet-overview-stat-button scale-3d ${healthFilter === 'LATENCY' ? 'fleet-overview-stat--active' : ''}`}
                         >
-                          🟡 LATENCIA ({countLat})
+                          <span className="fleet-overview-stat-label">Con latencia</span>
+                          <span className="fleet-overview-stat-value text-amber-300">{countLat}</span>
+                          <span className="fleet-overview-stat-foot">requieren atención</span>
                         </button>
-
                         <button
-                          onClick={() => setHealthFilter('OFFLINE')}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
-                            healthFilter === 'OFFLINE' ? 'bg-rose-500 text-white border-rose-400 shadow-md' : 'bg-slate-900/80 border-slate-700 text-rose-400'
-                          }`}
+                          type="button"
+                          aria-label={`Filtrar equipos desconectados: ${countOff}`}
+                          aria-pressed={healthFilter === 'OFFLINE'}
+                          onClick={() => setHealthFilter((current) => current === 'OFFLINE' ? 'ALL' : 'OFFLINE')}
+                          className={`fleet-overview-stat fleet-overview-stat-button scale-3d ${healthFilter === 'OFFLINE' ? 'fleet-overview-stat--active' : ''}`}
                         >
-                          🔴 OFFLINE ({countOff})
+                          <span className="fleet-overview-stat-label">Sin señal</span>
+                          <span className="fleet-overview-stat-value text-rose-300">{countOff}</span>
+                          <span className="fleet-overview-stat-foot">fuera de línea</span>
                         </button>
-
                         <button
+                          type="button"
+                          aria-label={`Mostrar todos los equipos: ${allowedDevices.length}`}
+                          aria-pressed={healthFilter === 'ALL'}
                           onClick={() => setHealthFilter('ALL')}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-mono font-bold border transition-all ${
-                            healthFilter === 'ALL' ? 'bg-cyan-500 text-slate-950 border-cyan-400 shadow-md' : 'bg-slate-900/80 border-slate-700 text-slate-300'
-                          }`}
+                          className={`fleet-overview-stat fleet-overview-stat-button scale-3d ${healthFilter === 'ALL' ? 'fleet-overview-stat--active' : ''}`}
                         >
-                          🌐 TODOS ({allowedDevices.length})
+                          <span className="fleet-overview-stat-label">Todos</span>
+                          <span className="fleet-overview-stat-value">{allowedDevices.length}</span>
+                          <span className="fleet-overview-stat-foot">equipos registrados</span>
                         </button>
+                      </div>
+                    </section>
+
+                    <div className="fleet-controls flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono">
+                        <span>{filteredDevices.length} de {allowedDevices.length} equipos</span>
+                        {healthFilter !== 'ALL' && (
+                          <button type="button" onClick={() => setHealthFilter('ALL')} className="fleet-clear-filter">
+                            Mostrar todos
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                        <label className="fleet-search-control flex items-center gap-2 px-3 py-2 rounded-lg w-full sm:w-72">
+                          <Search className="w-4 h-4 shrink-0 text-slate-400" />
+                          <input
+                            type="search"
+                            value={fleetSearch}
+                            onChange={(event) => setFleetSearch(event.target.value)}
+                            placeholder="Buscar alias, MAC o centro"
+                            aria-label="Buscar dispositivos por alias, MAC, centro o estado"
+                            className="min-w-0 flex-1 bg-transparent text-xs text-white outline-none placeholder:text-slate-500"
+                          />
+                          {fleetSearch && (
+                            <button type="button" onClick={() => setFleetSearch('')} aria-label="Limpiar búsqueda" className="text-slate-400 hover:text-white">
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </label>
+                        <label className="fleet-sort-control flex items-center gap-2 px-3 py-2 rounded-lg sm:min-w-48">
+                          <ArrowDownAZ className="w-4 h-4 shrink-0 text-slate-400" />
+                          <select value={fleetSort} onChange={(event) => setFleetSort(event.target.value)} aria-label="Ordenar dispositivos" className="min-w-0 flex-1 bg-transparent text-xs text-white outline-none">
+                            <option value="STATUS">Por estado</option>
+                            <option value="NAME">Nombre A-Z</option>
+                            <option value="RECENT">Actividad reciente</option>
+                          </select>
+                        </label>
                       </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       {filteredDevices.length === 0 ? (
                         <div className="col-span-full ultra-glass p-8 rounded-2xl text-center text-slate-400 font-mono text-xs">
-                          No hay equipos registrados en el estado [{healthFilter}].
+                          {fleetSearch
+                            ? `No hay equipos que coincidan con "${fleetSearch}".`
+                            : healthFilter === 'ALL'
+                              ? 'No hay equipos disponibles en la flota.'
+                              : `No hay equipos registrados en el estado [${healthFilter}].`}
                         </div>
                       ) : (
                         filteredDevices.map((dev) => {
@@ -721,9 +804,19 @@ function ScadaAppContent() {
                           return (
                             <div
                               key={dev.mac}
+                              role="button"
+                              tabIndex={0}
+                              aria-label={`Abrir equipo ${dev.meta?.alias || dev.mac}`}
                               onClick={() => { setSelectedMac(dev.mac); setActiveSection('detalle'); }}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter' || event.key === ' ') {
+                                  event.preventDefault();
+                                  setSelectedMac(dev.mac);
+                                  setActiveSection('detalle');
+                                }
+                              }}
                               onContextMenu={(e) => handleDeviceContextMenu(e, dev)}
-                              className="ultra-glass p-5 rounded-2xl cursor-pointer transition-all duration-200 hover:-translate-y-1 shadow-xl flex flex-col justify-between"
+                              className="fleet-device-card ultra-glass glow-border scale-3d p-5 rounded-2xl cursor-pointer flex flex-col justify-between"
                             >
                               <div>
                                 <div className="flex justify-between items-start mb-3">
@@ -745,10 +838,10 @@ function ScadaAppContent() {
                                   </div>
                                   
                                   <div className="text-right">
-                                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono border font-bold ${health.colorClass}`}>
+                                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono border font-bold ${health.colorClass} status-indicator`}>
                                       <span className={`w-1.5 h-1.5 rounded-full ${
-                                        health.status === 'ONLINE' ? 'bg-emerald-400 animate-ping' : 
-                                        health.status === 'LATENCY' ? 'bg-amber-400 animate-pulse' : 
+                                        health.status === 'ONLINE' ? 'bg-emerald-400 pulse-organic' :
+                                        health.status === 'LATENCY' ? 'bg-amber-400 pulse-organic' :
                                         'bg-rose-400'
                                       }`}></span>
                                       {health.text}
@@ -761,13 +854,13 @@ function ScadaAppContent() {
 
                                 {isVeh ? (
                                   <div className="grid grid-cols-2 gap-2 my-3">
-                                    <div className="p-2.5 rounded-xl glass-cell text-center w-full">
+                                    <div className="p-2.5 rounded-xl glass-cell hologram text-center w-full scale-3d">
                                       <span className="text-[10px] font-mono text-emerald-400 block">BATERÍA 12V</span>
                                       <span className="text-xl font-bold font-mono text-emerald-300">
                                         {(dDev.bateria_v || 12.6).toFixed(1)} V
                                       </span>
                                     </div>
-                                    <div className="p-2.5 rounded-xl glass-cell text-center w-full">
+                                    <div className="p-2.5 rounded-xl glass-cell hologram text-center w-full scale-3d">
                                       <span className="text-[10px] font-mono text-amber-400 block">ESTADO</span>
                                       <span className="text-sm font-bold font-mono text-white truncate block mt-1">
                                         {dDev.fase || 'APAGADO'}
@@ -776,13 +869,13 @@ function ScadaAppContent() {
                                   </div>
                                 ) : isPlc ? (
                                   <div className="grid grid-cols-2 gap-2 my-3 font-mono">
-                                    <div className="p-2.5 rounded-xl glass-cell text-center w-full">
+                                    <div className="p-2.5 rounded-xl glass-cell hologram text-center w-full scale-3d">
                                       <span className="text-[10px] text-cyan-400 block">RELÉS</span>
                                       <span className="text-xl font-bold text-white">
                                         {Object.values(dDev.reles || {}).filter(Boolean).length} / 8
                                       </span>
                                     </div>
-                                    <div className="p-2.5 rounded-xl glass-cell text-center w-full">
+                                    <div className="p-2.5 rounded-xl glass-cell hologram text-center w-full scale-3d">
                                       <span className="text-[10px] text-emerald-400 block">ENTRADAS</span>
                                       <span className="text-xl font-bold text-white">
                                         {Object.values(dDev.entradas || {}).filter(Boolean).length} / 8
@@ -792,13 +885,13 @@ function ScadaAppContent() {
                                 ) : (
                                   <>
                                     <div className="grid grid-cols-2 gap-2 my-3">
-                                      <div className="p-2.5 rounded-xl glass-cell text-center w-full">
+                                      <div className="p-2.5 rounded-xl glass-cell hologram text-center w-full scale-3d">
                                         <span className="text-[10px] font-mono text-cyan-400 block">TEMPERATURA</span>
                                         <span className="text-xl font-bold font-mono text-white">
                                           {isNaN(tempNum) ? '25.0' : tempNum.toFixed(1)}°C
                                         </span>
                                       </div>
-                                      <div className="p-2.5 rounded-xl glass-cell text-center w-full">
+                                      <div className="p-2.5 rounded-xl glass-cell hologram text-center w-full scale-3d">
                                         <span className="text-[10px] font-mono text-pink-400 block">PRESIÓN</span>
                                         <span className="text-xl font-bold font-mono text-white">
                                           {isNaN(presNum) ? '0.00' : presNum.toFixed(2)}b
@@ -812,14 +905,14 @@ function ScadaAppContent() {
                                         <span>{Math.round((cCount / (cLim || 1)) * 100)}%</span>
                                       </div>
                                       <div className="w-full bg-slate-800/80 rounded-full h-1.5 overflow-hidden">
-                                        <div className="bg-emerald-400 h-full" style={{ width: `${Math.min(100, (cCount / (cLim || 1)) * 100)}%` }}></div>
+                                        <div className="progress-glow h-full" style={{ width: `${Math.min(100, (cCount / (cLim || 1)) * 100)}%` }}></div>
                                       </div>
                                     </div>
                                   </>
                                 )}
                               </div>
 
-                              <div className="pt-3 border-t border-white/10 flex items-center justify-between text-xs font-mono text-cyan-400 font-bold w-full">
+                              <div className="fleet-device-cta pt-3 border-t border-white/10 flex items-center justify-between text-xs font-mono text-cyan-400 font-bold w-full rounded-b-xl">
                                 <span>ENTRAR A CABINA DE CONTROL</span>
                                 <ChevronRight className="w-4 h-4" />
                               </div>
@@ -829,94 +922,104 @@ function ScadaAppContent() {
                       )}
                     </div>
                   </div>
+                  </div>
                 )}
 
-                {activeSection === 'gestion' && (
-                  <FleetManagementView
-                    fleet={fleet}
-                    sendCommand={sendDeviceCommand}
-                    onSelectDevice={(mac) => { setSelectedMac(mac); setActiveSection('detalle'); }}
-                  />
+                {(visitedSections.has('gestion') || activeSection === 'gestion') && (
+                  <div className="app-view-panel" hidden={activeSection !== 'gestion'}>
+                    <FleetManagementView
+                      fleet={fleet}
+                      sendCommand={sendDeviceCommand}
+                      onSelectDevice={(mac) => { setSelectedMac(mac); setActiveSection('detalle'); }}
+                    />
+                  </div>
                 )}
 
-                {activeSection === 'studio' && (
-                  <AiAutomationStudio
-                    fleet={fleet}
-                    sendCommand={sendDeviceCommand}
-                    initialDeviceMac={selectedMac}
-                  />
+                {(visitedSections.has('studio') || activeSection === 'studio') && (
+                  <div className="app-view-panel" hidden={activeSection !== 'studio'}>
+                    <AiAutomationStudio
+                      fleet={fleet}
+                      sendCommand={sendDeviceCommand}
+                      initialDeviceMac={selectedMac}
+                    />
+                  </div>
                 )}
 
-                {activeSection === 'usuarios' && (
-                  <UserManagementView
-                    fleet={fleet}
-                    onFleetUpdated={() => {}}
-                  />
+                {(visitedSections.has('usuarios') || activeSection === 'usuarios') && (
+                  <div className="app-view-panel" hidden={activeSection !== 'usuarios'}>
+                    <UserManagementView
+                      fleet={fleet}
+                      onFleetUpdated={() => {}}
+                    />
+                  </div>
                 )}
 
-                {activeSection === 'fota' && (
-                  <FotaHubView fleet={fleet} sendCommand={sendDeviceCommand} />
+                {(visitedSections.has('fota') || activeSection === 'fota') && (
+                  <div className="app-view-panel" hidden={activeSection !== 'fota'}>
+                    <FotaHubView fleet={fleet} sendCommand={sendDeviceCommand} />
+                  </div>
                 )}
 
-                {activeSection === 'auditoria' && (
-                  <ClinicalAuditView />
+                {(visitedSections.has('auditoria') || activeSection === 'auditoria') && (
+                  <div className="app-view-panel" hidden={activeSection !== 'auditoria'}>
+                    <ClinicalAuditView />
+                  </div>
                 )}
-              </>
-            )}
+            </>
 
           </main>
         )}
 
         {/* Barra Inferior Celular */}
         {user && !kioskMac && (
-          <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-slate-950/90 border-t border-cyan-500/30 backdrop-blur-xl flex items-center justify-around z-50 px-2">
+          <nav className="mobile-nav-shell lg:hidden fixed bottom-0 left-0 right-0 h-16 border-t border-cyan-500/30 backdrop-blur-xl flex items-center justify-around z-50 px-2">
             <button
-              onClick={() => { setActiveSection('flota'); setSelectedMac(null); }}
-              className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-[10px] font-mono ${
-                activeSection === 'flota' || activeSection === 'detalle' ? 'text-cyan-400 font-bold' : 'text-slate-400'
+              onClick={() => setActiveSection('flota')}
+              className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-[10px] font-mono transition-all ${
+                activeSection === 'flota' || activeSection === 'detalle' ? 'text-cyan-400 font-bold scale-110' : 'text-slate-400 hover:text-cyan-300'
               }`}
             >
-              <Activity className="w-5 h-5" />
+              <Activity className={`w-5 h-5 ${activeSection === 'flota' || activeSection === 'detalle' ? 'icon-glow' : ''}`} />
               <span>Flota</span>
             </button>
 
             <button
-              onClick={() => { setActiveSection('gestion'); setSelectedMac(null); }}
-              className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-[10px] font-mono ${
-                activeSection === 'gestion' ? 'text-cyan-400 font-bold' : 'text-slate-400'
+              onClick={() => setActiveSection('gestion')}
+              className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-[10px] font-mono transition-all ${
+                activeSection === 'gestion' ? 'text-cyan-400 font-bold scale-110' : 'text-slate-400 hover:text-cyan-300'
               }`}
             >
-              <Building2 className="w-5 h-5" />
+              <Building2 className={`w-5 h-5 ${activeSection === 'gestion' ? 'icon-glow' : ''}`} />
               <span>Gestión</span>
             </button>
 
             <button
               onClick={() => setActiveSection('studio')}
-              className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-[10px] font-mono ${
-                activeSection === 'studio' ? 'text-amber-400 font-bold' : 'text-slate-400'
+              className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-[10px] font-mono transition-all ${
+                activeSection === 'studio' ? 'text-amber-400 font-bold scale-110' : 'text-slate-400 hover:text-amber-300'
               }`}
             >
-              <Sparkles className="w-5 h-5" />
+              <Sparkles className={`w-5 h-5 ${activeSection === 'studio' ? 'icon-glow' : ''}`} />
               <span>Studio</span>
             </button>
 
             <button
-              onClick={() => { setActiveSection('usuarios'); setSelectedMac(null); }}
-              className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-[10px] font-mono ${
-                activeSection === 'usuarios' ? 'text-cyan-400 font-bold' : 'text-slate-400'
+              onClick={() => setActiveSection('usuarios')}
+              className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-[10px] font-mono transition-all ${
+                activeSection === 'usuarios' ? 'text-cyan-400 font-bold scale-110' : 'text-slate-400 hover:text-cyan-300'
               }`}
             >
-              <Shield className="w-5 h-5" />
+              <Shield className={`w-5 h-5 ${activeSection === 'usuarios' ? 'icon-glow' : ''}`} />
               <span>Personal</span>
             </button>
 
             <button
-              onClick={() => { setActiveSection('fota'); setSelectedMac(null); }}
-              className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-[10px] font-mono ${
-                activeSection === 'fota' ? 'text-cyan-400 font-bold' : 'text-slate-400'
+              onClick={() => setActiveSection('fota')}
+              className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-[10px] font-mono transition-all ${
+                activeSection === 'fota' ? 'text-cyan-400 font-bold scale-110' : 'text-slate-400 hover:text-cyan-300'
               }`}
             >
-              <Rocket className="w-5 h-5" />
+              <Rocket className={`w-5 h-5 ${activeSection === 'fota' ? 'icon-glow' : ''}`} />
               <span>FOTA</span>
             </button>
           </nav>
@@ -1000,11 +1103,40 @@ function ScadaAppContent() {
         )}
 
         {showAdminModal && (
-          <UserManagementModal 
-            isOpen={showAdminModal} 
-            onClose={() => setShowAdminModal(false)} 
+          <UserManagementModal
+            isOpen={showAdminModal}
+            onClose={() => setShowAdminModal(false)}
           />
         )}
+
+        {/* Panel de Notificaciones */}
+        <NotificationsPanel
+          isOpen={showNotifications}
+          onClose={() => setShowNotifications(false)}
+          pendingRequests={pendingRequests}
+          onNavigateToFleet={(filter) => {
+            setActiveSection('flota');
+            if (filter) {
+              setHealthFilter(filter);
+            }
+          }}
+          onNavigateToAudit={() => {
+            setActiveSection('auditoria');
+          }}
+          onNavigateToStudio={() => {
+            setActiveSection('studio');
+          }}
+          onOpenAdminModal={() => {
+            setShowAdminModal(true);
+          }}
+          onNavigateToDetail={(mac) => {
+            setSelectedMac(mac);
+            setActiveSection('detalle');
+          }}
+          onCleared={() => {
+            setNotificationsCleared(true);
+          }}
+        />
       </div>
     </div>
   );
