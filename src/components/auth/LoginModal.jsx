@@ -138,13 +138,16 @@ export default function LoginModal() {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[75vh] px-4 w-full select-none font-mono">
-      <div className="ultra-glass p-7 md:p-10 rounded-2xl shadow-2xl max-w-md w-full border border-cyan-500/40 relative backdrop-blur-xl">
+    <div className="login-shell flex flex-col items-center justify-center min-h-[75vh] px-4 w-full select-none font-mono">
+      <div className="login-card ultra-glass glow-border glass-shine p-7 md:p-10 rounded-2xl shadow-2xl max-w-md w-full border border-cyan-500/40 relative backdrop-blur-xl scale-3d">
         
         {/* Cabecera */}
         <div className="text-center mb-6">
-          <div className="inline-flex p-3 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 mb-3 shadow-[0_0_20px_rgba(0,243,255,0.25)]">
+          <div className="login-card-badge brand-emitter inline-flex p-3 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 mb-3 shadow-[0_0_20px_rgba(0,243,255,0.25)]">
             <ShieldCheck className="w-8 h-8" />
+          </div>
+          <div className="flex items-center justify-center gap-2 mb-2">
+            <span className="brand-wordmark login-brand-name text-[9px] tracking-[0.28em] uppercase">BIOFLEET OS™</span>
           </div>
           <h2 className="text-xl font-bold text-white tracking-wide uppercase">
             Plataforma Central SCADA
@@ -199,7 +202,7 @@ export default function LoginModal() {
                     value={identifier}
                     onChange={(e) => setIdentifier(e.target.value)}
                     placeholder="superadmin o usuario@hospital.com"
-                    className="w-full pl-9 pr-3 py-2 bg-slate-900/80 border border-slate-700/80 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400 transition-colors"
+                    className="scada-input w-full pl-9 pr-3 py-2 rounded-lg text-sm text-white placeholder-slate-400 transition-all"
                   />
                 </div>
               </div>
@@ -224,7 +227,7 @@ export default function LoginModal() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••••••"
-                    className="w-full pl-9 pr-3 py-2 bg-slate-900/80 border border-slate-700/80 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400 transition-colors"
+                    className="scada-input w-full pl-9 pr-3 py-2 rounded-lg text-sm text-white placeholder-slate-400 transition-all"
                   />
                 </div>
               </div>
@@ -232,7 +235,7 @@ export default function LoginModal() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="w-full py-2.5 px-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-semibold rounded-lg text-sm shadow-lg shadow-cyan-500/25 transition-all flex items-center justify-center gap-2 disabled:opacity-50 mt-1 active:scale-95"
+                className="scada-primary-button login-primary-btn btn-glow-effect w-full py-2.5 px-4 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-semibold rounded-lg text-sm shadow-lg shadow-cyan-500/25 transition-all flex items-center justify-center gap-2 disabled:opacity-50 mt-1 active:scale-95"
               >
                 {submitting ? (
                   <>
@@ -286,7 +289,7 @@ export default function LoginModal() {
                     value={recoveryEmail}
                     onChange={(e) => setRecoveryEmail(e.target.value)}
                     placeholder="usuario@hospital.com"
-                    className="w-full pl-9 pr-3 py-2 bg-slate-900/80 border border-slate-700/80 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400 transition-colors"
+                    className="scada-input w-full pl-9 pr-3 py-2 rounded-lg text-sm text-white placeholder-slate-400 transition-all"
                   />
                 </div>
               </div>
@@ -294,7 +297,7 @@ export default function LoginModal() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="w-full py-2.5 px-4 bg-gradient-to-r from-amber-500 to-orange-600 hover:opacity-90 text-white font-semibold rounded-lg text-sm shadow-lg shadow-orange-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50 active:scale-95"
+                className="scada-secondary-button btn-glow-effect w-full py-2.5 px-4 bg-gradient-to-r from-amber-500 to-orange-600 hover:opacity-90 text-white font-semibold rounded-lg text-sm shadow-lg shadow-orange-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-50 active:scale-95"
               >
                 {submitting ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -329,7 +332,7 @@ export default function LoginModal() {
                   value={reqNombre}
                   onChange={(e) => setReqNombre(e.target.value)}
                   placeholder="Ej: Lic. Carlos Pérez"
-                  className="w-full px-3 py-1.5 bg-slate-900/80 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-cyan-400 font-sans"
+                  className="scada-input w-full px-3 py-1.5 rounded-lg text-xs text-white font-sans"
                 />
               </div>
 
@@ -342,7 +345,7 @@ export default function LoginModal() {
                     value={reqUsuario}
                     onChange={(e) => setReqUsuario(e.target.value)}
                     placeholder="carlos_ceye"
-                    className="w-full px-3 py-1.5 bg-slate-900/80 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-cyan-400"
+                    className="scada-input w-full px-3 py-1.5 rounded-lg text-xs text-white"
                   />
                 </div>
                 <div>
@@ -353,7 +356,7 @@ export default function LoginModal() {
                     value={reqEmail}
                     onChange={(e) => setReqEmail(e.target.value)}
                     placeholder="carlos@hospital.com"
-                    className="w-full px-3 py-1.5 bg-slate-900/80 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-cyan-400"
+                    className="scada-input w-full px-3 py-1.5 rounded-lg text-xs text-white"
                   />
                 </div>
               </div>
@@ -363,7 +366,7 @@ export default function LoginModal() {
                 <select
                   value={reqDepto}
                   onChange={(e) => setReqDepto(e.target.value)}
-                  className="w-full px-3 py-1.5 bg-slate-900/80 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-cyan-400 font-sans"
+                  className="scada-select w-full px-3 py-1.5 rounded-lg text-xs text-white font-sans"
                 >
                   <option value="Central de Esterilización (CEYE/RUMED)">Central de Esterilización (CEYE/RUMED)</option>
                   <option value="Quirófanos & Cirugía">Quirófanos & Cirugía</option>
@@ -381,14 +384,14 @@ export default function LoginModal() {
                   value={reqPassword}
                   onChange={(e) => setReqPassword(e.target.value)}
                   placeholder="Mínimo 4 caracteres"
-                  className="w-full px-3 py-1.5 bg-slate-900/80 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-cyan-400"
+                  className="scada-input w-full px-3 py-1.5 rounded-lg text-xs text-white"
                 />
               </div>
 
               <button
                 type="submit"
                 disabled={submitting}
-                className="w-full py-2 px-4 bg-gradient-to-r from-emerald-500 to-teal-600 hover:opacity-90 text-white font-semibold rounded-lg text-xs shadow-md transition-all flex items-center justify-center gap-2 mt-2 active:scale-95"
+                className="scada-primary-button btn-glow-effect w-full py-2 px-4 bg-gradient-to-r from-emerald-500 to-teal-600 hover:opacity-90 text-white font-semibold rounded-lg text-xs shadow-md transition-all flex items-center justify-center gap-2 mt-2 active:scale-95"
               >
                 {submitting ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
