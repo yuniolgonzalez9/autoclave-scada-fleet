@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { 
+  Activity,
   Settings, 
   Maximize, 
   RefreshCw, 
@@ -31,7 +32,9 @@ export default function GearMenu({
   setOpacity, 
   onLogout,
   kioskMac,
-  onUnlockKiosk
+  onUnlockKiosk,
+  onOpenDiagnostics,
+  appearanceSyncStatus
 }) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -73,7 +76,7 @@ export default function GearMenu({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="p-1.5 sm:p-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-cyan-500/40 text-cyan-300 transition-all flex items-center justify-center shadow-lg active:scale-95 shrink-0"
+        className="p-1.5 sm:p-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-cyan-500/40 text-cyan-300 transition-all flex items-center justify-center shadow-lg active:scale-95 shrink-0 icon-glow glow-border"
         title="Panel Técnico y Ajustes"
       >
         <Settings className="w-4 h-4 sm:w-5 sm:h-5 animate-[spin_14s_linear_infinite]" />
@@ -89,7 +92,7 @@ export default function GearMenu({
 
           {/* Panel Lateral Flotante */}
           <div 
-            className="fixed right-2 sm:right-6 top-14 sm:top-16 w-[calc(100vw-16px)] sm:w-88 max-w-sm ultra-glass p-4 sm:p-5 rounded-2xl shadow-2xl border-2 border-cyan-500/50 z-[99999] backdrop-blur-2xl space-y-3 sm:space-y-4 max-h-[85vh] overflow-y-auto select-none font-mono text-xs"
+            className="gear-panel fixed right-2 sm:right-6 top-14 sm:top-16 w-[calc(100vw-16px)] sm:w-88 max-w-sm ultra-glass p-4 sm:p-5 rounded-2xl shadow-2xl border-2 border-cyan-500/50 z-[99999] backdrop-blur-2xl space-y-3 sm:space-y-4 max-h-[85vh] overflow-y-auto select-none font-mono text-xs"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-between items-center border-b border-cyan-500/20 pb-2.5">
@@ -164,7 +167,7 @@ export default function GearMenu({
               <select
                 value={currentBg}
                 onChange={(e) => setBg(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 text-xs text-white rounded-lg p-2 focus:outline-none focus:border-cyan-400"
+                className="gear-select w-full bg-slate-900/80 border border-slate-700/80 text-xs text-white rounded-lg p-2.5 focus:outline-none focus:border-cyan-400"
               >
                 {WALLPAPERS_LIST.map((bg) => (
                   <option key={bg.id} value={bg.id}>
@@ -186,16 +189,37 @@ export default function GearMenu({
                 max="100" 
                 value={opacity} 
                 onChange={(e) => setOpacity(Number(e.target.value))} 
-                className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-cyan-400"
+                className="gear-slider w-full h-1.5 rounded-lg appearance-none cursor-pointer"
               />
             </div>
 
+            {appearanceSyncStatus && (
+              <p className="text-[10px] text-slate-500 flex items-center gap-1.5" role="status">
+                <span className={`w-1.5 h-1.5 rounded-full ${appearanceSyncStatus === 'synced' ? 'bg-emerald-400' : appearanceSyncStatus === 'saving' ? 'bg-amber-400 animate-pulse' : 'bg-slate-500'}`} />
+                {appearanceSyncStatus === 'synced' ? 'Preferencias sincronizadas' : appearanceSyncStatus === 'saving' ? 'Guardando preferencias…' : appearanceSyncStatus === 'loading' ? 'Cargando preferencias…' : 'Guardadas en este dispositivo'}
+              </p>
+            )}
+
             {/* 4. Acciones del Sistema */}
             <div className="pt-2 border-t border-slate-800 space-y-1.5">
+              {onOpenDiagnostics && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsOpen(false);
+                    onOpenDiagnostics();
+                  }}
+                  className="gear-action w-full py-1.5 px-3 bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white rounded-lg text-xs flex items-center gap-2 border border-slate-800 transition-colors"
+                >
+                  <Activity className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Diagnóstico de nube</span>
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={handleForceSync}
-                className="w-full py-1.5 px-3 bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white rounded-lg text-xs flex items-center gap-2 border border-slate-800 transition-colors"
+                className="gear-action w-full py-1.5 px-3 bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white rounded-lg text-xs flex items-center gap-2 border border-slate-800 transition-colors"
               >
                 <RefreshCw className="w-3.5 h-3.5 text-cyan-400" />
                 <span>Forzar Sincronización Nube</span>
@@ -204,7 +228,7 @@ export default function GearMenu({
               <button
                 type="button"
                 onClick={toggleFullScreen}
-                className="w-full py-1.5 px-3 bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white rounded-lg text-xs flex items-center gap-2 border border-slate-800 transition-colors"
+                className="gear-action w-full py-1.5 px-3 bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white rounded-lg text-xs flex items-center gap-2 border border-slate-800 transition-colors"
               >
                 <Maximize className="w-3.5 h-3.5 text-cyan-400" />
                 <span>Pantalla Completa</span>
@@ -213,7 +237,7 @@ export default function GearMenu({
               <button
                 type="button"
                 onClick={() => { setIsOpen(false); onLogout(); }}
-                className="w-full py-2 px-3 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-lg text-xs flex items-center gap-2 border border-rose-500/30 mt-1.5 transition-colors font-bold"
+                className="gear-danger w-full py-2 px-3 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-lg text-xs flex items-center gap-2 border border-rose-500/30 mt-1.5 transition-colors font-bold"
               >
                 <LogOut className="w-3.5 h-3.5" />
                 <span>Cerrar Sesión</span>
