@@ -16,6 +16,8 @@ import ContextMenu from './components/common/ContextMenu';
 import DeviceAssignmentModal from './components/admin/DeviceAssignmentModal';
 import SurgicalQRLabel from './components/labels/SurgicalQRLabel';
 import NotificationsPanel from './components/common/NotificationsPanel';
+import SwipeDots from './components/common/SwipeDots';
+import { useSwipe, stepThrough } from './hooks/useSwipe';
 import { useNotificationCenter } from './hooks/useNotificationCenter';
 import { useMqttFleet } from './hooks/useMqttFleet';
 import { useAccountAppearance } from './hooks/useAccountAppearance';
@@ -39,10 +41,12 @@ import {
   Rocket,
   Search,
   ArrowDownAZ,
-  X
+  X,
+  ChevronLeft
 } from 'lucide-react';
 
 const APP_SECTIONS = new Set(['flota', 'gestion', 'studio', 'usuarios', 'fota', 'auditoria', 'detalle']);
+const MOBILE_SECTIONS = ['flota', 'gestion', 'studio', 'usuarios', 'fota'];
 
 function getInitialActiveSection() {
   const urlParams = new URLSearchParams(window.location.search);
@@ -441,6 +445,32 @@ function ScadaAppContent() {
     return filteredDevices[0] || null;
   }, [inspectingMacToUse, fleet, filteredDevices]);
 
+  const mainRef = useRef(null);
+  const [navDir, setNavDir] = useState('none');
+  const navIndex = MOBILE_SECTIONS.indexOf(activeSection === 'detalle' ? 'flota' : activeSection);
+
+  const goToSection = useCallback((next) => {
+    const to = MOBILE_SECTIONS.indexOf(next);
+    setNavDir(navIndex === -1 || to === -1 || navIndex === to ? 'none' : to > navIndex ? 'next' : 'prev');
+    setActiveSection(next);
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }, [navIndex]);
+
+  const detailIndex = filteredDevices.findIndex((d) => d.mac === selectedMac);
+  const goToDevice = useCallback((delta) => {
+    const next = filteredDevices[detailIndex + delta];
+    if (detailIndex === -1 || !next) return false;
+    setNavDir(delta > 0 ? 'next' : 'prev');
+    setSelectedMac(next.mac);
+    return true;
+  }, [filteredDevices, detailIndex]);
+
+  useSwipe(mainRef, {
+    enabled: Boolean(user) && !kioskMac,
+    onSwipeLeft: () => (activeSection === 'detalle' ? goToDevice(1) : stepThrough(MOBILE_SECTIONS, activeSection, 1, goToSection)),
+    onSwipeRight: () => (activeSection === 'detalle' ? goToDevice(-1) : stepThrough(MOBILE_SECTIONS, activeSection, -1, goToSection))
+  });
+
   const bgObj = useMemo(() => WALLPAPERS_LIST.find((b) => b.id === currentBg) || WALLPAPERS_LIST[0], [currentBg]);
 
   if (loading) {
@@ -681,11 +711,41 @@ function ScadaAppContent() {
             <LoginModal />
           </main>
         ) : (
-          <main className="flex-1 p-3 md:p-6 max-w-7xl mx-auto w-full flex flex-col gap-4 android-view-transition">
+          <main ref={mainRef} data-nav-dir={navDir} className="flex-1 p-3 md:p-6 max-w-7xl mx-auto w-full flex flex-col gap-4 android-view-transition">
             
             <>
               {inspectingDevice && (kioskMac || selectedMac) && (visitedSections.has('detalle') || activeSection === 'detalle' || kioskMac) && (
                 <div className="app-view-panel" hidden={!(kioskMac || activeSection === 'detalle')}>
+                  {!kioskMac && detailIndex !== -1 && filteredDevices.length > 1 && (
+                    <div className="flex items-center justify-between gap-2 mb-3">
+                      <button
+                        type="button"
+                        onClick={() => goToDevice(-1)}
+                        disabled={detailIndex <= 0}
+                        aria-label="Equipo anterior"
+                        className="p-2 rounded-xl border border-slate-700 bg-slate-900/60 text-slate-300 hover:text-white disabled:opacity-30"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </button>
+                      <div className="flex flex-col items-center gap-1.5 min-w-0">
+                        <span className="text-[10px] font-mono text-slate-400 text-center">
+                          Equipo {detailIndex + 1} de {filteredDevices.length}
+                          <span className="lg:hidden"> · desliza para cambiar</span>
+                        </span>
+                        {filteredDevices.length <= 12 && <SwipeDots count={filteredDevices.length} index={detailIndex} />}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => goToDevice(1)}
+                        disabled={detailIndex >= filteredDevices.length - 1}
+                        aria-label="Equipo siguiente"
+                        className="p-2 rounded-xl border border-slate-700 bg-slate-900/60 text-slate-300 hover:text-white disabled:opacity-30"
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+                  <div key={inspectingMacToUse} className={navDir === 'next' ? 'swipe-enter-next' : navDir === 'prev' ? 'swipe-enter-prev' : ''}>
                   <DeviceDetailView
                     key={inspectingMacToUse}
                     device={inspectingDevice}
@@ -696,6 +756,7 @@ function ScadaAppContent() {
                     isKioskMode={Boolean(kioskMac)}
                     onToggleKiosk={() => toggleKioskMode(inspectingMacToUse)}
                   />
+                  </div>
                 </div>
               )}
 
@@ -1004,10 +1065,14 @@ function ScadaAppContent() {
 
         {/* Barra Inferior Celular */}
         {user && !kioskMac && (
-          <nav className="mobile-nav-shell lg:hidden fixed bottom-0 left-0 right-0 h-16 border-t border-cyan-500/30 backdrop-blur-xl flex items-center justify-around z-50 px-2">
+          <nav className="mobile-nav-shell lg:hidden fixed bottom-0 left-0 right-0 h-16 border-t border-cyan-500/30 backdrop-blur-xl flex items-center justify-around z-50">
+            <span
+              className="mobile-nav-indicator"
+              style={{ transform: `translateX(${Math.max(navIndex, 0) * 100}%)`, opacity: navIndex === -1 ? 0 : 1 }}
+            />
             <button
-              onClick={() => setActiveSection('flota')}
-              className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-[10px] font-mono transition-all ${
+              onClick={() => goToSection('flota')}
+              className={`flex-1 flex flex-col items-center gap-1 py-1 px-1 rounded-lg text-[10px] font-mono transition-all ${
                 activeSection === 'flota' || activeSection === 'detalle' ? 'text-cyan-400 font-bold scale-110' : 'text-slate-400 hover:text-cyan-300'
               }`}
             >
@@ -1016,8 +1081,8 @@ function ScadaAppContent() {
             </button>
 
             <button
-              onClick={() => setActiveSection('gestion')}
-              className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-[10px] font-mono transition-all ${
+              onClick={() => goToSection('gestion')}
+              className={`flex-1 flex flex-col items-center gap-1 py-1 px-1 rounded-lg text-[10px] font-mono transition-all ${
                 activeSection === 'gestion' ? 'text-cyan-400 font-bold scale-110' : 'text-slate-400 hover:text-cyan-300'
               }`}
             >
@@ -1026,8 +1091,8 @@ function ScadaAppContent() {
             </button>
 
             <button
-              onClick={() => setActiveSection('studio')}
-              className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-[10px] font-mono transition-all ${
+              onClick={() => goToSection('studio')}
+              className={`flex-1 flex flex-col items-center gap-1 py-1 px-1 rounded-lg text-[10px] font-mono transition-all ${
                 activeSection === 'studio' ? 'text-amber-400 font-bold scale-110' : 'text-slate-400 hover:text-amber-300'
               }`}
             >
@@ -1036,8 +1101,8 @@ function ScadaAppContent() {
             </button>
 
             <button
-              onClick={() => setActiveSection('usuarios')}
-              className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-[10px] font-mono transition-all ${
+              onClick={() => goToSection('usuarios')}
+              className={`flex-1 flex flex-col items-center gap-1 py-1 px-1 rounded-lg text-[10px] font-mono transition-all ${
                 activeSection === 'usuarios' ? 'text-cyan-400 font-bold scale-110' : 'text-slate-400 hover:text-cyan-300'
               }`}
             >
@@ -1046,8 +1111,8 @@ function ScadaAppContent() {
             </button>
 
             <button
-              onClick={() => setActiveSection('fota')}
-              className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-[10px] font-mono transition-all ${
+              onClick={() => goToSection('fota')}
+              className={`flex-1 flex flex-col items-center gap-1 py-1 px-1 rounded-lg text-[10px] font-mono transition-all ${
                 activeSection === 'fota' ? 'text-cyan-400 font-bold scale-110' : 'text-slate-400 hover:text-cyan-300'
               }`}
             >

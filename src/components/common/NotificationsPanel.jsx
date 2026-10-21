@@ -24,9 +24,12 @@ import {
   ChevronDown,
   Users,
   Cpu,
-  Server
+  Server,
+  Trash2
 } from 'lucide-react';
 import { SEVERITY_ORDER } from '../../hooks/useNotificationCenter';
+import { useSwipe, stepThrough } from '../../hooks/useSwipe';
+import SwipeDots from './SwipeDots';
 
 const TYPE_ICONS = {
   ALARMA: AlertOctagon,
@@ -100,7 +103,7 @@ function ActionButton({ onClick, icon: Icon, children, tone = 'slate', disabled 
   );
 }
 
-function NotificationCard({ notif, center, isAdmin, onViewDevice }) {
+function NotificationCard({ notif, center, isAdmin, canDelete, onViewDevice }) {
   const [mode, setMode] = useState(null);
   const [text, setText] = useState('');
   const [role, setRole] = useState('OPERADOR');
@@ -170,6 +173,21 @@ function NotificationCard({ notif, center, isAdmin, onViewDevice }) {
                   {notif.nota_resolucion ? ` · ${notif.nota_resolucion}` : ''}
                 </span>
               </p>
+            )}
+
+            {resolved && canDelete && !notif.local && (
+              <div className="flex flex-wrap gap-1.5 mt-2.5">
+                {mode === 'delete' ? (
+                  <>
+                    <ActionButton onClick={() => setMode(null)}>Cancelar</ActionButton>
+                    <ActionButton icon={Trash2} tone="rose" disabled={busy} onClick={() => run(() => center.remove(notif))}>
+                      Sí, eliminar registro
+                    </ActionButton>
+                  </>
+                ) : (
+                  <ActionButton icon={Trash2} tone="rose" onClick={() => setMode('delete')}>Eliminar</ActionButton>
+                )}
+              </div>
             )}
 
             {!resolved && !notif.local && (
@@ -274,6 +292,11 @@ export default function NotificationsPanel({
   const [tab, setTab] = useState('ALL');
   const [showResolved, setShowResolved] = useState(false);
   const [collapsed, setCollapsed] = useState({});
+  const [tabDir, setTabDir] = useState('none');
+  const [confirmClear, setConfirmClear] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [clearError, setClearError] = useState('');
+  const listRef = useRef(null);
 
   const notifications = center?.notifications || [];
   const counts = center?.counts || { open: 0, critical: 0, warning: 0 };
@@ -312,6 +335,42 @@ export default function NotificationsPanel({
       .filter((g) => g.items.length > 0);
   }, [notifications, tab, showResolved]);
 
+  const tabIds = tabs.map((t) => t.id);
+  const tabIndex = Math.max(0, tabIds.indexOf(tab));
+  const selectTab = (next) => {
+    setTabDir(tabIds.indexOf(next) > tabIndex ? 'next' : 'prev');
+    setTab(next);
+  };
+
+  useSwipe(listRef, {
+    enabled: isOpen,
+    onSwipeLeft: () => stepThrough(tabIds, tab, 1, selectTab),
+    onSwipeRight: () => stepThrough(tabIds, tab, -1, selectTab)
+  });
+
+  useEffect(() => {
+    setConfirmClear(false);
+    setClearError('');
+  }, [tab, showResolved, isOpen]);
+
+  const resolvedCount = notifications.filter((n) =>
+    n.estado === 'RESUELTA' && !n.local && (tab === 'ALL' || n.categoria === tab)
+  ).length;
+  const canClear = isAdmin && showResolved && resolvedCount > 0;
+
+  const clearHistory = async () => {
+    setClearing(true);
+    setClearError('');
+    try {
+      await center.clearHistory(tab);
+      setConfirmClear(false);
+    } catch (e) {
+      setClearError(e?.message || 'No se pudo vaciar el historial.');
+    } finally {
+      setClearing(false);
+    }
+  };
+
   const openInfoCount = notifications.filter((n) => n.severidad === 'INFO' && n.estado !== 'RESUELTA' && !n.local).length;
 
   useEffect(() => {
@@ -346,8 +405,8 @@ export default function NotificationsPanel({
         role="dialog"
         aria-label="Centro de notificaciones"
         className="notifications-panel fixed z-[100000] flex flex-col overflow-hidden border-cyan-500/40 shadow-2xl
-          inset-x-0 bottom-0 max-h-[88dvh] rounded-t-2xl border-t
-          sm:inset-x-auto sm:bottom-auto sm:right-4 sm:top-16 sm:w-[420px] sm:max-h-[calc(100dvh-5rem)] sm:rounded-2xl sm:border"
+          inset-x-0 bottom-0 h-[88dvh] rounded-t-2xl border-t
+          sm:inset-x-auto sm:bottom-auto sm:right-4 sm:top-16 sm:w-[420px] sm:h-[min(680px,calc(100dvh-5rem))] sm:rounded-2xl sm:border"
         style={{ backgroundColor: 'rgba(10, 15, 30, 0.98)', paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
         <div className="sm:hidden flex justify-center pt-2">
@@ -393,7 +452,7 @@ export default function NotificationsPanel({
           </span>
         </div>
 
-        <div className="flex items-center gap-1 px-3 py-2 overflow-x-auto shrink-0 scrollbar-none">
+        <div className="flex items-center gap-1 px-3 pt-2 overflow-x-auto shrink-0 scrollbar-none">
           {tabs.map((t) => {
             const TabIcon = t.icon;
             const active = tab === t.id;
@@ -401,8 +460,8 @@ export default function NotificationsPanel({
               <button
                 key={t.id}
                 type="button"
-                onClick={() => setTab(t.id)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold whitespace-nowrap transition-colors ${
+                onClick={() => selectTab(t.id)}
+                className={`flex flex-1 sm:flex-none justify-center items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg text-[12px] font-semibold whitespace-nowrap transition-colors ${
                   active ? 'bg-cyan-500/20 text-cyan-200 border border-cyan-500/40' : 'text-slate-400 border border-transparent hover:text-white hover:bg-white/5'
                 }`}
               >
@@ -416,10 +475,13 @@ export default function NotificationsPanel({
               </button>
             );
           })}
+        </div>
+        <div className="flex items-center gap-2 px-3 py-2 shrink-0">
+          <SwipeDots count={tabs.length} index={tabIndex} className="sm:hidden" />
           <button
             type="button"
             onClick={() => setShowResolved((v) => !v)}
-            className={`ml-auto flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold whitespace-nowrap border ${
+            className={`ml-auto min-w-[108px] justify-center flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold whitespace-nowrap border ${
               showResolved ? 'border-emerald-500/50 text-emerald-200 bg-emerald-500/10' : 'border-slate-700 text-slate-400 hover:text-white'
             }`}
           >
@@ -428,7 +490,11 @@ export default function NotificationsPanel({
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto overscroll-contain px-3 pb-3 space-y-3">
+        <div ref={listRef} className="flex-1 overflow-y-auto overscroll-contain px-3 pb-3">
+          <div
+            key={`${tab}-${showResolved}`}
+            className={`space-y-3 min-h-full ${tabDir === 'next' ? 'swipe-enter-next' : tabDir === 'prev' ? 'swipe-enter-prev' : ''}`}
+          >
           {groups.length === 0 ? (
             <div className="flex flex-col items-center justify-center text-center py-14 px-6">
               <div className="p-3 rounded-full bg-emerald-500/10 border border-emerald-500/30 mb-3">
@@ -453,17 +519,29 @@ export default function NotificationsPanel({
                 {!collapsed[group.id] && (
                   <div className="space-y-2">
                     {group.items.map((n) => (
-                      <NotificationCard key={n.id} notif={n} center={center} isAdmin={isAdmin} onViewDevice={viewDevice} />
+                      <NotificationCard key={n.id} notif={n} center={center} isAdmin={isAdmin} canDelete={isAdmin} onViewDevice={viewDevice} />
                     ))}
                   </div>
                 )}
               </section>
             ))
           )}
+          </div>
         </div>
 
-        {(openInfoCount > 0 || (isAdmin && onOpenAdminModal)) && (
-          <div className="flex items-center gap-2 px-3 py-2.5 border-t border-white/10 bg-slate-950/70 shrink-0">
+        {(openInfoCount > 0 || canClear || (isAdmin && onOpenAdminModal)) && (
+          <div className="flex flex-wrap items-center gap-2 px-3 py-2.5 border-t border-white/10 bg-slate-950/70 shrink-0">
+            {canClear && (confirmClear ? (
+              <>
+                <ActionButton onClick={() => setConfirmClear(false)}>Cancelar</ActionButton>
+                <ActionButton icon={Trash2} tone="rose" disabled={clearing} onClick={clearHistory}>
+                  {clearing ? 'Eliminando…' : `Sí, eliminar ${resolvedCount}`}
+                </ActionButton>
+              </>
+            ) : (
+              <ActionButton icon={Trash2} tone="rose" onClick={() => setConfirmClear(true)}>Vaciar historial ({resolvedCount})</ActionButton>
+            ))}
+            {clearError && <span className="w-full text-[11px] text-rose-300">{clearError}</span>}
             {openInfoCount > 0 && (
               <ActionButton icon={Check} onClick={() => center.resolveAllInfo()}>Limpiar informativas ({openInfoCount})</ActionButton>
             )}

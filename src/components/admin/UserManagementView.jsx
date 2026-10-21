@@ -1,6 +1,10 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from '../../services/supabase';
+import { useSwipe, stepThrough } from '../../hooks/useSwipe';
+import SwipeDots from '../common/SwipeDots';
+
+const TAB_ORDER = ['directorio', 'crear', 'solicitudes', 'bitacora'];
 import { 
   Users, 
   UserPlus, 
@@ -125,6 +129,17 @@ function DeviceIcon({ name, className }) {
 
 export default function UserManagementView({ fleet = {}, onFleetUpdated }) {
   const [activeTab, setActiveTab] = useState('directorio');
+  const rootRef = useRef(null);
+  useSwipe(rootRef, {
+    onSwipeLeft: () => stepThrough(TAB_ORDER, activeTab, 1, setActiveTab),
+    onSwipeRight: () => stepThrough(TAB_ORDER, activeTab, -1, setActiveTab)
+  });
+  const tabStripRef = useRef(null);
+  useEffect(() => {
+    const strip = tabStripRef.current;
+    const btn = strip?.querySelector(`[data-tab="${activeTab}"]`);
+    if (btn) strip.scrollTo({ left: btn.offsetLeft - (strip.clientWidth - btn.offsetWidth) / 2, behavior: 'smooth' });
+  }, [activeTab]);
   const [usersList, setUsersList] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -469,7 +484,7 @@ export default function UserManagementView({ fleet = {}, onFleetUpdated }) {
 
 
   return (
-    <div className="user-management-view space-y-4 font-mono text-xs select-none">
+    <div ref={rootRef} className="user-management-view space-y-4 font-mono text-xs select-none">
       
       {/* Cabecera */}
       <div className="ultra-glass rounded-2xl border border-cyan-500/30 overflow-hidden">
@@ -505,7 +520,7 @@ export default function UserManagementView({ fleet = {}, onFleetUpdated }) {
           </div>
         </div>
 
-        <div className="px-2 sm:px-3 border-t border-slate-800/80 flex gap-1 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+        <div ref={tabStripRef} className="px-2 sm:px-3 border-t border-slate-800/80 relative flex gap-1 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
           {[
             { id: 'directorio', label: 'Personal', icon: Users, count: activeList.length },
             { id: 'crear', label: 'Nuevo usuario', icon: UserPlus },
@@ -517,6 +532,7 @@ export default function UserManagementView({ fleet = {}, onFleetUpdated }) {
             return (
               <button
                 key={tab.id}
+                data-tab={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
                 className={`relative shrink-0 px-3 py-3 flex items-center gap-2 font-sans text-xs font-semibold transition-colors ${
@@ -537,6 +553,7 @@ export default function UserManagementView({ fleet = {}, onFleetUpdated }) {
             );
           })}
         </div>
+        <SwipeDots count={TAB_ORDER.length} index={TAB_ORDER.indexOf(activeTab)} className="py-2 sm:hidden" />
       </div>
 
       {msg && (

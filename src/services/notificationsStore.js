@@ -88,6 +88,21 @@ export async function updateNotification(id, patch) {
   return updated;
 }
 
+export async function deleteNotifications(ids) {
+  const list = ids.filter(Boolean);
+  if (!list.length) return;
+
+  if (mode === 'remote') {
+    const { error } = await supabase.from(NOTIFICATIONS_TABLE).delete().in('id', list);
+    if (error) throw error;
+    return;
+  }
+
+  const drop = new Set(list);
+  localRows = localRows.filter((row) => !drop.has(row.id));
+  list.forEach((id) => emit({ type: 'DELETE', row: { id } }));
+}
+
 export function subscribeNotifications(onEvent) {
   listeners.add(onEvent);
 

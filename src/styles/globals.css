@@ -1474,17 +1474,49 @@ button:active::after, .btn:active::after {
   border-top: 1px solid var(--card-border);
 }
 
-.mobile-nav-shell::before {
-  content: '';
+.mobile-nav-indicator {
   position: absolute;
   top: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 40%;
+  left: 0;
+  width: 20%;
   height: 4px;
+  pointer-events: none;
+  transition: transform 0.35s cubic-bezier(0.2, 0.85, 0.25, 1), opacity 0.2s ease;
+}
+
+.mobile-nav-indicator::after {
+  content: '';
+  position: absolute;
+  inset: 0 22%;
   background: var(--accent-color);
   border-radius: 0 0 4px 4px;
   box-shadow: 0 0 10px var(--accent-color);
+}
+
+@keyframes swipeEnterNext {
+  from { opacity: 0; transform: translateX(36px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes swipeEnterPrev {
+  from { opacity: 0; transform: translateX(-36px); }
+  to { opacity: 1; transform: none; }
+}
+
+.swipe-enter-next {
+  animation: swipeEnterNext 0.26s cubic-bezier(0.2, 0.85, 0.25, 1) both;
+}
+
+.swipe-enter-prev {
+  animation: swipeEnterPrev 0.26s cubic-bezier(0.2, 0.85, 0.25, 1) both;
+}
+
+main[data-nav-dir="next"] .app-view-panel:not([hidden]) {
+  animation-name: swipeEnterNext;
+}
+
+main[data-nav-dir="prev"] .app-view-panel:not([hidden]) {
+  animation-name: swipeEnterPrev;
 }
 
 /* 27. EFECTO DE ESCANEO EN TARJETAS */
@@ -1666,8 +1698,8 @@ button:active::after, .btn:active::after {
 /* =========================================================================
    RENDIMIENTO EN MÓVILES Y TABLETS
    ========================================================================= */
-html { -webkit-text-size-adjust: 100%; }
-body { -webkit-tap-highlight-color: transparent; }
+html { -webkit-text-size-adjust: 100%; overscroll-behavior-x: none; }
+body { -webkit-tap-highlight-color: transparent; overscroll-behavior-x: none; }
 button, a, label, input, select, textarea, [role="button"] { touch-action: manipulation; }
 
 @media (hover: none), (pointer: coarse), (max-width: 1023px) {
