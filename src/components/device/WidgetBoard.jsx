@@ -3,71 +3,125 @@ import { createPortal } from 'react-dom';
 import { ArrowLeft, ArrowRight, Check, LayoutGrid, Pencil, Plus, RotateCcw, Save, Trash2, X } from 'lucide-react';
 import {
   DATA_KEYS, LIBRARY_BY_TYPE, WIDGET_COLORS, WIDGET_LIBRARY,
-  createWidget, defaultWidgetsFor, normalizeWidget, readValue
+  createWidget, normalizeWidget, readValue
 } from './widgetLibrary';
+import { autoWidgetsFor, capabilitySummary, deriveCapabilities } from './capabilities';
+import { ActionTile, LedTile, ToggleTile, iconFor } from './controls';
+import { Power, Zap } from 'lucide-react';
 import { mergeDeviceConfig } from '../../services/deviceService';
 
 const SIZE_CLASS = { sm: 'col-span-1', md: 'col-span-2', lg: 'col-span-2 sm:col-span-4' };
 
+
 function Gauge({ value, min, max, color, unit }) {
   const pct = Math.max(0, Math.min(1, (Number(value) - min) / ((max - min) || 1)));
-  const r = 42;
-  const len = Math.PI * r;
+  const r = 40;
+  const arc = (Math.PI * 1.5) * r;
+  const stroke = WIDGET_COLORS[color].stroke;
+  const gid = `g_${color}`;
   return (
-    <svg viewBox="0 0 100 60" className="w-full max-w-[180px] mx-auto">
-      <path d="M8 54 A42 42 0 0 1 92 54" fill="none" stroke="rgba(148,163,184,0.18)" strokeWidth="8" strokeLinecap="round" />
-      <path
-        d="M8 54 A42 42 0 0 1 92 54" fill="none" stroke={WIDGET_COLORS[color].stroke} strokeWidth="8" strokeLinecap="round"
-        strokeDasharray={len} strokeDashoffset={len * (1 - pct)} style={{ transition: 'stroke-dashoffset 0.6s ease', filter: `drop-shadow(0 0 4px ${WIDGET_COLORS[color].stroke})` }}
-      />
-      <text x="50" y="46" textAnchor="middle" className="fill-white" style={{ font: '700 15px ui-monospace, monospace' }}>
-        {Number.isFinite(Number(value)) ? Number(value).toFixed(Math.abs(max) <= 10 ? 2 : 1) : '--'}
-      </text>
-      <text x="50" y="57" textAnchor="middle" className="fill-slate-400" style={{ font: '7px ui-monospace, monospace' }}>{unit}</text>
-    </svg>
+    <div className="relative w-full max-w-[170px] mx-auto aspect-square">
+      <svg viewBox="0 0 100 100" className="w-full h-full -rotate-[225deg]">
+        <defs>
+          <linearGradient id={gid} x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor={stroke} stopOpacity="0.35" />
+            <stop offset="100%" stopColor={stroke} />
+          </linearGradient>
+        </defs>
+        <circle cx="50" cy="50" r={r} fill="none" stroke="rgba(148,163,184,0.14)" strokeWidth="9" strokeLinecap="round" strokeDasharray={`${arc} 999`} />
+        <circle
+          cx="50" cy="50" r={r} fill="none" stroke={`url(#${gid})`} strokeWidth="9" strokeLinecap="round"
+          strokeDasharray={`${arc * pct} 999`} style={{ transition: 'stroke-dasharray 0.7s cubic-bezier(.2,.8,.2,1)', filter: `drop-shadow(0 0 5px ${stroke})` }}
+        />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-[26px] leading-none font-bold font-mono text-white tabular-nums">
+          {Number.isFinite(Number(value)) ? Number(value).toFixed(Math.abs(max) <= 10 ? 2 : 1) : '--'}
+        </span>
+        <span className="text-[10px] text-slate-400 font-mono mt-1">{unit}</span>
+      </div>
+      <span className="absolute bottom-[8%] left-[14%] text-[9px] text-slate-500 font-mono">{min}</span>
+      <span className="absolute bottom-[8%] right-[14%] text-[9px] text-slate-500 font-mono">{max}</span>
+    </div>
   );
 }
 
 function Sparkline({ points, color }) {
-  if (points.length < 2) return <div className="h-14 flex items-center justify-center text-[10px] text-slate-500">Esperando lecturas…</div>;
+  if (points.length < 2) return <div className="h-20 flex items-center justify-center text-[11px] text-slate-500 font-sans">Esperando lecturas en vivo…</div>;
   const min = Math.min(...points);
   const max = Math.max(...points);
   const span = max - min || 1;
   const d = points.map((p, i) => `${(i / (points.length - 1)) * 100},${38 - ((p - min) / span) * 34}`).join(' ');
   return (
-    <svg viewBox="0 0 100 40" preserveAspectRatio="none" className="w-full h-14">
-      <polyline points={`0,40 ${d} 100,40`} fill={WIDGET_COLORS[color].stroke} opacity="0.12" />
-      <polyline points={d} fill="none" stroke={WIDGET_COLORS[color].stroke} strokeWidth="1.6" vectorEffect="non-scaling-stroke" />
-    </svg>
+    <div className="space-y-1">
+      <svg viewBox="0 0 100 40" preserveAspectRatio="none" className="w-full h-20">
+        <polyline points={`0,40 ${d} 100,40`} fill={WIDGET_COLORS[color].stroke} opacity="0.14" />
+        <polyline points={d} fill="none" stroke={WIDGET_COLORS[color].stroke} strokeWidth="2" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
+      </svg>
+      <div className="flex justify-between text-[10px] font-mono text-slate-500"><span>mín {min.toFixed(1)}</span><span className="text-slate-300">actual {points[points.length - 1].toFixed(1)}</span><span>máx {max.toFixed(1)}</span></div>
+    </div>
   );
 }
+
+const PHASE_STYLE = (fase, active) => {
+  const f = String(fase || '').toUpperCase();
+  if (/ALARM|ERROR|FALL|ABORT|CANCEL/.test(f)) return { tone: 'rose', text: 'text-rose-200', dot: 'bg-rose-400' };
+  if (/FINALIZ|EXITO|ÉXITO|LISTO/.test(f)) return { tone: 'emerald', text: 'text-emerald-200', dot: 'bg-emerald-400' };
+  if (active) return { tone: 'amber', text: 'text-amber-200', dot: 'bg-amber-400' };
+  return { tone: 'slate', text: 'text-slate-200', dot: 'bg-slate-500' };
+};
+
+const CONTROL_TYPES = ['SWITCH_TOGGLE', 'PUSH_BUTTON', 'STATUS_LED'];
 
 function WidgetBody({ w, device, sendCommand, onConfirm, enCicloActivo, odometer, editing }) {
   const c = WIDGET_COLORS[w.color];
   const value = readValue(device, w.key);
   const [slider, setSlider] = useState(Number(value ?? w.min));
   useEffect(() => { if (value !== undefined) setSlider(Number(value)); }, [value]);
+  const sendSlider = () => sendCommand?.(device.mac, { cmd: 'SET_CONFIG', cfg: { [String(w.key).replace(/^cfg\./, '')]: slider } });
 
   switch (w.widget_type) {
     case 'GAUGE':
       return <Gauge value={value ?? 0} min={w.min} max={w.max} color={w.color} unit={w.unit} />;
-    case 'VALUE':
+    case 'VALUE': {
+      const n = Number(value);
+      const pct = Number.isFinite(n) ? Math.max(0, Math.min(100, ((n - w.min) / ((w.max - w.min) || 1)) * 100)) : 0;
       return (
-        <p className={`text-2xl font-bold font-mono ${c.text}`}>
-          {Number.isFinite(Number(value)) ? Number(value).toFixed(w.max <= 10 ? 2 : 1) : '--'}
-          <span className="text-xs text-slate-400 ml-1">{w.unit}</span>
-        </p>
+        <div className="space-y-2">
+          <p className={`text-[28px] leading-none font-bold font-mono tabular-nums ${c.text}`}>
+            {Number.isFinite(n) ? n.toFixed(w.max <= 10 ? 2 : 1) : '--'}
+            <span className="text-xs text-slate-400 ml-1 font-normal">{w.unit}</span>
+          </p>
+          <div className="h-1 rounded-full bg-slate-800 overflow-hidden"><div className={`h-full ${c.bg} transition-all duration-700`} style={{ width: `${pct}%` }} /></div>
+        </div>
       );
+    }
     case 'TREND': {
       const k = w.key === 'pressure' ? 'pressure' : 'temperature';
       return <Sparkline points={(device?.history || []).map((h) => Number(h[k])).filter(Number.isFinite)} color={w.color} />;
     }
     case 'TIMER': {
       const s = Number(device?.datos?.seg_restantes || 0);
-      return <p className={`text-2xl font-bold font-mono ${c.text}`}>{Math.floor(s / 60)}:{String(s % 60).padStart(2, '0')}</p>;
+      return (
+        <div>
+          <p className={`text-[28px] leading-none font-bold font-mono tabular-nums ${s > 0 ? c.text : 'text-slate-300'}`}>{Math.floor(s / 60)}:{String(s % 60).padStart(2, '0')}</p>
+          <p className="text-[10px] text-slate-500 font-sans mt-1">{s > 0 ? 'restante del ciclo' : 'sin ciclo en curso'}</p>
+        </div>
+      );
     }
-    case 'PHASE':
-      return <p className={`text-sm font-bold uppercase tracking-wide ${enCicloActivo ? 'text-amber-300 animate-pulse' : c.text}`}>{device?.datos?.fase || 'EN ESPERA'}</p>;
+    case 'PHASE': {
+      const fase = device?.datos?.fase || 'EN ESPERA';
+      const st = PHASE_STYLE(fase, enCicloActivo);
+      return (
+        <div className="flex items-center gap-3">
+          <span className="relative flex w-3 h-3 shrink-0">
+            {enCicloActivo && <span className={`absolute inset-0 rounded-full ${st.dot} opacity-60 animate-ping`} />}
+            <span className={`relative w-3 h-3 rounded-full ${st.dot}`} />
+          </span>
+          <span className={`text-base font-bold uppercase tracking-wide font-sans ${st.text}`}>{fase}</span>
+        </div>
+      );
+    }
     case 'PROGRESS': {
       const pct = Math.min(100, Math.round((odometer.ciclos / Math.max(1, odometer.limite)) * 100));
       return (
@@ -79,54 +133,56 @@ function WidgetBody({ w, device, sendCommand, onConfirm, enCicloActivo, odometer
     }
     case 'STATUS_LED': {
       const on = Boolean(Number(value)) || value === true;
-      return (
-        <div className="flex items-center gap-2">
-          <span className={`w-4 h-4 rounded-full border ${on ? `${c.bg} border-white/40 shadow-[0_0_12px_currentColor] ${c.text}` : 'bg-slate-800 border-slate-600'}`} />
-          <span className={`text-xs font-bold ${on ? c.text : 'text-slate-500'}`}>{on ? 'ACTIVO' : 'INACTIVO'}</span>
-        </div>
-      );
+      return <LedTile label={w.label} on={on} tone={w.color} />;
     }
     case 'SWITCH_TOGGLE': {
       const on = Boolean(Number(device?.datos?.reles?.[`R${w.canal}`]));
       return (
-        <button
-          type="button" disabled={editing || enCicloActivo}
-          onClick={() => sendCommand?.(device.mac, { cmd: 'SET_RELAY', canal: w.canal, val: !on })}
-          className={`w-full flex items-center justify-between px-3 py-2 rounded-xl border transition-all disabled:opacity-40 ${on ? `${c.soft} ${c.ring}` : 'bg-slate-950/70 border-slate-700'}`}
-          aria-pressed={on}
-        >
-          <span className={`text-[11px] font-bold ${on ? c.text : 'text-slate-400'}`}>R{w.canal} · {on ? 'ON' : 'OFF'}</span>
-          <span className={`w-10 h-5 rounded-full p-0.5 flex ${on ? `justify-end ${c.bg}` : 'justify-start bg-slate-700'}`}><span className="w-4 h-4 rounded-full bg-white shadow" /></span>
-        </button>
+        <ToggleTile
+          label={w.label}
+          sublabel={`R${w.canal} · ${on ? 'Encendido' : 'Apagado'}`}
+          on={on}
+          tone={w.color}
+          icon={iconFor(w.role, w.label)}
+          disabled={editing || enCicloActivo}
+          onToggle={() => sendCommand?.(device.mac, { cmd: 'SET_RELAY', canal: w.canal, val: !on })}
+        />
       );
     }
     case 'PUSH_BUTTON':
       return (
-        <button
-          type="button" disabled={editing}
+        <ActionTile
+          label={w.label}
+          hint={w.cmd?.cmd}
+          tone={w.color}
+          icon={iconFor(w.cmd?.cmd, w.label) === Power ? Zap : iconFor(w.cmd?.cmd, w.label)}
+          disabled={editing}
           onClick={() => {
             const run = () => sendCommand?.(device.mac, w.cmd || { cmd: 'PING' });
             if (w.confirm && onConfirm) onConfirm({ title: w.label, description: `¿Enviar el comando ${w.cmd?.cmd || ''} al equipo?`, onConfirm: run });
             else run();
           }}
-          className={`w-full py-2.5 rounded-xl font-bold text-xs text-slate-950 ${c.bg} hover:opacity-90 active:scale-[0.98] transition disabled:opacity-40`}
-        >
-          {w.cmd?.cmd || 'Enviar'}
-        </button>
+        />
       );
-    case 'SLIDER':
+    case 'SLIDER': {
+      const pct = ((slider - w.min) / ((w.max - w.min) || 1)) * 100;
       return (
-        <div className="space-y-1">
-          <div className="flex justify-between text-[11px] font-mono"><span className="text-slate-400">{w.min}</span><span className={`font-bold ${c.text}`}>{slider} {w.unit}</span><span className="text-slate-400">{w.max}</span></div>
+        <div className="space-y-2">
+          <div className="flex items-baseline justify-between">
+            <span className={`text-2xl font-bold font-mono tabular-nums ${c.text}`}>{slider}<span className="text-xs text-slate-400 ml-1 font-normal">{w.unit}</span></span>
+            <span className="text-[10px] text-slate-500 font-mono">{w.min} – {w.max}</span>
+          </div>
           <input
             type="range" min={w.min} max={w.max} step={w.step || 1} value={slider} disabled={editing}
             onChange={(e) => setSlider(Number(e.target.value))}
-            onPointerUp={() => sendCommand?.(device.mac, { cmd: 'SET_CONFIG', cfg: { [w.key.replace(/^cfg\./, '')]: slider } })}
-            onKeyUp={() => sendCommand?.(device.mac, { cmd: 'SET_CONFIG', cfg: { [w.key.replace(/^cfg\./, '')]: slider } })}
-            className="w-full accent-cyan-400"
+            onPointerUp={sendSlider}
+            onKeyUp={sendSlider}
+            className="control-range w-full"
+            style={{ '--fill': `${pct}%`, '--accent': c.stroke }}
           />
         </div>
       );
+    }
     default:
       return null;
   }
@@ -216,8 +272,9 @@ export default function WidgetBoard({ device, canEdit, sendCommand, onConfirm, e
   const tipo = device?.meta?.tipo || config.tipo;
   const stored = useMemo(() => {
     const list = config.custom_dashboard?.widgets;
-    return Array.isArray(list) && list.length ? list.map(normalizeWidget) : defaultWidgetsFor(tipo, config.nombres_reles);
-  }, [config.custom_dashboard, config.nombres_reles, tipo]);
+    return Array.isArray(list) && list.length ? list.map(normalizeWidget) : autoWidgetsFor(device);
+  }, [config.custom_dashboard, device?.esquema, device?.meta, Object.keys(device?.datos?.reles || {}).length, Object.keys(device?.datos?.entradas || {}).length]); // eslint-disable-line react-hooks/exhaustive-deps
+  const caps = useMemo(() => deriveCapabilities(device), [device?.esquema, device?.meta, device?.datos]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(stored);
@@ -259,13 +316,13 @@ export default function WidgetBoard({ device, canEdit, sendCommand, onConfirm, e
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <p className="text-[11px] text-slate-400 font-sans">
-          {editing ? 'Ordena, edita o elimina widgets. Los cambios se guardan en la nube para este equipo.' : `${widgets.length} widgets · ${config.custom_dashboard?.widgets?.length ? 'panel personalizado' : 'panel recomendado para el tipo de equipo'}`}
+          {editing ? 'Ordena, edita o elimina widgets. Los cambios se guardan en la nube para este equipo.' : `${config.custom_dashboard?.widgets?.length ? 'Panel personalizado' : 'Diseñado automáticamente'} · ${capabilitySummary(caps)} (fuente: ${caps.source})`}
         </p>
         {canEdit && (
           <div className="flex gap-1.5">
             {editing ? (
               <>
-                <button type="button" onClick={() => setDraft(defaultWidgetsFor(tipo, config.nombres_reles))} className="px-2.5 py-1.5 rounded-lg border border-slate-700 text-slate-300 text-[11px] font-bold flex items-center gap-1"><RotateCcw className="w-3.5 h-3.5" />Recomendado</button>
+                <button type="button" onClick={() => setDraft(autoWidgetsFor(device))} className="px-2.5 py-1.5 rounded-lg border border-slate-700 text-slate-300 text-[11px] font-bold flex items-center gap-1"><RotateCcw className="w-3.5 h-3.5" />Auto-diseñar</button>
                 <button type="button" onClick={() => { setEditing(false); setDraft(stored); }} className="px-2.5 py-1.5 rounded-lg border border-slate-700 text-slate-300 text-[11px] font-bold">Cancelar</button>
                 <button type="button" onClick={save} disabled={saving} className="px-3 py-1.5 rounded-lg bg-emerald-500 text-slate-950 text-[11px] font-bold flex items-center gap-1 disabled:opacity-50"><Save className="w-3.5 h-3.5" />{saving ? 'Guardando…' : 'Guardar'}</button>
               </>
@@ -280,10 +337,11 @@ export default function WidgetBoard({ device, canEdit, sendCommand, onConfirm, e
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
         {widgets.map((w, i) => {
           const c = WIDGET_COLORS[w.color];
+          const isControl = CONTROL_TYPES.includes(w.widget_type);
           return (
-            <div key={w.id} className={`${SIZE_CLASS[w.size]} relative rounded-2xl border ${c.ring} bg-slate-950/55 p-3 flex flex-col gap-2 min-h-[96px] ${editing ? 'ring-1 ring-dashed ring-slate-600' : ''}`}>
-              <div className="flex items-center justify-between gap-1">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 truncate">{w.label}</span>
+            <div key={w.id} className={`${SIZE_CLASS[w.size]} relative flex flex-col gap-2 ${isControl ? '' : `widget-card rounded-2xl border ${c.ring} bg-gradient-to-br from-slate-900/70 to-slate-950/80 p-3.5 min-h-[104px]`} ${editing ? 'outline outline-1 outline-dashed outline-slate-600 rounded-2xl' : ''}`}>
+              <div className={`flex items-center justify-between gap-1 ${isControl && !editing ? 'hidden' : ''}`}>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 truncate">{isControl ? '' : w.label}</span>
                 {editing && (
                   <div className="flex gap-0.5 shrink-0">
                     <button type="button" aria-label="Mover antes" onClick={() => move(i, -1)} className="p-1 rounded hover:bg-white/10 text-slate-300"><ArrowLeft className="w-3.5 h-3.5" /></button>

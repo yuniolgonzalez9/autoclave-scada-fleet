@@ -10,6 +10,7 @@ import CycleHistoryPanel from '../device/CycleHistoryPanel';
 import MaintenancePanel from '../device/MaintenancePanel';
 import DeviceConfigPanel from '../device/DeviceConfigPanel';
 import ServiceReportsView from '../service/ServiceReportsView';
+import { ActionTile, DoorOpen, ProgramPicker, ToggleTile, iconFor } from '../device/controls';
 import { fetchCycleStats } from '../../services/deviceService';
 import { 
   Activity, 
@@ -305,7 +306,6 @@ export default function DeviceDetailView({
   };
 
 
-  const pctTone = pctMant >= 100 ? 'text-rose-300' : pctMant >= alertaPct ? 'text-amber-300' : 'text-emerald-300';
 
   return (
     <div className="device-detail-view flex flex-col gap-4 w-full font-mono text-xs select-none">
@@ -377,7 +377,7 @@ export default function DeviceDetailView({
             ['Presión', presionBar.toFixed(2), 'bar', 'text-white'],
             ['F0', f0Score.toFixed(1), 'min', 'text-emerald-300'],
             ['Restante', `${Math.floor(segRestantes / 60)}:${(segRestantes % 60).toString().padStart(2, '0')}`, '', 'text-white'],
-            ['Servicio', `${pctMant}%`, `${ciclos}/${limite}`, pctTone]
+            ['Fase', faseEnVivo, '', `block truncate !text-sm sm:!text-base ${enCicloActivo ? 'text-amber-300' : 'text-slate-200'}`]
           ].map(([label, value, unit, cls], idx) => (
             <div key={label} className={`rounded-xl bg-slate-950/60 border border-slate-800 px-3 py-2 ${idx === 4 ? 'col-span-2 sm:col-span-1' : ''}`}>
               <span className="block text-[10px] uppercase tracking-wider text-slate-500">{label}</span>
@@ -423,174 +423,106 @@ export default function DeviceDetailView({
 
       <DeviceSection id="cabina" title="Cabina de control" subtitle="Programas, puerta, simulación y salidas físicas" icon={Flame}>
         <div className="space-y-4">
-          {/* Mando de Ciclos */}
-          <div className="ultra-glass p-4 rounded-xl border border-cyan-500/40 space-y-3">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-800 pb-2">
-              <span className="text-xs font-bold text-white flex items-center gap-1.5 uppercase">
-                <Flame className="w-4 h-4 text-amber-400" />
-                Mando de Operación de Ciclos:
-              </span>
-              <span className="text-[10px] text-slate-400">
-                Selecciona un programa normativo e inicia la secuencia
-              </span>
+          <div className="rounded-2xl border border-slate-700/70 bg-slate-950/40 p-3 sm:p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">Programa de ciclo</span>
+              <span className="text-[10px] text-slate-500 font-sans">EN 13060</span>
             </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="sm:col-span-2">
-                <label className="text-slate-300 block text-[10px] mb-1">Programa Clínico Normativo (EN 13060):</label>
-                <select
-                  disabled={enCicloActivo}
-                  value={programaSeleccionado}
-                  onChange={(e) => setProgramaSeleccionado(Number(e.target.value))}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white font-bold text-xs focus:border-cyan-400 disabled:opacity-50"
-                >
-                  {PROGRAMAS_CLINICOS.map((p) => (
-                    <option key={p.id} value={p.id}>P{p.id}: {p.nombre}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex items-end gap-2">
-                {enCicloActivo ? (
-                  <button
-                    type="button"
-                    onClick={handleParoEmergencia}
-                    className="w-full py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-rose-600/30 animate-pulse"
-                  >
-                    <Square className="w-4 h-4 fill-white" />
-                    <span>PARO DE EMERGENCIA</span>
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={handleIniciarCicloClinico}
-                    disabled={isBloqueado100}
-                    className="w-full py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:opacity-90 text-white font-bold rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-cyan-500/25 disabled:opacity-50"
-                  >
-                    <Play className="w-4 h-4 fill-white" />
-                    <span>INICIAR CICLO P{programaSeleccionado}</span>
-                  </button>
-                )}
-
-                {faseEnVivo === 'CANCELADO' && (
-                  <button
-                    type="button"
-                    onClick={handleRestablecerAlarma}
-                    className="p-2.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded-xl"
-                    title="Restablecer Alarma"
-                  >
-                    <RotateCcw className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Puerta Neumática */}
-            <div className="flex items-center justify-between pt-2 border-t border-slate-800 text-[11px]">
-              <span className="text-slate-400">Control Neumático de Puerta:</span>
-              <div className="flex gap-2">
+            <ProgramPicker programs={PROGRAMAS_CLINICOS} value={programaSeleccionado} onChange={setProgramaSeleccionado} disabled={enCicloActivo} />
+            <div className="flex gap-2">
+              {enCicloActivo ? (
                 <button
                   type="button"
-                  onClick={handleCerrarSelloPuerta}
-                  className="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 hover:border-cyan-400 text-slate-200 font-bold flex items-center gap-1"
+                  onClick={handleParoEmergencia}
+                  className="flex-1 py-3.5 rounded-2xl bg-gradient-to-r from-rose-600 to-red-500 text-white font-bold text-sm font-sans flex items-center justify-center gap-2 shadow-[0_0_24px_rgba(244,63,94,0.45)] active:scale-[0.98] transition"
                 >
-                  <Lock className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>Inflar / Sellar Puerta</span>
+                  <Square className="w-4 h-4 fill-white" />
+                  Paro de emergencia
                 </button>
+              ) : (
                 <button
                   type="button"
-                  onClick={handleAbrirPuertaSegura}
-                  className="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 hover:border-amber-400 text-slate-200 font-bold flex items-center gap-1"
+                  onClick={handleIniciarCicloClinico}
+                  disabled={isBloqueado100}
+                  className="flex-1 py-3.5 rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold text-sm font-sans flex items-center justify-center gap-2 shadow-[0_0_24px_rgba(34,211,238,0.35)] active:scale-[0.98] transition disabled:opacity-40"
                 >
-                  <Wind className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Apertura Despresurizada</span>
+                  <Play className="w-4 h-4 fill-white" />
+                  Iniciar ciclo P{programaSeleccionado}
                 </button>
-              </div>
+              )}
+              {faseEnVivo === 'CANCELADO' && (
+                <button type="button" onClick={handleRestablecerAlarma} aria-label="Restablecer alarma" className="px-4 rounded-2xl border border-slate-700 bg-slate-900 text-cyan-300 active:scale-[0.97]">
+                  <RotateCcw className="w-5 h-5" />
+                </button>
+              )}
             </div>
           </div>
 
-          {/* Bypasses de Banco */}
-          <div className="ultra-glass p-4 rounded-xl border border-amber-500/30 space-y-3">
-            <div className="flex justify-between items-center border-b border-slate-800 pb-2">
-              <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5 uppercase">
-                <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                Bypasses de Banco & Simulación de Sensores:
-              </span>
-              <span className="text-[10px] text-slate-400">
-                Simula presencia física en mesa de prueba
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {['puerta', 'sello', 'recamara', 'caldera'].map((key) => {
-                const isActive = Boolean(bypasses[key]);
-                const labels = {
-                  puerta: 'SIMULAR PUERTA',
-                  sello: 'SIMULAR SELLO',
-                  recamara: 'PRESIÓN CÁMARA',
-                  caldera: 'VAPOR CALDERA'
-                };
-
-                return (
-                  <div 
-                    key={key}
-                    onClick={() => handleToggleBypass(key)}
-                    className={`p-2.5 rounded-xl border cursor-pointer flex items-center justify-between transition-all ${
-                      isActive 
-                        ? 'bg-emerald-950/40 border-emerald-500/60 text-emerald-300' 
-                        : 'bg-slate-950 border-slate-800 text-slate-500'
-                    }`}
-                  >
-                    <div>
-                      <span className="font-bold text-[10px] block">{labels[key]}</span>
-                      <span className="text-[9px]">{isActive ? '🟢 ACTIVO' : '⚪ FÍSICO'}</span>
-                    </div>
-                    <div className={`w-8 h-4 rounded-full border p-0.5 flex items-center ${isActive ? 'justify-end bg-emerald-500/20 border-emerald-400' : 'justify-start bg-slate-900 border-slate-700'}`}>
-                      <span className={`w-3 h-3 rounded-full ${isActive ? 'bg-emerald-400' : 'bg-slate-600'}`}></span>
-                    </div>
-                  </div>
-                );
-              })}
+          <div className="space-y-2">
+            <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">Puerta</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <ActionTile label="Sellar puerta" hint="Inflar sello neumático" icon={Lock} tone="cyan" onClick={handleCerrarSelloPuerta} />
+              <ActionTile
+                label="Abrir puerta"
+                hint={presionBar > 0.05 ? `Bloqueada: ${presionBar.toFixed(2)} bar en cámara` : 'Apertura despresurizada'}
+                icon={DoorOpen}
+                tone="amber"
+                onClick={handleAbrirPuertaSegura}
+              />
             </div>
           </div>
 
-          {/* Matriz de Salidas (Relés) */}
-          <div className="ultra-glass p-4 rounded-xl border border-slate-800 space-y-3">
-            <span className="text-xs font-bold text-cyan-300 block uppercase">
-              Estado de Salidas Físicas HKL-EA8 (0x24):
-            </span>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {[1, 2, 3, 4, 5, 6, 7, 8].map(ch => {
-                const isActive = Boolean(relesFisicos[`R${ch}`]);
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">Simulación de banco</span>
+              <span className="text-[10px] text-slate-500 font-sans">Sustituye sensores físicos en pruebas</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+              {[['puerta', 'Puerta'], ['sello', 'Sello'], ['recamara', 'Presión cámara'], ['caldera', 'Vapor caldera']].map(([key, label]) => (
+                <ToggleTile
+                  key={key}
+                  compact
+                  label={label}
+                  sublabel={bypasses[key] ? 'Simulado' : 'Sensor físico'}
+                  on={Boolean(bypasses[key])}
+                  tone="amber"
+                  icon={ShieldCheck}
+                  onToggle={() => handleToggleBypass(key)}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">Salidas físicas</span>
+              <span className="text-[10px] text-slate-500 font-mono">{Object.values(relesFisicos).filter((v) => Number(v)).length} / 8 activas</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+              {[1, 2, 3, 4, 5, 6, 7, 8].map((ch) => {
+                const id = `R${ch}`;
+                const isActive = Boolean(Number(relesFisicos[id]));
+                const name = meta.config_deseada?.nombres_reles?.[id] || nombresReles[id] || `Relé ${ch}`;
                 return (
-                  <div key={ch} className="p-2.5 bg-slate-950/90 rounded-xl border border-slate-800 flex justify-between items-center">
-                    <div>
-                      <span className="text-white font-bold block text-[11px] truncate max-w-[110px]">
-                        R{ch}: {nombresReles[`R${ch}`] || `Relé ${ch}`}
-                      </span>
-                      <span className="text-[9px] text-slate-400">
-                        {isActive ? '🟢 ENERGIZADO' : '⚪ DESACTIVADO'}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      disabled={enCicloActivo}
-                      onClick={() => handleToggleManualRelay(ch, isActive)}
-                      className={`px-2.5 py-1 rounded text-[10px] font-bold transition-all disabled:opacity-40 ${
-                        isActive ? 'bg-emerald-500 text-slate-950 shadow-[0_0_10px_#10b981]' : 'bg-slate-800 text-slate-300 hover:text-white'
-                      }`}
-                    >
-                      {isActive ? 'ON' : 'OFF'}
-                    </button>
-                  </div>
+                  <ToggleTile
+                    key={ch}
+                    compact
+                    label={name}
+                    sublabel={`${id} · ${isActive ? 'Energizado' : 'Desactivado'}`}
+                    on={isActive}
+                    tone="emerald"
+                    icon={iconFor(meta.config_deseada?.roles_reles?.[id], name)}
+                    disabled={enCicloActivo}
+                    onToggle={() => handleToggleManualRelay(ch, isActive)}
+                  />
                 );
               })}
             </div>
           </div>
 
           {/* Gráfica Térmica */}
-          <div className="ultra-glass p-4 rounded-2xl border border-cyan-500/30">
-            <h3 className="text-xs font-bold text-cyan-300 mb-3 uppercase">Curva Térmica & Presión en Tiempo Real (ESP32)</h3>
+          <div className="rounded-2xl border border-slate-700/70 bg-slate-950/40 p-3 sm:p-4 space-y-2">
+            <span className="block text-[11px] font-bold uppercase tracking-widest text-slate-400">Curva térmica y presión en vivo</span>
             <SterilizationChart telemetryData={device.history || []} />
           </div>
         </div>
