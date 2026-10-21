@@ -400,7 +400,7 @@ export default function DeviceDetailView({
                 data-sec={s.id}
                 onClick={() => goToSection(s.id)}
                 aria-current={active ? 'true' : undefined}
-                className={`px-3 py-1.5 rounded-xl text-[11px] font-bold whitespace-nowrap flex items-center gap-1.5 transition-all ${active ? 'bg-cyan-500 text-slate-950 shadow-[0_0_12px_rgba(34,211,238,0.45)]' : 'text-slate-400 hover:text-white'}`}
+                className={`shrink-0 px-3 py-1.5 rounded-xl text-[11px] font-bold whitespace-nowrap flex items-center gap-1.5 transition-all ${active ? 'bg-cyan-500 text-slate-950 shadow-[0_0_12px_rgba(34,211,238,0.45)]' : 'text-slate-400 hover:text-white'}`}
               >
                 <Icon className="w-3.5 h-3.5" />{s.label}
               </button>
