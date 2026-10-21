@@ -21,6 +21,7 @@ import { useAccountAppearance } from './hooks/useAccountAppearance';
 import { startIndustrialSiren, stopIndustrialSiren, initAudioUnlock } from './services/audioAlarm';
 import { sendCriticalAlarmWithButtons } from './services/telegram';
 import { supabase } from './services/supabase';
+import HeaderLaserOrbit from './components/common/HeaderLaserOrbit';
 import { 
   Activity, 
   Flame, 
@@ -466,10 +467,7 @@ function ScadaAppContent() {
 
         {/* Header Superior */}
         <header className="header-shell speedtest-laser-header border-b border-cyan-500/20 px-3 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between sticky top-0 z-40 w-full glass-shine">
-          <svg className="header-laser-orbit" viewBox="0 0 1440 100" preserveAspectRatio="none" aria-hidden="true" focusable="false">
-            <path className="header-laser-orbit-glow" d="M12 2 H1428 Q1438 2 1438 12 V88 Q1438 98 1428 98 H12 Q2 98 2 88 V12 Q2 2 12 2" pathLength="1000" />
-            <path className="header-laser-orbit-core" d="M12 2 H1428 Q1438 2 1438 12 V88 Q1438 98 1428 98 H12 Q2 98 2 88 V12 Q2 2 12 2" pathLength="1000" />
-          </svg>
+          <HeaderLaserOrbit />
           <div className="brand-lockup flex items-center gap-2 sm:gap-3 min-w-0">
             <div className="brand-emitter p-1.5 sm:p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 shrink-0">
               <Activity className="w-5 h-5 sm:w-6 sm:h-6 animate-pulse" />
