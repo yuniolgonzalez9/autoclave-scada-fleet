@@ -46,21 +46,23 @@ export default function HeaderLaserOrbit() {
   useEffect(() => {
     if (!ready) return undefined;
     const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    const loopMs = reduceMotion ? LOOP_MS * 2 : LOOP_MS;
     const dash = perimeter * DASH_RATIO;
-    const animations = [];
-    [glowRef.current, coreRef.current].forEach((el, i) => {
-      if (!el) return;
-      el.style.strokeDasharray = `${dash} ${perimeter - dash}`;
-      el.style.strokeDashoffset = '0';
-      if (reduceMotion || typeof el.animate !== 'function') return;
-      animations.push(
-        el.animate(
-          [{ strokeDashoffset: 0 }, { strokeDashoffset: -perimeter }],
-          { duration: LOOP_MS, iterations: Infinity, easing: 'linear', delay: i === 1 ? -45 : 0 }
-        )
-      );
+    const paths = [glowRef.current, coreRef.current].filter(Boolean);
+    paths.forEach((el) => {
+      el.setAttribute('stroke-dasharray', `${dash} ${perimeter - dash}`);
+      el.setAttribute('stroke-dashoffset', '0');
     });
-    return () => animations.forEach((a) => a.cancel());
+
+    let frame = 0;
+    const start = performance.now();
+    const tick = (now) => {
+      const offset = -(((now - start) % loopMs) / loopMs) * perimeter;
+      paths.forEach((el) => el.setAttribute('stroke-dashoffset', offset.toFixed(2)));
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
   }, [ready, perimeter]);
 
   const d = ready ? roundedRectPath(w, h, inset, r) : '';
