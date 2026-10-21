@@ -14,8 +14,114 @@ import {
   ShieldCheck, 
   CheckCircle2, 
   AlertCircle,
-  Cpu
+  Cpu,
+  Search,
+  RefreshCw,
+  Mail,
+  Building2,
+  Fingerprint,
+  LogIn,
+  LogOut,
+  Timer,
+  Lock,
+  KeyRound,
+  BellRing,
+  UserCheck,
+  UserX,
+  ShieldAlert,
+  Activity,
+  Monitor,
+  Smartphone,
+  Tablet,
+  ChevronDown
 } from 'lucide-react';
+
+const ROLE_STYLES = {
+  SUPERADMIN: { label: 'Superadmin', badge: 'text-amber-300 border-amber-500/40 bg-amber-500/10', avatar: 'bg-amber-500/15 border-amber-400/40 text-amber-200' },
+  DIRECTOR: { label: 'Director', badge: 'text-purple-300 border-purple-500/40 bg-purple-500/10', avatar: 'bg-purple-500/15 border-purple-400/40 text-purple-200' },
+  ADMIN: { label: 'Administrador', badge: 'text-purple-300 border-purple-500/40 bg-purple-500/10', avatar: 'bg-purple-500/15 border-purple-400/40 text-purple-200' },
+  TECNICO: { label: 'Técnico biomédico', badge: 'text-sky-300 border-sky-500/40 bg-sky-500/10', avatar: 'bg-sky-500/15 border-sky-400/40 text-sky-200' },
+  AUDITOR_CALIDAD: { label: 'Auditor de calidad', badge: 'text-emerald-300 border-emerald-500/40 bg-emerald-500/10', avatar: 'bg-emerald-500/15 border-emerald-400/40 text-emerald-200' },
+  OPERADOR: { label: 'Operador', badge: 'text-cyan-300 border-cyan-500/40 bg-cyan-500/10', avatar: 'bg-cyan-500/15 border-cyan-400/40 text-cyan-200' },
+  CLIENTE: { label: 'Cliente / Enfermería', badge: 'text-slate-300 border-slate-500/40 bg-slate-500/10', avatar: 'bg-slate-500/15 border-slate-400/40 text-slate-200' }
+};
+
+const TONES = {
+  emerald: { dot: 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.7)]', icon: 'text-emerald-300 bg-emerald-500/10 border-emerald-500/30', text: 'text-emerald-300' },
+  rose: { dot: 'bg-rose-400 shadow-[0_0_8px_rgba(251,113,133,0.7)]', icon: 'text-rose-300 bg-rose-500/10 border-rose-500/30', text: 'text-rose-300' },
+  amber: { dot: 'bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.7)]', icon: 'text-amber-300 bg-amber-500/10 border-amber-500/30', text: 'text-amber-300' },
+  cyan: { dot: 'bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.7)]', icon: 'text-cyan-300 bg-cyan-500/10 border-cyan-500/30', text: 'text-cyan-300' },
+  slate: { dot: 'bg-slate-500', icon: 'text-slate-300 bg-slate-500/10 border-slate-600/40', text: 'text-slate-300' }
+};
+
+const EVENT_META = {
+  LOGIN_EXITOSO: { label: 'Inicio de sesión', icon: LogIn, tone: 'emerald', cat: 'ACCESO' },
+  INICIO_SESION_EXITOSO: { label: 'Inicio de sesión', icon: LogIn, tone: 'emerald', cat: 'ACCESO' },
+  CIERRE_SESION: { label: 'Cierre de sesión', icon: LogOut, tone: 'slate', cat: 'ACCESO' },
+  TIMEOUT_INACTIVIDAD: { label: 'Cierre por inactividad', icon: Timer, tone: 'amber', cat: 'ACCESO' },
+  CLAVE_INCORRECTA: { label: 'Contraseña incorrecta', icon: Lock, tone: 'rose', cat: 'SEGURIDAD' },
+  CUENTA_SUSPENDIDA: { label: 'Acceso bloqueado (cuenta suspendida)', icon: UserX, tone: 'rose', cat: 'SEGURIDAD' },
+  CAMBIO_ESTADO: { label: 'Cambio de estado de cuenta', icon: UserCheck, tone: 'cyan', cat: 'CUENTAS' },
+  SOLICITUD_RECUPERACION_PENDIENTE: { label: 'Solicitud de recuperación de clave', icon: KeyRound, tone: 'amber', cat: 'CUENTAS' },
+  ACK_TELEGRAM: { label: 'Alarma silenciada desde Telegram', icon: BellRing, tone: 'emerald', cat: 'ALARMAS' },
+  PARO_TELEGRAM: { label: 'Paro de emergencia desde Telegram', icon: ShieldAlert, tone: 'rose', cat: 'ALARMAS' },
+  PARO_EMERGENCIA: { label: 'Paro de emergencia', icon: ShieldAlert, tone: 'rose', cat: 'ALARMAS' }
+};
+
+const LOG_FILTERS = [
+  { id: 'TODOS', label: 'Todos' },
+  { id: 'ACCESO', label: 'Accesos' },
+  { id: 'SEGURIDAD', label: 'Seguridad' },
+  { id: 'CUENTAS', label: 'Cuentas' },
+  { id: 'ALARMAS', label: 'Alarmas' }
+];
+
+const LOGS_PAGE = 40;
+const DAY_MS = 86400000;
+
+function eventMeta(evento) {
+  if (EVENT_META[evento]) return EVENT_META[evento];
+  const text = (evento || 'EVENTO').replace(/_/g, ' ').toLowerCase();
+  return { label: text.charAt(0).toUpperCase() + text.slice(1), icon: Activity, tone: 'cyan', cat: 'OTROS' };
+}
+
+function roleStyle(rol) {
+  return ROLE_STYLES[rol] || ROLE_STYLES.OPERADOR;
+}
+
+function initialsOf(text) {
+  const parts = String(text || '?').trim().split(/[\s._-]+/).filter(Boolean);
+  return ((parts[0]?.[0] || '?') + (parts[1]?.[0] || '')).toUpperCase();
+}
+
+function relativeTime(ts) {
+  if (!ts) return null;
+  const diff = Date.now() - new Date(ts).getTime();
+  if (!Number.isFinite(diff)) return null;
+  const min = Math.round(diff / 60000);
+  if (min < 1) return 'ahora';
+  if (min < 60) return `hace ${min} min`;
+  const h = Math.round(min / 60);
+  if (h < 24) return `hace ${h} h`;
+  const d = Math.round(h / 24);
+  if (d < 30) return `hace ${d} d`;
+  return new Date(ts).toLocaleDateString();
+}
+
+function dayLabel(ts) {
+  const date = new Date(ts);
+  const today = new Date();
+  const startToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  if (date.getTime() >= startToday) return 'Hoy';
+  if (date.getTime() >= startToday - DAY_MS) return 'Ayer';
+  return date.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
+}
+
+function DeviceIcon({ name, className }) {
+  const text = (name || '').toLowerCase();
+  const Icon = /ipad|tablet/.test(text) ? Tablet : /android|iphone|móvil|movil|mobile|telegram/.test(text) ? Smartphone : Monitor;
+  return <Icon className={className} />;
+}
 
 export default function UserManagementView({ fleet = {}, onFleetUpdated }) {
   const [activeTab, setActiveTab] = useState('directorio');
@@ -61,7 +167,8 @@ export default function UserManagementView({ fleet = {}, onFleetUpdated }) {
       const { data } = await supabase
         .from('auditoria_accesos')
         .select('*')
-        .limit(35);
+        .order('created_at', { ascending: false })
+        .limit(300);
       if (data) setAuditLogs(data);
     } catch (_) {}
   }, []);
@@ -297,64 +404,138 @@ export default function UserManagementView({ fleet = {}, onFleetUpdated }) {
   const pendingList = useMemo(() => usersList.filter((u) => u.estado === 'PENDIENTE'), [usersList]);
   const activeList = useMemo(() => usersList.filter((u) => u.estado !== 'PENDIENTE'), [usersList]);
 
+  const [userSearch, setUserSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState('TODOS');
+  const [logFilter, setLogFilter] = useState('TODOS');
+  const [logSearch, setLogSearch] = useState('');
+  const [logsVisible, setLogsVisible] = useState(LOGS_PAGE);
+
+  const activeCount = useMemo(() => activeList.filter((u) => u.estado === 'ACTIVO').length, [activeList]);
+  const suspendedCount = activeList.length - activeCount;
+  const rolesPresent = useMemo(() => Array.from(new Set(activeList.map((u) => u.rol || 'OPERADOR'))), [activeList]);
+
+  const lastLoginByUser = useMemo(() => {
+    const map = {};
+    auditLogs.forEach((l) => {
+      if (eventMeta(l.evento).label !== 'Inicio de sesión') return;
+      const key = (l.usuario || '').toLowerCase();
+      if (key && !map[key]) map[key] = l;
+    });
+    return map;
+  }, [auditLogs]);
+
+  const filteredUsers = useMemo(() => {
+    const q = userSearch.trim().toLowerCase();
+    return activeList
+      .filter((u) => roleFilter === 'TODOS' || (u.rol || 'OPERADOR') === roleFilter)
+      .filter((u) => !q || [u.user, u.usuario, u.nombre, u.email, u.departamento].some((v) => (v || '').toLowerCase().includes(q)))
+      .sort((a, b) => (a.estado === b.estado ? 0 : a.estado === 'ACTIVO' ? -1 : 1));
+  }, [activeList, roleFilter, userSearch]);
+
+  const logStats = useMemo(() => {
+    const now = Date.now();
+    const stats = { logins24: 0, failed7: 0, timeouts7: 0, security: 0, alarms7: 0 };
+    auditLogs.forEach((l) => {
+      const age = now - new Date(l.created_at).getTime();
+      const meta = eventMeta(l.evento);
+      if (age <= DAY_MS && meta.label === 'Inicio de sesión') stats.logins24 += 1;
+      if (age > 7 * DAY_MS) return;
+      if (meta.cat === 'SEGURIDAD') { stats.failed7 += 1; stats.security += 1; }
+      if (l.evento === 'TIMEOUT_INACTIVIDAD') stats.timeouts7 += 1;
+      if (meta.cat === 'ALARMAS') stats.alarms7 += 1;
+    });
+    return stats;
+  }, [auditLogs]);
+
+  const filteredLogs = useMemo(() => {
+    const q = logSearch.trim().toLowerCase();
+    return auditLogs
+      .filter((l) => logFilter === 'TODOS' || eventMeta(l.evento).cat === logFilter)
+      .filter((l) => !q || [l.usuario, l.detalles, l.dispositivo, l.evento, eventMeta(l.evento).label].some((v) => (v || '').toLowerCase().includes(q)));
+  }, [auditLogs, logFilter, logSearch]);
+
+  const logGroups = useMemo(() => {
+    const groups = [];
+    filteredLogs.slice(0, logsVisible).forEach((l) => {
+      const label = dayLabel(l.created_at);
+      const last = groups[groups.length - 1];
+      if (last && last.label === label) last.items.push(l);
+      else groups.push({ label, items: [l] });
+    });
+    return groups;
+  }, [filteredLogs, logsVisible]);
+
+  useEffect(() => { setLogsVisible(LOGS_PAGE); }, [logFilter, logSearch]);
+
+
   return (
     <div className="user-management-view space-y-4 font-mono text-xs select-none">
       
       {/* Cabecera */}
-      <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
-        <div>
-          <h2 className="text-lg font-bold text-white flex items-center gap-2">
-            <Shield className="w-5 h-5 text-cyan-400" />
-            Centro Maestro de Personal, Roles & Asignación de Flota
-          </h2>
-          <p className="text-xs text-slate-300 font-sans mt-0.5">
-            Gestión de credenciales, roles jerárquicos y aislamiento multi-clínica en Supabase Cloud
-          </p>
+      <div className="ultra-glass rounded-2xl border border-cyan-500/30 overflow-hidden">
+        <div className="p-4 sm:p-5 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-gradient-to-r from-cyan-500/10 via-transparent to-purple-500/10">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 shrink-0 rounded-xl bg-cyan-500/15 border border-cyan-400/40 flex items-center justify-center shadow-[0_0_18px_rgba(34,211,238,0.25)]">
+              <Fingerprint className="w-6 h-6 text-cyan-300" />
+            </div>
+            <div>
+              <p className="text-[10px] tracking-[0.25em] text-cyan-400/80 uppercase">Control de personal</p>
+              <h2 className="text-base sm:text-lg font-bold text-white font-sans">Personal y seguridad forense</h2>
+              <p className="text-[11px] text-slate-400 font-sans">Cuentas, roles, equipos asignados y trazabilidad de accesos</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full lg:w-auto">
+            {[
+              { label: 'Activos', value: activeCount, tone: 'text-emerald-300', onClick: () => setActiveTab('directorio') },
+              { label: 'Suspendidos', value: suspendedCount, tone: suspendedCount ? 'text-rose-300' : 'text-slate-400', onClick: () => setActiveTab('directorio') },
+              { label: 'Solicitudes', value: pendingList.length, tone: pendingList.length ? 'text-amber-300' : 'text-slate-400', onClick: () => setActiveTab('solicitudes') },
+              { label: 'Alertas 7 días', value: logStats.security, tone: logStats.security ? 'text-rose-300' : 'text-slate-400', onClick: () => setActiveTab('bitacora') }
+            ].map((s) => (
+              <button
+                key={s.label}
+                type="button"
+                onClick={s.onClick}
+                className="min-w-[96px] px-3 py-2 rounded-xl bg-slate-950/60 border border-slate-800 hover:border-cyan-500/40 text-left transition-colors"
+              >
+                <span className={`block text-lg font-bold leading-tight ${s.tone}`}>{s.value}</span>
+                <span className="block text-[10px] text-slate-400 font-sans">{s.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
 
-        <div className="flex gap-1.5 flex-wrap">
-          <button
-            type="button"
-            onClick={() => setActiveTab('directorio')}
-            className={`px-3 py-1.5 rounded-xl font-bold transition-all ${
-              activeTab === 'directorio' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'bg-slate-900 border border-slate-700 text-slate-300 hover:text-white'
-            }`}
-          >
-            👥 Personal ({activeList.length})
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('crear')}
-            className={`px-3 py-1.5 rounded-xl font-bold transition-all ${
-              activeTab === 'crear' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'bg-slate-900 border border-slate-700 text-slate-300 hover:text-white'
-            }`}
-          >
-            + Crear Usuario & Asignar
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('solicitudes')}
-            className={`px-3 py-1.5 rounded-xl font-bold transition-all ${
-              activeTab === 'solicitudes' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'bg-slate-900 border border-slate-700 text-slate-300 hover:text-white'
-            }`}
-          >
-            <span className="flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 text-amber-400" />
-              <span>Solicitudes ({pendingList.length})</span>
-            </span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('bitacora')}
-            className={`px-3 py-1.5 rounded-xl font-bold transition-all ${
-              activeTab === 'bitacora' ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/30' : 'bg-slate-900 border border-slate-700 text-slate-300 hover:text-white'
-            }`}
-          >
-            🛡️ Bitácora Forense
-          </button>
+        <div className="px-2 sm:px-3 border-t border-slate-800/80 flex gap-1 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+          {[
+            { id: 'directorio', label: 'Personal', icon: Users, count: activeList.length },
+            { id: 'crear', label: 'Nuevo usuario', icon: UserPlus },
+            { id: 'solicitudes', label: 'Solicitudes', icon: Clock, count: pendingList.length, alert: pendingList.length > 0 },
+            { id: 'bitacora', label: 'Bitácora forense', icon: ShieldCheck }
+          ].map((tab) => {
+            const TabIcon = tab.icon;
+            const selected = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={`relative shrink-0 px-3 py-3 flex items-center gap-2 font-sans text-xs font-semibold transition-colors ${
+                  selected ? 'text-white' : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <TabIcon className={`w-4 h-4 ${selected ? 'text-cyan-300' : ''}`} />
+                <span>{tab.label}</span>
+                {tab.count !== undefined && (
+                  <span className={`min-w-[18px] px-1.5 rounded-full text-[10px] font-bold leading-[18px] text-center ${
+                    tab.alert ? 'bg-amber-400 text-slate-950' : selected ? 'bg-cyan-500/20 text-cyan-200' : 'bg-slate-800 text-slate-400'
+                  }`}>
+                    {tab.count}
+                  </span>
+                )}
+                {selected && <span className="absolute left-2 right-2 bottom-0 h-0.5 rounded-full bg-gradient-to-r from-cyan-400 to-blue-500 shadow-[0_0_10px_rgba(34,211,238,0.8)]" />}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -380,134 +561,172 @@ export default function UserManagementView({ fleet = {}, onFleetUpdated }) {
 
       {/* TAB 1: DIRECTORIO */}
       {activeTab === 'directorio' && (
-        <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 space-y-4">
-          <div className="flex justify-between items-center">
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              <Users className="w-4 h-4 text-cyan-400" />
-              Directorio de Cuentas y Equipos Vinculados
-            </h3>
-            <button 
+        <div className="space-y-3">
+          <div className="ultra-glass p-3 rounded-2xl border border-slate-800 flex flex-col md:flex-row gap-2 md:items-center">
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={userSearch}
+                onChange={(e) => setUserSearch(e.target.value)}
+                placeholder="Buscar por usuario, nombre, correo o clínica"
+                className="w-full bg-slate-950/70 border border-slate-800 rounded-xl py-2.5 pl-9 pr-3 text-white font-sans text-xs focus:outline-none focus:border-cyan-400"
+              />
+            </div>
+            <div className="flex gap-1.5 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+              {['TODOS', ...rolesPresent].map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => setRoleFilter(r)}
+                  className={`shrink-0 px-3 py-2 rounded-xl border font-sans text-[11px] font-semibold transition-colors ${
+                    roleFilter === r ? 'bg-cyan-500/15 border-cyan-400/60 text-cyan-200' : 'bg-slate-950/50 border-slate-800 text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {r === 'TODOS' ? 'Todos los roles' : roleStyle(r).label}
+                </button>
+              ))}
+            </div>
+            <button
               type="button"
-              onClick={fetchUsers} 
-              className="px-2.5 py-1 bg-slate-900 border border-slate-700 text-slate-300 rounded-lg hover:text-white"
+              onClick={() => { fetchUsers(); fetchLogs(); }}
+              className="shrink-0 px-3 py-2 rounded-xl bg-slate-950/50 border border-slate-800 text-slate-300 hover:text-white flex items-center justify-center gap-1.5 font-sans text-[11px]"
             >
-              🔄 Recargar
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+              Recargar
             </button>
           </div>
 
-          <div className="rounded-xl border border-slate-800 overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-900/90 text-cyan-400 border-b border-slate-800">
-                <tr>
-                  <th className="p-3">USUARIO / ID</th>
-                  <th className="p-3">NOMBRE</th>
-                  <th className="p-3">CORREO</th>
-                  <th className="p-3">ROL</th>
-                  <th className="p-3">CLÍNICA / HOSPITAL</th>
-                  <th className="p-3">AUTOCLAVES ASIGNADOS</th>
-                  <th className="p-3">ESTADO</th>
-                  <th className="p-3 text-center">ACCIONES</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60 text-slate-300">
-                {activeList.map((u) => {
-                  const username = u.user || u.usuario;
-                  const isActive = u.estado === 'ACTIVO';
-                  const isRoot = username === 'superadmin' || username === 'admin';
-                  
-                  const authMacs = (u.equipos_autorizados || '').toUpperCase().split(',').map((x) => x.trim()).filter(Boolean);
-                  const userMacs = macList.filter(m => authMacs.includes(m) || (fleet[m]?.meta?.usuario_asignado || '').toLowerCase() === username.toLowerCase());
+          {filteredUsers.length === 0 ? (
+            <div className="ultra-glass p-10 rounded-2xl border border-slate-800 text-center font-sans">
+              <Users className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+              <p className="text-sm text-slate-300">{loading ? 'Cargando personal…' : 'No hay cuentas que coincidan.'}</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-3">
+              {filteredUsers.map((u) => {
+                const username = u.user || u.usuario;
+                const isActive = u.estado === 'ACTIVO';
+                const isRoot = username === 'superadmin' || username === 'admin';
+                const role = roleStyle(u.rol);
+                const authMacs = (u.equipos_autorizados || '').toUpperCase().split(',').map((x) => x.trim()).filter(Boolean);
+                const userMacs = macList.filter((m) => authMacs.includes(m) || (fleet[m]?.meta?.usuario_asignado || '').toLowerCase() === username.toLowerCase());
+                const lastLogin = lastLoginByUser[username.toLowerCase()];
 
-                  return (
-                    <tr key={username} className="hover:bg-slate-800/40">
-                      <td className="p-3 font-bold text-white">
-                        <span className="text-cyan-300">{username}</span>
-                        {isRoot && <span className="text-[9px] px-1 ml-1 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">ROOT</span>}
-                      </td>
-                      <td className="p-3 text-white font-sans">{u.nombre || username}</td>
-                      <td className="p-3 text-slate-400">{u.email ? u.email : <span className="italic text-slate-600">Sin correo</span>}</td>
-                      <td className="p-3">
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold border border-cyan-500/30 text-cyan-300 bg-cyan-500/10">
-                          {u.rol || 'OPERADOR'}
-                        </span>
-                      </td>
-                      <td className="p-3 text-slate-300 font-sans">{u.departamento || <span className="italic text-slate-600">General</span>}</td>
-                      
-                      <td className="p-3">
+                return (
+                  <div
+                    key={username}
+                    className={`ultra-glass rounded-2xl border p-4 flex flex-col gap-3 transition-colors ${
+                      isActive ? 'border-slate-800 hover:border-cyan-500/40' : 'border-rose-500/30'
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={`w-11 h-11 shrink-0 rounded-xl border flex items-center justify-center font-bold text-sm font-sans ${role.avatar} ${isActive ? '' : 'grayscale opacity-60'}`}>
+                        {initialsOf(u.nombre || username)}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <p className="text-sm font-bold text-white font-sans truncate">{u.nombre || username}</p>
+                          {isRoot && <span className="text-[9px] px-1.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">ROOT</span>}
+                        </div>
+                        <p className="text-[11px] text-cyan-300 truncate">@{username}</p>
+                        <p className="text-[11px] text-slate-500 font-sans truncate flex items-center gap-1">
+                          <Mail className="w-3 h-3 shrink-0" />
+                          {u.email || 'Sin correo'}
+                        </p>
+                      </div>
+                      <span className={`shrink-0 flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-bold border ${
+                        isActive ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30' : 'bg-rose-500/10 text-rose-300 border-rose-500/30'
+                      }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-emerald-400' : 'bg-rose-400'}`} />
+                        {isActive ? 'Activo' : 'Suspendido'}
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap gap-1.5 font-sans">
+                      <span className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold border ${role.badge}`}>{role.label}</span>
+                      <span className="px-2 py-0.5 rounded-lg text-[10px] border border-slate-700 bg-slate-900/60 text-slate-300 flex items-center gap-1">
+                        <Building2 className="w-3 h-3" />
+                        {u.departamento || 'General'}
+                      </span>
+                    </div>
+
+                    <div className="rounded-xl bg-slate-950/50 border border-slate-800/80 p-3 space-y-2.5 font-sans">
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">Equipos asignados</p>
                         {isRoot ? (
-                          <span className="text-[10px] text-amber-300 font-bold">🌐 TODA LA FLOTA</span>
+                          <span className="text-[11px] text-amber-300 font-semibold">Toda la flota</span>
                         ) : userMacs.length === 0 ? (
-                          <span className="text-[10px] text-slate-500 italic">Sin equipos</span>
+                          <span className="text-[11px] text-slate-500 italic">Sin equipos asignados</span>
                         ) : (
                           <div className="flex flex-wrap gap-1">
                             {userMacs.map((m) => (
-                              <span key={m} className="px-1.5 py-0.2 rounded text-[9px] bg-cyan-950/80 border border-cyan-500/40 text-cyan-300">
+                              <span key={m} className="px-2 py-0.5 rounded-md text-[10px] bg-cyan-950/70 border border-cyan-500/30 text-cyan-200">
                                 {fleet[m]?.meta?.alias || m.slice(-4)}
                               </span>
                             ))}
                           </div>
                         )}
-                      </td>
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">Último acceso</p>
+                        {lastLogin ? (
+                          <p className="text-[11px] text-slate-300 flex items-center gap-1.5">
+                            <DeviceIcon name={lastLogin.dispositivo} className="w-3.5 h-3.5 text-slate-400" />
+                            <span>{relativeTime(lastLogin.created_at)}</span>
+                            <span className="text-slate-500 truncate">· {lastLogin.dispositivo || 'Navegador web'}</span>
+                          </p>
+                        ) : (
+                          <p className="text-[11px] text-slate-500 italic">Sin accesos recientes registrados</p>
+                        )}
+                      </div>
+                    </div>
 
-                      <td className="p-3">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
-                          isActive ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
-                        }`}>
-                          {isActive ? 'ACTIVO' : 'SUSPENDIDO'}
-                        </span>
-                      </td>
-
-                      <td className="p-3 text-center">
-                        <div className="flex items-center justify-center gap-1.5">
+                    <div className="flex flex-wrap gap-1.5 pt-1 font-sans">
+                      <button
+                        type="button"
+                        onClick={() => { setResetUser(u); setTempPassword(''); }}
+                        className="flex-1 min-w-[90px] px-2.5 py-2 rounded-xl bg-slate-900/70 border border-slate-700 text-cyan-200 hover:border-cyan-400/60 text-[11px] font-semibold flex items-center justify-center gap-1.5"
+                      >
+                        <Key className="w-3.5 h-3.5" />
+                        Clave
+                      </button>
+                      {!isRoot && (
+                        <>
                           <button
                             type="button"
-                            onClick={() => { setResetUser(u); setTempPassword(''); }}
-                            className="p-1.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded-lg text-xs"
-                            title="Cambiar Contraseña"
+                            onClick={() => openEditAssignModal(u)}
+                            className="flex-1 min-w-[90px] px-2.5 py-2 rounded-xl bg-purple-500/10 border border-purple-500/40 text-purple-200 hover:bg-purple-500/20 text-[11px] font-semibold flex items-center justify-center gap-1.5"
                           >
-                            <Key className="w-3.5 h-3.5" />
+                            <Cpu className="w-3.5 h-3.5" />
+                            Equipos
                           </button>
-
-                          {!isRoot && (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => openEditAssignModal(u)}
-                                className="p-1.5 bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/40 rounded-lg text-xs"
-                                title="Editar Autoclaves Asignados"
-                              >
-                                <Cpu className="w-3.5 h-3.5" />
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => handleToggleStatus(u)}
-                                className={`p-1.5 rounded-lg border text-xs ${
-                                  isActive ? 'bg-rose-500/10 border-rose-500/30 text-rose-400 hover:bg-rose-500/20' : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
-                                }`}
-                                title={isActive ? 'Suspender Acceso' : 'Activar Acceso'}
-                              >
-                                <Power className="w-3.5 h-3.5" />
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteUser(u)}
-                                className="p-1.5 bg-slate-800 hover:bg-rose-900/60 text-slate-400 hover:text-rose-300 rounded-lg text-xs"
-                                title="Eliminar Usuario"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleToggleStatus(u)}
+                            className={`flex-1 min-w-[90px] px-2.5 py-2 rounded-xl border text-[11px] font-semibold flex items-center justify-center gap-1.5 ${
+                              isActive ? 'bg-rose-500/10 border-rose-500/40 text-rose-200 hover:bg-rose-500/20' : 'bg-emerald-500/10 border-emerald-500/40 text-emerald-200 hover:bg-emerald-500/20'
+                            }`}
+                          >
+                            <Power className="w-3.5 h-3.5" />
+                            {isActive ? 'Suspender' : 'Activar'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteUser(u)}
+                            className="px-2.5 py-2 rounded-xl bg-slate-900/70 border border-slate-700 text-slate-400 hover:text-rose-300 hover:border-rose-500/50"
+                            title="Eliminar usuario"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -734,54 +953,128 @@ export default function UserManagementView({ fleet = {}, onFleetUpdated }) {
 
       {/* TAB 4: BITÁCORA */}
       {activeTab === 'bitacora' && (
-        <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 space-y-4">
-          <div className="flex justify-between items-center border-b border-cyan-500/20 pb-3">
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 text-cyan-400" />
-              Auditoría Forense de Accesos
-            </h3>
-            <button 
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 font-sans">
+            {[
+              { label: 'Inicios de sesión (24 h)', value: logStats.logins24, icon: LogIn, tone: 'emerald' },
+              { label: 'Accesos fallidos o bloqueados (7 d)', value: logStats.failed7, icon: ShieldAlert, tone: logStats.failed7 ? 'rose' : 'slate' },
+              { label: 'Cierres por inactividad (7 d)', value: logStats.timeouts7, icon: Timer, tone: logStats.timeouts7 ? 'amber' : 'slate' },
+              { label: 'Acciones de alarma (7 d)', value: logStats.alarms7, icon: BellRing, tone: logStats.alarms7 ? 'cyan' : 'slate' }
+            ].map((k) => {
+              const KIcon = k.icon;
+              return (
+                <div key={k.label} className="ultra-glass rounded-2xl border border-slate-800 p-3 flex items-center gap-3">
+                  <div className={`w-9 h-9 shrink-0 rounded-xl border flex items-center justify-center ${TONES[k.tone].icon}`}>
+                    <KIcon className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-lg font-bold text-white leading-tight">{k.value}</p>
+                    <p className="text-[10px] text-slate-400 leading-tight">{k.label}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="ultra-glass p-3 rounded-2xl border border-slate-800 flex flex-col md:flex-row gap-2 md:items-center">
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={logSearch}
+                onChange={(e) => setLogSearch(e.target.value)}
+                placeholder="Buscar por usuario, equipo, dispositivo o detalle"
+                className="w-full bg-slate-950/70 border border-slate-800 rounded-xl py-2.5 pl-9 pr-3 text-white font-sans text-xs focus:outline-none focus:border-cyan-400"
+              />
+            </div>
+            <div className="flex gap-1.5 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+              {LOG_FILTERS.map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => setLogFilter(f.id)}
+                  className={`shrink-0 px-3 py-2 rounded-xl border font-sans text-[11px] font-semibold transition-colors ${
+                    logFilter === f.id ? 'bg-cyan-500/15 border-cyan-400/60 text-cyan-200' : 'bg-slate-950/50 border-slate-800 text-slate-400 hover:text-white'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+            <button
               type="button"
-              onClick={fetchLogs} 
-              className="px-2.5 py-1 bg-slate-900 border border-slate-700 text-xs text-slate-300 rounded-lg hover:text-white"
+              onClick={fetchLogs}
+              className="shrink-0 px-3 py-2 rounded-xl bg-slate-950/50 border border-slate-800 text-slate-300 hover:text-white flex items-center justify-center gap-1.5 font-sans text-[11px]"
             >
-              🔄 Actualizar
+              <RefreshCw className="w-3.5 h-3.5" />
+              Actualizar
             </button>
           </div>
 
-          <div className="rounded-xl border border-slate-800 overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-900/90 text-cyan-400 border-b border-slate-800">
-                <tr>
-                  <th className="p-3">FECHA / HORA</th>
-                  <th className="p-3">USUARIO</th>
-                  <th className="p-3">EVENTO DE SEGURIDAD</th>
-                  <th className="p-3">TERMINAL / DISPOSITIVO</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/60 text-slate-300">
-                {auditLogs.length === 0 ? (
-                  <tr><td colSpan="4" className="p-6 text-center text-slate-500">Sin registros forenses recientes.</td></tr>
-                ) : (
-                  auditLogs.map((l, i) => (
-                    <tr key={i} className="hover:bg-slate-800/30">
-                      <td className="p-3 text-slate-400">{new Date(l.fecha_hora || l.created_at || Date.now()).toLocaleString()}</td>
-                      <td className="p-3 font-bold text-white">{l.usuario_email || l.usuario}</td>
-                      <td className="p-3">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
-                          (l.evento || '').includes('EXITOSO') || (l.evento || '').includes('ACK') ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' :
-                          (l.evento || '').includes('FALLO') || (l.evento || '').includes('SUSPEND') ? 'bg-rose-500/10 text-rose-400 border-rose-500/30' :
-                          'bg-cyan-500/10 text-cyan-300 border border-cyan-500/30'
-                        }`}>
-                          {l.evento}
-                        </span>
-                      </td>
-                      <td className="p-3 text-slate-400">{l.dispositivo || 'Navegador Web'}</td>
-                    </tr>
-                  ))
+          <div className="ultra-glass rounded-2xl border border-slate-800 p-3 sm:p-4">
+            {logGroups.length === 0 ? (
+              <div className="p-8 text-center font-sans">
+                <ShieldCheck className="w-8 h-8 text-slate-600 mx-auto mb-2" />
+                <p className="text-sm text-slate-300">Sin eventos para este filtro.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {logGroups.map((group) => (
+                  <div key={group.label}>
+                    <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500 font-sans mb-2 flex items-center gap-2">
+                      <span className="capitalize">{group.label}</span>
+                      <span className="h-px flex-1 bg-slate-800" />
+                      <span>{group.items.length}</span>
+                    </p>
+                    <div className="relative ml-2 pl-5 border-l border-slate-800 space-y-2">
+                      {group.items.map((l) => {
+                        const meta = eventMeta(l.evento);
+                        const tone = TONES[meta.tone];
+                        const EIcon = meta.icon;
+                        return (
+                          <div key={l.id ?? `${l.created_at}-${l.evento}`} className="relative">
+                            <span className={`absolute -left-[25px] top-4 w-2.5 h-2.5 rounded-full ring-4 ring-slate-950 ${tone.dot}`} />
+                            <div className="rounded-xl bg-slate-950/50 border border-slate-800/80 hover:border-slate-700 p-3 flex gap-3 transition-colors">
+                              <div className={`w-8 h-8 shrink-0 rounded-lg border flex items-center justify-center ${tone.icon}`}>
+                                <EIcon className="w-4 h-4" />
+                              </div>
+                              <div className="min-w-0 flex-1 font-sans">
+                                <div className="flex items-start justify-between gap-2">
+                                  <p className={`text-xs font-semibold ${tone.text}`}>{meta.label}</p>
+                                  <span className="shrink-0 text-[10px] text-slate-500 font-mono" title={new Date(l.created_at).toLocaleString()}>
+                                    {new Date(l.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                  </span>
+                                </div>
+                                <p className="text-[11px] text-white mt-0.5">
+                                  <span className="font-semibold">{l.usuario || 'Desconocido'}</span>
+                                  {l.rol && <span className={`ml-1.5 px-1.5 rounded text-[9px] border ${roleStyle(l.rol).badge}`}>{roleStyle(l.rol).label}</span>}
+                                </p>
+                                {l.detalles && <p className="text-[11px] text-slate-400 mt-0.5 break-words">{l.detalles}</p>}
+                                <p className="text-[10px] text-slate-500 mt-1 flex items-center gap-1">
+                                  <DeviceIcon name={l.dispositivo} className="w-3 h-3" />
+                                  {l.dispositivo || 'Navegador web'}
+                                  <span>· {relativeTime(l.created_at)}</span>
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+                {filteredLogs.length > logsVisible && (
+                  <button
+                    type="button"
+                    onClick={() => setLogsVisible((n) => n + LOGS_PAGE)}
+                    className="w-full py-2.5 rounded-xl border border-slate-800 bg-slate-950/50 text-slate-300 hover:text-white font-sans text-xs flex items-center justify-center gap-1.5"
+                  >
+                    <ChevronDown className="w-4 h-4" />
+                    Ver más ({filteredLogs.length - logsVisible} restantes)
+                  </button>
                 )}
-              </tbody>
-            </table>
+              </div>
+            )}
           </div>
         </div>
       )}
