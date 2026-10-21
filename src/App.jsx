@@ -16,6 +16,7 @@ import ContextMenu from './components/common/ContextMenu';
 import DeviceAssignmentModal from './components/admin/DeviceAssignmentModal';
 import SurgicalQRLabel from './components/labels/SurgicalQRLabel';
 import NotificationsPanel from './components/common/NotificationsPanel';
+import { useNotificationCenter } from './hooks/useNotificationCenter';
 import { useMqttFleet } from './hooks/useMqttFleet';
 import { useAccountAppearance } from './hooks/useAccountAppearance';
 import { startIndustrialSiren, stopIndustrialSiren, initAudioUnlock } from './services/audioAlarm';
@@ -54,7 +55,19 @@ function getInitialActiveSection() {
 }
 
 function ScadaAppContent() {
-  const { user, profile, loading, pendingRequests, logout, authMode } = useAuth();
+  const {
+    user,
+    profile,
+    loading,
+    pendingRequests,
+    recoveryRequests,
+    requestsLoadedAt,
+    loadPendingRequests,
+    updateUserStatus,
+    resetUserPassword,
+    logout,
+    authMode
+  } = useAuth();
   const { fleet, mqttConnected, sendDeviceCommand } = useMqttFleet();
   const { appearance, setAppearance, syncStatus: appearanceSyncStatus } = useAccountAppearance(profile, authMode);
   const currentTheme = appearance.theme;
@@ -178,7 +191,6 @@ function ScadaAppContent() {
   const [qrModalDevice, setQrModalDevice] = useState(null);
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [notificationsCleared, setNotificationsCleared] = useState(false);
   const [sirenActive, setSirenActive] = useState(false);
 
   const handleDeviceContextMenu = useCallback((e, dev) => {
@@ -330,6 +342,24 @@ function ScadaAppContent() {
         return false;
       });
   }, [fleet, isAdmin, profile, user]);
+
+  const notificationCenter = useNotificationCenter({
+    enabled: Boolean(user),
+    fleet,
+    allowedDevices,
+    isAdmin,
+    profile,
+    mqttConnected,
+    pendingRequests,
+    recoveryRequests,
+    requestsLoadedAt,
+    loadPendingRequests,
+    updateUserStatus,
+    resetUserPassword,
+    sendDeviceCommand
+  });
+  const bellCount = notificationCenter.counts.unattended;
+  const bellCritical = notificationCenter.counts.criticalNew > 0;
 
   const getDeviceHealthData = useCallback((dev) => {
     if (!dev || !dev.lastSeen || dev.lastSeen === 0) {
@@ -547,14 +577,18 @@ function ScadaAppContent() {
                 className="relative p-1.5 sm:p-2 rounded-xl bg-slate-900/90 border border-cyan-500/40 text-cyan-300 shrink-0 ultra-glass hover:bg-cyan-500/20 transition-all group"
                 title="Notificaciones"
               >
-                <Bell className={`w-4 h-4 sm:w-5 sm:h-5 ${pendingRequests.length > 0 && !notificationsCleared ? 'animate-[ring_2s_ease-in-out_infinite]' : ''}`} />
-                {pendingRequests.length > 0 && !notificationsCleared && (
-                  <span className="absolute -top-1 -right-1 px-1.5 py-0.2 rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 text-slate-950 text-[9px] font-bold status-indicator animate-bounce shadow-[0_0_12px_rgba(34,211,238,0.6)]">
-                    {pendingRequests.length}
+                <Bell className={`w-4 h-4 sm:w-5 sm:h-5 ${bellCritical ? 'text-rose-300 animate-[ring_2s_ease-in-out_infinite]' : ''}`} />
+                {bellCount > 0 && (
+                  <span className={`absolute -top-1 -right-1 min-w-[16px] px-1 rounded-full text-[9px] font-bold leading-4 text-center status-indicator ${
+                    bellCritical
+                      ? 'bg-rose-500 text-white shadow-[0_0_12px_rgba(244,63,94,0.7)]'
+                      : 'bg-amber-400 text-slate-950 shadow-[0_0_10px_rgba(251,191,36,0.6)]'
+                  }`}>
+                    {bellCount > 99 ? '99+' : bellCount}
                   </span>
                 )}
-                {pendingRequests.length > 0 && !notificationsCleared && (
-                  <div className="absolute inset-0 rounded-xl bg-cyan-500/10 animate-pulse"></div>
+                {bellCritical && (
+                  <div className="absolute inset-0 rounded-xl bg-rose-500/10 animate-pulse"></div>
                 )}
               </button>
             )}
@@ -1111,28 +1145,16 @@ function ScadaAppContent() {
         <NotificationsPanel
           isOpen={showNotifications}
           onClose={() => setShowNotifications(false)}
-          pendingRequests={pendingRequests}
-          onNavigateToFleet={(filter) => {
-            setActiveSection('flota');
-            if (filter) {
-              setHealthFilter(filter);
-            }
-          }}
-          onNavigateToAudit={() => {
-            setActiveSection('auditoria');
-          }}
-          onNavigateToStudio={() => {
-            setActiveSection('studio');
-          }}
+          center={notificationCenter}
+          isAdmin={isAdmin}
+          sirenActive={sirenActive}
+          onSilenceSiren={handleSilenceSiren}
           onOpenAdminModal={() => {
             setShowAdminModal(true);
           }}
           onNavigateToDetail={(mac) => {
             setSelectedMac(mac);
             setActiveSection('detalle');
-          }}
-          onCleared={() => {
-            setNotificationsCleared(true);
           }}
         />
       </div>
