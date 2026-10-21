@@ -222,6 +222,7 @@ export function useNotificationCenter({
   const sessionStartRef = useRef(Date.now());
   const inflightRef = useRef(new Set());
   const clearedRef = useRef(new Set());
+  const failedAtRef = useRef(new Map());
   const mqttDownSinceRef = useRef(null);
 
   const actor = (profile?.nombre || profile?.user || profile?.usuario || profile?.email || 'usuario').toString();
@@ -302,13 +303,17 @@ export function useNotificationCenter({
         return;
       }
       if (inflightRef.current.has(d.clave)) return;
+      if (Date.now() - (failedAtRef.current.get(d.clave) || 0) < REFRESH_MS) return;
       if (everSeen.has(d.clave) && !clearedRef.current.has(d.clave)) return;
 
       inflightRef.current.add(d.clave);
       clearedRef.current.delete(d.clave);
       insertNotification(d)
         .then((row) => (row ? setRows((prev) => upsertRow(prev, row)) : refresh()))
-        .catch((e) => console.warn('[NOTIFICACIONES] Error creando:', e?.message || e))
+        .catch((e) => {
+          failedAtRef.current.set(d.clave, Date.now());
+          console.warn('[NOTIFICACIONES] Error creando:', e?.message || e);
+        })
         .finally(() => inflightRef.current.delete(d.clave));
     });
 
