@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useSwipe, stepThrough } from '../../hooks/useSwipe';
+import SwipeDots from '../common/SwipeDots';
 import SterilizationChart from '../graphics/SterilizationChart';
 import SurgicalQRLabel from '../labels/SurgicalQRLabel';
 import SessionDetailModal from '../reports/SessionDetailModal';
@@ -47,9 +49,10 @@ const PROGRAMAS_CLINICOS = [
   { id: 6, nombre: '⚡ P6: Test Ultrarrápido de Banco (1 min meseta - Prueba de Mesa)' }
 ];
 
-function DeviceSection({ id, title, subtitle, icon: Icon, children, accent = 'cyan' }) {
+function DeviceSection({ id, title, subtitle, icon: Icon, children, accent = 'cyan', active, dir }) {
+  if (!active) return null;
   return (
-    <section id={`dev-sec-${id}`} className="device-section scroll-mt-32 ultra-glass rounded-2xl border border-slate-700/60 p-4 sm:p-5 space-y-4">
+    <section id={`dev-sec-${id}`} className={`device-section ${dir === 'prev' ? 'swipe-enter-prev' : dir === 'next' ? 'swipe-enter-next' : ''} scroll-mt-32 ultra-glass rounded-2xl border border-slate-700/60 p-4 sm:p-5 space-y-4`}>
       <header className="flex items-center gap-2.5">
         <span className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${accent === 'amber' ? 'bg-amber-500/15 text-amber-300' : 'bg-cyan-500/15 text-cyan-300'}`}><Icon className="w-[18px] h-[18px]" /></span>
         <div className="min-w-0">
@@ -93,7 +96,9 @@ export default function DeviceDetailView({
   });
 
   const [cycleStats, setCycleStats] = useState([]);
-  const [activeSection, setActiveSection] = useState('panel');
+  const [activeSection, setActiveSection] = useState(() => sessionStorage.getItem('scada_device_section') || 'panel');
+  const [sectionDir, setSectionDir] = useState('none');
+  const rootRef = useRef(null);
   const navRef = useRef(null);
   const [inspectedSession, setInspectedSession] = useState(null);
 
@@ -179,16 +184,6 @@ export default function DeviceDetailView({
     ...(canEditHardware ? [{ id: 'hardware', label: 'Hardware', icon: Cpu }] : [])
   ];
 
-  useEffect(() => {
-    const els = sections.map((s) => document.getElementById(`dev-sec-${s.id}`)).filter(Boolean);
-    if (!els.length || typeof IntersectionObserver === 'undefined') return undefined;
-    const io = new IntersectionObserver((entries) => {
-      const hit = entries.filter((e) => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
-      if (hit) setActiveSection(hit.target.id.replace('dev-sec-', ''));
-    }, { rootMargin: '-30% 0px -60% 0px' });
-    els.forEach((el) => io.observe(el));
-    return () => io.disconnect();
-  }, [canEditHardware, device?.mac]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const strip = navRef.current;
@@ -196,10 +191,24 @@ export default function DeviceDetailView({
     if (btn) strip.scrollTo({ left: btn.offsetLeft - (strip.clientWidth - btn.offsetWidth) / 2, behavior: 'smooth' });
   }, [activeSection]);
 
+  const sectionIds = sections.map((sec) => sec.id);
+  const sectionIndex = Math.max(0, sectionIds.indexOf(activeSection));
+  const currentSection = sectionIds.includes(activeSection) ? activeSection : 'panel';
+
   const goToSection = (id) => {
+    const to = sectionIds.indexOf(id);
+    setSectionDir(to > sectionIndex ? 'next' : to < sectionIndex ? 'prev' : 'none');
     setActiveSection(id);
-    document.getElementById(`dev-sec-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    sessionStorage.setItem('scada_device_section', id);
+    const nav = navRef.current?.closest('nav');
+    if (nav && nav.getBoundingClientRect().top < 0) nav.scrollIntoView({ block: 'start' });
   };
+
+  useSwipe(rootRef, {
+    onSwipeLeft: () => stepThrough(sectionIds, currentSection, 1, goToSection),
+    onSwipeRight: () => stepThrough(sectionIds, currentSection, -1, goToSection)
+  });
+
 
   const handleDeviceUpdated = (row) => onDeviceUpdated?.(row);
 
@@ -308,7 +317,7 @@ export default function DeviceDetailView({
 
 
   return (
-    <div className="device-detail-view flex flex-col gap-4 w-full font-mono text-xs select-none">
+    <div ref={rootRef} className="device-detail-view flex flex-col gap-4 w-full font-mono text-xs select-none">
 
       {isBloqueado100 && (
         <div className="bg-rose-600/90 border-2 border-rose-400 p-3.5 rounded-2xl text-white flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-2xl">
@@ -392,7 +401,7 @@ export default function DeviceDetailView({
         <div ref={navRef} className="flex gap-1.5 overflow-x-auto no-scrollbar p-1 rounded-2xl bg-slate-950/80 backdrop-blur-md border border-slate-800">
           {sections.map((s) => {
             const Icon = s.icon;
-            const active = activeSection === s.id;
+            const active = currentSection === s.id;
             return (
               <button
                 key={s.id}
@@ -407,9 +416,10 @@ export default function DeviceDetailView({
             );
           })}
         </div>
+        <SwipeDots count={sections.length} index={sectionIndex} className="mt-1.5 lg:hidden" />
       </nav>
 
-      <DeviceSection id="panel" title="Panel del equipo" subtitle="Widgets en vivo personalizables" icon={LayoutGrid}>
+      <DeviceSection id="panel" active={currentSection === 'panel'} dir={sectionDir} title="Panel del equipo" subtitle="Widgets en vivo personalizables" icon={LayoutGrid}>
         <WidgetBoard
           device={device}
           canEdit={canEditHardware}
@@ -421,7 +431,7 @@ export default function DeviceDetailView({
         />
       </DeviceSection>
 
-      <DeviceSection id="cabina" title="Cabina de control" subtitle="Programas, puerta, simulación y salidas físicas" icon={Flame}>
+      <DeviceSection id="cabina" active={currentSection === 'cabina'} dir={sectionDir} title="Cabina de control" subtitle="Programas, puerta, simulación y salidas físicas" icon={Flame}>
         <div className="space-y-4">
           <div className="rounded-2xl border border-slate-700/70 bg-slate-950/40 p-3 sm:p-4 space-y-3">
             <div className="flex items-center justify-between">
@@ -528,11 +538,11 @@ export default function DeviceDetailView({
         </div>
       </DeviceSection>
 
-      <DeviceSection id="ciclos" title="Historial de ciclos" subtitle="Expedientes de esterilización guardados en la nube" icon={History}>
+      <DeviceSection id="ciclos" active={currentSection === 'ciclos'} dir={sectionDir} title="Historial de ciclos" subtitle="Expedientes de esterilización guardados en la nube" icon={History}>
         <CycleHistoryPanel mac={device.mac} stats={cycleStats} onInspect={setInspectedSession} />
       </DeviceSection>
 
-      <DeviceSection id="mantenimiento" title="Mantenimiento y odómetro" subtitle="Contadores reales, planes y servicios registrados" icon={Wrench}>
+      <DeviceSection id="mantenimiento" active={currentSection === 'mantenimiento'} dir={sectionDir} title="Mantenimiento y odómetro" subtitle="Contadores reales, planes y servicios registrados" icon={Wrench}>
         <MaintenancePanel
           device={device}
           odometer={odometer}
@@ -544,16 +554,16 @@ export default function DeviceDetailView({
         />
       </DeviceSection>
 
-      <DeviceSection id="servicio" title="Reportes de servicio" subtitle="Fallas reportadas y atención técnica de este equipo" icon={ClipboardList}>
+      <DeviceSection id="servicio" active={currentSection === 'servicio'} dir={sectionDir} title="Reportes de servicio" subtitle="Fallas reportadas y atención técnica de este equipo" icon={ClipboardList}>
         <ServiceReportsView fleet={{ [device.mac]: device }} fixedMac={device.mac} operatorName={operatorName} isAdmin={isAdmin} embedded />
       </DeviceSection>
 
-      <DeviceSection id="config" title="Configuración del equipo" subtitle="Identidad, tipo, modelo y asignación" icon={Settings2}>
+      <DeviceSection id="config" active={currentSection === 'config'} dir={sectionDir} title="Configuración del equipo" subtitle="Identidad, tipo, modelo y asignación" icon={Settings2}>
         <DeviceConfigPanel device={device} canEdit={canEditHardware} sendCommand={sendCommand} onDeviceUpdated={handleDeviceUpdated} />
       </DeviceSection>
 
       {canEditHardware && (
-        <DeviceSection id="hardware" title="Hardware y bus I2C" subtitle="Chips detectados en la placa" icon={Cpu} accent="amber">
+        <DeviceSection id="hardware" active={currentSection === 'hardware'} dir={sectionDir} title="Hardware y bus I2C" subtitle="Chips detectados en la placa" icon={Cpu} accent="amber">
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-amber-500/20 pb-3">
             <div>

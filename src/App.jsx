@@ -468,8 +468,8 @@ function ScadaAppContent() {
 
   useSwipe(mainRef, {
     enabled: Boolean(user) && !kioskMac,
-    onSwipeLeft: () => (activeSection === 'detalle' ? goToDevice(1) : stepThrough(MOBILE_SECTIONS, activeSection, 1, goToSection)),
-    onSwipeRight: () => (activeSection === 'detalle' ? goToDevice(-1) : stepThrough(MOBILE_SECTIONS, activeSection, -1, goToSection))
+    onSwipeLeft: () => (activeSection === 'detalle' ? false : stepThrough(MOBILE_SECTIONS, activeSection, 1, goToSection)),
+    onSwipeRight: () => (activeSection === 'detalle' ? false : stepThrough(MOBILE_SECTIONS, activeSection, -1, goToSection))
   });
 
   const bgObj = useMemo(() => WALLPAPERS_LIST.find((b) => b.id === currentBg) || WALLPAPERS_LIST[0], [currentBg]);
@@ -740,7 +740,7 @@ function ScadaAppContent() {
                       <div className="flex flex-col items-center gap-1.5 min-w-0">
                         <span className="text-[10px] font-mono text-slate-400 text-center">
                           Equipo {detailIndex + 1} de {filteredDevices.length}
-                          <span className="lg:hidden"> · desliza para cambiar</span>
+                          
                         </span>
                         {filteredDevices.length <= 12 && <SwipeDots count={filteredDevices.length} index={detailIndex} />}
                       </div>
