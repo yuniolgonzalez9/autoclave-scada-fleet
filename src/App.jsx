@@ -900,8 +900,16 @@ function ScadaAppContent() {
                           const isVeh = devTipo === 'VEHICULO';
                           const isPlc = devTipo === 'UNIVERSAL_PLC' || devTipo === 'PLC_GENERICO';
 
-                          const cCount = Number(dDev?.cfg?.ciclos || dev?.meta?.ciclosCompletados || 0);
-                          const cLim = Number(dDev?.cfg?.lim_mant || dev?.meta?.limiteMantenimiento || 200);
+                          const fase = String(dDev.fase || 'EN ESPERA').toUpperCase();
+                          const faseActiva = !/^(EN[ _]?ESPERA|ESPERA|APAGADO|CANCELADO|FINALIZADO.*|LISTO|IDLE)$/.test(fase.trim());
+                          const faseTone = /ALARM|ERROR|FALL|ABORT|CANCEL/.test(fase)
+                            ? 'border-rose-500/40 bg-rose-500/10 text-rose-200'
+                            : /FINALIZ|EXITO|ÉXITO/.test(fase)
+                              ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200'
+                              : faseActiva
+                                ? 'border-amber-500/40 bg-amber-500/10 text-amber-200'
+                                : 'border-slate-700 bg-slate-900/60 text-slate-300';
+                          const segRest = Number(dDev.seg_restantes || 0);
 
                           const tempNum = parseFloat(dDev.temp_camara ?? 25.0);
                           const presNum = parseFloat(dDev.presion ?? 0.0);
@@ -1004,17 +1012,24 @@ function ScadaAppContent() {
                                       </div>
                                     </div>
 
-                                    <div className="space-y-1 mb-3 w-full">
-                                      <div className="flex justify-between text-[10px] font-mono text-slate-400">
-                                        <span>Odómetro: {cCount}/{cLim} ciclos</span>
-                                        <span>{Math.round((cCount / (cLim || 1)) * 100)}%</span>
-                                      </div>
-                                      <div className="w-full bg-slate-800/80 rounded-full h-1.5 overflow-hidden">
-                                        <div className="progress-glow h-full" style={{ width: `${Math.min(100, (cCount / (cLim || 1)) * 100)}%` }}></div>
-                                      </div>
-                                    </div>
                                   </>
                                 )}
+
+                                <div className={`flex items-center justify-between gap-2 mb-3 px-3 py-2 rounded-xl border ${faseTone}`}>
+                                  <span className="flex items-center gap-2 min-w-0">
+                                    <span className="relative flex w-2.5 h-2.5 shrink-0">
+                                      {faseActiva && <span className="absolute inset-0 rounded-full bg-current opacity-60 animate-ping" />}
+                                      <span className="relative w-2.5 h-2.5 rounded-full bg-current" />
+                                    </span>
+                                    <span className="text-[10px] font-mono uppercase tracking-wider opacity-70">Fase</span>
+                                    <span className="text-xs font-bold font-mono truncate">{fase}</span>
+                                  </span>
+                                  {segRest > 0 && (
+                                    <span className="text-[11px] font-mono font-bold tabular-nums shrink-0">
+                                      {Math.floor(segRest / 60)}:{String(segRest % 60).padStart(2, '0')}
+                                    </span>
+                                  )}
+                                </div>
                               </div>
 
                               <div className="fleet-device-cta pt-3 border-t border-white/10 flex items-center justify-between text-xs font-mono text-cyan-400 font-bold w-full rounded-b-xl">
