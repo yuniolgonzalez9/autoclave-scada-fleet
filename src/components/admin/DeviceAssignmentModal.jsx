@@ -91,15 +91,18 @@ export default function DeviceAssignmentModal({
     try {
       // 1. Guardar metadatos en Supabase
       if (supabase) {
-        await supabase.from('dispositivos_scada').upsert({
+        const { error } = await supabase.from('asignaciones_equipos').upsert({
           mac: device.mac,
-          alias: alias,
-          cliente: cliente,
+          alias,
+          cliente,
           usuario_asignado: usuarioAsignado,
-          tipo: tipo,
-          modelo: `${marca} - ${modelo}`,
+          tipo,
+          marca,
+          modelo,
+          limite_mantenimiento: Number(limiteMant),
           updated_at: new Date().toISOString()
         }, { onConflict: 'mac' });
+        if (error) throw error;
       }
 
       // 2. Enviar configuración de hardware vía MQTT si hay comando disponible

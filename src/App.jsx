@@ -9,6 +9,7 @@ import DeviceDetailView from './components/dashboard/DeviceDetailView';
 import ClinicalAuditView from './components/reports/ClinicalAuditView';
 import FotaHubView from './components/fota/FotaHubView';
 import FleetManagementView from './components/fleet/FleetManagementView';
+import ServiceReportsView from './components/service/ServiceReportsView';
 import AiAutomationStudio from './components/studio/AiAutomationStudio';
 import GearMenu, { WALLPAPERS_LIST } from './components/common/GearMenu';
 import ClinicalTooltip from './components/common/ClinicalTooltip';
@@ -72,7 +73,7 @@ function ScadaAppContent() {
     logout,
     authMode
   } = useAuth();
-  const { fleet, mqttConnected, sendDeviceCommand } = useMqttFleet();
+  const { fleet, mqttConnected, sendDeviceCommand, patchDeviceMeta } = useMqttFleet();
   const { appearance, setAppearance, syncStatus: appearanceSyncStatus } = useAccountAppearance(profile, authMode);
   const currentTheme = appearance.theme;
   const currentBg = appearance.background;
@@ -447,7 +448,7 @@ function ScadaAppContent() {
 
   const mainRef = useRef(null);
   const [navDir, setNavDir] = useState('none');
-  const navIndex = MOBILE_SECTIONS.indexOf(activeSection === 'detalle' ? 'flota' : activeSection);
+  const navIndex = MOBILE_SECTIONS.indexOf(activeSection === 'detalle' ? 'flota' : activeSection === 'servicio' ? 'gestion' : activeSection);
 
   const goToSection = useCallback((next) => {
     const to = MOBILE_SECTIONS.indexOf(next);
@@ -665,6 +666,15 @@ function ScadaAppContent() {
             </button>
 
             <button
+              onClick={() => setActiveSection('servicio')}
+              className={`fleet-nav-pill px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
+                activeSection === 'servicio' ? 'fleet-nav-pill--active text-slate-950' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              🛠️ Reportes técnicos
+            </button>
+
+            <button
               onClick={() => setActiveSection('studio')}
               className={`fleet-nav-pill px-3.5 py-1.5 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 transition-all ${
                 activeSection === 'studio' 
@@ -755,6 +765,8 @@ function ScadaAppContent() {
                     userRole={displayRole}
                     isKioskMode={Boolean(kioskMac)}
                     onToggleKiosk={() => toggleKioskMode(inspectingMacToUse)}
+                    onDeviceUpdated={(row) => patchDeviceMeta(inspectingMacToUse, row)}
+                    isAdmin={isAdmin}
                   />
                   </div>
                 </div>
@@ -1024,6 +1036,17 @@ function ScadaAppContent() {
                       fleet={fleet}
                       sendCommand={sendDeviceCommand}
                       onSelectDevice={(mac) => { setSelectedMac(mac); setActiveSection('detalle'); }}
+                      onOpenReports={() => setActiveSection('servicio')}
+                    />
+                  </div>
+                )}
+
+                {(visitedSections.has('servicio') || activeSection === 'servicio') && (
+                  <div className="app-view-panel" hidden={activeSection !== 'servicio'}>
+                    <ServiceReportsView
+                      fleet={Object.fromEntries(allowedDevices.map((d) => [d.mac, d]))}
+                      operatorName={displayName}
+                      isAdmin={isAdmin}
                     />
                   </div>
                 )}

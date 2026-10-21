@@ -1775,3 +1775,15 @@ button, a, label, input, select, textarea, [role="button"] { touch-action: manip
 
   .icon-glow:hover { filter: drop-shadow(0 0 8px var(--accent-color)); }
 }
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.device-section-nav {
+  scroll-margin-top: 4rem;
+}
