@@ -3,6 +3,7 @@ import {
   listNotifications,
   insertNotification,
   updateNotification,
+  deleteNotifications,
   subscribeNotifications,
   getStoreMode
 } from '../services/notificationsStore';
@@ -222,6 +223,7 @@ export function useNotificationCenter({
   const sessionStartRef = useRef(Date.now());
   const inflightRef = useRef(new Set());
   const clearedRef = useRef(new Set());
+  const deletedRef = useRef(new Set());
   const failedAtRef = useRef(new Map());
   const mqttDownSinceRef = useRef(null);
 
@@ -284,6 +286,8 @@ export function useNotificationCenter({
       if (r.estado !== 'RESUELTA') openByKey.set(r.clave, r);
     });
 
+    deletedRef.current.forEach((k) => { if (!detectedByKey.has(k)) deletedRef.current.delete(k); });
+
     detected.forEach((d) => {
       const open = openByKey.get(d.clave);
       if (open) {
@@ -304,7 +308,7 @@ export function useNotificationCenter({
       }
       if (inflightRef.current.has(d.clave)) return;
       if (Date.now() - (failedAtRef.current.get(d.clave) || 0) < REFRESH_MS) return;
-      if (everSeen.has(d.clave) && !clearedRef.current.has(d.clave)) return;
+      if ((everSeen.has(d.clave) || deletedRef.current.has(d.clave)) && !clearedRef.current.has(d.clave)) return;
 
       inflightRef.current.add(d.clave);
       clearedRef.current.delete(d.clave);
@@ -415,6 +419,26 @@ export function useNotificationCenter({
     await Promise.all(infos.map((n) => resolve(n, 'Revisada')));
   }, [notifications, resolve]);
 
+  const removeRows = useCallback(async (list) => {
+    const targets = list.filter((n) => n?.id && !n.local && n.estado === 'RESUELTA');
+    if (!targets.length) return;
+    targets.forEach((n) => deletedRef.current.add(n.clave));
+    try {
+      await deleteNotifications(targets.map((n) => n.id));
+    } catch (e) {
+      targets.forEach((n) => deletedRef.current.delete(n.clave));
+      throw e;
+    }
+    const ids = new Set(targets.map((n) => n.id));
+    setRows((prev) => prev.filter((r) => !ids.has(r.id)));
+  }, []);
+
+  const remove = useCallback((notif) => removeRows([notif]), [removeRows]);
+
+  const clearHistory = useCallback((categoria = 'ALL') => removeRows(
+    visibleRows.filter((r) => r.estado === 'RESUELTA' && (categoria === 'ALL' || r.categoria === categoria))
+  ), [removeRows, visibleRows]);
+
   const approveAccess = useCallback(async (notif, rol = 'OPERADOR') => {
     const usuario = notif?.datos?.usuario;
     if (!usuario || !updateUserStatus) return;
@@ -450,6 +474,8 @@ export function useNotificationCenter({
     acknowledge,
     resolve,
     resolveAllInfo,
+    remove,
+    clearHistory,
     approveAccess,
     rejectAccess,
     resetPassword,
