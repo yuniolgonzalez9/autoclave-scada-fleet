@@ -16,7 +16,8 @@ import {
   RefreshCw,
   Sliders,
   ShieldCheck,
-  Radio
+  Radio,
+  Wrench
 } from 'lucide-react';
 
 // Perfiles de hardware comercial preconfigurados
@@ -28,7 +29,7 @@ const PERFILES_HARDWARE = [
   { id: 'GENERIC-DIY', nombre: 'Genérico ESP32 NodeMCU (Mapeo Libre GPIO)', tipoDefault: 'AUTOCLAVE' }
 ];
 
-export default function FleetManagementView({ fleet = {}, sendCommand, onSelectDevice }) {
+export default function FleetManagementView({ fleet = {}, sendCommand, onSelectDevice, onOpenReports }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState('ALL');
 
@@ -156,7 +157,17 @@ export default function FleetManagementView({ fleet = {}, sendCommand, onSelectD
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {onOpenReports && (
+            <button
+              type="button"
+              onClick={onOpenReports}
+              className="px-3 py-1.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold flex items-center gap-1.5"
+            >
+              <Wrench className="w-3.5 h-3.5" />
+              Reportes técnicos
+            </button>
+          )}
           <span className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 text-cyan-300 font-bold">
             Total en Red: {macList.length}
           </span>

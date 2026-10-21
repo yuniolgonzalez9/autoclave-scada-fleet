@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { connectMqttFleet } from '../services/mqttClient';
 import { accumulateF0 } from '../utils/f0Formulas';
 import { supabase } from '../services/supabase';
+import { mergeDeviceConfig } from '../services/deviceService';
 
 const CACHE_KEY = 'biofleet_fleet_cache_v2';
 const PERSIST_INTERVAL_MS = 4000;
@@ -55,7 +56,7 @@ export function useMqttFleet() {
               if (!cleanMac) return;
 
               const configDeseada = item.config_deseada || {};
-              const tipoCalculado = (configDeseada.tipo || item.tipo || 'AUTOCLAVE').toUpperCase();
+              const tipoCalculado = (item.tipo || configDeseada.tipo || 'AUTOCLAVE').toUpperCase();
               const existing = nextFleet[cleanMac] || {};
 
               nextFleet[cleanMac] = {
@@ -73,9 +74,9 @@ export function useMqttFleet() {
                   reles: existing.datos?.reles || { R1: 0, R2: 0, R3: 0, R4: 0, R5: 0, R6: 0, R7: 0, R8: 0 },
                   entradas: existing.datos?.entradas || { IN1: 0, IN2: 0, IN3: 0, IN4: 0, IN5: 0, IN6: 0, IN7: 0, IN8: 0 },
                   cfg: {
-                    ciclos: Number(item.ciclos || existing.datos?.cfg?.ciclos || 0),
-                    lim_mant: Number(item.limite || existing.datos?.cfg?.lim_mant || 200),
-                    alerta_pct: Number(configDeseada.alerta_pct || 80),
+                    ciclos: Number(existing.datos?.cfg?.ciclos ?? item.ciclos_activos ?? 0),
+                    lim_mant: Number(item.limite_mantenimiento || configDeseada.lim_mant || existing.datos?.cfg?.lim_mant || 200),
+                    alerta_pct: Number(item.alerta_porcentaje || configDeseada.alerta_pct || 80),
                     sp_temp: Number(configDeseada.sp_temp || 121.0),
                     t_ciclo: Number(configDeseada.t_ciclo || 2)
                   }
@@ -214,6 +215,16 @@ export function useMqttFleet() {
             }
 
             persistSessionReport(cleanMac, payload, updated.meta);
+
+            const prevActivos = Number(currentDev.meta?.ciclos_activos || 0);
+            if (isFreshStream && ciclosAcum > prevActivos && currentDev.meta?.updated_at) {
+              const historicos = Number(currentDev.meta?.ciclos_historicos || 0) + (ciclosAcum - prevActivos);
+              updated.meta = { ...updated.meta, ciclos_activos: ciclosAcum, ciclos_historicos: historicos };
+              supabase.from('asignaciones_equipos')
+                .update({ ciclos_activos: ciclosAcum, ciclos_historicos: historicos })
+                .eq('mac', cleanMac)
+                .then(() => {}, () => {});
+            }
           }
 
           return { ...prevFleet, [cleanMac]: updated };
@@ -285,13 +296,26 @@ export function useMqttFleet() {
       });
 
       if (!cmd.cmd || cmd.cmd === 'APPLY_HAL_MAP' || cmd.cmd === 'SET_ALERTA_MANT') {
-        supabase.from('asignaciones_equipos').update({
-          config_deseada: cmd,
-          updated_at: new Date().toISOString()
-        }).eq('mac', cleanMac).then(() => {}).catch(() => {});
+        const { cmd: _ignored, ...patch } = cmd;
+        mergeDeviceConfig(cleanMac, patch).catch(() => {});
       }
     }
   }, []);
 
-  return { fleet, mqttConnected, sendDeviceCommand };
+  const patchDeviceMeta = useCallback((mac, patch) => {
+    const cleanMac = (mac || '').toUpperCase().replace(/[:\-]/g, '');
+    setFleet((prev) => {
+      const dev = prev[cleanMac];
+      if (!dev) return prev;
+      const meta = { ...(dev.meta || {}), ...patch, mac: cleanMac };
+      if (patch.tipo) meta.tipo = String(patch.tipo).toUpperCase();
+      const cfg = { ...(dev.datos?.cfg || {}) };
+      if (patch.ciclos_activos !== undefined) cfg.ciclos = Number(patch.ciclos_activos);
+      if (patch.limite_mantenimiento !== undefined) cfg.lim_mant = Number(patch.limite_mantenimiento);
+      if (patch.alerta_porcentaje !== undefined) cfg.alerta_pct = Number(patch.alerta_porcentaje);
+      return { ...prev, [cleanMac]: { ...dev, meta, datos: { ...(dev.datos || {}), tipo: meta.tipo || dev.datos?.tipo, cfg } } };
+    });
+  }, []);
+
+  return { fleet, mqttConnected, sendDeviceCommand, patchDeviceMeta };
 }
