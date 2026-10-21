@@ -86,7 +86,10 @@ export default function SessionDetailModal({ isOpen, onClose, session }) {
     const touch = e.touches[0];
     const dx = touch.clientX - dragStartRef.current.startX;
     const dy = touch.clientY - dragStartRef.current.startY;
-    setOffset({ x: dragStartRef.current.initialX + dx, y: dragStartRef.current.initialY + dy });
+    const maxOffset = Math.max(window.innerWidth / 2 - 100, 200);
+    const clampedX = Math.max(-maxOffset, Math.min(maxOffset, dragStartRef.current.initialX + dx));
+    const clampedY = Math.max(-200, Math.min(window.innerHeight / 2, dragStartRef.current.initialY + dy));
+    setOffset({ x: clampedX, y: clampedY });
   };
 
   const handleTouchEnd = () => setIsDragging(false);
@@ -449,7 +452,7 @@ export default function SessionDetailModal({ isOpen, onClose, session }) {
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
-          className="px-4 sm:px-6 py-3 border-b border-cyan-500/30 bg-slate-950/95 flex items-center justify-between shrink-0 cursor-grab active:cursor-grabbing select-none"
+          className="px-4 sm:px-6 py-3 border-b border-cyan-500/30 bg-slate-950/95 flex items-center justify-between shrink-0 cursor-grab active:cursor-grabbing select-none touch-none"
           title="Arrastra para mover la ventana"
         >
           <div className="flex items-center gap-2.5 min-w-0">
