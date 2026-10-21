@@ -1,4 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
+import { useSwipe, stepThrough } from '../../hooks/useSwipe';
+import SwipeDots from '../common/SwipeDots';
 import { supabase } from '../../services/supabase';
 import { 
   Building2, 
@@ -43,6 +45,14 @@ export default function FleetManagementView({ fleet = {}, sendCommand, onSelectD
   const [submitting, setSubmitting] = useState(false);
   const [msg, setMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+
+  const [view, setView] = useState('equipos');
+  const rootRef = useRef(null);
+  const VIEWS = ['equipos', 'alta'];
+  useSwipe(rootRef, {
+    onSwipeLeft: () => stepThrough(VIEWS, view, 1, setView),
+    onSwipeRight: () => stepThrough(VIEWS, view, -1, setView)
+  });
 
   const macList = useMemo(() => Object.keys(fleet || {}), [fleet]);
 
@@ -115,6 +125,7 @@ export default function FleetManagementView({ fleet = {}, sendCommand, onSelectD
       }
 
       setMsg(`¡Equipo [${cleanMac}] aprovisionado y registrado con éxito en la nube!`);
+      setView('equipos');
       setNewMac('');
       setNewAlias('');
       setNewCliente('');
@@ -143,7 +154,7 @@ export default function FleetManagementView({ fleet = {}, sendCommand, onSelectD
   };
 
   return (
-    <div className="space-y-4 font-mono text-xs select-none">
+    <div ref={rootRef} className="space-y-4 font-mono text-xs select-none">
       
       {/* Cabecera */}
       <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
@@ -191,7 +202,17 @@ export default function FleetManagementView({ fleet = {}, sendCommand, onSelectD
         </div>
       )}
 
+      <div className="sticky top-14 sm:top-16 z-20 py-1">
+        <div className="grid grid-cols-2 gap-1 p-1 rounded-2xl bg-slate-950/80 backdrop-blur-md border border-slate-800">
+          {[['equipos', `Equipos (${macList.length})`], ['alta', 'Registrar equipo']].map(([id, label]) => (
+            <button key={id} type="button" onClick={() => setView(id)} className={`py-2 rounded-xl text-[11px] font-bold transition-all ${view === id ? 'bg-cyan-500 text-slate-950 shadow-[0_0_12px_rgba(34,211,238,0.45)]' : 'text-slate-400 hover:text-white'}`}>{label}</button>
+          ))}
+        </div>
+        <SwipeDots count={2} index={VIEWS.indexOf(view)} className="mt-1.5 lg:hidden" />
+      </div>
+
       {/* FORMULARIO DE ALTA Y PROVISIÓN */}
+      {view === 'alta' && (
       <form onSubmit={handleProvisionDevice} className="ultra-glass p-5 rounded-2xl border border-amber-500/30 space-y-4">
         <h3 className="text-sm font-bold text-amber-300 flex items-center gap-2 border-b border-amber-500/20 pb-2">
           <Plus className="w-4 h-4 text-amber-400" />
@@ -271,7 +292,10 @@ export default function FleetManagementView({ fleet = {}, sendCommand, onSelectD
         </button>
       </form>
 
+      )}
+
       {/* FILTROS Y BÚSQUEDA */}
+      {view === 'equipos' && (<>
       <div className="ultra-glass p-3 rounded-xl border border-slate-800 flex flex-col sm:flex-row justify-between items-center gap-2">
         <div className="relative w-full sm:w-80">
           <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
@@ -415,6 +439,7 @@ export default function FleetManagementView({ fleet = {}, sendCommand, onSelectD
         </table>
       </div>
 
+      </>)}
     </div>
   );
 }
