@@ -36,6 +36,7 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [pendingRequests, setPendingRequests] = useState([]);
   const [recoveryRequests, setRecoveryRequests] = useState([]);
+  const [requestsLoadedAt, setRequestsLoadedAt] = useState(0);
 
   const loadPendingRequests = useCallback(async () => {
     try {
@@ -46,6 +47,7 @@ export const AuthProvider = ({ children }) => {
 
       if (!errPend && pendings) {
         setPendingRequests(pendings.map(normalizeUserProfile));
+        setRequestsLoadedAt(Date.now());
       }
 
       try {
@@ -313,6 +315,7 @@ export const AuthProvider = ({ children }) => {
       loading,
       pendingRequests,
       recoveryRequests,
+      requestsLoadedAt,
       loadPendingRequests,
       loginWithCredentials,
       requestPasswordRecovery,

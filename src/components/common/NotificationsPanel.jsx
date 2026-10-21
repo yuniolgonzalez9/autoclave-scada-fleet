@@ -4,498 +4,480 @@ import {
   Bell,
   X,
   Check,
+  CheckCheck,
   AlertTriangle,
+  AlertOctagon,
   Info,
-  ShieldCheck,
+  Thermometer,
+  WifiOff,
+  Wrench,
+  Lock,
   UserPlus,
-  Settings,
-  ChevronRight,
-  Clock,
-  Trash2,
-  Filter,
-  Rocket,    // <-- Agregado por corrección
-  Sparkles   // <-- Agregado por corrección
+  KeyRound,
+  ClipboardCheck,
+  RadioTower,
+  Database,
+  Eye,
+  RotateCcw,
+  VolumeX,
+  ShieldCheck,
+  ChevronDown,
+  Users,
+  Cpu,
+  Server
 } from 'lucide-react';
+import { SEVERITY_ORDER } from '../../hooks/useNotificationCenter';
+
+const TYPE_ICONS = {
+  ALARMA: AlertOctagon,
+  SOBRETEMP: Thermometer,
+  OFFLINE: WifiOff,
+  MANT_PROXIMO: Wrench,
+  MANT_LIMITE: Lock,
+  CICLO: ClipboardCheck,
+  ACCESO: UserPlus,
+  RECUPERACION: KeyRound,
+  MQTT: RadioTower
+};
+
+const SEVERITY_STYLES = {
+  CRITICA: {
+    label: 'Críticas',
+    bar: 'bg-rose-500',
+    icon: 'bg-rose-500/15 text-rose-300 border-rose-500/40',
+    chip: 'bg-rose-500/15 text-rose-300 border-rose-500/40'
+  },
+  ADVERTENCIA: {
+    label: 'Advertencias',
+    bar: 'bg-amber-400',
+    icon: 'bg-amber-500/15 text-amber-300 border-amber-500/40',
+    chip: 'bg-amber-500/15 text-amber-300 border-amber-500/40'
+  },
+  INFO: {
+    label: 'Informativas',
+    bar: 'bg-cyan-400',
+    icon: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/40',
+    chip: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/40'
+  }
+};
+
+const ROLES = ['OPERADOR', 'CLIENTE', 'TECNICO', 'AUDITOR_CALIDAD', 'ADMIN', 'DIRECTOR'];
+
+const rtf = typeof Intl !== 'undefined' && Intl.RelativeTimeFormat
+  ? new Intl.RelativeTimeFormat('es', { numeric: 'auto' })
+  : null;
+
+function timeAgo(iso) {
+  const t = Date.parse(iso || '');
+  if (!Number.isFinite(t)) return '';
+  const diff = Math.round((t - Date.now()) / 1000);
+  const abs = Math.abs(diff);
+  if (!rtf) return new Date(t).toLocaleString('es');
+  if (abs < 45) return 'ahora';
+  if (abs < 3600) return rtf.format(Math.round(diff / 60), 'minute');
+  if (abs < 86400) return rtf.format(Math.round(diff / 3600), 'hour');
+  return rtf.format(Math.round(diff / 86400), 'day');
+}
+
+function ActionButton({ onClick, icon: Icon, children, tone = 'slate', disabled }) {
+  const tones = {
+    slate: 'border-slate-600/60 text-slate-200 hover:bg-slate-700/40',
+    cyan: 'border-cyan-500/50 text-cyan-200 bg-cyan-500/10 hover:bg-cyan-500/20',
+    emerald: 'border-emerald-500/50 text-emerald-200 bg-emerald-500/10 hover:bg-emerald-500/20',
+    rose: 'border-rose-500/50 text-rose-200 bg-rose-500/10 hover:bg-rose-500/20',
+    amber: 'border-amber-500/50 text-amber-200 bg-amber-500/10 hover:bg-amber-500/20'
+  };
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={(e) => { e.stopPropagation(); onClick?.(); }}
+      className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[11px] font-semibold transition-colors disabled:opacity-50 ${tones[tone]}`}
+    >
+      {Icon && <Icon className="w-3.5 h-3.5" />}
+      {children}
+    </button>
+  );
+}
+
+function NotificationCard({ notif, center, isAdmin, onViewDevice }) {
+  const [mode, setMode] = useState(null);
+  const [text, setText] = useState('');
+  const [role, setRole] = useState('OPERADOR');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  const styles = SEVERITY_STYLES[notif.severidad] || SEVERITY_STYLES.INFO;
+  const Icon = TYPE_ICONS[notif.tipo] || Info;
+  const resolved = notif.estado === 'RESUELTA';
+
+  const run = async (fn) => {
+    setBusy(true);
+    setError('');
+    try {
+      await fn();
+      setMode(null);
+      setText('');
+    } catch (e) {
+      setError(e?.message || 'No se pudo completar la acción.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className={`relative overflow-hidden rounded-xl border border-white/10 bg-slate-900/70 ${resolved ? 'opacity-70' : ''}`}>
+      <span className={`absolute left-0 top-0 bottom-0 w-1 ${styles.bar}`} />
+      <div className="pl-4 pr-3 py-3">
+        <div className="flex items-start gap-3">
+          <div className={`p-2 rounded-lg border shrink-0 ${styles.icon}`}>
+            <Icon className="w-4 h-4" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between gap-2">
+              <h4 className="text-[13px] font-bold text-white leading-snug">{notif.titulo}</h4>
+              <span className="text-[10px] text-slate-400 whitespace-nowrap mt-0.5">{timeAgo(notif.creada_en)}</span>
+            </div>
+            {notif.mensaje && <p className="text-[12px] text-slate-300 mt-1 leading-snug">{notif.mensaje}</p>}
+
+            <div className="flex flex-wrap items-center gap-1.5 mt-2">
+              {notif.estado === 'NUEVA' && !resolved && (
+                <span className={`px-1.5 py-0.5 rounded border text-[10px] font-bold ${styles.chip}`}>Nueva</span>
+              )}
+              {notif.estado === 'ATENDIDA' && (
+                <span className="px-1.5 py-0.5 rounded border border-sky-500/40 bg-sky-500/10 text-sky-300 text-[10px] font-bold">
+                  En atención · {notif.atendida_por}
+                </span>
+              )}
+              {!resolved && notif.activa === false && (
+                <span className="px-1.5 py-0.5 rounded border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 text-[10px] font-bold">
+                  Condición normalizada
+                </span>
+              )}
+              {(notif.ocurrencias || 1) > 1 && (
+                <span className="px-1.5 py-0.5 rounded border border-slate-600 text-slate-300 text-[10px] font-bold">×{notif.ocurrencias}</span>
+              )}
+              {notif.mac && (
+                <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 text-[10px] font-mono">{notif.mac}</span>
+              )}
+            </div>
+
+            {resolved && (
+              <p className="text-[11px] text-emerald-300/90 mt-2 flex items-start gap-1">
+                <CheckCheck className="w-3.5 h-3.5 shrink-0 mt-px" />
+                <span>
+                  Resuelta por {notif.resuelta_por || '—'} {timeAgo(notif.resuelta_en)}
+                  {notif.nota_resolucion ? ` · ${notif.nota_resolucion}` : ''}
+                </span>
+              </p>
+            )}
+
+            {!resolved && !notif.local && (
+              <div className="flex flex-wrap gap-1.5 mt-3">
+                {notif.mac && <ActionButton icon={Eye} onClick={() => onViewDevice(notif.mac)}>Ver equipo</ActionButton>}
+                {notif.tipo === 'ALARMA' && notif.activa !== false && (
+                  <ActionButton icon={RotateCcw} tone="amber" disabled={busy} onClick={() => run(() => center.resetDeviceAlarm(notif))}>
+                    Restablecer alarma
+                  </ActionButton>
+                )}
+                {notif.tipo === 'ACCESO' && isAdmin && (
+                  <>
+                    <ActionButton icon={Check} tone="emerald" onClick={() => setMode(mode === 'approve' ? null : 'approve')}>Aprobar</ActionButton>
+                    <ActionButton icon={X} tone="rose" disabled={busy} onClick={() => run(() => center.rejectAccess(notif))}>Rechazar</ActionButton>
+                  </>
+                )}
+                {notif.tipo === 'RECUPERACION' && isAdmin && (
+                  <ActionButton icon={KeyRound} tone="cyan" onClick={() => setMode(mode === 'password' ? null : 'password')}>
+                    Asignar contraseña
+                  </ActionButton>
+                )}
+                {notif.estado === 'NUEVA' && notif.severidad !== 'INFO' && !['ACCESO', 'RECUPERACION'].includes(notif.tipo) && (
+                  <ActionButton icon={ShieldCheck} tone="cyan" disabled={busy} onClick={() => run(() => center.acknowledge(notif))}>
+                    Atender
+                  </ActionButton>
+                )}
+                {notif.severidad === 'INFO' ? (
+                  <ActionButton icon={Check} disabled={busy} onClick={() => run(() => center.resolve(notif, 'Revisada'))}>Marcar leída</ActionButton>
+                ) : (
+                  <ActionButton icon={CheckCheck} tone="emerald" onClick={() => setMode(mode === 'resolve' ? null : 'resolve')}>Resolver</ActionButton>
+                )}
+              </div>
+            )}
+
+            {mode === 'resolve' && (
+              <div className="mt-3 space-y-2">
+                <textarea
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  rows={2}
+                  placeholder="¿Qué se hizo para solucionarlo? (opcional)"
+                  className="w-full rounded-lg bg-slate-950/80 border border-slate-700 px-2.5 py-2 text-[12px] text-white placeholder:text-slate-500 focus:outline-none focus:border-emerald-500/60"
+                />
+                <div className="flex gap-1.5 justify-end">
+                  <ActionButton onClick={() => setMode(null)}>Cancelar</ActionButton>
+                  <ActionButton icon={CheckCheck} tone="emerald" disabled={busy} onClick={() => run(() => center.resolve(notif, text))}>
+                    Confirmar solución
+                  </ActionButton>
+                </div>
+              </div>
+            )}
+
+            {mode === 'approve' && (
+              <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                <select
+                  value={role}
+                  onChange={(e) => setRole(e.target.value)}
+                  className="rounded-lg bg-slate-950/80 border border-slate-700 px-2 py-1.5 text-[12px] text-white"
+                >
+                  {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+                </select>
+                <ActionButton icon={Check} tone="emerald" disabled={busy} onClick={() => run(() => center.approveAccess(notif, role))}>
+                  Confirmar acceso
+                </ActionButton>
+              </div>
+            )}
+
+            {mode === 'password' && (
+              <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                <input
+                  type="text"
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  placeholder="Contraseña temporal (mín. 4)"
+                  className="flex-1 min-w-[140px] rounded-lg bg-slate-950/80 border border-slate-700 px-2.5 py-1.5 text-[12px] text-white placeholder:text-slate-500"
+                />
+                <ActionButton icon={KeyRound} tone="cyan" disabled={busy || text.trim().length < 4} onClick={() => run(() => center.resetPassword(notif, text))}>
+                  Guardar
+                </ActionButton>
+              </div>
+            )}
+
+            {error && <p className="text-[11px] text-rose-300 mt-2">{error}</p>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function NotificationsPanel({
   isOpen,
   onClose,
-  pendingRequests = [],
-  notifications = [],
-  onNavigateToFleet = null,
-  onNavigateToAudit = null,
-  onNavigateToStudio = null,
-  onOpenAdminModal = null,
+  center,
+  isAdmin = false,
+  sirenActive = false,
+  onSilenceSiren = null,
   onNavigateToDetail = null,
-  onCleared = null
+  onOpenAdminModal = null
 }) {
   const panelRef = useRef(null);
-  const [filter, setFilter] = useState('ALL');
-  const [isCleared, setIsCleared] = useState(false);
+  const [tab, setTab] = useState('ALL');
+  const [showResolved, setShowResolved] = useState(false);
+  const [collapsed, setCollapsed] = useState({});
 
-  // Sistema completo de notificaciones optimizado con useMemo
-  const allNotifications = useMemo(() => [
-    // ========================================
-    // 1. SOLICITUDES REALES PENDIENTES
-    // ========================================
-    ...(pendingRequests.length > 0 ? pendingRequests.map(req => ({
-      id: req.id || req.user_id || req.user || Math.random().toString(),
-      type: 'approval',
-      title: 'Solicitud de Acceso Pendiente',
-      message: `${req.nombre || req.usuario || req.user || 'Nuevo usuario'} solicita credenciales SCADA`,
-      time: 'Reciente',
-      unread: true,
-      icon: UserPlus,
-      color: 'amber',
-      action: 'approve',
-      details: {
-        department: req.departamento || 'Sin especificar',
-        email: req.email || 'Sin correo',
-        role: req.rol || 'OPERADOR'
-      }
-    })) : []),
+  const notifications = center?.notifications || [];
+  const counts = center?.counts || { open: 0, critical: 0, warning: 0 };
 
-    // ========================================
-    // 2. SEGURIDAD Y USUARIOS
-    // ========================================
-    {
-      id: 'user-1',
-      type: 'user',
-      title: 'Nuevo Usuario Registrado',
-      message: 'Lic. María González se ha registrado en el sistema',
-      time: 'Hace 10 min',
-      unread: true,
-      icon: UserPlus,
-      color: 'emerald',
-      action: 'admin',
-      details: {
-        name: 'María González',
-        department: 'Quirófanos',
-        email: 'maria.gonzalez@hospital.com',
-        role: 'OPERADOR'
-      }
-    },
-    {
-      id: 'user-2',
-      type: 'security',
-      title: 'Login desde Nueva Ubicación',
-      message: 'Sesión iniciada desde dispositivo no reconocido',
-      time: 'Hace 30 min',
-      unread: true,
-      icon: ShieldCheck,
-      color: 'amber',
-      action: 'security',
-      details: {
-        user: 'admin',
-        location: 'Oficina Administrativa',
-        device: 'Firefox / macOS',
-        ip: '192.168.1.234'
-      }
-    },
-    {
-      id: 'user-3',
-      type: 'security',
-      title: 'Intento de Acceso Fallido',
-      message: '3 intentos fallidos de login detectados',
-      time: 'Hace 1 hora',
-      unread: true,
-      icon: AlertTriangle,
-      color: 'rose',
-      action: 'security',
-      details: {
-        username: 'desconocido',
-        attempts: 3,
-        ip: '192.168.1.999',
-        blocked: true
-      }
-    },
+  const tabs = useMemo(() => {
+    const open = notifications.filter((n) => n.estado !== 'RESUELTA');
+    const base = [
+      { id: 'ALL', label: 'Todas', icon: Bell, count: open.length },
+      { id: 'EQUIPO', label: 'Equipos', icon: Cpu, count: open.filter((n) => n.categoria === 'EQUIPO').length }
+    ];
+    if (isAdmin) base.push({ id: 'USUARIO', label: 'Usuarios', icon: Users, count: open.filter((n) => n.categoria === 'USUARIO').length });
+    base.push({ id: 'SISTEMA', label: 'Sistema', icon: Server, count: open.filter((n) => n.categoria === 'SISTEMA').length });
+    return base;
+  }, [notifications, isAdmin]);
 
-    // ========================================
-    // 3. DISPOSITIVOS / AUTOCLAVES
-    // ========================================
-    {
-      id: 'dev-1',
-      type: 'device',
-      title: 'Alarma Crítica de Temperatura',
-      message: 'Autoclave A-001 excedió temperatura de meseta segura',
-      time: 'Hace 30 min',
-      unread: true,
-      icon: AlertTriangle,
-      color: 'rose',
-      action: 'detail',
-      deviceMac: 'A-001',
-      details: {
-        deviceName: 'Autoclave A-001',
-        currentTemp: '135.5°C',
-        maxTemp: '134.0°C',
-        phase: 'CRÍTICA'
-      }
-    },
-    {
-      id: 'dev-2',
-      type: 'device',
-      title: 'Ciclo Completado Exitosamente',
-      message: 'Autoclave B-002 finalizó ciclo de esterilización conforme',
-      time: 'Hace 45 min',
-      unread: false,
-      icon: Check,
-      color: 'emerald',
-      action: 'detail',
-      deviceMac: 'B-002',
-      details: {
-        deviceName: 'Autoclave B-002',
-        cycleType: '134°C Instrumental',
-        duration: '45 min'
-      }
-    },
-    {
-      id: 'dev-3',
-      type: 'device',
-      title: 'Mantenimiento Preventivo Requerido',
-      message: 'Autoclave C-003 alcanzó el límite de 200 ciclos programados',
-      time: 'Hace 1 hora',
-      unread: true,
-      icon: Settings,
-      color: 'amber',
-      action: 'detail',
-      deviceMac: 'C-003',
-      details: {
-        deviceName: 'Autoclave C-003',
-        currentCycles: 200,
-        maxCycles: 200
-      }
-    },
-    {
-      id: 'dev-7',
-      type: 'device',
-      title: 'Actualización FOTA Lista',
-      message: 'Firmware v2.1 disponible para Autoclave G-007',
-      time: 'Hace 5 horas',
-      unread: false,
-      icon: Rocket,
-      color: 'cyan',
-      action: 'fota',
-      deviceMac: 'G-007',
-      details: {
-        deviceName: 'Autoclave G-007',
-        newVersion: '2.1.0'
-      }
-    },
+  const groups = useMemo(() => {
+    const list = notifications
+      .filter((n) => (tab === 'ALL' ? true : n.categoria === tab))
+      .filter((n) => (showResolved ? n.estado === 'RESUELTA' : n.estado !== 'RESUELTA'));
 
-    // ========================================
-    // 4. VEHÍCULOS UCI / FLOTA
-    // ========================================
-    {
-      id: 'veh-1',
-      type: 'vehicle',
-      title: 'Batería Crítica 12V',
-      message: 'Ambulancia V-001 con voltaje por debajo de 11.8V',
-      time: 'Hace 15 min',
-      unread: true,
-      icon: AlertTriangle,
-      color: 'amber',
-      action: 'detail',
-      deviceMac: 'V-001',
-      details: {
-        vehicleName: 'Ambulancia UCI 01',
-        batteryLevel: '11.4 V'
-      }
-    },
-
-    // ========================================
-    // 5. SISTEMA Y TELEMETRÍA
-    // ========================================
-    {
-      id: 'sys-1',
-      type: 'system',
-      title: 'Broker HiveMQ Conectado',
-      message: 'Enlace WebSocket 8884 activo y sincronizado',
-      time: 'En vivo',
-      unread: false,
-      icon: Check,
-      color: 'emerald',
-      action: 'none'
-    },
-    {
-      id: 'sys-2',
-      type: 'system',
-      title: 'Base de Datos Supabase',
-      message: 'Sincronización de esquemas clínicos establecida',
-      time: 'En vivo',
-      unread: false,
-      icon: Check,
-      color: 'emerald',
-      action: 'none'
-    },
-
-    // ========================================
-    // 6. REPORTES Y CERTIFICADOS
-    // ========================================
-    {
-      id: 'rep-1',
-      type: 'info',
-      title: 'Auditoría Forense Disponible',
-      message: 'Certificado de ciclo ISO 17665 listo para validación',
-      time: 'Hace 2 horas',
-      unread: false,
-      icon: Info,
-      color: 'blue',
-      action: 'download'
-    },
-
-    // ========================================
-    // 7. AI AUTOMATION STUDIO
-    // ========================================
-    {
-      id: 'auto-1',
-      type: 'automation',
-      title: 'Regla de Seguridad IA Activa',
-      message: 'Regla automática de alivio térmico compilada con éxito',
-      time: 'Hace 15 min',
-      unread: false,
-      icon: Sparkles,
-      color: 'purple',
-      action: 'studio',
-      details: {
-        ruleName: 'Termo-Protección IA',
-        target: 'TODA LA FLOTA'
-      }
+    if (showResolved) {
+      return [{
+        id: 'RESUELTA',
+        label: 'Resueltas (últimos 30 días)',
+        items: list.sort((a, b) => Date.parse(b.resuelta_en || 0) - Date.parse(a.resuelta_en || 0))
+      }];
     }
-  ], [pendingRequests]);
 
-  // Lógica de filtrado 100% completada y enlazada a las pestañas
-  const filteredNotifications = useMemo(() => {
-    return allNotifications.filter(notif => {
-      if (filter === 'ALL') return true;
-      if (filter === 'UNREAD') return notif.unread;
-      if (filter === 'APPROVALS') return notif.type === 'approval';
-      if (filter === 'DEVICES') return notif.type === 'device';
-      if (filter === 'VEHICLES') return notif.type === 'vehicle';
-      if (filter === 'SYSTEM') return notif.type === 'system';
-      if (filter === 'REPORTS') return notif.type === 'info';
-      if (filter === 'SECURITY') return notif.type === 'security' || notif.type === 'user';
-      if (filter === 'AUTOMATION') return notif.type === 'automation';
-      return true;
-    });
-  }, [allNotifications, filter]);
+    const sorted = list.sort((a, b) =>
+      (SEVERITY_ORDER[a.severidad] ?? 9) - (SEVERITY_ORDER[b.severidad] ?? 9) ||
+      (a.estado === 'NUEVA' ? 0 : 1) - (b.estado === 'NUEVA' ? 0 : 1) ||
+      Date.parse(b.creada_en || 0) - Date.parse(a.creada_en || 0)
+    );
+    return ['CRITICA', 'ADVERTENCIA', 'INFO']
+      .map((sev) => ({ id: sev, label: SEVERITY_STYLES[sev].label, items: sorted.filter((n) => n.severidad === sev) }))
+      .filter((g) => g.items.length > 0);
+  }, [notifications, tab, showResolved]);
 
-  const displayNotifications = isCleared ? [] : filteredNotifications;
+  const openInfoCount = notifications.filter((n) => n.severidad === 'INFO' && n.estado !== 'RESUELTA' && !n.local).length;
 
-  const markAllAsRead = () => {
-    // Silencia las alertas sin romper el array
-    setIsCleared(false);
-  };
-
-  const clearAll = () => {
-    setIsCleared(true);
-    if (onCleared) onCleared();
-  };
-
-  const handleNotificationClick = (notif) => {
-    onClose();
-
-    switch (notif.action) {
-      case 'approve':
-      case 'admin':
-        if (onOpenAdminModal) onOpenAdminModal();
-        break;
-      case 'view':
-        if (onNavigateToFleet) onNavigateToFleet('LATENCY');
-        break;
-      case 'download':
-        if (onNavigateToAudit) onNavigateToAudit();
-        break;
-      case 'studio':
-        if (onNavigateToStudio) onNavigateToStudio();
-        break;
-      case 'detail':
-        if (onNavigateToDetail && notif.deviceMac) onNavigateToDetail(notif.deviceMac);
-        break;
-      default:
-        break;
-    }
-  };
-
-  // Cierre con Escape
   useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.key === 'Escape') onClose();
-    };
-
-    if (isOpen) {
-      window.addEventListener('keydown', handleKeyDown);
-    }
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    if (!isOpen) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, [isOpen, onClose]);
 
-  // Cierre al hacer clic fuera del panel
   useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (panelRef.current && !panelRef.current.contains(e.target)) {
-        onClose();
-      }
-    };
-
-    if (isOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isOpen, onClose]);
+    if (!isOpen) return undefined;
+    const prev = document.body.style.overflow;
+    if (window.matchMedia?.('(max-width: 639px)').matches) document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = prev; };
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
-  const getColorClasses = (color) => {
-    const colors = {
-      amber: 'bg-amber-500/20 border-amber-500/40 text-amber-300',
-      cyan: 'bg-cyan-500/20 border-cyan-500/40 text-cyan-300',
-      rose: 'bg-rose-500/20 border-rose-500/40 text-rose-300',
-      blue: 'bg-blue-500/20 border-blue-500/40 text-blue-300',
-      emerald: 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300',
-      purple: 'bg-purple-500/20 border-purple-500/40 text-purple-300'
-    };
-    return colors[color] || colors.cyan;
+  const viewDevice = (mac) => {
+    onClose();
+    onNavigateToDetail?.(mac);
   };
 
-  const unreadCount = isCleared ? 0 : allNotifications.filter(n => n.unread).length;
+  const shared = center?.storeMode === 'remote';
 
   const content = (
     <>
-      {/* Fondo difuminado */}
-      <div
-        className="fixed inset-0 z-[99998] bg-black/60 backdrop-blur-sm"
-        onClick={onClose}
-      />
+      <div className="fixed inset-0 z-[99998] bg-black/55 sm:bg-black/40" onClick={onClose} />
 
-      {/* Panel de Notificaciones Flotante */}
       <div
         ref={panelRef}
-        className="notifications-panel fixed right-2 sm:right-6 top-16 w-[calc(100vw-16px)] sm:w-96 max-w-md rounded-2xl shadow-2xl border-2 border-cyan-500/50 z-[100000] backdrop-blur-2xl max-h-[85vh] overflow-hidden flex flex-col font-mono"
-        style={{ backgroundColor: 'rgba(15, 23, 42, 0.98)' }}
+        role="dialog"
+        aria-label="Centro de notificaciones"
+        className="notifications-panel fixed z-[100000] flex flex-col overflow-hidden border-cyan-500/40 shadow-2xl
+          inset-x-0 bottom-0 max-h-[88dvh] rounded-t-2xl border-t
+          sm:inset-x-auto sm:bottom-auto sm:right-4 sm:top-16 sm:w-[420px] sm:max-h-[calc(100dvh-5rem)] sm:rounded-2xl sm:border"
+        style={{ backgroundColor: 'rgba(10, 15, 30, 0.98)', paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-cyan-500/20 bg-gradient-to-r from-cyan-500/10 to-transparent shrink-0">
-          <div className="flex items-center gap-2">
-            <Bell className="w-5 h-5 text-cyan-400" />
-            <div>
-              <h3 className="text-sm font-bold text-white">Panel de Notificaciones</h3>
-              <p className="text-[10px] text-slate-400">
-                {unreadCount} sin leer de {allNotifications.length} eventos
+        <div className="sm:hidden flex justify-center pt-2">
+          <span className="w-10 h-1 rounded-full bg-slate-600" />
+        </div>
+
+        <div className="flex items-center justify-between gap-3 px-4 pt-3 pb-3 border-b border-white/10 shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="p-2 rounded-xl bg-cyan-500/15 border border-cyan-500/40">
+              <Bell className="w-5 h-5 text-cyan-300" />
+            </div>
+            <div className="min-w-0">
+              <h3 className="text-[15px] font-bold text-white leading-tight">Centro de notificaciones</h3>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                {counts.open === 0
+                  ? 'Todo en orden'
+                  : `${counts.critical} crítica${counts.critical === 1 ? '' : 's'} · ${counts.warning} advertencia${counts.warning === 1 ? '' : 's'}`}
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-slate-800/50 text-slate-400 hover:text-white transition-colors"
-          >
+          <button type="button" onClick={onClose} aria-label="Cerrar" className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/10">
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Filtros Horizontales Estandarizados */}
-        <div className="flex items-center gap-1 px-3 py-2 border-b border-slate-800 overflow-x-auto shrink-0 scrollbar-none">
-          {[
-            { id: 'ALL', label: 'Todas' },
-            { id: 'UNREAD', label: 'Sin leer' },
-            { id: 'APPROVALS', label: 'Aprobaciones' },
-            { id: 'DEVICES', label: 'Autoclaves' },
-            { id: 'VEHICLES', label: 'Vehículos' },
-            { id: 'SYSTEM', label: 'Sistema' },
-            { id: 'REPORTS', label: 'Reportes' },
-            { id: 'SECURITY', label: 'Seguridad' },
-            { id: 'AUTOMATION', label: 'IA Studio' }
-          ].map((f) => (
-            <button
-              key={f.id}
-              onClick={() => setFilter(f.id)}
-              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold whitespace-nowrap transition-all ${
-                filter === f.id
-                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
+        {sirenActive && (
+          <div className="mx-3 mt-3 flex items-center justify-between gap-2 rounded-xl border border-rose-500/50 bg-rose-500/15 px-3 py-2 shrink-0">
+            <span className="flex items-center gap-2 text-[12px] font-bold text-rose-200">
+              <AlertTriangle className="w-4 h-4 animate-pulse" /> Sirena de alarma activa
+            </span>
+            {onSilenceSiren && <ActionButton icon={VolumeX} tone="rose" onClick={onSilenceSiren}>Silenciar</ActionButton>}
+          </div>
+        )}
+
+        <div className="flex items-center gap-3 px-4 py-2 text-[10px] text-slate-400 border-b border-white/5 shrink-0">
+          <span className="flex items-center gap-1.5">
+            <span className={`w-1.5 h-1.5 rounded-full ${center?.mqttConnected ? 'bg-emerald-400' : 'bg-rose-500'}`} />
+            MQTT {center?.mqttConnected ? 'en línea' : 'sin conexión'}
+          </span>
+          <span className="flex items-center gap-1.5" title={shared ? 'Todos los usuarios ven el mismo estado' : 'Falta crear la tabla notificaciones_scada en Supabase'}>
+            <Database className="w-3 h-3" />
+            {shared ? 'Historial compartido' : center?.storeMode === 'local' ? 'Solo este navegador' : 'Conectando…'}
+          </span>
         </div>
 
-        {/* Acciones Rápidas */}
-        <div className="flex items-center justify-between px-3 py-2 border-b border-slate-800 bg-slate-900/40 shrink-0">
+        <div className="flex items-center gap-1 px-3 py-2 overflow-x-auto shrink-0 scrollbar-none">
+          {tabs.map((t) => {
+            const TabIcon = t.icon;
+            const active = tab === t.id;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setTab(t.id)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold whitespace-nowrap transition-colors ${
+                  active ? 'bg-cyan-500/20 text-cyan-200 border border-cyan-500/40' : 'text-slate-400 border border-transparent hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <TabIcon className="w-3.5 h-3.5" />
+                {t.label}
+                {t.count > 0 && (
+                  <span className={`min-w-[18px] px-1 rounded-full text-[10px] ${active ? 'bg-cyan-400 text-slate-950' : 'bg-slate-700 text-slate-200'}`}>
+                    {t.count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
           <button
-            onClick={markAllAsRead}
-            className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] text-slate-400 hover:text-cyan-300 hover:bg-cyan-500/10 transition-all"
+            type="button"
+            onClick={() => setShowResolved((v) => !v)}
+            className={`ml-auto flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold whitespace-nowrap border ${
+              showResolved ? 'border-emerald-500/50 text-emerald-200 bg-emerald-500/10' : 'border-slate-700 text-slate-400 hover:text-white'
+            }`}
           >
-            <Check className="w-3 h-3" />
-            <span>Leídas</span>
-          </button>
-          <button
-            onClick={clearAll}
-            className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] text-slate-400 hover:text-rose-300 hover:bg-rose-500/10 transition-all"
-          >
-            <Trash2 className="w-3 h-3" />
-            <span>Limpiar</span>
+            <CheckCheck className="w-3.5 h-3.5" />
+            {showResolved ? 'Ver abiertas' : 'Historial'}
           </button>
         </div>
 
-        {/* Lista con Scroll */}
-        <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
-          {displayNotifications.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-slate-400">
-              <Check className="w-10 h-10 mb-2 text-emerald-400/40" />
-              <p className="text-xs">No hay notificaciones en esta categoría</p>
+        <div className="flex-1 overflow-y-auto overscroll-contain px-3 pb-3 space-y-3">
+          {groups.length === 0 ? (
+            <div className="flex flex-col items-center justify-center text-center py-14 px-6">
+              <div className="p-3 rounded-full bg-emerald-500/10 border border-emerald-500/30 mb-3">
+                <ShieldCheck className="w-7 h-7 text-emerald-400" />
+              </div>
+              <p className="text-[13px] font-semibold text-white">{showResolved ? 'Sin historial todavía' : 'Todo en orden'}</p>
+              <p className="text-[11px] text-slate-400 mt-1">
+                {showResolved ? 'Aquí verás lo que se ha resuelto y quién lo hizo.' : 'Cuando un equipo o usuario necesite atención aparecerá aquí.'}
+              </p>
             </div>
           ) : (
-            displayNotifications.map((notif) => {
-              const IconComponent = notif.icon || Bell;
-              return (
-                <div
-                  key={notif.id}
-                  className={`ultra-glass rounded-xl p-3 cursor-pointer transition-all hover:scale-[1.01] hover:border-cyan-500/40 ${
-                    notif.unread ? 'border-l-2 border-l-cyan-400' : 'opacity-75'
-                  }`}
-                  onClick={() => handleNotificationClick(notif)}
+            groups.map((group) => (
+              <section key={group.id}>
+                <button
+                  type="button"
+                  onClick={() => setCollapsed((c) => ({ ...c, [group.id]: !c[group.id] }))}
+                  className="w-full flex items-center justify-between py-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-400"
                 >
-                  <div className="flex items-start gap-3">
-                    <div className={`p-2 rounded-lg ${getColorClasses(notif.color)} shrink-0`}>
-                      <IconComponent className="w-4 h-4" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2">
-                        <h4 className="text-xs font-bold text-white leading-tight">
-                          {notif.title}
-                        </h4>
-                        {notif.unread && (
-                          <div className="w-2 h-2 rounded-full bg-cyan-400 shrink-0 mt-1 animate-pulse" />
-                        )}
-                      </div>
-                      <p className="text-[11px] text-slate-400 mt-1 line-clamp-2">
-                        {notif.message}
-                      </p>
-
-                      <div className="flex items-center justify-between mt-2 pt-1 border-t border-white/5">
-                        <span className="text-[9px] text-slate-500 flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
-                          {notif.time}
-                        </span>
-                        <ChevronRight className="w-3 h-3 text-slate-500" />
-                      </div>
-                    </div>
+                  <span>{group.label} · {group.items.length}</span>
+                  <ChevronDown className={`w-4 h-4 transition-transform ${collapsed[group.id] ? '-rotate-90' : ''}`} />
+                </button>
+                {!collapsed[group.id] && (
+                  <div className="space-y-2">
+                    {group.items.map((n) => (
+                      <NotificationCard key={n.id} notif={n} center={center} isAdmin={isAdmin} onViewDevice={viewDevice} />
+                    ))}
                   </div>
-                </div>
-              );
-            })
+                )}
+              </section>
+            ))
           )}
         </div>
 
-        {/* Footer */}
-        <div className="px-4 py-2.5 border-t border-cyan-500/20 bg-slate-950/80 shrink-0">
-          <button
-            onClick={() => { if (onOpenAdminModal) { onClose(); onOpenAdminModal(); } }}
-            className="w-full py-1.5 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 text-cyan-300 text-xs font-bold transition-all flex items-center justify-center gap-1.5"
-          >
-            <Filter className="w-3.5 h-3.5" />
-            <span>Gestión Central de Accesos</span>
-          </button>
-        </div>
+        {(openInfoCount > 0 || (isAdmin && onOpenAdminModal)) && (
+          <div className="flex items-center gap-2 px-3 py-2.5 border-t border-white/10 bg-slate-950/70 shrink-0">
+            {openInfoCount > 0 && (
+              <ActionButton icon={Check} onClick={() => center.resolveAllInfo()}>Limpiar informativas ({openInfoCount})</ActionButton>
+            )}
+            {isAdmin && onOpenAdminModal && (
+              <button
+                type="button"
+                onClick={() => { onClose(); onOpenAdminModal(); }}
+                className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-cyan-500/40 bg-cyan-500/10 text-cyan-200 text-[11px] font-semibold hover:bg-cyan-500/20"
+              >
+                <Users className="w-3.5 h-3.5" /> Gestión de accesos
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </>
   );

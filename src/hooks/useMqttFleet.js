@@ -156,6 +156,7 @@ export function useMqttFleet() {
           };
 
           if (channel === 'telemetria') {
+            if (isFreshStream) updated.lastTelemetryAt = Date.now();
             updated.datos = {
               ...(currentDev.datos || {}),
               ...(payload || {})
@@ -207,6 +208,10 @@ export function useMqttFleet() {
             const ciclosAcum = Number(payload?.ciclos_acumulados || payload?.ciclos || 0);
             if (!updated.datos.cfg) updated.datos.cfg = {};
             updated.datos.cfg.ciclos = ciclosAcum;
+
+            if (isFreshStream) {
+              updated.ultimoReporte = { ...(payload || {}), recibidoEn: Date.now() };
+            }
 
             persistSessionReport(cleanMac, payload, updated.meta);
           }
