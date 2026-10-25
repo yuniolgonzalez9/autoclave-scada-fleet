@@ -1,8 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 
 const LOOP_MS = 6400;
 const DASH_RATIO = 0.15;
 
+/**
+ * Genera el trazado SVG SVGPath de un rectángulo redondeado canónico.
+ */
 function roundedRectPath(w, h, inset, r) {
   const x0 = inset;
   const y0 = inset;
@@ -17,21 +20,27 @@ export default function HeaderLaserOrbit() {
   const coreRef = useRef(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
 
+  // Detección reactiva de dimensiones del contenedor padre
   useEffect(() => {
     const host = svgRef.current?.parentElement;
     if (!host) return undefined;
+
     const measure = () => {
       const w = Math.round(host.clientWidth);
       const h = Math.round(host.clientHeight);
       setSize((prev) => (prev.w === w && prev.h === h ? prev : { w, h }));
     };
+
     measure();
+
     if (typeof ResizeObserver === 'undefined') {
       window.addEventListener('resize', measure);
       return () => window.removeEventListener('resize', measure);
     }
+
     const ro = new ResizeObserver(measure);
     ro.observe(host);
+
     return () => ro.disconnect();
   }, []);
 
@@ -39,30 +48,59 @@ export default function HeaderLaserOrbit() {
   const ready = w > 40 && h > 20;
   const inset = 2;
   const r = ready ? Math.min(12, (h - inset * 2) / 2) : 0;
+  
   const perimeter = ready
     ? 2 * (w - 2 * inset - 2 * r) + 2 * (h - 2 * inset - 2 * r) + 2 * Math.PI * r
     : 0;
 
+  // Animación del pulso láser orbital con pausa en segundo plano
   useEffect(() => {
-    if (!ready) return undefined;
-    const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    const loopMs = reduceMotion ? LOOP_MS * 2 : LOOP_MS;
+    if (!ready || perimeter <= 0) return undefined;
+
+    // Respeto de accesibilidad: si el usuario prefiere movimiento reducido, detener animación continua
+    const prefersReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    
     const dash = perimeter * DASH_RATIO;
     const paths = [glowRef.current, coreRef.current].filter(Boolean);
+
+    if (prefersReducedMotion) {
+      paths.forEach((el) => {
+        el.setAttribute('stroke-dasharray', 'none');
+        el.setAttribute('stroke-dashoffset', '0');
+        el.style.opacity = '0.35';
+      });
+      return undefined;
+    }
+
     paths.forEach((el) => {
       el.setAttribute('stroke-dasharray', `${dash} ${perimeter - dash}`);
       el.setAttribute('stroke-dashoffset', '0');
+      el.style.opacity = '';
     });
 
-    let frame = 0;
+    let frameId = 0;
+    let isPaused = document.hidden;
     const start = performance.now();
+
     const tick = (now) => {
-      const offset = -(((now - start) % loopMs) / loopMs) * perimeter;
-      paths.forEach((el) => el.setAttribute('stroke-dashoffset', offset.toFixed(2)));
-      frame = requestAnimationFrame(tick);
+      if (!isPaused) {
+        const offset = -(((now - start) % LOOP_MS) / LOOP_MS) * perimeter;
+        paths.forEach((el) => el.setAttribute('stroke-dashoffset', offset.toFixed(2)));
+      }
+      frameId = requestAnimationFrame(tick);
     };
-    frame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
+
+    const handleVisibilityChange = () => {
+      isPaused = document.hidden;
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    frameId = requestAnimationFrame(tick);
+
+    return () => {
+      cancelAnimationFrame(frameId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [ready, perimeter]);
 
   const d = ready ? roundedRectPath(w, h, inset, r) : '';
@@ -70,7 +108,7 @@ export default function HeaderLaserOrbit() {
   return (
     <svg
       ref={svgRef}
-      className="header-laser-orbit"
+      className="header-laser-orbit pointer-events-none select-none"
       viewBox={ready ? `0 0 ${w} ${h}` : '0 0 1 1'}
       aria-hidden="true"
       focusable="false"
