@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Bell,
@@ -71,12 +71,18 @@ const rtf = typeof Intl !== 'undefined' && Intl.RelativeTimeFormat
   : null;
 
 function timeAgo(iso) {
-  const t = Date.parse(iso || '');
-  if (!Number.isFinite(t)) return '';
+  if (!iso) return '—';
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return '—';
   const diff = Math.round((t - Date.now()) / 1000);
   const abs = Math.abs(diff);
-  if (!rtf) return new Date(t).toLocaleString('es');
-  if (abs < 45) return 'ahora';
+
+  if (!rtf) {
+    const d = new Date(t);
+    return isNaN(d.getTime()) ? '—' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+
+  if (abs < 45) return 'hace unos segundos';
   if (abs < 3600) return rtf.format(Math.round(diff / 60), 'minute');
   if (abs < 86400) return rtf.format(Math.round(diff / 3600), 'hour');
   return rtf.format(Math.round(diff / 86400), 'day');
@@ -95,10 +101,10 @@ function ActionButton({ onClick, icon: Icon, children, tone = 'slate', disabled 
       type="button"
       disabled={disabled}
       onClick={(e) => { e.stopPropagation(); onClick?.(); }}
-      className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[11px] font-semibold transition-colors disabled:opacity-50 ${tones[tone]}`}
+      className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[11px] font-semibold transition-colors disabled:opacity-40 ${tones[tone]}`}
     >
       {Icon && <Icon className="w-3.5 h-3.5" />}
-      {children}
+      <span>{children}</span>
     </button>
   );
 }
@@ -122,7 +128,7 @@ function NotificationCard({ notif, center, isAdmin, canDelete, onViewDevice }) {
       setMode(null);
       setText('');
     } catch (e) {
-      setError(e?.message || 'No se pudo completar la acción.');
+      setError(e?.message || 'No fue posible completar la acción solicitada.');
     } finally {
       setBusy(false);
     }
@@ -149,7 +155,7 @@ function NotificationCard({ notif, center, isAdmin, canDelete, onViewDevice }) {
               )}
               {notif.estado === 'ATENDIDA' && (
                 <span className="px-1.5 py-0.5 rounded border border-sky-500/40 bg-sky-500/10 text-sky-300 text-[10px] font-bold">
-                  En atención · {notif.atendida_por}
+                  En atención · {notif.atendida_por || 'Técnico'}
                 </span>
               )}
               {!resolved && notif.activa === false && (
@@ -158,18 +164,22 @@ function NotificationCard({ notif, center, isAdmin, canDelete, onViewDevice }) {
                 </span>
               )}
               {(notif.ocurrencias || 1) > 1 && (
-                <span className="px-1.5 py-0.5 rounded border border-slate-600 text-slate-300 text-[10px] font-bold">×{notif.ocurrencias}</span>
+                <span className="px-1.5 py-0.5 rounded border border-slate-600 text-slate-300 text-[10px] font-bold font-mono">
+                  ×{notif.ocurrencias}
+                </span>
               )}
               {notif.mac && (
-                <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 text-[10px] font-mono">{notif.mac}</span>
+                <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 text-[10px] font-mono">
+                  {notif.mac}
+                </span>
               )}
             </div>
 
             {resolved && (
-              <p className="text-[11px] text-emerald-300/90 mt-2 flex items-start gap-1">
+              <p className="text-[11px] text-emerald-300/90 mt-2 flex items-start gap-1 font-sans">
                 <CheckCheck className="w-3.5 h-3.5 shrink-0 mt-px" />
                 <span>
-                  Resuelta por {notif.resuelta_por || '—'} {timeAgo(notif.resuelta_en)}
+                  Resuelta por {notif.resuelta_por || 'Supervisión'} {timeAgo(notif.resuelta_en)}
                   {notif.nota_resolucion ? ` · ${notif.nota_resolucion}` : ''}
                 </span>
               </p>
@@ -181,43 +191,43 @@ function NotificationCard({ notif, center, isAdmin, canDelete, onViewDevice }) {
                   <>
                     <ActionButton onClick={() => setMode(null)}>Cancelar</ActionButton>
                     <ActionButton icon={Trash2} tone="rose" disabled={busy} onClick={() => run(() => center.remove(notif))}>
-                      Sí, eliminar registro
+                      Confirmar Eliminación
                     </ActionButton>
                   </>
                 ) : (
-                  <ActionButton icon={Trash2} tone="rose" onClick={() => setMode('delete')}>Eliminar</ActionButton>
+                  <ActionButton icon={Trash2} tone="rose" onClick={() => setMode('delete')}>Eliminar Registro</ActionButton>
                 )}
               </div>
             )}
 
             {!resolved && !notif.local && (
               <div className="flex flex-wrap gap-1.5 mt-3">
-                {notif.mac && <ActionButton icon={Eye} onClick={() => onViewDevice(notif.mac)}>Ver equipo</ActionButton>}
+                {notif.mac && <ActionButton icon={Eye} onClick={() => onViewDevice(notif.mac)}>Inspeccionar Equipo</ActionButton>}
                 {notif.tipo === 'ALARMA' && notif.activa !== false && (
                   <ActionButton icon={RotateCcw} tone="amber" disabled={busy} onClick={() => run(() => center.resetDeviceAlarm(notif))}>
-                    Restablecer alarma
+                    Restablecer Alarma
                   </ActionButton>
                 )}
                 {notif.tipo === 'ACCESO' && isAdmin && (
                   <>
-                    <ActionButton icon={Check} tone="emerald" onClick={() => setMode(mode === 'approve' ? null : 'approve')}>Aprobar</ActionButton>
+                    <ActionButton icon={Check} tone="emerald" onClick={() => setMode(mode === 'approve' ? null : 'approve')}>Aprobar Acceso</ActionButton>
                     <ActionButton icon={X} tone="rose" disabled={busy} onClick={() => run(() => center.rejectAccess(notif))}>Rechazar</ActionButton>
                   </>
                 )}
                 {notif.tipo === 'RECUPERACION' && isAdmin && (
                   <ActionButton icon={KeyRound} tone="cyan" onClick={() => setMode(mode === 'password' ? null : 'password')}>
-                    Asignar contraseña
+                    Asignar Clave
                   </ActionButton>
                 )}
                 {notif.estado === 'NUEVA' && notif.severidad !== 'INFO' && !['ACCESO', 'RECUPERACION'].includes(notif.tipo) && (
                   <ActionButton icon={ShieldCheck} tone="cyan" disabled={busy} onClick={() => run(() => center.acknowledge(notif))}>
-                    Atender
+                    Reconocer / Atender
                   </ActionButton>
                 )}
                 {notif.severidad === 'INFO' ? (
-                  <ActionButton icon={Check} disabled={busy} onClick={() => run(() => center.resolve(notif, 'Revisada'))}>Marcar leída</ActionButton>
+                  <ActionButton icon={Check} disabled={busy} onClick={() => run(() => center.resolve(notif, 'Revisada'))}>Marcar Leída</ActionButton>
                 ) : (
-                  <ActionButton icon={CheckCheck} tone="emerald" onClick={() => setMode(mode === 'resolve' ? null : 'resolve')}>Resolver</ActionButton>
+                  <ActionButton icon={CheckCheck} tone="emerald" onClick={() => setMode(mode === 'resolve' ? null : 'resolve')}>Resolver Evento</ActionButton>
                 )}
               </div>
             )}
@@ -228,13 +238,13 @@ function NotificationCard({ notif, center, isAdmin, canDelete, onViewDevice }) {
                   value={text}
                   onChange={(e) => setText(e.target.value)}
                   rows={2}
-                  placeholder="¿Qué se hizo para solucionarlo? (opcional)"
-                  className="w-full rounded-lg bg-slate-950/80 border border-slate-700 px-2.5 py-2 text-[12px] text-white placeholder:text-slate-500 focus:outline-none focus:border-emerald-500/60"
+                  placeholder="Acciones correctivas realizadas (opcional)..."
+                  className="w-full rounded-lg bg-slate-950/80 border border-slate-700 px-2.5 py-2 text-[12px] text-white placeholder:text-slate-500 focus:outline-none focus:border-emerald-500/60 font-sans"
                 />
                 <div className="flex gap-1.5 justify-end">
                   <ActionButton onClick={() => setMode(null)}>Cancelar</ActionButton>
                   <ActionButton icon={CheckCheck} tone="emerald" disabled={busy} onClick={() => run(() => center.resolve(notif, text))}>
-                    Confirmar solución
+                    Cerrar y Archivar
                   </ActionButton>
                 </div>
               </div>
@@ -245,12 +255,12 @@ function NotificationCard({ notif, center, isAdmin, canDelete, onViewDevice }) {
                 <select
                   value={role}
                   onChange={(e) => setRole(e.target.value)}
-                  className="rounded-lg bg-slate-950/80 border border-slate-700 px-2 py-1.5 text-[12px] text-white"
+                  className="rounded-lg bg-slate-950/80 border border-slate-700 px-2 py-1.5 text-[12px] text-white font-mono"
                 >
                   {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
                 </select>
                 <ActionButton icon={Check} tone="emerald" disabled={busy} onClick={() => run(() => center.approveAccess(notif, role))}>
-                  Confirmar acceso
+                  Confirmar Aprobación
                 </ActionButton>
               </div>
             )}
@@ -261,16 +271,16 @@ function NotificationCard({ notif, center, isAdmin, canDelete, onViewDevice }) {
                   type="text"
                   value={text}
                   onChange={(e) => setText(e.target.value)}
-                  placeholder="Contraseña temporal (mín. 4)"
-                  className="flex-1 min-w-[140px] rounded-lg bg-slate-950/80 border border-slate-700 px-2.5 py-1.5 text-[12px] text-white placeholder:text-slate-500"
+                  placeholder="Contraseña temporal..."
+                  className="flex-1 min-w-[140px] rounded-lg bg-slate-950/80 border border-slate-700 px-2.5 py-1.5 text-[12px] text-white placeholder:text-slate-500 font-mono"
                 />
                 <ActionButton icon={KeyRound} tone="cyan" disabled={busy || text.trim().length < 4} onClick={() => run(() => center.resetPassword(notif, text))}>
-                  Guardar
+                  Guardar Credencial
                 </ActionButton>
               </div>
             )}
 
-            {error && <p className="text-[11px] text-rose-300 mt-2">{error}</p>}
+            {error && <p className="text-[11px] text-rose-300 mt-2 font-sans">{error}</p>}
           </div>
         </div>
       </div>
@@ -307,7 +317,9 @@ export default function NotificationsPanel({
       { id: 'ALL', label: 'Todas', icon: Bell, count: open.length },
       { id: 'EQUIPO', label: 'Equipos', icon: Cpu, count: open.filter((n) => n.categoria === 'EQUIPO').length }
     ];
-    if (isAdmin) base.push({ id: 'USUARIO', label: 'Usuarios', icon: Users, count: open.filter((n) => n.categoria === 'USUARIO').length });
+    if (isAdmin) {
+      base.push({ id: 'USUARIO', label: 'Usuarios', icon: Users, count: open.filter((n) => n.categoria === 'USUARIO').length });
+    }
     base.push({ id: 'SISTEMA', label: 'Sistema', icon: Server, count: open.filter((n) => n.categoria === 'SISTEMA').length });
     return base;
   }, [notifications, isAdmin]);
@@ -320,7 +332,7 @@ export default function NotificationsPanel({
     if (showResolved) {
       return [{
         id: 'RESUELTA',
-        label: 'Resueltas (últimos 30 días)',
+        label: 'Historial Resuelto (Últimos 30 días)',
         items: list.sort((a, b) => Date.parse(b.resuelta_en || 0) - Date.parse(a.resuelta_en || 0))
       }];
     }
@@ -335,12 +347,13 @@ export default function NotificationsPanel({
       .filter((g) => g.items.length > 0);
   }, [notifications, tab, showResolved]);
 
-  const tabIds = tabs.map((t) => t.id);
+  const tabIds = useMemo(() => tabs.map((t) => t.id), [tabs]);
   const tabIndex = Math.max(0, tabIds.indexOf(tab));
-  const selectTab = (next) => {
+  
+  const selectTab = useCallback((next) => {
     setTabDir(tabIds.indexOf(next) > tabIndex ? 'next' : 'prev');
     setTab(next);
-  };
+  }, [tabIds, tabIndex]);
 
   useSwipe(listRef, {
     enabled: isOpen,
@@ -365,7 +378,7 @@ export default function NotificationsPanel({
       await center.clearHistory(tab);
       setConfirmClear(false);
     } catch (e) {
-      setClearError(e?.message || 'No se pudo vaciar el historial.');
+      setClearError(e?.message || 'No fue posible vaciar el historial.');
     } finally {
       setClearing(false);
     }
@@ -383,11 +396,13 @@ export default function NotificationsPanel({
   useEffect(() => {
     if (!isOpen) return undefined;
     const prev = document.body.style.overflow;
-    if (window.matchMedia?.('(max-width: 639px)').matches) document.body.style.overflow = 'hidden';
+    if (window.matchMedia?.('(max-width: 639px)').matches) {
+      document.body.style.overflow = 'hidden';
+    }
     return () => { document.body.style.overflow = prev; };
   }, [isOpen]);
 
-  if (!isOpen) return null;
+  if (!isOpen || typeof document === 'undefined') return null;
 
   const viewDevice = (mac) => {
     onClose();
@@ -398,15 +413,16 @@ export default function NotificationsPanel({
 
   const content = (
     <>
-      <div className="fixed inset-0 z-[99998] bg-black/55 sm:bg-black/40" onClick={onClose} />
+      <div className="fixed inset-0 z-[99998] bg-black/60 backdrop-blur-sm" onClick={onClose} />
 
       <div
         ref={panelRef}
         role="dialog"
-        aria-label="Centro de notificaciones"
-        className="notifications-panel fixed z-[100000] flex flex-col overflow-hidden border-cyan-500/40 shadow-2xl
+        aria-modal="true"
+        aria-label="Centro de notificaciones y alarmas SCADA"
+        className="notifications-panel fixed z-[100000] flex flex-col overflow-hidden border-cyan-500/40 shadow-2xl font-mono
           inset-x-0 bottom-0 h-[88dvh] rounded-t-2xl border-t
-          sm:inset-x-auto sm:bottom-auto sm:right-4 sm:top-16 sm:w-[420px] sm:h-[min(680px,calc(100dvh-5rem))] sm:rounded-2xl sm:border"
+          sm:inset-x-auto sm:bottom-auto sm:right-4 sm:top-16 sm:w-[440px] sm:h-[min(700px,calc(100dvh-5rem))] sm:rounded-2xl sm:border"
         style={{ backgroundColor: 'rgba(10, 15, 30, 0.98)', paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
         <div className="sm:hidden flex justify-center pt-2">
@@ -419,10 +435,10 @@ export default function NotificationsPanel({
               <Bell className="w-5 h-5 text-cyan-300" />
             </div>
             <div className="min-w-0">
-              <h3 className="text-[15px] font-bold text-white leading-tight">Centro de notificaciones</h3>
-              <p className="text-[11px] text-slate-400 mt-0.5">
+              <h3 className="text-[14px] font-bold text-white leading-tight">Centro de Notificaciones</h3>
+              <p className="text-[11px] text-slate-400 mt-0.5 font-sans">
                 {counts.open === 0
-                  ? 'Todo en orden'
+                  ? 'Sin eventos pendientes de resolución'
                   : `${counts.critical} crítica${counts.critical === 1 ? '' : 's'} · ${counts.warning} advertencia${counts.warning === 1 ? '' : 's'}`}
               </p>
             </div>
@@ -435,7 +451,7 @@ export default function NotificationsPanel({
         {sirenActive && (
           <div className="mx-3 mt-3 flex items-center justify-between gap-2 rounded-xl border border-rose-500/50 bg-rose-500/15 px-3 py-2 shrink-0">
             <span className="flex items-center gap-2 text-[12px] font-bold text-rose-200">
-              <AlertTriangle className="w-4 h-4 animate-pulse" /> Sirena de alarma activa
+              <AlertTriangle className="w-4 h-4 animate-pulse" /> Sirena Industrial Activa
             </span>
             {onSilenceSiren && <ActionButton icon={VolumeX} tone="rose" onClick={onSilenceSiren}>Silenciar</ActionButton>}
           </div>
@@ -444,11 +460,11 @@ export default function NotificationsPanel({
         <div className="flex items-center gap-3 px-4 py-2 text-[10px] text-slate-400 border-b border-white/5 shrink-0">
           <span className="flex items-center gap-1.5">
             <span className={`w-1.5 h-1.5 rounded-full ${center?.mqttConnected ? 'bg-emerald-400' : 'bg-rose-500'}`} />
-            MQTT {center?.mqttConnected ? 'en línea' : 'sin conexión'}
+            MQTT: {center?.mqttConnected ? 'En línea' : 'Sin conexión'}
           </span>
-          <span className="flex items-center gap-1.5" title={shared ? 'Todos los usuarios ven el mismo estado' : 'Falta crear la tabla notificaciones_scada en Supabase'}>
-            <Database className="w-3 h-3" />
-            {shared ? 'Historial compartido' : center?.storeMode === 'local' ? 'Solo este navegador' : 'Conectando…'}
+          <span className="flex items-center gap-1.5">
+            <Database className="w-3 h-3 text-cyan-400" />
+            {shared ? 'PostgreSQL Central Sincronizado' : 'Registro de Terminal Local'}
           </span>
         </div>
 
@@ -461,14 +477,14 @@ export default function NotificationsPanel({
                 key={t.id}
                 type="button"
                 onClick={() => selectTab(t.id)}
-                className={`flex flex-1 sm:flex-none justify-center items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg text-[12px] font-semibold whitespace-nowrap transition-colors ${
+                className={`flex flex-1 sm:flex-none justify-center items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-colors ${
                   active ? 'bg-cyan-500/20 text-cyan-200 border border-cyan-500/40' : 'text-slate-400 border border-transparent hover:text-white hover:bg-white/5'
                 }`}
               >
                 <TabIcon className="w-3.5 h-3.5" />
-                {t.label}
+                <span>{t.label}</span>
                 {t.count > 0 && (
-                  <span className={`min-w-[18px] px-1 rounded-full text-[10px] ${active ? 'bg-cyan-400 text-slate-950' : 'bg-slate-700 text-slate-200'}`}>
+                  <span className={`min-w-[18px] px-1 rounded-full text-[10px] font-bold ${active ? 'bg-cyan-400 text-slate-950' : 'bg-slate-700 text-slate-200'}`}>
                     {t.count}
                   </span>
                 )}
@@ -476,17 +492,18 @@ export default function NotificationsPanel({
             );
           })}
         </div>
+
         <div className="flex items-center gap-2 px-3 py-2 shrink-0">
           <SwipeDots count={tabs.length} index={tabIndex} className="sm:hidden" />
           <button
             type="button"
             onClick={() => setShowResolved((v) => !v)}
-            className={`ml-auto min-w-[108px] justify-center flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold whitespace-nowrap border ${
+            className={`ml-auto min-w-[110px] justify-center flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap border transition-all ${
               showResolved ? 'border-emerald-500/50 text-emerald-200 bg-emerald-500/10' : 'border-slate-700 text-slate-400 hover:text-white'
             }`}
           >
             <CheckCheck className="w-3.5 h-3.5" />
-            {showResolved ? 'Ver abiertas' : 'Historial'}
+            <span>{showResolved ? 'Ver Abiertas' : 'Historial'}</span>
           </button>
         </div>
 
@@ -495,37 +512,41 @@ export default function NotificationsPanel({
             key={`${tab}-${showResolved}`}
             className={`space-y-3 min-h-full ${tabDir === 'next' ? 'swipe-enter-next' : tabDir === 'prev' ? 'swipe-enter-prev' : ''}`}
           >
-          {groups.length === 0 ? (
-            <div className="flex flex-col items-center justify-center text-center py-14 px-6">
-              <div className="p-3 rounded-full bg-emerald-500/10 border border-emerald-500/30 mb-3">
-                <ShieldCheck className="w-7 h-7 text-emerald-400" />
+            {groups.length === 0 ? (
+              <div className="flex flex-col items-center justify-center text-center py-14 px-6 font-sans">
+                <div className="p-3 rounded-full bg-emerald-500/10 border border-emerald-500/30 mb-3">
+                  <ShieldCheck className="w-7 h-7 text-emerald-400" />
+                </div>
+                <p className="text-[13px] font-semibold text-white">
+                  {showResolved ? 'Sin registros en el historial' : 'No hay alarmas activas'}
+                </p>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  {showResolved 
+                    ? 'Los eventos resueltos y archivados aparecerán en este registro.' 
+                    : 'Todos los equipos operan dentro de los parámetros térmicos e interlocks nominales.'}
+                </p>
               </div>
-              <p className="text-[13px] font-semibold text-white">{showResolved ? 'Sin historial todavía' : 'Todo en orden'}</p>
-              <p className="text-[11px] text-slate-400 mt-1">
-                {showResolved ? 'Aquí verás lo que se ha resuelto y quién lo hizo.' : 'Cuando un equipo o usuario necesite atención aparecerá aquí.'}
-              </p>
-            </div>
-          ) : (
-            groups.map((group) => (
-              <section key={group.id}>
-                <button
-                  type="button"
-                  onClick={() => setCollapsed((c) => ({ ...c, [group.id]: !c[group.id] }))}
-                  className="w-full flex items-center justify-between py-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-400"
-                >
-                  <span>{group.label} · {group.items.length}</span>
-                  <ChevronDown className={`w-4 h-4 transition-transform ${collapsed[group.id] ? '-rotate-90' : ''}`} />
-                </button>
-                {!collapsed[group.id] && (
-                  <div className="space-y-2">
-                    {group.items.map((n) => (
-                      <NotificationCard key={n.id} notif={n} center={center} isAdmin={isAdmin} canDelete={isAdmin} onViewDevice={viewDevice} />
-                    ))}
-                  </div>
-                )}
-              </section>
-            ))
-          )}
+            ) : (
+              groups.map((group) => (
+                <section key={group.id}>
+                  <button
+                    type="button"
+                    onClick={() => setCollapsed((c) => ({ ...c, [group.id]: !c[group.id] }))}
+                    className="w-full flex items-center justify-between py-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-400"
+                  >
+                    <span>{group.label} ({group.items.length})</span>
+                    <ChevronDown className={`w-4 h-4 transition-transform ${collapsed[group.id] ? '-rotate-90' : ''}`} />
+                  </button>
+                  {!collapsed[group.id] && (
+                    <div className="space-y-2">
+                      {group.items.map((n) => (
+                        <NotificationCard key={n.id} notif={n} center={center} isAdmin={isAdmin} canDelete={isAdmin} onViewDevice={viewDevice} />
+                      ))}
+                    </div>
+                  )}
+                </section>
+              ))
+            )}
           </div>
         </div>
 
@@ -535,15 +556,19 @@ export default function NotificationsPanel({
               <>
                 <ActionButton onClick={() => setConfirmClear(false)}>Cancelar</ActionButton>
                 <ActionButton icon={Trash2} tone="rose" disabled={clearing} onClick={clearHistory}>
-                  {clearing ? 'Eliminando…' : `Sí, eliminar ${resolvedCount}`}
+                  {clearing ? 'Eliminando...' : `Confirmar Borrado (${resolvedCount})`}
                 </ActionButton>
               </>
             ) : (
-              <ActionButton icon={Trash2} tone="rose" onClick={() => setConfirmClear(true)}>Vaciar historial ({resolvedCount})</ActionButton>
+              <ActionButton icon={Trash2} tone="rose" onClick={() => setConfirmClear(true)}>
+                Vaciar Historial ({resolvedCount})
+              </ActionButton>
             ))}
-            {clearError && <span className="w-full text-[11px] text-rose-300">{clearError}</span>}
+            {clearError && <span className="w-full text-[11px] text-rose-300 font-sans">{clearError}</span>}
             {openInfoCount > 0 && (
-              <ActionButton icon={Check} onClick={() => center.resolveAllInfo()}>Limpiar informativas ({openInfoCount})</ActionButton>
+              <ActionButton icon={Check} onClick={() => center.resolveAllInfo()}>
+                Depurar Informativas ({openInfoCount})
+              </ActionButton>
             )}
             {isAdmin && onOpenAdminModal && (
               <button
@@ -551,7 +576,8 @@ export default function NotificationsPanel({
                 onClick={() => { onClose(); onOpenAdminModal(); }}
                 className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-cyan-500/40 bg-cyan-500/10 text-cyan-200 text-[11px] font-semibold hover:bg-cyan-500/20"
               >
-                <Users className="w-3.5 h-3.5" /> Gestión de accesos
+                <Users className="w-3.5 h-3.5" />
+                <span>Gestión de Accesos</span>
               </button>
             )}
           </div>
@@ -560,5 +586,5 @@ export default function NotificationsPanel({
     </>
   );
 
-  return typeof document !== 'undefined' ? createPortal(content, document.body) : null;
+  return createPortal(content, document.body);
 }
