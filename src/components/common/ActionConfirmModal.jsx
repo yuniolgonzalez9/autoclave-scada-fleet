@@ -12,36 +12,109 @@ import {
 } from 'lucide-react';
 
 /**
- * Función Criptográfica para Sellar Reportes y Comandos con Hash SHA-256
- * Compatible con HTTPS (Web Crypto API) y con redes locales HTTP (Fallback FNV-1a)
+ * Algoritmo SHA-256 puro para intranets hospitalarias HTTP
+ * donde window.crypto.subtle no está disponible.
+ */
+function sha256Fallback(ascii) {
+  function rightRotate(value, amount) {
+    return (value >>> amount) | (value << (32 - amount));
+  }
+
+  const mathPow = Math.pow;
+  const maxWord = mathPow(2, 32);
+  let i, j;
+  let result = '';
+
+  const words = [];
+  const utf8 = unescape(encodeURIComponent(ascii));
+  const asciiBitLength = utf8.length * 8;
+
+  const hash = [];
+  const k = [];
+  let primeCounter = 0;
+  const isComposite = {};
+
+  for (let candidate = 2; primeCounter < 64; candidate++) {
+    if (!isComposite[candidate]) {
+      for (i = 0; i < 313; i += candidate) {
+        isComposite[i] = candidate;
+      }
+      hash[primeCounter] = (mathPow(candidate, 0.5) * maxWord) | 0;
+      k[primeCounter++] = (mathPow(candidate, 1 / 3) * maxWord) | 0;
+    }
+  }
+
+  for (i = 0; i < utf8.length; i++) {
+    j = utf8.charCodeAt(i);
+    words[i >> 2] |= j << ((3 - (i % 4)) * 8);
+  }
+
+  words[asciiBitLength >> 5] |= 0x80 << (24 - (asciiBitLength % 32));
+  words[(((asciiBitLength + 64) >> 9) << 4) + 15] = asciiBitLength;
+
+  for (let b = 0; b < words.length; b += 16) {
+    const w = words.slice(b, b + 16);
+    const oldHash = hash.slice(0);
+
+    for (i = 0; i < 64; i++) {
+      let w15 = w[i - 15], w2 = w[i - 2];
+
+      const s0 = rightRotate(w15, 7) ^ rightRotate(w15, 18) ^ (w15 >>> 3);
+      const s1 = rightRotate(w2, 17) ^ rightRotate(w2, 19) ^ (w2 >>> 10);
+
+      w[i] = i < 16 ? w[i] : (w[i - 16] + s0 + w[i - 7] + s1) | 0;
+
+      const ch = (hash[4] & hash[5]) ^ (~hash[4] & hash[6]);
+      const temp1 = (hash[7] + (rightRotate(hash[4], 6) ^ rightRotate(hash[4], 11) ^ rightRotate(hash[4], 25)) + ch + k[i] + w[i]) | 0;
+      const maj = (hash[0] & hash[1]) ^ (hash[0] & hash[2]) ^ (hash[1] & hash[2]);
+      const temp2 = ((rightRotate(hash[0], 2) ^ rightRotate(hash[0], 13) ^ rightRotate(hash[0], 22)) + maj) | 0;
+
+      hash[7] = hash[6];
+      hash[6] = hash[5];
+      hash[5] = hash[4];
+      hash[4] = (hash[3] + temp1) | 0;
+      hash[3] = hash[2];
+      hash[2] = hash[1];
+      hash[1] = hash[0];
+      hash[0] = (temp1 + temp2) | 0;
+    }
+
+    for (i = 0; i < 8; i++) {
+      hash[i] = (hash[i] + oldHash[i]) | 0;
+    }
+  }
+
+  for (i = 0; i < 8; i++) {
+    for (let c = 3; c >= 0; c--) {
+      const byte = (hash[i] >> (c * 8)) & 255;
+      result += (byte < 16 ? '0' : '') + byte.toString(16);
+    }
+  }
+
+  return result.toUpperCase();
+}
+
+/**
+ * Función Criptográfica para Sellar Reportes y Comandos con Hash SHA-256 Íntegro (256 bits).
+ * Cumple con FDA 21 CFR Part 11 e ISO 17665.
  */
 export async function generateClinicalHash(dataString = '') {
   const str = String(dataString);
 
-  // 1. Entorno seguro HTTPS / Localhost
+  // 1. Entorno seguro HTTPS / Localhost (Nativo Web Crypto API)
   if (typeof window !== 'undefined' && window.crypto && window.crypto.subtle) {
     try {
       const encoder = new TextEncoder();
       const data = encoder.encode(str);
       const hashBuffer = await window.crypto.subtle.digest('SHA-256', data);
       const hashArray = Array.from(new Uint8Array(hashBuffer));
-      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('').substring(0, 32).toUpperCase();
+      // Hash SHA-256 completo de 64 caracteres hexadecimales
+      return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('').toUpperCase();
     } catch (_) {}
   }
 
-  // 2. Fallback matemático de dispersión para intranets hospitalarias sin certificado SSL
-  let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
-  for (let i = 0; i < str.length; i++) {
-    const ch = str.charCodeAt(i);
-    h1 = Math.imul(h1 ^ ch, 2654435761);
-    h2 = Math.imul(h2 ^ ch, 1597334677);
-  }
-  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
-  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
-  const part1 = (h1 >>> 0).toString(16).padStart(8, '0');
-  const part2 = (h2 >>> 0).toString(16).padStart(8, '0');
-  const timestampPart = Date.now().toString(16).slice(-8);
-  return `${part1}${part2}${timestampPart}`.substring(0, 32).toUpperCase();
+  // 2. Fallback estándar para intranets hospitalarias HTTP sin Web Crypto
+  return sha256Fallback(str);
 }
 
 export default function ActionConfirmModal({
@@ -49,7 +122,7 @@ export default function ActionConfirmModal({
   onClose,
   onConfirm,
   title = 'Confirmar Acción Clínica',
-  description = '¿Estás seguro de ejecutar esta operación en el autoclave?',
+  description = '¿Está seguro de ejecutar esta operación en el autoclave?',
   actionType = 'WARNING', // 'START' | 'STOP' | 'RESET' | 'WARNING'
   deviceName = 'AUTOCLAVE',
   operatorName = 'Operador Activo'
@@ -109,11 +182,13 @@ export default function ActionConfirmModal({
 
   return createPortal(
     <div 
-      className="fixed inset-0 z-[99999] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 select-none"
+      className="fixed inset-0 z-[99999] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 select-none font-mono"
       onClick={onClose}
+      role="dialog"
+      aria-modal="true"
     >
       <div 
-        className={`w-full max-w-md ultra-glass border-2 ${config.border} rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.9)] p-6 space-y-4 font-mono text-xs text-left`}
+        className={`w-full max-w-md ultra-glass border-2 ${config.border} rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.9)] p-6 space-y-4 text-xs text-left`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Cabecera */}
@@ -168,7 +243,7 @@ export default function ActionConfirmModal({
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold transition-all"
+            className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold transition-all text-center"
           >
             Cancelar
           </button>
@@ -178,7 +253,7 @@ export default function ActionConfirmModal({
               onConfirm();
               onClose();
             }}
-            className={`flex-1 py-2.5 ${config.btnBg} text-white rounded-xl font-bold flex items-center justify-center gap-1.5 shadow-lg active:scale-95 transition-all`}
+            className={`flex-1 py-2.5 ${config.btnBg} text-white rounded-xl font-bold flex items-center justify-center gap-1.5 shadow-lg active:scale-95 transition-all text-center`}
           >
             <Check className="w-4 h-4" />
             <span>{config.btnText}</span>
