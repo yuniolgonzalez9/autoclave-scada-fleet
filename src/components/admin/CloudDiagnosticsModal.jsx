@@ -63,7 +63,7 @@ export default function CloudDiagnosticsModal({
     try {
       const results = await Promise.allSettled([
         supabase.from('reportes_autoclaves').select('*', { count: 'exact', head: true }),
-        supabase.from('usuarios_scada').select('*', { count: 'exact', head: true }),
+        supabase.from('user_profiles').select('*', { count: 'exact', head: true }),
         supabase.from('asignaciones_equipos').select('*', { count: 'exact', head: true }),
         supabase.from('mantenimientos_equipos').select('*', { count: 'exact', head: true }),
         supabase.from('auditoria_accesos').select('*', { count: 'exact', head: true })
@@ -300,7 +300,7 @@ export default function CloudDiagnosticsModal({
                     <span>USUARIOS & ROLES</span>
                   </div>
                   <p className="text-xl font-bold text-white">{sbStats.usuariosCount}</p>
-                  <span className="text-[9px] text-slate-500">usuarios_scada</span>
+                  <span className="text-[9px] text-slate-500">user_profiles</span>
                 </div>
 
                 <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800">

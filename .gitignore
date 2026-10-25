@@ -1,0 +1,19 @@
+# Dependencias y build
+node_modules/
+dist/
+
+# Secretos y entorno local — NUNCA versionar
+.env
+.env.*
+!.env.example
+
+# Temporales
+temp_backup/
+*.log
+.DS_Store
+.vercel
+
+# Extras
+.vscode/
+autoclave-scada-fleet/
+supabase/.temp/

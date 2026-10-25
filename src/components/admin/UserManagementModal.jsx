@@ -16,8 +16,9 @@ import {
 } from 'lucide-react';
 
 export default function UserManagementModal({ isOpen, onClose }) {
-  const { updateUserStatus, resetUserPassword } = useAuth();
+  const { updateUserStatus, resetUserPassword, listUserProfiles, listAccessRequests, approveAccessRequest, rejectAccessRequest } = useAuth();
   const [usersList, setUsersList] = useState([]);
+  const [requestsList, setRequestsList] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
   const [selectedRole, setSelectedRole] = useState({});
   const [resetPromptUser, setResetPromptUser] = useState(null);
@@ -39,12 +40,14 @@ export default function UserManagementModal({ isOpen, onClose }) {
 
   const fetchAllUsers = useCallback(async () => {
     try {
-      const { data, error } = await supabase
-        .from('usuarios_scada')
-        .select('*');
-      if (!error && data) setUsersList(data);
+      const profiles = await listUserProfiles();
+      setUsersList(profiles);
     } catch (_) {}
-  }, []);
+    try {
+      const requests = await listAccessRequests();
+      setRequestsList(requests);
+    } catch (_) {}
+  }, [listUserProfiles, listAccessRequests]);
 
   const fetchAuditLogs = useCallback(async () => {
     try {
@@ -64,35 +67,44 @@ export default function UserManagementModal({ isOpen, onClose }) {
   }, [isOpen, fetchAllUsers, fetchAuditLogs]);
 
   // HOOKS REUBICADOS ARRIBA: Se ejecutan siempre de forma incondicional
-  const pendingList = useMemo(() => usersList.filter(u => u.estado === 'PENDIENTE'), [usersList]);
-  const activeList = useMemo(() => usersList.filter(u => u.estado !== 'PENDIENTE'), [usersList]);
+  const pendingList = useMemo(() => requestsList.filter(u => u.estado === 'PENDIENTE'), [requestsList]);
+  const activeList = useMemo(() => usersList, [usersList]);
 
   // Manejadores de aprobación / rechazo / claves
   const handleApprove = async (u) => {
-    const targetId = u.user || u.usuario || u.id;
-    const roleToAssign = selectedRole[u.id || u.user || u.usuario] || 'OPERADOR';
-    await updateUserStatus(targetId, 'ACTIVO', roleToAssign);
-    await fetchAllUsers();
+    const reqKey = u.user || u.usuario || u.id;
+    const roleToAssign = selectedRole[reqKey] || 'OPERADOR';
+    try {
+      await approveAccessRequest(u.request_id, roleToAssign);
+      await fetchAllUsers();
+    } catch (e) {
+      alert('Error aprobando solicitud: ' + (e.message || ''));
+    }
   };
 
   const handleReject = async (u) => {
-    const targetId = u.user || u.usuario || u.id;
-    await updateUserStatus(targetId, 'RECHAZADO');
-    await fetchAllUsers();
+    try {
+      await rejectAccessRequest(u.request_id);
+      await fetchAllUsers();
+    } catch (e) {
+      alert('Error rechazando solicitud: ' + (e.message || ''));
+    }
   };
 
   const handleToggleActive = async (u) => {
-    const targetId = u.user || u.usuario || u.id;
     const newStatus = (u.estado === 'ACTIVO') ? 'INACTIVO' : 'ACTIVO';
-    await updateUserStatus(targetId, newStatus);
-    await fetchAllUsers();
+    try {
+      await updateUserStatus(u.user_id, newStatus);
+      await fetchAllUsers();
+    } catch (e) {
+      alert('Error cambiando estado: ' + (e.message || ''));
+    }
   };
 
   const handleConfirmPasswordReset = async () => {
-    if (!resetPromptUser || !tempPass.trim()) return;
-    const targetId = resetPromptUser.user || resetPromptUser.usuario || resetPromptUser.id;
+    if (!resetPromptUser || tempPass.trim().length < 6) return;
     try {
-      await resetUserPassword(targetId, tempPass);
+      await resetUserPassword(resetPromptUser.user_id, tempPass);
       setSuccessInfo(`Contraseña de [${resetPromptUser.usuario || resetPromptUser.user}] actualizada.`);
       setResetPromptUser(null);
       setTempPass('');

@@ -87,8 +87,8 @@ export default function LoginModal() {
       setErrorMsg('El usuario debe tener al menos 3 caracteres.');
       return;
     }
-    if (reqPassword.trim().length < 4) {
-      setErrorMsg('La contraseña propuesta debe tener al menos 4 caracteres.');
+    if (reqPassword.trim().length < 6) {
+      setErrorMsg('La contraseña propuesta debe tener al menos 6 caracteres.');
       return;
     }
 
@@ -383,7 +383,7 @@ export default function LoginModal() {
                   autoComplete="new-password"
                   value={reqPassword}
                   onChange={(e) => setReqPassword(e.target.value)}
-                  placeholder="Mínimo 4 caracteres"
+                  placeholder="Mínimo 6 caracteres"
                   className="scada-input w-full px-3 py-1.5 rounded-lg text-xs text-white"
                 />
               </div>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from '../../services/supabase';
+import { useAuth } from '../../context/AuthContext';
 import { 
   Users, 
   UserPlus, 
@@ -18,8 +19,21 @@ import {
 } from 'lucide-react';
 
 export default function UserManagementView({ fleet = {}, onFleetUpdated }) {
+  const {
+    listUserProfiles,
+    listAccessRequests,
+    createUserAccount,
+    deleteUserAccount,
+    approveAccessRequest,
+    rejectAccessRequest,
+    updateUserStatus,
+    updateUserProfile,
+    resetUserPassword
+  } = useAuth();
+
   const [activeTab, setActiveTab] = useState('directorio');
   const [usersList, setUsersList] = useState([]);
+  const [requestsList, setRequestsList] = useState([]);
   const [auditLogs, setAuditLogs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
@@ -45,16 +59,20 @@ export default function UserManagementView({ fleet = {}, onFleetUpdated }) {
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('usuarios_scada')
-        .select('*');
-      if (!error && data) setUsersList(data);
+      const profiles = await listUserProfiles();
+      setUsersList(profiles);
     } catch (e) {
       console.warn('[USER MGMT] Error cargando usuarios:', e);
-    } finally {
-      setLoading(false);
+      setErrorMsg('No se pudo cargar el directorio seguro de personal.');
     }
-  }, []);
+    try {
+      const requests = await listAccessRequests();
+      setRequestsList(requests);
+    } catch (e) {
+      console.warn('[USER MGMT] Error cargando solicitudes:', e);
+    }
+    setLoading(false);
+  }, [listUserProfiles, listAccessRequests]);
 
   const fetchLogs = useCallback(async () => {
     try {
@@ -91,44 +109,18 @@ export default function UserManagementView({ fleet = {}, onFleetUpdated }) {
     const assignedMacs = Object.keys(selectedDevices).filter((m) => selectedDevices[m]);
 
     if (cleanUser.length < 3) return setErrorMsg('El nombre de usuario debe tener mínimo 3 caracteres.');
-    if (cleanPass.length < 4) return setErrorMsg('La contraseña debe tener mínimo 4 caracteres.');
+    if (cleanPass.length < 6) return setErrorMsg('La contraseña debe tener mínimo 6 caracteres.');
 
     try {
-      const fullPayload = {
-        user: cleanUser,
-        pass: cleanPass,
-        usuario: cleanUser,
+      await createUserAccount({
+        username: cleanUser,
+        displayName: uNombre.trim() || cleanUser,
         password: cleanPass,
-        nombre: uNombre.trim() || cleanUser,
-        email: cleanEmail,
-        rol: uRol,
-        departamento: cleanHospital,
-        equipos_autorizados: assignedMacs.length > 0 ? assignedMacs.join(',') : null,
-        estado: 'ACTIVO'
-      };
-
-      let { error: insertError } = await supabase
-        .from('usuarios_scada')
-        .upsert(fullPayload, { onConflict: 'user' });
-
-      // Plan de contingencia si la tabla Postgres tiene columnas antiguas
-      if (insertError && insertError.message && insertError.message.includes('schema cache')) {
-        const safePayload = {
-          user: cleanUser,
-          pass: cleanPass,
-          rol: uRol,
-          email: cleanEmail,
-          estado: 'ACTIVO'
-        };
-
-        const { error: safeError } = await supabase
-          .from('usuarios_scada')
-          .upsert(safePayload, { onConflict: 'user' });
-
-        if (safeError) throw safeError;
-      } else if (insertError) {
-        throw insertError;
-      }
+        role: uRol,
+        department: cleanHospital,
+        contactEmail: cleanEmail || '',
+        authorizedDevices: assignedMacs
+      });
 
       // Vincular autoclaves en asignaciones_equipos
       for (const mac of assignedMacs) {
@@ -163,47 +155,32 @@ export default function UserManagementView({ fleet = {}, onFleetUpdated }) {
   // Alternar Estado Activo / Suspendido
   const handleToggleStatus = async (userObj) => {
     const username = userObj.user || userObj.usuario;
-    if (username === 'superadmin' || username === 'admin') {
+    if (userObj.rol === 'SUPERADMIN') {
       return alert('No puedes suspender la cuenta del Superadministrador.');
     }
 
     const newStatus = userObj.estado === 'ACTIVO' ? 'INACTIVO' : 'ACTIVO';
     try {
-      const matchCol = userObj.user ? 'user' : 'usuario';
-      await supabase
-        .from('usuarios_scada')
-        .update({ estado: newStatus })
-        .eq(matchCol, username);
-
+      await updateUserStatus(userObj.user_id, newStatus);
       fetchUsers();
-    } catch (_) {
-      alert('Error cambiando estado del usuario');
+    } catch (e) {
+      alert('Error cambiando estado del usuario: ' + (e.message || ''));
     }
   };
 
   // Guardar Nueva Contraseña
   const handleSavePassword = async () => {
-    if (!resetUser || tempPassword.trim().length < 4) return alert('Mínimo 4 caracteres.');
+    if (!resetUser || tempPassword.trim().length < 6) return alert('Mínimo 6 caracteres.');
     const username = resetUser.user || resetUser.usuario;
-    const matchCol = resetUser.user ? 'user' : 'usuario';
 
     try {
-      const updateData = {
-        pass: tempPassword.trim(),
-        password: tempPassword.trim()
-      };
-
-      await supabase
-        .from('usuarios_scada')
-        .update(updateData)
-        .eq(matchCol, username);
-
-      alert(`Contraseña de [${username}] actualizada a: ${tempPassword}`);
+      await resetUserPassword(resetUser.user_id, tempPassword.trim());
+      alert(`Contraseña de [${username}] actualizada correctamente.`);
       setResetUser(null);
       setTempPassword('');
       fetchUsers();
-    } catch (_) {
-      alert('Error actualizando contraseña');
+    } catch (e) {
+      alert('Error actualizando contraseña: ' + (e.message || ''));
     }
   };
 
@@ -214,13 +191,7 @@ export default function UserManagementView({ fleet = {}, onFleetUpdated }) {
     const newAssignedMacs = Object.keys(editUserDevices).filter((m) => editUserDevices[m]);
 
     try {
-      const matchCol = editAssignUser.user ? 'user' : 'usuario';
-      try {
-        await supabase
-          .from('usuarios_scada')
-          .update({ equipos_autorizados: newAssignedMacs.join(',') || null })
-          .eq(matchCol, username);
-      } catch (_) {}
+      await updateUserProfile(editAssignUser.user_id, { authorizedDevices: newAssignedMacs });
 
       // Actualizar asignaciones en cada máquina
       for (const mac of macList) {
@@ -248,8 +219,8 @@ export default function UserManagementView({ fleet = {}, onFleetUpdated }) {
       setEditAssignUser(null);
       fetchUsers();
       if (onFleetUpdated) onFleetUpdated();
-    } catch (_) {
-      alert('Error guardando asignación');
+    } catch (e) {
+      alert('Error guardando asignación: ' + (e.message || ''));
     }
   };
 
@@ -266,36 +237,43 @@ export default function UserManagementView({ fleet = {}, onFleetUpdated }) {
 
   const handleDeleteUser = async (userObj) => {
     const username = userObj.user || userObj.usuario;
-    if (username === 'superadmin' || username === 'admin') {
+
+    // Las solicitudes se rechazan, no se eliminan cuentas
+    if (!userObj.user_id && (userObj.request_id || userObj.estado === 'PENDIENTE')) {
+      if (!confirm(`¿Rechazar la solicitud de [${username.toUpperCase()}]?`)) return;
+      try {
+        await rejectAccessRequest(userObj.request_id);
+        fetchUsers();
+      } catch (e) {
+        alert('Error rechazando solicitud: ' + (e.message || ''));
+      }
+      return;
+    }
+
+    if (userObj.rol === 'SUPERADMIN') {
       return alert('No puedes eliminar la cuenta raíz de Superadmin.');
     }
     if (!confirm(`¿Eliminar definitivamente al usuario [${username.toUpperCase()}]?`)) return;
 
     try {
-      const matchCol = userObj.user ? 'user' : 'usuario';
-      await supabase.from('usuarios_scada').delete().eq(matchCol, username);
+      await deleteUserAccount(userObj.user_id);
       fetchUsers();
-    } catch (_) {
-      alert('Error eliminando usuario');
+    } catch (e) {
+      alert('Error eliminando usuario: ' + (e.message || ''));
     }
   };
 
   const handleApproveRequest = async (reqUser, roleToAssign = 'OPERADOR') => {
-    const username = reqUser.user || reqUser.usuario;
-    const matchCol = reqUser.user ? 'user' : 'usuario';
     try {
-      await supabase
-        .from('usuarios_scada')
-        .update({ estado: 'ACTIVO', rol: roleToAssign })
-        .eq(matchCol, username);
+      await approveAccessRequest(reqUser.request_id, roleToAssign);
       fetchUsers();
-    } catch (_) {
-      alert('Error aprobando solicitud');
+    } catch (e) {
+      alert('Error aprobando solicitud: ' + (e.message || ''));
     }
   };
 
-  const pendingList = useMemo(() => usersList.filter((u) => u.estado === 'PENDIENTE'), [usersList]);
-  const activeList = useMemo(() => usersList.filter((u) => u.estado !== 'PENDIENTE'), [usersList]);
+  const pendingList = useMemo(() => requestsList.filter((u) => u.estado === 'PENDIENTE'), [requestsList]);
+  const activeList = useMemo(() => usersList, [usersList]);
 
   return (
     <div className="space-y-4 font-mono text-xs select-none">
@@ -413,7 +391,7 @@ export default function UserManagementView({ fleet = {}, onFleetUpdated }) {
                 {activeList.map((u) => {
                   const username = u.user || u.usuario;
                   const isActive = u.estado === 'ACTIVO';
-                  const isRoot = username === 'superadmin' || username === 'admin';
+                  const isRoot = u.rol === 'SUPERADMIN';
                   
                   const authMacs = (u.equipos_autorizados || '').toUpperCase().split(',').map((x) => x.trim()).filter(Boolean);
                   const userMacs = macList.filter(m => authMacs.includes(m) || (fleet[m]?.meta?.usuario_asignado || '').toLowerCase() === username.toLowerCase());

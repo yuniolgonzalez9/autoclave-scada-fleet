@@ -63,13 +63,13 @@ function ScadaAppContent() {
   const setCurrentBg = (background) => setAppearance((current) => ({ ...current, background }));
   const setOpacity = (nextOpacity) => setAppearance((current) => ({ ...current, opacity: nextOpacity }));
 
-  // Verificación periódica de conexión con Supabase (cada 15s) usando la columna "user"
+  // Verificación periódica de conexión con Supabase (cada 15s)
   const [supabaseConnected, setSupabaseConnected] = useState(true);
   useEffect(() => {
     let isMounted = true;
     const checkSupabase = async () => {
       try {
-        const { error } = await supabase.from('usuarios_scada').select('user').limit(1);
+        const { error } = await supabase.rpc('resolve_login_email', { p_identifier: '__ping__' });
         if (isMounted) {
           setSupabaseConnected(!error && navigator.onLine);
         }

@@ -2,7 +2,7 @@ import mqtt from 'mqtt';
 
 const BROKER_URL = import.meta.env.VITE_MQTT_BROKER_URL || 'wss://d15a5980139147d99bb9e2ad3825e62e.s1.eu.hivemq.cloud:8884/mqtt';
 const MQTT_USER = import.meta.env.VITE_MQTT_USER || 'admin_autoclave';
-const MQTT_PASS = import.meta.env.VITE_MQTT_PASS || '24331973';
+const MQTT_PASS = import.meta.env.VITE_MQTT_PASS || '';
 
 const CHANNEL_NAME = 'scada_hivemq_mesh_v2';
 
