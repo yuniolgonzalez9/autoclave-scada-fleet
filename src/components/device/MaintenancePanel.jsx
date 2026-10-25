@@ -1,590 +1,701 @@
-import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { createPortal } from 'react-dom';
-import {
-  Bell,
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { 
+  CalendarClock, 
+  CheckCircle2, 
+  ClipboardCheck, 
+  Gauge, 
+  Pencil, 
+  Plus, 
+  Save, 
+  Timer, 
+  Trash2, 
+  Wrench, 
   X,
-  Check,
-  CheckCheck,
   AlertTriangle,
-  AlertOctagon,
-  Info,
-  Thermometer,
-  WifiOff,
-  Wrench,
-  Lock,
-  UserPlus,
-  KeyRound,
-  ClipboardCheck,
-  RadioTower,
-  Database,
-  Eye,
-  RotateCcw,
-  VolumeX,
-  ShieldCheck,
-  ChevronDown,
-  Users,
-  Cpu,
-  Server,
-  Trash2
+  Clock
 } from 'lucide-react';
-import { SEVERITY_ORDER } from '../../hooks/useNotificationCenter';
-import { useSwipe, stepThrough } from '../../hooks/useSwipe';
-import SwipeDots from './SwipeDots';
+import {
+  DEFAULT_PLANES, 
+  TIPOS_SERVICIO, 
+  cycleDurationMinutes, 
+  fetchMaintenanceLog, 
+  mergeDeviceConfig,
+  planIdFromEntry, 
+  registerMaintenance, 
+  stripPlanTag, 
+  updateDeviceRow
+} from '../../services/deviceService';
 
-const TYPE_ICONS = {
-  ALARMA: AlertOctagon,
-  SOBRETEMP: Thermometer,
-  OFFLINE: WifiOff,
-  MANT_PROXIMO: Wrench,
-  MANT_LIMITE: Lock,
-  CICLO: ClipboardCheck,
-  ACCESO: UserPlus,
-  RECUPERACION: KeyRound,
-  MQTT: RadioTower
-};
+const DAY = 86400000;
+const field = 'w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-2 text-white text-xs focus:outline-none focus:border-cyan-400 font-mono';
 
-const SEVERITY_STYLES = {
-  CRITICA: {
-    label: 'Críticas',
-    bar: 'bg-rose-500',
-    icon: 'bg-rose-500/15 text-rose-300 border-rose-500/40',
-    chip: 'bg-rose-500/15 text-rose-300 border-rose-500/40'
-  },
-  ADVERTENCIA: {
-    label: 'Advertencias',
-    bar: 'bg-amber-400',
-    icon: 'bg-amber-500/15 text-amber-300 border-amber-500/40',
-    chip: 'bg-amber-500/15 text-amber-300 border-amber-500/40'
-  },
-  INFO: {
-    label: 'Informativas',
-    bar: 'bg-cyan-400',
-    icon: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/40',
-    chip: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/40'
-  }
-};
-
-const ROLES = ['OPERADOR', 'CLIENTE', 'TECNICO', 'AUDITOR_CALIDAD', 'ADMIN', 'DIRECTOR'];
-
-const rtf = typeof Intl !== 'undefined' && Intl.RelativeTimeFormat
-  ? new Intl.RelativeTimeFormat('es', { numeric: 'auto' })
-  : null;
-
-function timeAgo(iso) {
-  if (!iso) return '—';
-  const t = Date.parse(iso);
-  if (!Number.isFinite(t)) return '—';
-  const diff = Math.round((t - Date.now()) / 1000);
-  const abs = Math.abs(diff);
-
-  if (!rtf) {
-    const d = new Date(t);
-    return isNaN(d.getTime()) ? '—' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  }
-
-  if (abs < 45) return 'hace unos segundos';
-  if (abs < 3600) return rtf.format(Math.round(diff / 60), 'minute');
-  if (abs < 86400) return rtf.format(Math.round(diff / 3600), 'hour');
-  return rtf.format(Math.round(diff / 86400), 'day');
-}
-
-function ActionButton({ onClick, icon: Icon, children, tone = 'slate', disabled }) {
-  const tones = {
-    slate: 'border-slate-600/60 text-slate-200 hover:bg-slate-700/40',
-    cyan: 'border-cyan-500/50 text-cyan-200 bg-cyan-500/10 hover:bg-cyan-500/20',
-    emerald: 'border-emerald-500/50 text-emerald-200 bg-emerald-500/10 hover:bg-emerald-500/20',
-    rose: 'border-rose-500/50 text-rose-200 bg-rose-500/10 hover:bg-rose-500/20',
-    amber: 'border-amber-500/50 text-amber-200 bg-amber-500/10 hover:bg-amber-500/20'
-  };
+function OdometerDigits({ value, digits = 6 }) {
+  const safeNumber = Math.max(0, Math.floor(Number(value) || 0));
+  const str = String(safeNumber).padStart(digits, '0');
+  
   return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={(e) => { e.stopPropagation(); onClick?.(); }}
-      className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[11px] font-semibold transition-colors disabled:opacity-40 ${tones[tone]}`}
-    >
-      {Icon && <Icon className="w-3.5 h-3.5" />}
-      <span>{children}</span>
-    </button>
+    <div className="flex gap-1 select-none" aria-label={`${safeNumber} ciclos registrados`}>
+      {str.split('').map((d, i) => (
+        <span 
+          key={i} 
+          className="w-7 h-10 sm:w-8 sm:h-11 rounded-md bg-gradient-to-b from-slate-800 via-slate-950 to-slate-800 border border-slate-600 flex items-center justify-center text-lg sm:text-xl font-bold font-mono text-white shadow-inner"
+        >
+          {d}
+        </span>
+      ))}
+    </div>
   );
 }
 
-function NotificationCard({ notif, center, isAdmin, canDelete, onViewDevice }) {
-  const [mode, setMode] = useState(null);
-  const [text, setText] = useState('');
-  const [role, setRole] = useState('OPERADOR');
-  const [busy, setBusy] = useState(false);
+function planStatus(plan, log, historicos) {
+  const last = log.find((e) => planIdFromEntry(e) === plan.id);
+  
+  if (plan.modo === 'CICLOS') {
+    const base = last ? Math.max(0, Number(last.ciclos_al_momento) || 0) : 0;
+    const intervalSafe = Math.max(1, Number(plan.intervalo) || 100);
+    const used = Math.max(0, historicos - base);
+    const pct = Math.min(100, Math.round((used / intervalSafe) * 100));
+    
+    return { 
+      last, 
+      pct, 
+      label: `${used} / ${intervalSafe} ciclos`, 
+      due: used >= intervalSafe, 
+      soon: pct >= 80 
+    };
+  }
+
+  // Modo DÍAS
+  if (!last || !last.created_at) {
+    return { 
+      last: null, 
+      pct: 100, 
+      label: 'Sin registro previo', 
+      due: true, 
+      soon: true 
+    };
+  }
+
+  const lastTime = new Date(last.created_at).getTime();
+  if (isNaN(lastTime)) {
+    return { 
+      last: null, 
+      pct: 100, 
+      label: 'Fecha previa no válida', 
+      due: true, 
+      soon: true 
+    };
+  }
+
+  const intervalDays = Math.max(1, Number(plan.intervalo) || 30);
+  const next = new Date(lastTime + intervalDays * DAY);
+  const daysLeft = Math.ceil((next.getTime() - Date.now()) / DAY);
+  const pct = Math.max(0, Math.min(100, Math.round(((intervalDays - daysLeft) / intervalDays) * 100)));
+
+  return {
+    last, 
+    pct, 
+    next,
+    label: daysLeft < 0 ? `Vencido hace ${-daysLeft} d` : daysLeft === 0 ? 'Vence hoy' : `Faltan ${daysLeft} d (${next.toLocaleDateString()})`,
+    due: daysLeft <= 0, 
+    soon: pct >= 80
+  };
+}
+
+export default function MaintenancePanel({ 
+  device, 
+  odometer, 
+  stats = [], 
+  canEdit, 
+  operatorName, 
+  sendCommand, 
+  onDeviceUpdated 
+}) {
+  const meta = device?.meta || {};
+  const tipo = (meta.tipo || 'AUTOCLAVE').toUpperCase();
+  const { ciclos = 0, historicos = 0, limite = 200, alertaPct = 80 } = odometer || {};
+
+  const [log, setLog] = useState([]);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [form, setForm] = useState(null);
+  const [limits, setLimits] = useState(null);
+  const [planEdit, setPlanEdit] = useState(null);
+  const [busy, setBusy] = useState(false);
 
-  const styles = SEVERITY_STYLES[notif.severidad] || SEVERITY_STYLES.INFO;
-  const Icon = TYPE_ICONS[notif.tipo] || Info;
-  const resolved = notif.estado === 'RESUELTA';
+  const cleanMac = useMemo(() => {
+    return (device?.mac || '').toUpperCase().replace(/[:\-]/g, '');
+  }, [device?.mac]);
 
-  const run = async (fn) => {
+  const plans = useMemo(() => {
+    if (Array.isArray(meta.plan_mantenimiento) && meta.plan_mantenimiento.length > 0) {
+      return meta.plan_mantenimiento;
+    }
+    return DEFAULT_PLANES[tipo] || DEFAULT_PLANES.AUTOCLAVE || [];
+  }, [meta.plan_mantenimiento, tipo]);
+
+  const load = useCallback(async () => {
+    if (!cleanMac) return;
+    setLoading(true);
+    try { 
+      const entries = await fetchMaintenanceLog(cleanMac);
+      setLog(Array.isArray(entries) ? entries : []); 
+      setError(''); 
+    } catch (e) { 
+      setError(e.message || 'Error cargando bitácora de mantenimiento.'); 
+    } finally { 
+      setLoading(false); 
+    }
+  }, [cleanMac]);
+
+  useEffect(() => { 
+    load(); 
+  }, [load]);
+
+  const insights = useMemo(() => {
+    const safeStats = Array.isArray(stats) ? stats : [];
+    const since = Date.now() - 30 * DAY;
+    
+    const recent = safeStats.filter((r) => {
+      const t = new Date(r.created_at).getTime();
+      return !isNaN(t) && t >= since;
+    }).length;
+
+    const perDay = recent / 30;
+    const remaining = Math.max(0, limite - ciclos);
+    
+    const minutes = safeStats
+      .map(cycleDurationMinutes)
+      .filter((v) => typeof v === 'number' && !isNaN(v))
+      .reduce((a, b) => a + b, 0);
+
+    return {
+      perDay,
+      remaining,
+      eta: perDay > 0 ? new Date(Date.now() + (remaining / perDay) * DAY) : null,
+      hours: minutes / 60,
+      lastService: log[0]?.created_at || meta.ultimo_mantenimiento || null
+    };
+  }, [stats, limite, ciclos, log, meta.ultimo_mantenimiento]);
+
+  const pct = Math.min(100, Math.round((ciclos / Math.max(1, limite)) * 100));
+  const tone = pct >= 100 ? 'rose' : pct >= alertaPct ? 'amber' : 'emerald';
+  const toneBar = { rose: 'bg-rose-500', amber: 'bg-amber-400', emerald: 'bg-emerald-400' }[tone];
+  const toneText = { rose: 'text-rose-300', amber: 'text-amber-300', emerald: 'text-emerald-300' }[tone];
+
+  const openForm = (plan = null) => {
+    setForm({
+      tipo_servicio: plan?.tipo_servicio || 'PREVENTIVO',
+      tecnico_responsable: operatorName || '',
+      descripcion: plan ? `Ejecución de plan: ${plan.nombre}` : '',
+      plan_id: plan?.id || '',
+      reiniciarOdometro: !plan
+    });
+  };
+
+  const submitMaintenance = async (e) => {
+    e.preventDefault();
+    if (!cleanMac) return;
+
     setBusy(true);
     setError('');
+
     try {
-      await fn();
-      setMode(null);
-      setText('');
-    } catch (e) {
-      setError(e?.message || 'No fue posible completar la acción solicitada.');
+      const { row } = await registerMaintenance({ 
+        mac: cleanMac, 
+        ...form, 
+        plan_id: form.plan_id || null, 
+        ciclos_al_momento: historicos 
+      });
+
+      if (form.reiniciarOdometro && sendCommand) {
+        sendCommand(cleanMac, { cmd: 'RESET_ODOMETRO' });
+      }
+
+      if (row) {
+        onDeviceUpdated?.(row);
+      }
+
+      setForm(null);
+      await load();
+    } catch (err) {
+      setError(err.message || 'Error registrando el servicio.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveLimits = async () => {
+    if (!cleanMac) return;
+
+    const parsedLimite = Math.max(10, parseInt(limits.limite, 10) || 300);
+    const parsedAlerta = Math.max(10, Math.min(99, parseInt(limits.alerta, 10) || 80));
+
+    setBusy(true);
+    setError('');
+
+    try {
+      const row = await updateDeviceRow(cleanMac, { 
+        limite_mantenimiento: parsedLimite, 
+        alerta_porcentaje: parsedAlerta 
+      });
+
+      await mergeDeviceConfig(cleanMac, { 
+        lim_mant: parsedLimite, 
+        alerta_pct: parsedAlerta 
+      });
+
+      if (sendCommand) {
+        sendCommand(cleanMac, { 
+          cmd: 'SET_CONFIG', 
+          cfg: { lim_mant: parsedLimite, alerta_pct: parsedAlerta } 
+        });
+      }
+
+      if (row) {
+        onDeviceUpdated?.(row);
+      }
+
+      setLimits(null);
+    } catch (err) {
+      setError(err.message || 'Error actualizando límites de mantenimiento.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const savePlans = async (nextPlans) => {
+    if (!cleanMac) return;
+
+    setBusy(true);
+    setError('');
+
+    try {
+      const row = await updateDeviceRow(cleanMac, { plan_mantenimiento: nextPlans });
+      if (row) {
+        onDeviceUpdated?.(row);
+      }
+      setPlanEdit(null);
+    } catch (err) {
+      setError(err.message || 'Error actualizando planes de mantenimiento.');
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <div className={`relative overflow-hidden rounded-xl border border-white/10 bg-slate-900/70 ${resolved ? 'opacity-70' : ''}`}>
-      <span className={`absolute left-0 top-0 bottom-0 w-1 ${styles.bar}`} />
-      <div className="pl-4 pr-3 py-3">
-        <div className="flex items-start gap-3">
-          <div className={`p-2 rounded-lg border shrink-0 ${styles.icon}`}>
-            <Icon className="w-4 h-4" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-start justify-between gap-2">
-              <h4 className="text-[13px] font-bold text-white leading-snug">{notif.titulo}</h4>
-              <span className="text-[10px] text-slate-400 whitespace-nowrap mt-0.5">{timeAgo(notif.creada_en)}</span>
-            </div>
-            {notif.mensaje && <p className="text-[12px] text-slate-300 mt-1 leading-snug">{notif.mensaje}</p>}
+    <div className="space-y-4 font-mono text-xs select-none">
+      {error && (
+        <div className="p-3 bg-rose-500/15 border border-rose-500/40 text-rose-300 rounded-xl flex items-center gap-2 font-sans">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
 
-            <div className="flex flex-wrap items-center gap-1.5 mt-2">
-              {notif.estado === 'NUEVA' && !resolved && (
-                <span className={`px-1.5 py-0.5 rounded border text-[10px] font-bold ${styles.chip}`}>Nueva</span>
-              )}
-              {notif.estado === 'ATENDIDA' && (
-                <span className="px-1.5 py-0.5 rounded border border-sky-500/40 bg-sky-500/10 text-sky-300 text-[10px] font-bold">
-                  En atención · {notif.atendida_por || 'Técnico'}
-                </span>
-              )}
-              {!resolved && notif.activa === false && (
-                <span className="px-1.5 py-0.5 rounded border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 text-[10px] font-bold">
-                  Condición normalizada
-                </span>
-              )}
-              {(notif.ocurrencias || 1) > 1 && (
-                <span className="px-1.5 py-0.5 rounded border border-slate-600 text-slate-300 text-[10px] font-bold font-mono">
-                  ×{notif.ocurrencias}
-                </span>
-              )}
-              {notif.mac && (
-                <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 text-[10px] font-mono">
-                  {notif.mac}
-                </span>
-              )}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-3">
+        {/* Odómetro Principal */}
+        <div className="lg:col-span-3 rounded-2xl border border-slate-700 bg-gradient-to-br from-slate-950 to-slate-900 p-4 sm:p-5 space-y-4 shadow-xl">
+          <div className="flex items-start justify-between gap-2 flex-wrap">
+            <div>
+              <span className="text-[10px] uppercase tracking-widest text-slate-500 font-bold block">
+                Odómetro Acumulado Total (Vida Útil)
+              </span>
+              <div className="mt-2">
+                <OdometerDigits value={historicos} />
+              </div>
             </div>
-
-            {resolved && (
-              <p className="text-[11px] text-emerald-300/90 mt-2 flex items-start gap-1 font-sans">
-                <CheckCheck className="w-3.5 h-3.5 shrink-0 mt-px" />
-                <span>
-                  Resuelta por {notif.resuelta_por || 'Supervisión'} {timeAgo(notif.resuelta_en)}
-                  {notif.nota_resolucion ? ` · ${notif.nota_resolucion}` : ''}
-                </span>
+            <div className="text-right">
+              <span className="text-[10px] uppercase tracking-widest text-slate-500 font-bold block">
+                Tiempo de Operación
+              </span>
+              <p className="text-xl sm:text-2xl font-bold font-mono text-cyan-300 mt-1">
+                {insights.hours.toFixed(1)} <span className="text-xs font-normal text-slate-400">horas</span>
               </p>
-            )}
+            </div>
+          </div>
 
-            {resolved && canDelete && !notif.local && (
-              <div className="flex flex-wrap gap-1.5 mt-2.5">
-                {mode === 'delete' ? (
-                  <>
-                    <ActionButton onClick={() => setMode(null)}>Cancelar</ActionButton>
-                    <ActionButton icon={Trash2} tone="rose" disabled={busy} onClick={() => run(() => center.remove(notif))}>
-                      Confirmar Eliminación
-                    </ActionButton>
-                  </>
-                ) : (
-                  <ActionButton icon={Trash2} tone="rose" onClick={() => setMode('delete')}>Eliminar Registro</ActionButton>
-                )}
-              </div>
-            )}
+          <div className="space-y-1.5 pt-1">
+            <div className="flex justify-between text-[11px]">
+              <span className="text-slate-300 font-sans">Ciclos desde la última intervención técnica:</span>
+              <span className={`font-bold font-mono ${toneText}`}>
+                {ciclos} / {limite} ({pct}%)
+              </span>
+            </div>
+            <div className="relative h-3 rounded-full bg-slate-800 overflow-hidden border border-slate-700">
+              <div 
+                className={`h-full ${toneBar} transition-all duration-500`} 
+                style={{ width: `${pct}%` }} 
+              />
+              <span 
+                className="absolute top-0 bottom-0 w-0.5 bg-white/70 shadow-[0_0_6px_#fff]" 
+                style={{ left: `${alertaPct}%` }} 
+                title={`Umbral de alerta temprana: ${alertaPct}%`} 
+              />
+            </div>
+          </div>
 
-            {!resolved && !notif.local && (
-              <div className="flex flex-wrap gap-1.5 mt-3">
-                {notif.mac && <ActionButton icon={Eye} onClick={() => onViewDevice(notif.mac)}>Inspeccionar Equipo</ActionButton>}
-                {notif.tipo === 'ALARMA' && notif.activa !== false && (
-                  <ActionButton icon={RotateCcw} tone="amber" disabled={busy} onClick={() => run(() => center.resetDeviceAlarm(notif))}>
-                    Restablecer Alarma
-                  </ActionButton>
-                )}
-                {notif.tipo === 'ACCESO' && isAdmin && (
-                  <>
-                    <ActionButton icon={Check} tone="emerald" onClick={() => setMode(mode === 'approve' ? null : 'approve')}>Aprobar Acceso</ActionButton>
-                    <ActionButton icon={X} tone="rose" disabled={busy} onClick={() => run(() => center.rejectAccess(notif))}>Rechazar</ActionButton>
-                  </>
-                )}
-                {notif.tipo === 'RECUPERACION' && isAdmin && (
-                  <ActionButton icon={KeyRound} tone="cyan" onClick={() => setMode(mode === 'password' ? null : 'password')}>
-                    Asignar Clave
-                  </ActionButton>
-                )}
-                {notif.estado === 'NUEVA' && notif.severidad !== 'INFO' && !['ACCESO', 'RECUPERACION'].includes(notif.tipo) && (
-                  <ActionButton icon={ShieldCheck} tone="cyan" disabled={busy} onClick={() => run(() => center.acknowledge(notif))}>
-                    Reconocer / Atender
-                  </ActionButton>
-                )}
-                {notif.severidad === 'INFO' ? (
-                  <ActionButton icon={Check} disabled={busy} onClick={() => run(() => center.resolve(notif, 'Revisada'))}>Marcar Leída</ActionButton>
-                ) : (
-                  <ActionButton icon={CheckCheck} tone="emerald" onClick={() => setMode(mode === 'resolve' ? null : 'resolve')}>Resolver Evento</ActionButton>
-                )}
-              </div>
-            )}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+            <div className="rounded-xl bg-slate-950/70 border border-slate-800 p-2.5">
+              <span className="block text-slate-500 text-[10px]">Restantes</span>
+              <span className="font-bold text-white font-mono text-sm">{insights.remaining}</span>
+            </div>
+            <div className="rounded-xl bg-slate-950/70 border border-slate-800 p-2.5">
+              <span className="block text-slate-500 text-[10px]">Tasa de Uso</span>
+              <span className="font-bold text-white font-mono text-sm">{insights.perDay.toFixed(1)} / día</span>
+            </div>
+            <div className="rounded-xl bg-slate-950/70 border border-slate-800 p-2.5">
+              <span className="block text-slate-500 text-[10px]">Próximo Servicio</span>
+              <span className="font-bold text-white font-mono text-sm">
+                {insights.eta ? insights.eta.toLocaleDateString() : '—'}
+              </span>
+            </div>
+            <div className="rounded-xl bg-slate-950/70 border border-slate-800 p-2.5">
+              <span className="block text-slate-500 text-[10px]">Último Mantenimiento</span>
+              <span className="font-bold text-white font-mono text-sm">
+                {insights.lastService ? new Date(insights.lastService).toLocaleDateString() : 'Sin registros'}
+              </span>
+            </div>
+          </div>
 
-            {mode === 'resolve' && (
-              <div className="mt-3 space-y-2">
-                <textarea
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  rows={2}
-                  placeholder="Acciones correctivas realizadas (opcional)..."
-                  className="w-full rounded-lg bg-slate-950/80 border border-slate-700 px-2.5 py-2 text-[12px] text-white placeholder:text-slate-500 focus:outline-none focus:border-emerald-500/60 font-sans"
+          {canEdit && (
+            <div className="flex flex-wrap gap-2 pt-1 border-t border-slate-800">
+              <button 
+                type="button" 
+                onClick={() => openForm()} 
+                className="px-3.5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-[11px] font-bold flex items-center gap-1.5 shadow transition-all"
+              >
+                <Wrench className="w-3.5 h-3.5" />
+                <span>Registrar Intervención Técnica</span>
+              </button>
+              <button 
+                type="button" 
+                onClick={() => setLimits({ limite, alerta: alertaPct })} 
+                className="px-3.5 py-2 rounded-xl border border-slate-700 hover:bg-slate-800 text-slate-300 text-[11px] font-bold flex items-center gap-1.5 transition-all"
+              >
+                <Gauge className="w-3.5 h-3.5" />
+                <span>Ajustar Límites & Umbral</span>
+              </button>
+            </div>
+          )}
+
+          {/* Formulario de Umbrales */}
+          {limits && (
+            <div className="rounded-xl border border-cyan-500/30 bg-slate-950 p-3.5 grid grid-cols-2 gap-2.5 items-end">
+              <label className="text-[11px] text-slate-400">
+                Límite de Ciclos Preventivo
+                <input 
+                  type="number" 
+                  min="10" 
+                  className={field} 
+                  value={limits.limite} 
+                  onChange={(e) => setLimits({ ...limits, limite: e.target.value })} 
                 />
-                <div className="flex gap-1.5 justify-end">
-                  <ActionButton onClick={() => setMode(null)}>Cancelar</ActionButton>
-                  <ActionButton icon={CheckCheck} tone="emerald" disabled={busy} onClick={() => run(() => center.resolve(notif, text))}>
-                    Cerrar y Archivar
-                  </ActionButton>
-                </div>
-              </div>
-            )}
+              </label>
+              <label className="text-[11px] text-slate-400">
+                Aviso Temprano (%)
+                <input 
+                  type="number" 
+                  min="10" 
+                  max="99" 
+                  className={field} 
+                  value={limits.alerta} 
+                  onChange={(e) => setLimits({ ...limits, alerta: e.target.value })} 
+                />
+              </label>
+              <button 
+                type="button" 
+                onClick={() => setLimits(null)} 
+                className="py-2 rounded-lg border border-slate-700 text-slate-300 text-[11px] font-bold hover:text-white"
+              >
+                Cancelar
+              </button>
+              <button 
+                type="button" 
+                disabled={busy} 
+                onClick={saveLimits} 
+                className="py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-[11px] font-bold flex items-center justify-center gap-1 shadow disabled:opacity-50"
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span>Guardar Umbrales</span>
+              </button>
+            </div>
+          )}
+        </div>
 
-            {mode === 'approve' && (
-              <div className="mt-3 flex flex-wrap items-center gap-1.5">
-                <select
-                  value={role}
-                  onChange={(e) => setRole(e.target.value)}
-                  className="rounded-lg bg-slate-950/80 border border-slate-700 px-2 py-1.5 text-[12px] text-white font-mono"
+        {/* Planes de Mantenimiento Específicos */}
+        <div className="lg:col-span-2 rounded-2xl border border-slate-700 bg-slate-950/50 p-4 sm:p-5 space-y-3">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+            <span className="text-xs font-bold text-white flex items-center gap-1.5">
+              <CalendarClock className="w-4 h-4 text-cyan-400" />
+              <span>Protocolos Preventivos</span>
+            </span>
+            {canEdit && (
+              <button 
+                type="button" 
+                onClick={() => setPlanEdit({ id: '', nombre: '', modo: 'DIAS', intervalo: 30, tipo_servicio: 'PREVENTIVO' })} 
+                className="p-1 rounded-lg border border-slate-700 text-cyan-300 hover:bg-slate-800" 
+                aria-label="Agregar nuevo plan preventivo"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {!plans.length && (
+            <p className="text-[11px] text-slate-500 font-sans p-4 text-center">
+              No existen planes secundarios configurados.
+            </p>
+          )}
+
+          <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+            {plans.map((plan) => {
+              const st = planStatus(plan, log, historicos);
+              return (
+                <div 
+                  key={plan.id} 
+                  className={`rounded-xl border p-2.5 space-y-1.5 transition-colors ${
+                    st.due 
+                      ? 'border-rose-500/40 bg-rose-500/10' 
+                      : st.soon 
+                      ? 'border-amber-500/40 bg-amber-500/5' 
+                      : 'border-slate-800 bg-slate-900/60'
+                  }`}
                 >
-                  {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
-                </select>
-                <ActionButton icon={Check} tone="emerald" disabled={busy} onClick={() => run(() => center.approveAccess(notif, role))}>
-                  Confirmar Aprobación
-                </ActionButton>
-              </div>
-            )}
-
-            {mode === 'password' && (
-              <div className="mt-3 flex flex-wrap items-center gap-1.5">
-                <input
-                  type="text"
-                  value={text}
-                  onChange={(e) => setText(e.target.value)}
-                  placeholder="Contraseña temporal..."
-                  className="flex-1 min-w-[140px] rounded-lg bg-slate-950/80 border border-slate-700 px-2.5 py-1.5 text-[12px] text-white placeholder:text-slate-500 font-mono"
-                />
-                <ActionButton icon={KeyRound} tone="cyan" disabled={busy || text.trim().length < 4} onClick={() => run(() => center.resetPassword(notif, text))}>
-                  Guardar Credencial
-                </ActionButton>
-              </div>
-            )}
-
-            {error && <p className="text-[11px] text-rose-300 mt-2 font-sans">{error}</p>}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <span className="block text-[11px] font-bold text-white truncate">{plan.nombre}</span>
+                      <span className={`block text-[10px] ${st.due ? 'text-rose-300' : st.soon ? 'text-amber-300' : 'text-slate-400'}`}>
+                        Intervalo: {plan.intervalo} {plan.modo === 'CICLOS' ? 'ciclos' : 'días'} · {st.label}
+                      </span>
+                    </div>
+                    <div className="flex gap-0.5 shrink-0">
+                      {canEdit && (
+                        <button 
+                          type="button" 
+                          onClick={() => openForm(plan)} 
+                          className="p-1 rounded hover:bg-white/10 text-emerald-300" 
+                          title="Registrar ejecución de este plan"
+                        >
+                          <ClipboardCheck className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      {canEdit && (
+                        <button 
+                          type="button" 
+                          onClick={() => setPlanEdit(plan)} 
+                          className="p-1 rounded hover:bg-white/10 text-slate-300" 
+                          title="Editar parámetros del plan"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-slate-800 overflow-hidden">
+                    <div 
+                      className={`h-full transition-all ${st.due ? 'bg-rose-500' : st.soon ? 'bg-amber-400' : 'bg-emerald-400'}`} 
+                      style={{ width: `${st.pct}%` }} 
+                    />
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
+      </div>
+
+      {/* Editor de Planes */}
+      {planEdit && (
+        <div className="rounded-2xl border border-cyan-500/30 bg-slate-950 p-4 grid grid-cols-2 sm:grid-cols-4 gap-2.5 items-end">
+          <label className="col-span-2 text-[11px] text-slate-400">
+            Nombre del Procedimiento
+            <input 
+              className={field} 
+              value={planEdit.nombre} 
+              onChange={(e) => setPlanEdit({ ...planEdit, nombre: e.target.value })} 
+              placeholder="Ej: Sustitución de empaque y válvula de retención" 
+            />
+          </label>
+          <label className="text-[11px] text-slate-400">
+            Unidad de Medida
+            <select 
+              className={field} 
+              value={planEdit.modo} 
+              onChange={(e) => setPlanEdit({ ...planEdit, modo: e.target.value })}
+            >
+              <option value="DIAS">Días Calendario</option>
+              <option value="CICLOS">Ciclos de Cámara</option>
+            </select>
+          </label>
+          <label className="text-[11px] text-slate-400">
+            Frecuencia
+            <input 
+              type="number" 
+              min="1" 
+              className={field} 
+              value={planEdit.intervalo} 
+              onChange={(e) => setPlanEdit({ ...planEdit, intervalo: Math.max(1, parseInt(e.target.value, 10) || 1) })} 
+            />
+          </label>
+          <label className="col-span-2 text-[11px] text-slate-400">
+            Tipo de Servicio
+            <select 
+              className={field} 
+              value={planEdit.tipo_servicio} 
+              onChange={(e) => setPlanEdit({ ...planEdit, tipo_servicio: e.target.value })}
+            >
+              {TIPOS_SERVICIO.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+            </select>
+          </label>
+          <div className="col-span-2 flex gap-2">
+            {planEdit.id && (
+              <button 
+                type="button" 
+                onClick={() => savePlans(plans.filter((p) => p.id !== planEdit.id))} 
+                className="p-2 rounded-lg border border-rose-500/40 text-rose-300 hover:bg-rose-500/10" 
+                title="Eliminar este protocolo"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
+            <button 
+              type="button" 
+              onClick={() => setPlanEdit(null)} 
+              className="flex-1 py-2 rounded-lg border border-slate-700 text-slate-300 text-[11px] font-bold hover:text-white"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button" 
+              disabled={busy || !planEdit.nombre.trim()}
+              onClick={() => {
+                const cleanName = planEdit.nombre.trim();
+                const planId = planEdit.id || `plan_${Date.now().toString(36)}`;
+                const planClean = { ...planEdit, nombre: cleanName, id: planId };
+                savePlans(planEdit.id ? plans.map((p) => (p.id === planId ? planClean : p)) : [...plans, planClean]);
+              }}
+              className="flex-1 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-[11px] font-bold disabled:opacity-50 shadow"
+            >
+              Guardar Protocolo
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Formulario de Registro de Servicio */}
+      {form && (
+        <form onSubmit={submitMaintenance} className="rounded-2xl border border-emerald-500/30 bg-slate-950 p-4 sm:p-5 space-y-3 shadow-xl">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+            <span className="text-xs font-bold text-white flex items-center gap-1.5">
+              <Wrench className="w-4 h-4 text-emerald-400" />
+              <span>Registrar Certificación de Servicio</span>
+            </span>
+            <button type="button" onClick={() => setForm(null)} className="p-1 rounded hover:bg-white/10 text-slate-300">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            <label className="text-[11px] text-slate-400">
+              Tipo de Servicio
+              <select className={field} value={form.tipo_servicio} onChange={(e) => setForm({ ...form, tipo_servicio: e.target.value })}>
+                {TIPOS_SERVICIO.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+              </select>
+            </label>
+            <label className="text-[11px] text-slate-400">
+              Protocolo Vinculado
+              <select className={field} value={form.plan_id} onChange={(e) => setForm({ ...form, plan_id: e.target.value })}>
+                <option value="">General / Fuera de plan</option>
+                {plans.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+              </select>
+            </label>
+            <label className="text-[11px] text-slate-400">
+              Técnico Responsable
+              <input required className={field} value={form.tecnico_responsable} onChange={(e) => setForm({ ...form, tecnico_responsable: e.target.value })} />
+            </label>
+          </div>
+
+          <label className="block text-[11px] text-slate-400">
+            Descripción de Acciones Ejecutadas
+            <textarea 
+              rows={3} 
+              required 
+              className={`${field} font-sans leading-relaxed`} 
+              value={form.descripcion} 
+              onChange={(e) => setForm({ ...form, descripcion: e.target.value })} 
+              placeholder="Detalle de mediciones de presión, sustitución de sellos, comprobación de termocuplas..." 
+            />
+          </label>
+
+          <label className="flex items-center gap-2 text-[11px] text-slate-300 font-sans cursor-pointer pt-1">
+            <input 
+              type="checkbox" 
+              checked={form.reiniciarOdometro} 
+              onChange={(e) => setForm({ ...form, reiniciarOdometro: e.target.checked })} 
+              className="w-4 h-4 accent-emerald-400"
+            />
+            <span>Reiniciar odómetro de servicio de la máquina ({ciclos} ciclos ➔ 0 ciclos)</span>
+          </label>
+
+          <button 
+            type="submit" 
+            disabled={busy} 
+            className="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold flex items-center justify-center gap-1.5 disabled:opacity-50 shadow transition-all"
+          >
+            <CheckCircle2 className="w-4 h-4" />
+            <span>{busy ? 'Registrando en Base de Datos...' : 'Validar y Asentar Servicio'}</span>
+          </button>
+        </form>
+      )}
+
+      {/* Bitácora Histórica de Servicios */}
+      <div className="space-y-2 pt-2">
+        <span className="text-[10px] uppercase tracking-widest text-slate-500 font-bold flex items-center gap-1.5">
+          <Timer className="w-3.5 h-3.5" />
+          <span>Historial de Intervenciones {loading ? '· consultando...' : `(${log.length} registros)`}</span>
+        </span>
+
+        {!loading && !log.length && (
+          <div className="p-6 text-center text-slate-500 rounded-xl border border-dashed border-slate-800 font-sans">
+            No existen intervenciones previas registradas para este equipo.
+          </div>
+        )}
+
+        <ol className="relative border-l border-slate-800 ml-2 space-y-3">
+          {log.map((e) => {
+            const plan = plans.find((p) => p.id === planIdFromEntry(e));
+            return (
+              <li key={e.id} className="ml-4">
+                <span className="absolute -left-[5px] mt-1.5 w-2.5 h-2.5 rounded-full bg-cyan-400 shadow-[0_0_6px_#22d3ee]" />
+                <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-3 space-y-1">
+                  <div className="flex flex-wrap items-center gap-2 text-[10px]">
+                    <span className="px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-300 font-bold">
+                      {e.tipo_servicio}
+                    </span>
+                    {plan && (
+                      <span className="px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-300 font-bold">
+                        {plan.nombre}
+                      </span>
+                    )}
+                    <span className="text-slate-400">
+                      {new Date(e.created_at).toLocaleString()}
+                    </span>
+                    <span className="text-slate-500">
+                      · Odómetro: {e.ciclos_al_momento ?? '—'} ciclos
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-200 font-sans whitespace-pre-line leading-relaxed">
+                    {stripPlanTag(e.descripcion) || 'Sin descripción'}
+                  </p>
+                  <p className="text-[10px] text-slate-500">
+                    Técnico: <strong className="text-slate-300">{e.tecnico_responsable || '—'}</strong>
+                  </p>
+                </div>
+              </li>
+            );
+          })}
+        </ol>
       </div>
     </div>
   );
-}
-
-export default function NotificationsPanel({
-  isOpen,
-  onClose,
-  center,
-  isAdmin = false,
-  sirenActive = false,
-  onSilenceSiren = null,
-  onNavigateToDetail = null,
-  onOpenAdminModal = null
-}) {
-  const panelRef = useRef(null);
-  const [tab, setTab] = useState('ALL');
-  const [showResolved, setShowResolved] = useState(false);
-  const [collapsed, setCollapsed] = useState({});
-  const [tabDir, setTabDir] = useState('none');
-  const [confirmClear, setConfirmClear] = useState(false);
-  const [clearing, setClearing] = useState(false);
-  const [clearError, setClearError] = useState('');
-  const listRef = useRef(null);
-
-  const notifications = center?.notifications || [];
-  const counts = center?.counts || { open: 0, critical: 0, warning: 0 };
-
-  const tabs = useMemo(() => {
-    const open = notifications.filter((n) => n.estado !== 'RESUELTA');
-    const base = [
-      { id: 'ALL', label: 'Todas', icon: Bell, count: open.length },
-      { id: 'EQUIPO', label: 'Equipos', icon: Cpu, count: open.filter((n) => n.categoria === 'EQUIPO').length }
-    ];
-    if (isAdmin) {
-      base.push({ id: 'USUARIO', label: 'Usuarios', icon: Users, count: open.filter((n) => n.categoria === 'USUARIO').length });
-    }
-    base.push({ id: 'SISTEMA', label: 'Sistema', icon: Server, count: open.filter((n) => n.categoria === 'SISTEMA').length });
-    return base;
-  }, [notifications, isAdmin]);
-
-  const groups = useMemo(() => {
-    const list = notifications
-      .filter((n) => (tab === 'ALL' ? true : n.categoria === tab))
-      .filter((n) => (showResolved ? n.estado === 'RESUELTA' : n.estado !== 'RESUELTA'));
-
-    if (showResolved) {
-      return [{
-        id: 'RESUELTA',
-        label: 'Historial Resuelto (Últimos 30 días)',
-        items: list.sort((a, b) => Date.parse(b.resuelta_en || 0) - Date.parse(a.resuelta_en || 0))
-      }];
-    }
-
-    const sorted = list.sort((a, b) =>
-      (SEVERITY_ORDER[a.severidad] ?? 9) - (SEVERITY_ORDER[b.severidad] ?? 9) ||
-      (a.estado === 'NUEVA' ? 0 : 1) - (b.estado === 'NUEVA' ? 0 : 1) ||
-      Date.parse(b.creada_en || 0) - Date.parse(a.creada_en || 0)
-    );
-    return ['CRITICA', 'ADVERTENCIA', 'INFO']
-      .map((sev) => ({ id: sev, label: SEVERITY_STYLES[sev].label, items: sorted.filter((n) => n.severidad === sev) }))
-      .filter((g) => g.items.length > 0);
-  }, [notifications, tab, showResolved]);
-
-  const tabIds = useMemo(() => tabs.map((t) => t.id), [tabs]);
-  const tabIndex = Math.max(0, tabIds.indexOf(tab));
-  
-  const selectTab = useCallback((next) => {
-    setTabDir(tabIds.indexOf(next) > tabIndex ? 'next' : 'prev');
-    setTab(next);
-  }, [tabIds, tabIndex]);
-
-  useSwipe(listRef, {
-    enabled: isOpen,
-    onSwipeLeft: () => stepThrough(tabIds, tab, 1, selectTab),
-    onSwipeRight: () => stepThrough(tabIds, tab, -1, selectTab)
-  });
-
-  useEffect(() => {
-    setConfirmClear(false);
-    setClearError('');
-  }, [tab, showResolved, isOpen]);
-
-  const resolvedCount = notifications.filter((n) =>
-    n.estado === 'RESUELTA' && !n.local && (tab === 'ALL' || n.categoria === tab)
-  ).length;
-  const canClear = isAdmin && showResolved && resolvedCount > 0;
-
-  const clearHistory = async () => {
-    setClearing(true);
-    setClearError('');
-    try {
-      await center.clearHistory(tab);
-      setConfirmClear(false);
-    } catch (e) {
-      setClearError(e?.message || 'No fue posible vaciar el historial.');
-    } finally {
-      setClearing(false);
-    }
-  };
-
-  const openInfoCount = notifications.filter((n) => n.severidad === 'INFO' && n.estado !== 'RESUELTA' && !n.local).length;
-
-  useEffect(() => {
-    if (!isOpen) return undefined;
-    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [isOpen, onClose]);
-
-  useEffect(() => {
-    if (!isOpen) return undefined;
-    const prev = document.body.style.overflow;
-    if (window.matchMedia?.('(max-width: 639px)').matches) {
-      document.body.style.overflow = 'hidden';
-    }
-    return () => { document.body.style.overflow = prev; };
-  }, [isOpen]);
-
-  if (!isOpen || typeof document === 'undefined') return null;
-
-  const viewDevice = (mac) => {
-    onClose();
-    onNavigateToDetail?.(mac);
-  };
-
-  const shared = center?.storeMode === 'remote';
-
-  const content = (
-    <>
-      <div className="fixed inset-0 z-[99998] bg-black/60 backdrop-blur-sm" onClick={onClose} />
-
-      <div
-        ref={panelRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Centro de notificaciones y alarmas SCADA"
-        className="notifications-panel fixed z-[100000] flex flex-col overflow-hidden border-cyan-500/40 shadow-2xl font-mono
-          inset-x-0 bottom-0 h-[88dvh] rounded-t-2xl border-t
-          sm:inset-x-auto sm:bottom-auto sm:right-4 sm:top-16 sm:w-[440px] sm:h-[min(700px,calc(100dvh-5rem))] sm:rounded-2xl sm:border"
-        style={{ backgroundColor: 'rgba(10, 15, 30, 0.98)', paddingBottom: 'env(safe-area-inset-bottom)' }}
-      >
-        <div className="sm:hidden flex justify-center pt-2">
-          <span className="w-10 h-1 rounded-full bg-slate-600" />
-        </div>
-
-        <div className="flex items-center justify-between gap-3 px-4 pt-3 pb-3 border-b border-white/10 shrink-0">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="p-2 rounded-xl bg-cyan-500/15 border border-cyan-500/40">
-              <Bell className="w-5 h-5 text-cyan-300" />
-            </div>
-            <div className="min-w-0">
-              <h3 className="text-[14px] font-bold text-white leading-tight">Centro de Notificaciones</h3>
-              <p className="text-[11px] text-slate-400 mt-0.5 font-sans">
-                {counts.open === 0
-                  ? 'Sin eventos pendientes de resolución'
-                  : `${counts.critical} crítica${counts.critical === 1 ? '' : 's'} · ${counts.warning} advertencia${counts.warning === 1 ? '' : 's'}`}
-              </p>
-            </div>
-          </div>
-          <button type="button" onClick={onClose} aria-label="Cerrar" className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/10">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        {sirenActive && (
-          <div className="mx-3 mt-3 flex items-center justify-between gap-2 rounded-xl border border-rose-500/50 bg-rose-500/15 px-3 py-2 shrink-0">
-            <span className="flex items-center gap-2 text-[12px] font-bold text-rose-200">
-              <AlertTriangle className="w-4 h-4 animate-pulse" /> Sirena Industrial Activa
-            </span>
-            {onSilenceSiren && <ActionButton icon={VolumeX} tone="rose" onClick={onSilenceSiren}>Silenciar</ActionButton>}
-          </div>
-        )}
-
-        <div className="flex items-center gap-3 px-4 py-2 text-[10px] text-slate-400 border-b border-white/5 shrink-0">
-          <span className="flex items-center gap-1.5">
-            <span className={`w-1.5 h-1.5 rounded-full ${center?.mqttConnected ? 'bg-emerald-400' : 'bg-rose-500'}`} />
-            MQTT: {center?.mqttConnected ? 'En línea' : 'Sin conexión'}
-          </span>
-          <span className="flex items-center gap-1.5">
-            <Database className="w-3 h-3 text-cyan-400" />
-            {shared ? 'PostgreSQL Central Sincronizado' : 'Registro de Terminal Local'}
-          </span>
-        </div>
-
-        <div className="flex items-center gap-1 px-3 pt-2 overflow-x-auto shrink-0 scrollbar-none">
-          {tabs.map((t) => {
-            const TabIcon = t.icon;
-            const active = tab === t.id;
-            return (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => selectTab(t.id)}
-                className={`flex flex-1 sm:flex-none justify-center items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-colors ${
-                  active ? 'bg-cyan-500/20 text-cyan-200 border border-cyan-500/40' : 'text-slate-400 border border-transparent hover:text-white hover:bg-white/5'
-                }`}
-              >
-                <TabIcon className="w-3.5 h-3.5" />
-                <span>{t.label}</span>
-                {t.count > 0 && (
-                  <span className={`min-w-[18px] px-1 rounded-full text-[10px] font-bold ${active ? 'bg-cyan-400 text-slate-950' : 'bg-slate-700 text-slate-200'}`}>
-                    {t.count}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="flex items-center gap-2 px-3 py-2 shrink-0">
-          <SwipeDots count={tabs.length} index={tabIndex} className="sm:hidden" />
-          <button
-            type="button"
-            onClick={() => setShowResolved((v) => !v)}
-            className={`ml-auto min-w-[110px] justify-center flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap border transition-all ${
-              showResolved ? 'border-emerald-500/50 text-emerald-200 bg-emerald-500/10' : 'border-slate-700 text-slate-400 hover:text-white'
-            }`}
-          >
-            <CheckCheck className="w-3.5 h-3.5" />
-            <span>{showResolved ? 'Ver Abiertas' : 'Historial'}</span>
-          </button>
-        </div>
-
-        <div ref={listRef} className="flex-1 overflow-y-auto overscroll-contain px-3 pb-3">
-          <div
-            key={`${tab}-${showResolved}`}
-            className={`space-y-3 min-h-full ${tabDir === 'next' ? 'swipe-enter-next' : tabDir === 'prev' ? 'swipe-enter-prev' : ''}`}
-          >
-            {groups.length === 0 ? (
-              <div className="flex flex-col items-center justify-center text-center py-14 px-6 font-sans">
-                <div className="p-3 rounded-full bg-emerald-500/10 border border-emerald-500/30 mb-3">
-                  <ShieldCheck className="w-7 h-7 text-emerald-400" />
-                </div>
-                <p className="text-[13px] font-semibold text-white">
-                  {showResolved ? 'Sin registros en el historial' : 'No hay alarmas activas'}
-                </p>
-                <p className="text-[11px] text-slate-400 mt-1">
-                  {showResolved 
-                    ? 'Los eventos resueltos y archivados aparecerán en este registro.' 
-                    : 'Todos los equipos operan dentro de los parámetros térmicos e interlocks nominales.'}
-                </p>
-              </div>
-            ) : (
-              groups.map((group) => (
-                <section key={group.id}>
-                  <button
-                    type="button"
-                    onClick={() => setCollapsed((c) => ({ ...c, [group.id]: !c[group.id] }))}
-                    className="w-full flex items-center justify-between py-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-400"
-                  >
-                    <span>{group.label} ({group.items.length})</span>
-                    <ChevronDown className={`w-4 h-4 transition-transform ${collapsed[group.id] ? '-rotate-90' : ''}`} />
-                  </button>
-                  {!collapsed[group.id] && (
-                    <div className="space-y-2">
-                      {group.items.map((n) => (
-                        <NotificationCard key={n.id} notif={n} center={center} isAdmin={isAdmin} canDelete={isAdmin} onViewDevice={viewDevice} />
-                      ))}
-                    </div>
-                  )}
-                </section>
-              ))
-            )}
-          </div>
-        </div>
-
-        {(openInfoCount > 0 || canClear || (isAdmin && onOpenAdminModal)) && (
-          <div className="flex flex-wrap items-center gap-2 px-3 py-2.5 border-t border-white/10 bg-slate-950/70 shrink-0">
-            {canClear && (confirmClear ? (
-              <>
-                <ActionButton onClick={() => setConfirmClear(false)}>Cancelar</ActionButton>
-                <ActionButton icon={Trash2} tone="rose" disabled={clearing} onClick={clearHistory}>
-                  {clearing ? 'Eliminando...' : `Confirmar Borrado (${resolvedCount})`}
-                </ActionButton>
-              </>
-            ) : (
-              <ActionButton icon={Trash2} tone="rose" onClick={() => setConfirmClear(true)}>
-                Vaciar Historial ({resolvedCount})
-              </ActionButton>
-            ))}
-            {clearError && <span className="w-full text-[11px] text-rose-300 font-sans">{clearError}</span>}
-            {openInfoCount > 0 && (
-              <ActionButton icon={Check} onClick={() => center.resolveAllInfo()}>
-                Depurar Informativas ({openInfoCount})
-              </ActionButton>
-            )}
-            {isAdmin && onOpenAdminModal && (
-              <button
-                type="button"
-                onClick={() => { onClose(); onOpenAdminModal(); }}
-                className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-cyan-500/40 bg-cyan-500/10 text-cyan-200 text-[11px] font-semibold hover:bg-cyan-500/20"
-              >
-                <Users className="w-3.5 h-3.5" />
-                <span>Gestión de Accesos</span>
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-    </>
-  );
-
-  return createPortal(content, document.body);
 }
