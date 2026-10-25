@@ -3,7 +3,6 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import LoginModal from './components/auth/LoginModal';
 import UserManagementModal from './components/admin/UserManagementModal';
 import UserManagementView from './components/admin/UserManagementView';
-import AuthUserManagementView from './components/admin/AuthUserManagementView';
 import CloudDiagnosticsModal from './components/admin/CloudDiagnosticsModal';
 import DeviceDetailView from './components/dashboard/DeviceDetailView';
 import ClinicalAuditView from './components/reports/ClinicalAuditView';
@@ -46,7 +45,7 @@ import {
   ChevronLeft
 } from 'lucide-react';
 
-const APP_SECTIONS = new Set(['flota', 'gestion', 'studio', 'usuarios', 'fota', 'auditoria', 'detalle']);
+const APP_SECTIONS = new Set(['flota', 'gestion', 'servicio', 'studio', 'usuarios', 'fota', 'auditoria', 'detalle']);
 const MOBILE_SECTIONS = ['flota', 'gestion', 'studio', 'usuarios', 'fota'];
 
 function getInitialActiveSection() {
@@ -74,7 +73,7 @@ function ScadaAppContent() {
     authMode
   } = useAuth();
   const { fleet, mqttConnected, sendDeviceCommand, patchDeviceMeta } = useMqttFleet();
-  const { appearance, setAppearance, syncStatus: appearanceSyncStatus } = useAccountAppearance(profile, authMode);
+  const { appearance, setAppearance } = useAccountAppearance(profile, authMode);
   const currentTheme = appearance.theme;
   const currentBg = appearance.background;
   const opacity = appearance.opacity;
@@ -82,7 +81,7 @@ function ScadaAppContent() {
   const setCurrentBg = (background) => setAppearance((current) => ({ ...current, background }));
   const setOpacity = (nextOpacity) => setAppearance((current) => ({ ...current, opacity: nextOpacity }));
 
-  // Verificación periódica de conexión con Supabase (cada 15s) usando la columna "user"
+  // Verificación periódica de conexión con Supabase (cada 15s)
   const [supabaseConnected, setSupabaseConnected] = useState(true);
   useEffect(() => {
     let isMounted = true;
@@ -197,6 +196,7 @@ function ScadaAppContent() {
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [sirenActive, setSirenActive] = useState(false);
+  const sirenActiveRef = useRef(false);
 
   const handleDeviceContextMenu = useCallback((e, dev) => {
     e.preventDefault();
@@ -208,11 +208,12 @@ function ScadaAppContent() {
     });
   }, []);
 
-  // Reloj de inactividad
+  // Reloj de inactividad con throttle
   const [showTimeoutModal, setShowTimeoutModal] = useState(false);
   const [countdown, setCountdown] = useState(60);
   const idleTimerRef = useRef(null);
   const countdownIntervalRef = useRef(null);
+  const lastActivityTimestamp = useRef(Date.now());
 
   const resetIdleTimer = useCallback(() => {
     if (!user) return;
@@ -245,12 +246,19 @@ function ScadaAppContent() {
   }, [showTimeoutModal, logout]);
 
   useEffect(() => {
+    const handleThrottledActivity = () => {
+      const now = Date.now();
+      if (now - lastActivityTimestamp.current > 5000) {
+        lastActivityTimestamp.current = now;
+        resetIdleTimer();
+      }
+    };
+
     const events = ['mousemove', 'mousedown', 'keydown', 'touchstart'];
-    const handleActivity = () => resetIdleTimer();
-    events.forEach((evt) => window.addEventListener(evt, handleActivity, { passive: true }));
+    events.forEach((evt) => window.addEventListener(evt, handleThrottledActivity, { passive: true }));
     resetIdleTimer();
     return () => {
-      events.forEach((evt) => window.removeEventListener(evt, handleActivity));
+      events.forEach((evt) => window.removeEventListener(evt, handleThrottledActivity));
       clearTimeout(idleTimerRef.current);
     };
   }, [resetIdleTimer]);
@@ -298,16 +306,19 @@ function ScadaAppContent() {
       }
     }
 
-    if (hasCriticalAlarm && !sirenActive) {
-      startIndustrialSiren();
+    if (hasCriticalAlarm && !sirenActiveRef.current) {
+      sirenActiveRef.current = true;
       setSirenActive(true);
-    } else if (!hasCriticalAlarm && sirenActive) {
-      stopIndustrialSiren();
+      startIndustrialSiren();
+    } else if (!hasCriticalAlarm && sirenActiveRef.current) {
+      sirenActiveRef.current = false;
       setSirenActive(false);
+      stopIndustrialSiren();
     }
-  }, [fleet, sirenActive]);
+  }, [fleet]);
 
   const handleSilenceSiren = useCallback(() => {
+    sirenActiveRef.current = false;
     stopIndustrialSiren();
     setSirenActive(false);
   }, []);
@@ -329,11 +340,11 @@ function ScadaAppContent() {
 
   const allowedDevices = useMemo(() => {
     const macKeys = Object.keys(fleet);
-    if (isAdmin) return macKeys.map((k) => fleet[k]);
+    if (isAdmin) return macKeys.map((k) => fleet[k]).filter(Boolean);
 
     const userHospital = (profile?.departamento || '').toLowerCase().trim();
     const currentUsername = (profile?.user || profile?.usuario || user?.email || '').toLowerCase().trim();
-    const userAuthMacs = (profile?.equipos_autorizados || '').toUpperCase().split(',').map((x) => x.trim());
+    const userAuthMacs = (profile?.equipos_autorizados || '').toUpperCase().split(',').map((x) => x.trim()).filter(Boolean);
 
     return macKeys
       .map((k) => fleet[k])
@@ -476,9 +487,9 @@ function ScadaAppContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#070913] flex flex-col items-center justify-center">
+      <div className="min-h-screen bg-[#070913] flex flex-col items-center justify-center font-mono">
         <Activity className="w-8 h-8 text-cyan-400 animate-spin mb-3" />
-        <p className="text-xs font-mono text-cyan-400 tracking-wider">SINCRONIZANDO SESIÓN BIOMÉDICA CENTRAL...</p>
+        <p className="text-xs text-cyan-400 tracking-wider">SINCRONIZANDO SESIÓN BIOMÉDICA CENTRAL...</p>
       </div>
     );
   }
@@ -638,6 +649,7 @@ function ScadaAppContent() {
                   kioskMac={kioskMac}
                   onUnlockKiosk={() => toggleKioskMode(null)}
                   onOpenDiagnostics={isAdmin ? () => setCloudDiagType('hivemq') : null}
+                  appearanceSyncStatus={appearanceSyncStatus}
                 />
               </div>
             )}
@@ -740,7 +752,6 @@ function ScadaAppContent() {
                       <div className="flex flex-col items-center gap-1.5 min-w-0">
                         <span className="text-[10px] font-mono text-slate-400 text-center">
                           Equipo {detailIndex + 1} de {filteredDevices.length}
-                          
                         </span>
                         {filteredDevices.length <= 12 && <SwipeDots count={filteredDevices.length} index={detailIndex} />}
                       </div>
@@ -756,25 +767,25 @@ function ScadaAppContent() {
                     </div>
                   )}
                   <div key={inspectingMacToUse} className={navDir === 'next' ? 'swipe-enter-next' : navDir === 'prev' ? 'swipe-enter-prev' : ''}>
-                  <DeviceDetailView
-                    key={inspectingMacToUse}
-                    device={inspectingDevice}
-                    onBack={() => { setActiveSection('flota'); setSelectedMac(null); }}
-                    sendCommand={sendDeviceCommand}
-                    operatorName={displayName}
-                    userRole={displayRole}
-                    isKioskMode={Boolean(kioskMac)}
-                    onToggleKiosk={() => toggleKioskMode(inspectingMacToUse)}
-                    onDeviceUpdated={(row) => patchDeviceMeta(inspectingMacToUse, row)}
-                    isAdmin={isAdmin}
-                  />
+                    <DeviceDetailView
+                      key={inspectingMacToUse}
+                      device={inspectingDevice}
+                      onBack={() => { setActiveSection('flota'); setSelectedMac(null); }}
+                      sendCommand={sendDeviceCommand}
+                      operatorName={displayName}
+                      userRole={displayRole}
+                      isKioskMode={Boolean(kioskMac)}
+                      onToggleKiosk={() => toggleKioskMode(inspectingMacToUse)}
+                      onDeviceUpdated={(row) => patchDeviceMeta(inspectingMacToUse, row)}
+                      isAdmin={isAdmin}
+                    />
                   </div>
                 </div>
               )}
 
-                {(visitedSections.has('flota') || activeSection === 'flota') && (
-                  <div className="app-view-panel" hidden={activeSection !== 'flota'}>
-                    <div className="space-y-4">
+              {(visitedSections.has('flota') || activeSection === 'flota') && (
+                <div className="app-view-panel" hidden={activeSection !== 'flota'}>
+                  <div className="space-y-4">
                     <section className="fleet-overview flex flex-col lg:flex-row lg:items-center justify-between gap-5 px-4 py-4 sm:px-5 sm:py-5 rounded-xl">
                       <div className="relative z-10 flex items-start gap-3">
                         <div className="fleet-overview-mark flex items-center justify-center w-11 h-11 rounded-lg shrink-0">
@@ -996,23 +1007,20 @@ function ScadaAppContent() {
                                     </div>
                                   </div>
                                 ) : (
-                                  <>
-                                    <div className="grid grid-cols-2 gap-2 my-3">
-                                      <div className="p-2.5 rounded-xl glass-cell hologram text-center w-full scale-3d">
-                                        <span className="text-[10px] font-mono text-cyan-400 block">TEMPERATURA</span>
-                                        <span className="text-xl font-bold font-mono text-white">
-                                          {isNaN(tempNum) ? '25.0' : tempNum.toFixed(1)}°C
-                                        </span>
-                                      </div>
-                                      <div className="p-2.5 rounded-xl glass-cell hologram text-center w-full scale-3d">
-                                        <span className="text-[10px] font-mono text-pink-400 block">PRESIÓN</span>
-                                        <span className="text-xl font-bold font-mono text-white">
-                                          {isNaN(presNum) ? '0.00' : presNum.toFixed(2)}b
-                                        </span>
-                                      </div>
+                                  <div className="grid grid-cols-2 gap-2 my-3">
+                                    <div className="p-2.5 rounded-xl glass-cell hologram text-center w-full scale-3d">
+                                      <span className="text-[10px] font-mono text-cyan-400 block">TEMPERATURA</span>
+                                      <span className="text-xl font-bold font-mono text-white">
+                                        {isNaN(tempNum) ? '25.0' : tempNum.toFixed(1)}°C
+                                      </span>
                                     </div>
-
-                                  </>
+                                    <div className="p-2.5 rounded-xl glass-cell hologram text-center w-full scale-3d">
+                                      <span className="text-[10px] font-mono text-pink-400 block">PRESIÓN</span>
+                                      <span className="text-xl font-bold font-mono text-white">
+                                        {isNaN(presNum) ? '0.00' : presNum.toFixed(2)}b
+                                      </span>
+                                    </div>
+                                  </div>
                                 )}
 
                                 <div className={`flex items-center justify-between gap-2 mb-3 px-3 py-2 rounded-xl border ${faseTone}`}>
@@ -1042,60 +1050,60 @@ function ScadaAppContent() {
                       )}
                     </div>
                   </div>
-                  </div>
-                )}
+                </div>
+              )}
 
-                {(visitedSections.has('gestion') || activeSection === 'gestion') && (
-                  <div className="app-view-panel" hidden={activeSection !== 'gestion'}>
-                    <FleetManagementView
-                      fleet={fleet}
-                      sendCommand={sendDeviceCommand}
-                      onSelectDevice={(mac) => { setSelectedMac(mac); setActiveSection('detalle'); }}
-                      onOpenReports={() => setActiveSection('servicio')}
-                    />
-                  </div>
-                )}
+              {(visitedSections.has('gestion') || activeSection === 'gestion') && (
+                <div className="app-view-panel" hidden={activeSection !== 'gestion'}>
+                  <FleetManagementView
+                    fleet={fleet}
+                    sendCommand={sendDeviceCommand}
+                    onSelectDevice={(mac) => { setSelectedMac(mac); setActiveSection('detalle'); }}
+                    onOpenReports={() => setActiveSection('servicio')}
+                  />
+                </div>
+              )}
 
-                {(visitedSections.has('servicio') || activeSection === 'servicio') && (
-                  <div className="app-view-panel" hidden={activeSection !== 'servicio'}>
-                    <ServiceReportsView
-                      fleet={Object.fromEntries(allowedDevices.map((d) => [d.mac, d]))}
-                      operatorName={displayName}
-                      isAdmin={isAdmin}
-                    />
-                  </div>
-                )}
+              {(visitedSections.has('servicio') || activeSection === 'servicio') && (
+                <div className="app-view-panel" hidden={activeSection !== 'servicio'}>
+                  <ServiceReportsView
+                    fleet={Object.fromEntries(allowedDevices.map((d) => [d.mac, d]))}
+                    operatorName={displayName}
+                    isAdmin={isAdmin}
+                  />
+                </div>
+              )}
 
-                {(visitedSections.has('studio') || activeSection === 'studio') && (
-                  <div className="app-view-panel" hidden={activeSection !== 'studio'}>
-                    <AiAutomationStudio
-                      fleet={fleet}
-                      sendCommand={sendDeviceCommand}
-                      initialDeviceMac={selectedMac}
-                    />
-                  </div>
-                )}
+              {(visitedSections.has('studio') || activeSection === 'studio') && (
+                <div className="app-view-panel" hidden={activeSection !== 'studio'}>
+                  <AiAutomationStudio
+                    fleet={fleet}
+                    sendCommand={sendDeviceCommand}
+                    initialDeviceMac={selectedMac}
+                  />
+                </div>
+              )}
 
-                {(visitedSections.has('usuarios') || activeSection === 'usuarios') && (
-                  <div className="app-view-panel" hidden={activeSection !== 'usuarios'}>
-                    <UserManagementView
-                      fleet={fleet}
-                      onFleetUpdated={() => {}}
-                    />
-                  </div>
-                )}
+              {(visitedSections.has('usuarios') || activeSection === 'usuarios') && (
+                <div className="app-view-panel" hidden={activeSection !== 'usuarios'}>
+                  <UserManagementView
+                    fleet={fleet}
+                    onFleetUpdated={() => {}}
+                  />
+                </div>
+              )}
 
-                {(visitedSections.has('fota') || activeSection === 'fota') && (
-                  <div className="app-view-panel" hidden={activeSection !== 'fota'}>
-                    <FotaHubView fleet={fleet} sendCommand={sendDeviceCommand} />
-                  </div>
-                )}
+              {(visitedSections.has('fota') || activeSection === 'fota') && (
+                <div className="app-view-panel" hidden={activeSection !== 'fota'}>
+                  <FotaHubView fleet={fleet} sendCommand={sendDeviceCommand} />
+                </div>
+              )}
 
-                {(visitedSections.has('auditoria') || activeSection === 'auditoria') && (
-                  <div className="app-view-panel" hidden={activeSection !== 'auditoria'}>
-                    <ClinicalAuditView />
-                  </div>
-                )}
+              {(visitedSections.has('auditoria') || activeSection === 'auditoria') && (
+                <div className="app-view-panel" hidden={activeSection !== 'auditoria'}>
+                  <ClinicalAuditView />
+                </div>
+              )}
             </>
 
           </main>
