@@ -1,34 +1,8 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
 import { supabase } from '../services/supabase';
 import { sendTelegramAlert } from '../services/telegram';
 
-const AuthContext = createContext({});
-const SESSION_STORAGE_KEY = 'biofleet_enterprise_session';
-
-function normalizeUserProfile(raw = {}) {
-  const username = (raw.user || raw.usuario || raw.email?.split('@')[0] || '').toLowerCase().trim();
-  const pass = raw.pass || raw.password || raw.clave || '';
-  const role = (raw.rol || 'OPERADOR').toUpperCase().trim();
-  const hospital = raw.departamento || raw.hospital || raw.clinica || 'Central Hospitalaria';
-  const state = (raw.estado || 'ACTIVO').toUpperCase().trim();
-  const authorizedMacs = (raw.equipos_autorizados || '').toUpperCase().trim();
-
-  return {
-    ...raw,
-    id: raw.id || `usr_${username}`,
-    user: username,
-    usuario: username,
-    pass,
-    password: pass,
-    nombre: raw.nombre || raw.nombre_completo || username,
-    email: (raw.email || '').toLowerCase().trim(),
-    rol: role,
-    departamento: hospital,
-    hospital: hospital,
-    equipos_autorizados: authorizedMacs,
-    estado: state
-  };
-}
+const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -38,295 +12,293 @@ export const AuthProvider = ({ children }) => {
   const [recoveryRequests, setRecoveryRequests] = useState([]);
   const [requestsLoadedAt, setRequestsLoadedAt] = useState(0);
 
-  const loadPendingRequests = useCallback(async () => {
+  // Carga de perfil y autorización desde la base de datos
+  const fetchUserProfile = useCallback(async (authUserId, email) => {
     try {
-      const { data: pendings, error: errPend } = await supabase
+      const { data, error } = await supabase
         .from('usuarios_scada')
         .select('*')
-        .eq('estado', 'PENDIENTE');
+        .or(`auth_id.eq.${authUserId},email.eq.${email.toLowerCase()}`)
+        .maybeSingle();
 
-      if (!errPend && pendings) {
-        setPendingRequests(pendings.map(normalizeUserProfile));
-        setRequestsLoadedAt(Date.now());
+      if (error || !data) {
+        throw new Error(error?.message || 'Perfil biomédico no encontrado o no asignado.');
       }
 
-      try {
-        const { data: recoveries } = await supabase
-          .from('auditoria_accesos')
-          .select('*')
-          .eq('evento', 'SOLICITUD_RECUPERACION_PENDIENTE')
-          .limit(10);
+      if (data.estado === 'PENDIENTE') {
+        throw new Error('ESTADO_PENDIENTE: Su cuenta se encuentra en revisión.');
+      }
+      if (data.estado === 'INACTIVO' || data.estado === 'SUSPENDIDO') {
+        throw new Error('ESTADO_INACTIVO: Acceso revocado por supervisión técnica.');
+      }
 
-        if (recoveries) setRecoveryRequests(recoveries);
-      } catch (_) {}
-
-    } catch (e) {
-      console.warn('[AUTH] Carga de solicitudes:', e);
+      return data;
+    } catch (err) {
+      throw err;
     }
   }, []);
 
-  useEffect(() => {
-    const stored = localStorage.getItem(SESSION_STORAGE_KEY);
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored);
-        const normalized = normalizeUserProfile(parsed);
-        setUser(normalized);
-        setProfile(normalized);
-
-        const isPrivileged = normalized.rol?.includes('ADMIN') || normalized.rol?.includes('DIRECTOR');
-        if (isPrivileged) {
-          loadPendingRequests();
-        }
-      } catch (e) {
-        localStorage.removeItem(SESSION_STORAGE_KEY);
-      }
-    }
-    setLoading(false);
-  }, [loadPendingRequests]);
-
-  const loginWithCredentials = async (userOrEmail, passwordInput) => {
-    const cleanId = (userOrEmail || '').trim().toLowerCase();
-    const cleanPass = (passwordInput || '').trim();
-
-    if (!cleanId || !cleanPass) {
-      throw new Error('Introduce tu usuario y contraseña.');
-    }
-
-    if (
-      (cleanId === 'superadmin' || cleanId === 'admin' || cleanId === 'yuniol0220@gmail.com' || cleanId === 'yuniolgonzalez9@gmail.com') &&
-      cleanPass === '24331973'
-    ) {
-      const masterUser = normalizeUserProfile({
-        id: 'usr_superadmin_01',
-        user: 'superadmin',
-        nombre: 'Francisco Gonzalez',
-        email: 'yuniol0220@gmail.com',
-        rol: 'SUPERADMIN',
-        departamento: 'Dirección Biomédica Central',
-        estado: 'ACTIVO'
-      });
-
-      localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(masterUser));
-      setUser(masterUser);
-      setProfile(masterUser);
-      await loadPendingRequests();
-      return masterUser;
-    }
-
-    let { data: users, error } = await supabase
-      .from('usuarios_scada')
-      .select('*')
-      .or(`user.eq.${cleanId},usuario.eq.${cleanId},email.eq.${cleanId}`)
-      .limit(1);
-
-    if (error || !users || users.length === 0) {
-      const fallbackQuery = await supabase
-        .from('usuarios_scada')
-        .select('*');
-
-      if (!fallbackQuery.error && fallbackQuery.data) {
-        users = fallbackQuery.data.filter(u => {
-          const uName = (u.user || u.usuario || '').toLowerCase();
-          const uMail = (u.email || '').toLowerCase();
-          return uName === cleanId || uMail === cleanId;
-        });
-      }
-    }
-
-    if (!users || users.length === 0) {
-      throw new Error('El usuario o correo no se encuentra registrado.');
-    }
-
-    const matchedUser = normalizeUserProfile(users[0]);
-
-    if (matchedUser.pass !== cleanPass) {
-      throw new Error('Contraseña incorrecta.');
-    }
-
-    if (matchedUser.estado === 'PENDIENTE') {
-      throw new Error('ESTADO_PENDIENTE: Su solicitud está pendiente de aprobación por el Administrador.');
-    }
-
-    if (matchedUser.estado === 'INACTIVO' || matchedUser.estado === 'SUSPENDIDO') {
-      throw new Error('ESTADO_INACTIVO: Cuenta suspendida o inhabilitada.');
-    }
-
-    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(matchedUser));
-    setUser(matchedUser);
-    setProfile(matchedUser);
-
-    const isPrivileged = matchedUser.rol?.includes('ADMIN') || matchedUser.rol?.includes('DIRECTOR');
-    if (isPrivileged) {
-      await loadPendingRequests();
-    }
-
+  const loadPendingRequests = useCallback(async () => {
     try {
-      await supabase.from('auditoria_accesos').insert([{
-        usuario: matchedUser.user,
-        evento: 'INICIO_SESION_EXITOSO',
-        dispositivo: navigator.userAgent.slice(0, 80)
-      }]);
-    } catch (_) {}
+      const { data: pendings } = await supabase
+        .from('usuarios_scada')
+        .select('*')
+        .eq('estado', 'PENDIENTE')
+        .order('created_at', { ascending: false });
 
-    return matchedUser;
+      if (pendings) {
+        setPendingRequests(pendings);
+        setRequestsLoadedAt(Date.now());
+      }
+
+      const { data: recoveries } = await supabase
+        .from('auditoria_accesos')
+        .select('*')
+        .eq('evento', 'SOLICITUD_RECUPERACION_PENDIENTE')
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (recoveries) setRecoveryRequests(recoveries);
+    } catch (err) {
+      console.error('[AUTH SCADA] Error cargando solicitudes pendientes:', err);
+    }
+  }, []);
+
+  // Inicialización de sesión persistente con Supabase Auth
+  useEffect(() => {
+    let isMounted = true;
+
+    const initializeAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user && isMounted) {
+          const userProfile = await fetchUserProfile(session.user.id, session.user.email);
+          setUser(session.user);
+          setProfile(userProfile);
+
+          if (userProfile.rol === 'SUPERADMIN' || userProfile.rol === 'DIRECTOR') {
+            loadPendingRequests();
+          }
+        }
+      } catch (err) {
+        await supabase.auth.signOut();
+        if (isMounted) {
+          setUser(null);
+          setProfile(null);
+        }
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+
+    initializeAuth();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        try {
+          const userProfile = await fetchUserProfile(session.user.id, session.user.email);
+          setUser(session.user);
+          setProfile(userProfile);
+          if (userProfile.rol === 'SUPERADMIN' || userProfile.rol === 'DIRECTOR') {
+            loadPendingRequests();
+          }
+        } catch (err) {
+          await supabase.auth.signOut();
+          setUser(null);
+          setProfile(null);
+        }
+      } else if (event === 'SIGNED_OUT') {
+        setUser(null);
+        setProfile(null);
+        setPendingRequests([]);
+        setRecoveryRequests([]);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      authListener?.subscription?.unsubscribe();
+    };
+  }, [fetchUserProfile, loadPendingRequests]);
+
+  const loginWithCredentials = async (emailOrUser, password) => {
+    const cleanIdentifier = emailOrUser.trim().toLowerCase();
+    const cleanPassword = password.trim();
+
+    if (!cleanIdentifier || !cleanPassword) {
+      throw new Error('Debe especificar usuario/correo y contraseña.');
+    }
+
+    let authEmail = cleanIdentifier;
+
+    // Si el operador ingresa su ID de usuario en vez de email, resolver el email real en BD
+    if (!cleanIdentifier.includes('@')) {
+      const { data: userData, error: userError } = await supabase
+        .from('usuarios_scada')
+        .select('email')
+        .eq('user', cleanIdentifier)
+        .maybeSingle();
+
+      if (userError || !userData?.email) {
+        throw new Error('Credenciales inválidas o identificador no registrado.');
+      }
+      authEmail = userData.email;
+    }
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: authEmail,
+      password: cleanPassword
+    });
+
+    if (error) {
+      // Registro de auditoría de fallo
+      await supabase.from('auditoria_accesos').insert([{
+        usuario: cleanIdentifier,
+        evento: 'CLAVE_INCORRECTA',
+        dispositivo: navigator.userAgent.slice(0, 100)
+      }]);
+      throw new Error('Credenciales de acceso incorrectas.');
+    }
+
+    const userProfile = await fetchUserProfile(data.user.id, data.user.email);
+    setUser(data.user);
+    setProfile(userProfile);
+
+    // Registro de auditoría de éxito
+    await supabase.from('auditoria_accesos').insert([{
+      usuario: userProfile.user,
+      evento: 'INICIO_SESION_EXITOSO',
+      dispositivo: navigator.userAgent.slice(0, 100)
+    }]);
+
+    return userProfile;
   };
 
   const requestPasswordRecovery = async (emailInput) => {
-    const cleanEmail = (emailInput || '').trim().toLowerCase();
-    if (!cleanEmail) throw new Error('Por favor introduce un correo válido.');
+    const cleanEmail = emailInput.trim().toLowerCase();
+    if (!cleanEmail) throw new Error('Ingrese un correo corporativo válido.');
 
-    if (cleanEmail === 'yuniol0220@gmail.com' || cleanEmail === 'yuniolgonzalez9@gmail.com') {
-      await sendTelegramAlert(
-        `🛡️ <b>RECUPERACIÓN MAESTRA</b>\n\n` +
-        `👤 <b>Superadmin:</b> Francisco Gonzalez\n` +
-        `🔑 <b>Clave de Emergencia:</b> <code>24331973</code>`
-      );
-      return {
-        isMaster: true,
-        message: 'Credencial Maestra detectada. El PIN ha sido enviado a tu Telegram.'
-      };
-    }
-
-    const { data: users } = await supabase
+    const { data: existingUser } = await supabase
       .from('usuarios_scada')
-      .select('*')
+      .select('user, nombre, email')
       .eq('email', cleanEmail)
-      .limit(1);
+      .maybeSingle();
 
-    if (!users || users.length === 0) {
-      await sendTelegramAlert(
-        `🚨 <b>ALERTA DE SEGURIDAD</b>\n\nIntento de recuperación con correo no registrado: <code>${cleanEmail}</code>`
-      );
-      return {
-        isMaster: false,
-        message: 'Si el correo existe en la base clínica, se ha notificado a la Administración.'
-      };
+    if (!existingUser) {
+      await supabase.from('auditoria_accesos').insert([{
+        usuario: cleanEmail,
+        evento: 'INTENTO_RECUPERACION_NO_REGISTRADO',
+        dispositivo: navigator.userAgent.slice(0, 100)
+      }]);
+      throw new Error('El correo ingresado no pertenece a un personal autorizado.');
     }
 
-    const targetUser = normalizeUserProfile(users[0]);
+    // Flujo estándar seguro: Magic Link / Token de restablecimiento
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+      redirectTo: `${window.location.origin}/reset-password`
+    });
 
-    try {
-      await supabase.from('auditoria_accesos').insert([{
-        usuario: targetUser.user,
-        evento: 'SOLICITUD_RECUPERACION_PENDIENTE'
-      }]);
-    } catch (_) {}
+    if (resetError) throw resetError;
+
+    await supabase.from('auditoria_accesos').insert([{
+      usuario: existingUser.user,
+      evento: 'SOLICITUD_RECUPERACION_PENDIENTE',
+      dispositivo: navigator.userAgent.slice(0, 100)
+    }]);
 
     await sendTelegramAlert(
-      `🔔 <b>SOLICITUD DE RECUPERACIÓN</b>\n\n` +
-      `👤 <b>Personal:</b> ${targetUser.nombre}\n` +
-      `🆔 <b>Usuario:</b> <code>${targetUser.user}</code>\n` +
-      `🔑 <b>Clave Registrada:</b> <code>${targetUser.pass}</code>`
+      `🔐 <b>SOLICITUD DE RESTABLECIMIENTO DE CLAVE</b>\n\n` +
+      `👤 <b>Operador:</b> ${existingUser.nombre}\n` +
+      `🆔 <b>Usuario:</b> <code>${existingUser.user}</code>\n` +
+      `📧 <b>Email:</b> <code>${cleanEmail}</code>\n` +
+      `ℹ️ Se ha emitido un enlace de reseteo seguro al correo del operador.`
     );
 
-    await loadPendingRequests();
-
     return {
-      isMaster: false,
-      message: 'Solicitud enviada a la Dirección Biomédica.'
+      message: 'Se ha emitido un correo oficial con el enlace criptográfico para actualizar la contraseña.'
     };
-  };
-
-  const resetUserPassword = async (userIdOrUsername, newTempPassword) => {
-    const cleanPass = newTempPassword.trim();
-    if (cleanPass.length < 4) throw new Error('Mínimo 4 caracteres.');
-
-    const updatePayload = { pass: cleanPass, password: cleanPass };
-
-    let { error } = await supabase
-      .from('usuarios_scada')
-      .update(updatePayload)
-      .eq('id', userIdOrUsername);
-
-    if (error) {
-      const retry = await supabase
-        .from('usuarios_scada')
-        .update(updatePayload)
-        .or(`user.eq.${userIdOrUsername},usuario.eq.${userIdOrUsername}`);
-
-      if (retry.error) throw retry.error;
-    }
   };
 
   const requestUserAccess = async ({ usuario, nombre_completo, email, departamento, password }) => {
     const cleanUser = usuario.trim().toLowerCase();
-    const cleanPass = password.trim();
+    const cleanEmail = email.trim().toLowerCase();
 
-    const insertPayload = {
-      user: cleanUser,
-      usuario: cleanUser,
-      nombre: (nombre_completo || cleanUser).trim(),
-      email: (email || '').trim().toLowerCase(),
-      departamento: departamento || 'Central de Esterilización',
-      rol: 'OPERADOR',
-      pass: cleanPass,
-      password: cleanPass,
-      estado: 'PENDIENTE'
-    };
+    // 1. Crear el usuario en Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email: cleanEmail,
+      password: password.trim()
+    });
 
-    const { data, error } = await supabase
+    if (authError) throw new Error(authError.message);
+
+    // 2. Insertar registro de perfil clínico en estado PENDIENTE
+    const { error: profileError } = await supabase
       .from('usuarios_scada')
-      .insert([insertPayload])
-      .select();
+      .insert([{
+        auth_id: authData.user?.id,
+        user: cleanUser,
+        nombre: nombre_completo.trim(),
+        email: cleanEmail,
+        departamento,
+        rol: 'OPERADOR',
+        estado: 'PENDIENTE'
+      }]);
 
-    if (error) throw new Error(error.message);
+    if (profileError) throw new Error(profileError.message);
 
     await sendTelegramAlert(
-      `🆕 <b>NUEVA SOLICITUD DE ACCESO</b>\n\n` +
+      `📋 <b>NUEVA SOLICITUD DE ACCESO CLÍNICO</b>\n\n` +
       `👤 <b>Nombre:</b> ${nombre_completo}\n` +
       `🆔 <b>Usuario:</b> <code>${cleanUser}</code>\n` +
-      `🏥 <b>Área:</b> ${departamento}`
+      `🏥 <b>Área:</b> ${departamento}\n` +
+      `⚠️ Esperando aprobación de Dirección Biomédica.`
     );
-
-    return data;
   };
 
-  const updateUserStatus = async (userIdOrUsername, nuevoEstado, nuevoRol = null) => {
-    const updatePayload = { estado: nuevoEstado };
+  const updateUserStatus = async (userId, nuevoEstado, nuevoRol = null) => {
+    const updatePayload = { estado: nuevoEstado, updated_at: new Date().toISOString() };
     if (nuevoRol) updatePayload.rol = nuevoRol;
 
-    let { error } = await supabase
+    const { error } = await supabase
       .from('usuarios_scada')
       .update(updatePayload)
-      .eq('id', userIdOrUsername);
+      .eq('id', userId);
 
-    if (error) {
-      await supabase
-        .from('usuarios_scada')
-        .update(updatePayload)
-        .or(`user.eq.${userIdOrUsername},usuario.eq.${userIdOrUsername}`);
-    }
-
+    if (error) throw error;
     await loadPendingRequests();
   };
 
-  const logout = () => {
-    localStorage.removeItem(SESSION_STORAGE_KEY);
-    sessionStorage.clear();
+  const logout = async () => {
+    await supabase.auth.signOut();
     setUser(null);
     setProfile(null);
+    sessionStorage.clear();
   };
 
+  const authContextValue = useMemo(() => ({
+    user,
+    profile,
+    loading,
+    pendingRequests,
+    recoveryRequests,
+    requestsLoadedAt,
+    loadPendingRequests,
+    loginWithCredentials,
+    requestPasswordRecovery,
+    requestUserAccess,
+    updateUserStatus,
+    logout
+  }), [user, profile, loading, pendingRequests, recoveryRequests, requestsLoadedAt, loadPendingRequests]);
+
   return (
-    <AuthContext.Provider value={{
-      user,
-      profile,
-      loading,
-      pendingRequests,
-      recoveryRequests,
-      requestsLoadedAt,
-      loadPendingRequests,
-      loginWithCredentials,
-      requestPasswordRecovery,
-      resetUserPassword,
-      requestUserAccess,
-      updateUserStatus,
-      logout
-    }}>
+    <AuthContext.Provider value={authContextValue}>
       {children}
     </AuthContext.Provider>
   );
 };
 
-export const useAuth = () => useContext(AuthContext);
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) throw new Error('useAuth debe utilizarse dentro de un AuthProvider.');
+  return context;
+};
