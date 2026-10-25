@@ -1,16 +1,19 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   Activity,
   Settings, 
   Maximize, 
+  Minimize,
   RefreshCw, 
   LogOut, 
   Waves, 
   Palette, 
   Image as ImageIcon,
   X,
-  Unlock
+  Unlock,
+  CheckCircle2,
+  HardDrive
 } from 'lucide-react';
 
 export const WALLPAPERS_LIST = [
@@ -20,7 +23,7 @@ export const WALLPAPERS_LIST = [
   { id: 'motherboard-gold', name: '🔌 Placa Base & Hardware Eléctrico', url: 'https://images.unsplash.com/photo-1555680202-c86f0e12f086?auto=format&fit=crop&w=2000&q=80' },
   { id: 'quantum-connections', name: '💠 Conexiones Cuánticas & Fibra', url: 'https://images.unsplash.com/photo-1504639725590-34d0984388bd?auto=format&fit=crop&w=2000&q=80' },
   { id: 'server-datacenter', name: '🏢 Datacenter Hospitalario', url: 'https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=2068&q=80' },
-  { id: 'oled', name: '⚫ Negro OLED Cósmico', url: '' }
+  { id: 'oled', name: '⚫ Negro OLED Cósmico (Bajo Consumo)', url: '' }
 ];
 
 export default function GearMenu({ 
@@ -37,33 +40,52 @@ export default function GearMenu({
   appearanceSyncStatus
 }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
-  // Cierre con Escape
+  // Escuchar cambios de fullscreen nativo
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(Boolean(document.fullscreenElement));
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
+  // Cierre con tecla Escape
   const handleKeyDown = useCallback((e) => {
-    if (e.key === 'Escape') setIsOpen(false);
+    if (e.key === 'Escape') {
+      setIsOpen(false);
+    }
   }, []);
 
   useEffect(() => {
+    const originalOverflow = document.body.style.overflow;
     if (isOpen) {
       window.addEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = 'hidden'; // Evita scroll de fondo
+      document.body.style.overflow = 'hidden';
     } else {
-      document.body.style.overflow = '';
+      document.body.style.overflow = originalOverflow;
     }
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
-      document.body.style.overflow = '';
+      document.body.style.overflow = originalOverflow;
     };
   }, [isOpen, handleKeyDown]);
 
   const toggleFullScreen = () => {
     if (!document.fullscreenElement) {
       const docEl = document.documentElement;
-      if (docEl.requestFullscreen) docEl.requestFullscreen().catch(() => {});
-      else if (docEl.webkitRequestFullscreen) docEl.webkitRequestFullscreen();
-      else if (docEl.msRequestFullscreen) docEl.msRequestFullscreen();
+      if (docEl.requestFullscreen) {
+        docEl.requestFullscreen().catch(() => {});
+      } else if (docEl.webkitRequestFullscreen) {
+        docEl.webkitRequestFullscreen();
+      } else if (docEl.msRequestFullscreen) {
+        docEl.msRequestFullscreen();
+      }
     } else {
-      if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
+      if (document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+      }
     }
   };
 
@@ -77,14 +99,15 @@ export default function GearMenu({
         type="button"
         onClick={() => setIsOpen(!isOpen)}
         className="p-1.5 sm:p-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-cyan-500/40 text-cyan-300 transition-all flex items-center justify-center shadow-lg active:scale-95 shrink-0 icon-glow glow-border"
-        title="Panel Técnico y Ajustes"
+        title="Panel Técnico y Preferencias"
+        aria-label="Abrir panel técnico y ajustes"
       >
-        <Settings className="w-4 h-4 sm:w-5 sm:h-5 animate-[spin_14s_linear_infinite]" />
+        <Settings className="w-4 h-4 sm:w-5 sm:h-5 animate-[spin_18s_linear_infinite]" />
       </button>
 
       {isOpen && typeof document !== 'undefined' && createPortal(
         <>
-          {/* Fondo difuminado */}
+          {/* Fondo Difuminado */}
           <div 
             className="fixed inset-0 z-[99998] bg-black/60 backdrop-blur-sm"
             onClick={() => setIsOpen(false)}
@@ -94,27 +117,31 @@ export default function GearMenu({
           <div 
             className="gear-panel fixed right-2 sm:right-6 top-14 sm:top-16 w-[calc(100vw-16px)] sm:w-88 max-w-sm ultra-glass p-4 sm:p-5 rounded-2xl shadow-2xl border-2 border-cyan-500/50 z-[99999] backdrop-blur-2xl space-y-3 sm:space-y-4 max-h-[85vh] overflow-y-auto select-none font-mono text-xs"
             onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Panel de configuración técnica y estética"
           >
             <div className="flex justify-between items-center border-b border-cyan-500/20 pb-2.5">
               <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
                 <Settings className="w-4 h-4 text-cyan-400" />
-                Panel de Control Técnico
+                <span>Panel Técnico y Personalización</span>
               </span>
               <button 
                 type="button"
                 onClick={() => setIsOpen(false)} 
-                className="text-slate-400 hover:text-white p-1 rounded-lg"
+                className="text-slate-400 hover:text-white p-1 rounded-lg transition-colors"
+                aria-label="Cerrar panel de ajustes"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* BOTÓN DE RESCATE SI ESTÁ EN MODO KIOSCO */}
+            {/* Alerta de Desanclaje Kiosk */}
             {kioskMac && (
               <div className="p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/40 space-y-1.5">
                 <p className="text-[11px] font-bold text-amber-300 flex items-center gap-1.5">
                   <Unlock className="w-3.5 h-3.5" />
-                  Terminal Anclada a [{kioskMac.slice(-4)}]
+                  <span>Terminal Anclada a [{kioskMac.slice(-4)}]</span>
                 </p>
                 <button
                   type="button"
@@ -122,23 +149,23 @@ export default function GearMenu({
                     if (onUnlockKiosk) onUnlockKiosk();
                     setIsOpen(false);
                   }}
-                  className="w-full py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg text-xs font-bold transition-all shadow-md active:scale-95"
+                  className="w-full py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg text-xs font-bold transition-all shadow active:scale-95 text-center"
                 >
-                  Desanclar y Ver Toda la Flota
+                  Desanclar y Ver Flota Completa
                 </button>
               </div>
             )}
 
-            {/* 1. Selector de Temas */}
+            {/* 1. Selector de Tema de Color */}
             <div>
               <label className="text-[11px] text-cyan-400 font-bold block mb-1.5 flex items-center gap-1.5">
                 <Palette className="w-3.5 h-3.5" />
-                TEMA VISUAL OFICIAL:
+                <span>PALETA DE COLORES CLÍNICA:</span>
               </label>
               <div className="grid grid-cols-3 gap-1.5">
                 {[
                   { id: 'tactical', label: '🛡️ Pizarra', desc: 'Cian' },
-                  { id: 'cyber', label: '🌙 Cyber', desc: 'Fucsia' },
+                  { id: 'cyber', label: '🌙 Cyber', desc: 'Azul' },
                   { id: 'hybrid', label: '⚡ Híbrido', desc: 'Esmeralda' }
                 ].map((t) => (
                   <button
@@ -158,16 +185,16 @@ export default function GearMenu({
               </div>
             </div>
 
-            {/* 2. Selector de Fondos */}
+            {/* 2. Selector de Papel Tapiz */}
             <div>
               <label className="text-[11px] text-cyan-400 font-bold block mb-1 flex items-center gap-1.5">
                 <ImageIcon className="w-3.5 h-3.5" />
-                PAPEL TAPIZ (CIRCUITOS & HD):
+                <span>FONDO DE PANTALLA INDUSTRIAL:</span>
               </label>
               <select
                 value={currentBg}
                 onChange={(e) => setBg(e.target.value)}
-                className="gear-select w-full bg-slate-900/80 border border-slate-700/80 text-xs text-white rounded-lg p-2.5 focus:outline-none focus:border-cyan-400"
+                className="gear-select w-full bg-slate-900/80 border border-slate-700/80 text-xs text-white rounded-lg p-2.5 focus:outline-none focus:border-cyan-400 font-mono"
               >
                 {WALLPAPERS_LIST.map((bg) => (
                   <option key={bg.id} value={bg.id}>
@@ -177,27 +204,45 @@ export default function GearMenu({
               </select>
             </div>
 
-            {/* 3. Transparencia Ultra-Glass */}
-            <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800 space-y-1">
+            {/* 3. Nivel de Transparencia Ultra-Glass */}
+            <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800 space-y-1.5">
               <div className="flex justify-between text-xs text-cyan-300">
-                <span className="flex items-center gap-1"><Waves className="w-3.5 h-3.5" /> Transparencia Ultra-Glass:</span>
-                <span className="font-bold">{opacity}%</span>
+                <span className="flex items-center gap-1">
+                  <Waves className="w-3.5 h-3.5" />
+                  <span>Opacidad de Cristal:</span>
+                </span>
+                <span className="font-bold font-mono">{opacity}%</span>
               </div>
               <input 
                 type="range" 
                 min="0" 
                 max="100" 
+                step="1"
                 value={opacity} 
                 onChange={(e) => setOpacity(Number(e.target.value))} 
                 className="gear-slider w-full h-1.5 rounded-lg appearance-none cursor-pointer"
+                aria-label="Ajustar transparencia ultra-glass"
+                aria-valuemin="0"
+                aria-valuemax="100"
+                aria-valuenow={opacity}
               />
             </div>
 
+            {/* Estado de sincronización en la nube */}
             {appearanceSyncStatus && (
-              <p className="text-[10px] text-slate-500 flex items-center gap-1.5" role="status">
-                <span className={`w-1.5 h-1.5 rounded-full ${appearanceSyncStatus === 'synced' ? 'bg-emerald-400' : appearanceSyncStatus === 'saving' ? 'bg-amber-400 animate-pulse' : 'bg-slate-500'}`} />
-                {appearanceSyncStatus === 'synced' ? 'Preferencias sincronizadas' : appearanceSyncStatus === 'saving' ? 'Guardando preferencias…' : appearanceSyncStatus === 'loading' ? 'Cargando preferencias…' : 'Guardadas en este dispositivo'}
-              </p>
+              <div className="px-1 py-0.5 text-[10px] text-slate-400 flex items-center gap-1.5" role="status">
+                <span className={`w-1.5 h-1.5 rounded-full ${
+                  appearanceSyncStatus === 'synced' ? 'bg-emerald-400' :
+                  appearanceSyncStatus === 'saving' ? 'bg-amber-400 animate-pulse' :
+                  'bg-slate-500'
+                }`} />
+                <span>
+                  {appearanceSyncStatus === 'synced' ? 'Preferencias sincronizadas con la nube' :
+                   appearanceSyncStatus === 'saving' ? 'Guardando ajustes en Supabase...' :
+                   appearanceSyncStatus === 'loading' ? 'Cargando perfil...' :
+                   'Guardado localmente en esta terminal'}
+                </span>
+              </div>
             )}
 
             {/* 4. Acciones del Sistema */}
@@ -212,7 +257,7 @@ export default function GearMenu({
                   className="gear-action w-full py-1.5 px-3 bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white rounded-lg text-xs flex items-center gap-2 border border-slate-800 transition-colors"
                 >
                   <Activity className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>Diagnóstico de nube</span>
+                  <span>Diagnóstico de Red & Base de Datos</span>
                 </button>
               )}
 
@@ -222,7 +267,7 @@ export default function GearMenu({
                 className="gear-action w-full py-1.5 px-3 bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white rounded-lg text-xs flex items-center gap-2 border border-slate-800 transition-colors"
               >
                 <RefreshCw className="w-3.5 h-3.5 text-cyan-400" />
-                <span>Forzar Sincronización Nube</span>
+                <span>Forzar Recarga & Sincronización</span>
               </button>
 
               <button
@@ -230,8 +275,8 @@ export default function GearMenu({
                 onClick={toggleFullScreen}
                 className="gear-action w-full py-1.5 px-3 bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white rounded-lg text-xs flex items-center gap-2 border border-slate-800 transition-colors"
               >
-                <Maximize className="w-3.5 h-3.5 text-cyan-400" />
-                <span>Pantalla Completa</span>
+                {isFullscreen ? <Minimize className="w-3.5 h-3.5 text-cyan-400" /> : <Maximize className="w-3.5 h-3.5 text-cyan-400" />}
+                <span>{isFullscreen ? 'Salir de Pantalla Completa' : 'Modo Pantalla Completa'}</span>
               </button>
 
               <button
@@ -240,7 +285,7 @@ export default function GearMenu({
                 className="gear-danger w-full py-2 px-3 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-lg text-xs flex items-center gap-2 border border-rose-500/30 mt-1.5 transition-colors font-bold"
               >
                 <LogOut className="w-3.5 h-3.5" />
-                <span>Cerrar Sesión</span>
+                <span>Cerrar Sesión Activa</span>
               </button>
             </div>
           </div>
