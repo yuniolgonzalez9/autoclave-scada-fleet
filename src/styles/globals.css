@@ -1765,13 +1765,19 @@ button, a, label, input, select, textarea, [role="button"] { touch-action: manip
 
   .brand-wordmark { filter: none; }
 
-  .header-laser-orbit-glow {
-    filter: none;
-    stroke-width: 6;
-    opacity: 0.4;
+  /* Rayo logo->nombre más presente en móvil (ciclo más corto) */
+  .brand-emitter::after {
+    animation-duration: 4.2s;
+    height: 3px;
   }
 
-  .header-laser-orbit-core { stroke-width: 2; }
+  .header-laser-orbit-glow {
+    filter: none;
+    stroke-width: 8;
+    opacity: 0.85;
+  }
+
+  .header-laser-orbit-core { stroke-width: 2.6; }
 }
 
 @keyframes particleDriftMobile {

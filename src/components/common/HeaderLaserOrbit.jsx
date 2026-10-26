@@ -60,7 +60,8 @@ export default function HeaderLaserOrbit() {
     // Respeto de accesibilidad: si el usuario prefiere movimiento reducido, detener animación continua
     const prefersReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     
-    const dash = perimeter * DASH_RATIO;
+    const coarsePointer = window.matchMedia?.('(pointer: coarse)').matches;
+    const dash = perimeter * (coarsePointer ? 0.22 : DASH_RATIO);
     const paths = [glowRef.current, coreRef.current].filter(Boolean);
 
     if (prefersReducedMotion) {
@@ -83,8 +84,7 @@ export default function HeaderLaserOrbit() {
     let frameId = 0;
     let isPaused = document.hidden;
     let lastPaint = 0;
-    const coarse = window.matchMedia?.('(pointer: coarse)').matches;
-    const minFrameMs = coarse ? 33 : 0;
+    const minFrameMs = coarsePointer ? 33 : 0;
     const start = performance.now();
 
     const tick = (now) => {
