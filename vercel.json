@@ -1,11 +1,11 @@
 {
   "headers": [
     {
-      "source": "/(app.js|style.css|manifest.json)",
+      "source": "/(version.json|sw.js|manifest.json|index.html)",
       "headers": [
         {
           "key": "Cache-Control",
-          "value": "public, max-age=0, must-revalidate"
+          "value": "no-cache, no-store, must-revalidate"
         }
       ]
     },
