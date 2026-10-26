@@ -1730,6 +1730,12 @@ button, a, label, input, select, textarea, [role="button"] { touch-action: manip
     -webkit-backdrop-filter: blur(10px);
   }
 
+  /* Saltar render de tarjetas fuera de pantalla (móviles de bajos recursos) */
+  .ultra-glass {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 320px;
+  }
+
   .app-shell::before,
   .app-shell::after {
     filter: none;

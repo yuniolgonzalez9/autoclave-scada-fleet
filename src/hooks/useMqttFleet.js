@@ -131,13 +131,41 @@ export function useMqttFleet() {
   }, []);
 
   useEffect(() => {
-    const { client, sendCommand } = connectMqttFleet(
-      ({ mac, channel, payload, isRetained }) => {
-        const cleanMac = (mac || '').toUpperCase().replace(/[:\-]/g, '');
-        if (!cleanMac) return;
+    // Buffer de mensajes: agrupa telemetría y aplica una sola
+    // actualización de estado cada ~600ms (evita re-render por paquete)
+    let pendingPackets = [];
 
-        setFleet((prevFleet) => {
-          const currentDev = prevFleet[cleanMac] || {
+    const { client, sendCommand } = connectMqttFleet(
+      (packetData) => {
+        pendingPackets.push(packetData);
+      },
+      (status) => setMqttConnected(status)
+    );
+
+    sendCommandRef.current = sendCommand;
+
+    const flushTimer = setInterval(() => {
+      if (pendingPackets.length === 0) return;
+      const rawBatch = pendingPackets;
+      pendingPackets = [];
+
+      // Deduplicar telemetría: solo el último paquete por MAC importa
+      const lastTeleIdx = {};
+      rawBatch.forEach((p, i) => {
+        if (p.channel === 'telemetria') lastTeleIdx[p.mac] = i;
+      });
+      const batch = rawBatch.filter(
+        (p, i) => p.channel !== 'telemetria' || lastTeleIdx[p.mac] === i
+      );
+
+      setFleet((prevFleet) => {
+        let nextFleet = prevFleet;
+
+        batch.forEach(({ mac, channel, payload, isRetained }) => {
+          const cleanMac = (mac || '').toUpperCase().replace(/[:\-]/g, '');
+          if (!cleanMac) return;
+
+          const currentDev = nextFleet[cleanMac] || {
             mac: cleanMac,
             lastSeen: Date.now(),
             datos: {},
@@ -227,15 +255,16 @@ export function useMqttFleet() {
             }
           }
 
-          return { ...prevFleet, [cleanMac]: updated };
+          nextFleet = { ...nextFleet, [cleanMac]: updated };
         });
-      },
-      (status) => setMqttConnected(status)
-    );
 
-    sendCommandRef.current = sendCommand;
-    return () => { 
-      if (client) client.end(); 
+        return nextFleet;
+      });
+    }, 600);
+
+    return () => {
+      clearInterval(flushTimer);
+      if (client) client.end();
     };
   }, [persistSessionReport]);
 
