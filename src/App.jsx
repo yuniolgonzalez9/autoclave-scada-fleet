@@ -1,15 +1,8 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspense } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import LoginModal from './components/auth/LoginModal';
 import UserManagementModal from './components/admin/UserManagementModal';
-import UserManagementView from './components/admin/UserManagementView';
 import CloudDiagnosticsModal from './components/admin/CloudDiagnosticsModal';
-import DeviceDetailView from './components/dashboard/DeviceDetailView';
-import ClinicalAuditView from './components/reports/ClinicalAuditView';
-import FotaHubView from './components/fota/FotaHubView';
-import FleetManagementView from './components/fleet/FleetManagementView';
-import ServiceReportsView from './components/service/ServiceReportsView';
-import AiAutomationStudio from './components/studio/AiAutomationStudio';
 import GearMenu, { WALLPAPERS_LIST } from './components/common/GearMenu';
 import ClinicalTooltip from './components/common/ClinicalTooltip';
 import ContextMenu from './components/common/ContextMenu';
@@ -25,6 +18,21 @@ import { startIndustrialSiren, stopIndustrialSiren, initAudioUnlock } from './se
 import { sendCriticalAlarmWithButtons } from './services/telegram';
 import { supabase } from './services/supabase';
 import HeaderLaserOrbit from './components/common/HeaderLaserOrbit';
+
+// Vistas pesadas: carga diferida para acelerar el arranque en móviles
+const DeviceDetailView = lazy(() => import('./components/dashboard/DeviceDetailView'));
+const FleetManagementView = lazy(() => import('./components/fleet/FleetManagementView'));
+const ServiceReportsView = lazy(() => import('./components/service/ServiceReportsView'));
+const AiAutomationStudio = lazy(() => import('./components/studio/AiAutomationStudio'));
+const UserManagementView = lazy(() => import('./components/admin/UserManagementView'));
+const FotaHubView = lazy(() => import('./components/fota/FotaHubView'));
+const ClinicalAuditView = lazy(() => import('./components/reports/ClinicalAuditView'));
+
+const ViewLoader = () => (
+  <div className="p-8 text-center text-slate-400 text-[10px] tracking-[0.3em] uppercase animate-pulse">
+    Cargando módulo…
+  </div>
+);
 import { 
   Activity, 
   Flame, 
@@ -767,6 +775,7 @@ function ScadaAppContent() {
                     </div>
                   )}
                   <div key={inspectingMacToUse} className={navDir === 'next' ? 'swipe-enter-next' : navDir === 'prev' ? 'swipe-enter-prev' : ''}>
+                    <Suspense fallback={<ViewLoader />}>
                     <DeviceDetailView
                       key={inspectingMacToUse}
                       device={inspectingDevice}
@@ -779,6 +788,7 @@ function ScadaAppContent() {
                       onDeviceUpdated={(row) => patchDeviceMeta(inspectingMacToUse, row)}
                       isAdmin={isAdmin}
                     />
+                    </Suspense>
                   </div>
                 </div>
               )}
@@ -1055,53 +1065,65 @@ function ScadaAppContent() {
 
               {(visitedSections.has('gestion') || activeSection === 'gestion') && (
                 <div className="app-view-panel" hidden={activeSection !== 'gestion'}>
+                  <Suspense fallback={<ViewLoader />}>
                   <FleetManagementView
                     fleet={fleet}
                     sendCommand={sendDeviceCommand}
                     onSelectDevice={(mac) => { setSelectedMac(mac); setActiveSection('detalle'); }}
                     onOpenReports={() => setActiveSection('servicio')}
                   />
+                  </Suspense>
                 </div>
               )}
 
               {(visitedSections.has('servicio') || activeSection === 'servicio') && (
                 <div className="app-view-panel" hidden={activeSection !== 'servicio'}>
+                  <Suspense fallback={<ViewLoader />}>
                   <ServiceReportsView
                     fleet={Object.fromEntries(allowedDevices.map((d) => [d.mac, d]))}
                     operatorName={displayName}
                     isAdmin={isAdmin}
                   />
+                  </Suspense>
                 </div>
               )}
 
               {(visitedSections.has('studio') || activeSection === 'studio') && (
                 <div className="app-view-panel" hidden={activeSection !== 'studio'}>
+                  <Suspense fallback={<ViewLoader />}>
                   <AiAutomationStudio
                     fleet={fleet}
                     sendCommand={sendDeviceCommand}
                     initialDeviceMac={selectedMac}
                   />
+                  </Suspense>
                 </div>
               )}
 
               {(visitedSections.has('usuarios') || activeSection === 'usuarios') && (
                 <div className="app-view-panel" hidden={activeSection !== 'usuarios'}>
+                  <Suspense fallback={<ViewLoader />}>
                   <UserManagementView
                     fleet={fleet}
                     onFleetUpdated={() => {}}
                   />
+                  </Suspense>
                 </div>
               )}
 
               {(visitedSections.has('fota') || activeSection === 'fota') && (
                 <div className="app-view-panel" hidden={activeSection !== 'fota'}>
+                  <Suspense fallback={<ViewLoader />}>
                   <FotaHubView fleet={fleet} sendCommand={sendDeviceCommand} />
+                  </Suspense>
                 </div>
               )}
 
               {(visitedSections.has('auditoria') || activeSection === 'auditoria') && (
                 <div className="app-view-panel" hidden={activeSection !== 'auditoria'}>
+                  <Suspense fallback={<ViewLoader />}>
                   <ClinicalAuditView />
+                  </Suspense>
                 </div>
               )}
             </>
