@@ -19,3 +19,4 @@ autoclave-scada-fleet/
 supabase/.temp/
 .env*
 .vite/
+e2e-shots/
