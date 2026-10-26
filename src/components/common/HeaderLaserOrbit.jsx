@@ -74,32 +74,14 @@ export default function HeaderLaserOrbit() {
 
     paths.forEach((el) => {
       el.setAttribute('stroke-dasharray', `${dash} ${perimeter - dash}`);
-      el.setAttribute('stroke-dashoffset', '0');
+      el.style.setProperty('--laser-perimeter', perimeter.toFixed(2));
+      el.style.setProperty('--laser-loop-ms', `${LOOP_MS}ms`);
       el.style.opacity = '';
+      el.classList.add('laser-orbit-animating');
     });
 
-    let frameId = 0;
-    let isPaused = document.hidden;
-    const start = performance.now();
-
-    const tick = (now) => {
-      if (!isPaused) {
-        const offset = -(((now - start) % LOOP_MS) / LOOP_MS) * perimeter;
-        paths.forEach((el) => el.setAttribute('stroke-dashoffset', offset.toFixed(2)));
-      }
-      frameId = requestAnimationFrame(tick);
-    };
-
-    const handleVisibilityChange = () => {
-      isPaused = document.hidden;
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    frameId = requestAnimationFrame(tick);
-
     return () => {
-      cancelAnimationFrame(frameId);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      paths.forEach((el) => el.classList.remove('laser-orbit-animating'));
     };
   }, [ready, perimeter]);
 

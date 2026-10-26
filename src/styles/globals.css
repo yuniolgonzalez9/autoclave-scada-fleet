@@ -354,6 +354,17 @@ button:active, .btn-touch:active {
   opacity: 0.95;
 }
 
+.laser-orbit-animating {
+  stroke-dashoffset: 0;
+  animation: laserOrbitTravel var(--laser-loop-ms, 6400ms) linear infinite;
+}
+
+@keyframes laserOrbitTravel {
+  to {
+    stroke-dashoffset: calc(-1 * var(--laser-perimeter, 400));
+  }
+}
+
 .brand-emitter {
   position: relative;
   z-index: 1;

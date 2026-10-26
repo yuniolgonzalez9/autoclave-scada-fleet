@@ -29,6 +29,8 @@ export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
   let lastLeaderPulse = 0;
   let mqttClient = null;
   let isDestroyed = false;
+  let reconnectAttempts = 0;
+  let reconnectTimer = null;
 
   const hasBroadcastSupport = typeof window !== 'undefined' && 'BroadcastChannel' in window;
   if (hasBroadcastSupport) {
@@ -45,11 +47,31 @@ export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
     if (fastCheckTimer) clearTimeout(fastCheckTimer);
   };
 
+  const scheduleReconnect = () => {
+    if (isDestroyed || !mqttClient || reconnectTimer) return;
+    const delay = Math.min(30000, 2500 * Math.pow(2, reconnectAttempts));
+    reconnectAttempts += 1;
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      if (isDestroyed || !mqttClient || mqttClient.connected) return;
+      try {
+        mqttClient.reconnect();
+      } catch (e) {
+        scheduleReconnect();
+      }
+    }, delay);
+  };
+
   const startMqttConnection = () => {
     if (mqttClient || isDestroyed) return;
 
+    if (!MQTT_PASS) {
+      if (onStatusChange) onStatusChange(false);
+      return;
+    }
+
     const clientId = 'SCADA_' + Math.random().toString(36).substring(2, 10);
-    
+
     mqttClient = mqtt.connect(BROKER_URL, {
       clientId,
       username: MQTT_USER,
@@ -58,13 +80,18 @@ export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
       keepalive: 20,
       reschedulePings: true,
       connectTimeout: 8000,
-      reconnectPeriod: 2500
+      reconnectPeriod: 0
     });
 
     mqttClient.on('connect', () => {
       if (isDestroyed) {
         mqttClient.end(true);
         return;
+      }
+      reconnectAttempts = 0;
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
       }
       if (onStatusChange) onStatusChange(true);
 
@@ -85,6 +112,7 @@ export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
     mqttClient.on('close', () => {
       if (onStatusChange) onStatusChange(false);
       if (broadcast) broadcast.postMessage({ type: 'STATUS_UPDATE', status: false });
+      scheduleReconnect();
     });
 
     mqttClient.on('offline', () => {
