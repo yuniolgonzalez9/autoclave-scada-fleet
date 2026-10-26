@@ -10,10 +10,12 @@ let audioCtx = null;
 let masterGain = null;
 let sirenaInterval = null;
 let sirenaActiva = false;
+let audioUnlocked = false;
 
-// Obtiene o inicializa de forma segura el contexto de audio
+// Obtiene o inicializa de forma segura el contexto de audio.
+// El contexto solo se crea tras un gesto del usuario (política de autoplay).
 function getAudioContext() {
-  if (typeof window === 'undefined') return null;
+  if (typeof window === 'undefined' || !audioUnlocked) return null;
 
   if (!audioCtx) {
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
@@ -38,6 +40,7 @@ export const initAudioUnlock = () => {
   if (typeof window === 'undefined') return;
 
   const unlock = () => {
+    audioUnlocked = true;
     const ctx = getAudioContext();
     if (ctx && ctx.state === 'suspended') {
       ctx.resume().catch(() => {});
