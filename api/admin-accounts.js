@@ -10,8 +10,9 @@ const ALLOWED_ROLES = new Set([
   'SUPERADMIN'
 ]);
 const ALLOWED_STATUSES = new Set(['PENDIENTE', 'ACTIVO', 'INACTIVO', 'SUSPENDIDO']);
-const ALLOWED_THEMES = new Set(['tactical', 'cyber', 'hybrid']);
+const ALLOWED_THEMES = new Set(['industrial', 'tactical', 'cyber', 'hybrid']);
 const ALLOWED_BACKGROUNDS = new Set([
+  'solid',
   'circuit-pcb',
   'planet-nodes',
   'cyber-matrix',

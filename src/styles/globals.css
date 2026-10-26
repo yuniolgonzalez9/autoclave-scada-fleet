@@ -1855,3 +1855,79 @@ button, a, label, input, select, textarea, [role="button"] { touch-action: manip
   -webkit-tap-highlight-color: transparent;
   min-height: 56px;
 }
+
+/* ===== Tema Industrial (ISA-101 · HMI de alto rendimiento) =====
+   Superficies grises sólidas, sin desenfoques ni brillos: el color se
+   reserva para estados y alarmas. Es el tema predeterminado. */
+[data-theme="industrial"] {
+  --glass-bg: 36 40 47;
+  --surface-glow: 110 120 132;
+  --accent-color: #5b9bd5;
+  --card-border: rgba(148, 163, 184, 0.2);
+  --laser-gradient: none;
+  --laser-glow: none;
+}
+
+html[data-theme="industrial"],
+html[data-theme="industrial"] body {
+  background: #1b1e23 !important;
+}
+
+[data-theme="industrial"] .app-shell {
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif !important;
+  font-variant-numeric: tabular-nums;
+}
+
+[data-theme="industrial"] .particle-background,
+[data-theme="industrial"] .header-laser-orbit,
+[data-theme="industrial"] .app-shell::before,
+[data-theme="industrial"] .app-shell::after {
+  display: none !important;
+}
+
+[data-theme="industrial"] #scada-background {
+  background-image: none !important;
+  background-color: #1b1e23 !important;
+}
+
+[data-theme="industrial"] *,
+[data-theme="industrial"] *::before,
+[data-theme="industrial"] *::after {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  text-shadow: none !important;
+}
+
+[data-theme="industrial"] .ultra-glass {
+  background-color: rgb(var(--glass-bg)) !important;
+  background-image: none !important;
+  border-color: var(--card-border) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35) !important;
+}
+
+[data-theme="industrial"] .glass-cell {
+  background-color: #2b3037 !important;
+  background-image: none !important;
+  border-color: var(--card-border) !important;
+}
+
+[data-theme="industrial"] [class*="shadow-[0_0"],
+[data-theme="industrial"] [class*="shadow-cyan"],
+[data-theme="industrial"] [class*="shadow-emerald"],
+[data-theme="industrial"] [class*="shadow-blue"] {
+  box-shadow: none !important;
+}
+
+[data-theme="industrial"] .text-cyan-300,
+[data-theme="industrial"] .text-cyan-400 { color: #8db4dc !important; }
+[data-theme="industrial"] .text-cyan-500 { color: #6f9fcf !important; }
+
+[data-theme="industrial"] .animate-pulse:not(.alert-wave),
+[data-theme="industrial"] .animate-ping {
+  animation: none !important;
+}
+
+[data-theme="industrial"] .mobile-nav-shell {
+  background: #23272d !important;
+  border-color: rgba(148, 163, 184, 0.2) !important;
+}

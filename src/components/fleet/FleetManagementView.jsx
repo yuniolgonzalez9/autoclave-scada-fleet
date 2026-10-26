@@ -437,10 +437,12 @@ export default function FleetManagementView({ fleet = {}, sendCommand, onSelectD
 
                             <button
                               type="button"
-                              onClick={() => {
+                              onClick={async () => {
                                 if (sendCommand) {
-                                  sendCommand(mac, { cmd: 'SCAN_HARDWARE' });
-                                  setMsg(`Orden SCAN_HARDWARE enviada a la placa [${mac}].`);
+                                  const r = await sendCommand(mac, { cmd: 'SCAN_HARDWARE' });
+                                  setMsg(r?.ok === false
+                                    ? `No se envió la orden a [${mac}]: ${r.error}`
+                                    : `Orden SCAN_HARDWARE enviada a la placa [${mac}].`);
                                 }
                               }}
                               className="p-1 bg-slate-800 hover:bg-slate-700 text-amber-300 rounded-lg transition-all"

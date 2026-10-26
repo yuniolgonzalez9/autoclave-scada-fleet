@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 
 export const WALLPAPERS_LIST = [
+  { id: 'solid', name: 'Gris industrial sólido (recomendado)', url: '' },
   { id: 'circuit-pcb', name: '⚡ Microchip & Pistas PCB Neón (Favorito)', url: 'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=2000&q=80' },
   { id: 'planet-nodes', name: '🌐 Red Global de Nodos & Planeta', url: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=2000&q=80' },
   { id: 'cyber-matrix', name: '🏙️ Matriz Cyberpunk de Servidores', url: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=2000&q=80' },
@@ -162,8 +163,9 @@ export default function GearMenu({
                 <Palette className="w-3.5 h-3.5" />
                 <span>PALETA DE COLORES CLÍNICA:</span>
               </label>
-              <div className="grid grid-cols-3 gap-1.5">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                 {[
+                  { id: 'industrial', label: 'Industrial', desc: 'Profesional' },
                   { id: 'tactical', label: '🛡️ Pizarra', desc: 'Cian' },
                   { id: 'cyber', label: '🌙 Cyber', desc: 'Azul' },
                   { id: 'hybrid', label: '⚡ Híbrido', desc: 'Esmeralda' }
