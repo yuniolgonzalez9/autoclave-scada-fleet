@@ -73,7 +73,7 @@ function ScadaAppContent() {
     authMode
   } = useAuth();
   const { fleet, mqttConnected, sendDeviceCommand, patchDeviceMeta } = useMqttFleet();
-  const { appearance, setAppearance } = useAccountAppearance(profile, authMode);
+  const { appearance, setAppearance, syncStatus: appearanceSyncStatus } = useAccountAppearance(profile, authMode);
   const currentTheme = appearance.theme;
   const currentBg = appearance.background;
   const opacity = appearance.opacity;
