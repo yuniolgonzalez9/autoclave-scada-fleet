@@ -72,29 +72,40 @@ export default function HeaderLaserOrbit() {
       return undefined;
     }
 
-    const useWaapi = typeof paths[0]?.animate === 'function';
-    const animations = [];
-
     paths.forEach((el) => {
       el.setAttribute('stroke-dasharray', `${dash} ${perimeter - dash}`);
+      el.setAttribute('stroke-dashoffset', '0');
       el.style.opacity = '';
-      if (useWaapi) {
-        animations.push(
-          el.animate(
-            [{ strokeDashoffset: '0' }, { strokeDashoffset: `${-perimeter}` }],
-            { duration: LOOP_MS, iterations: Infinity }
-          )
-        );
-      } else {
-        el.style.setProperty('--laser-perimeter', perimeter.toFixed(2));
-        el.style.setProperty('--laser-loop-ms', `${LOOP_MS}ms`);
-        el.classList.add('laser-orbit-animating');
-      }
     });
 
+    // rAF universal (WAAPI con valores sin unidad falla en varios móviles).
+    // En pantallas táctiles se limita a ~30fps: imperceptible en un ciclo de 6.4s.
+    let frameId = 0;
+    let isPaused = document.hidden;
+    let lastPaint = 0;
+    const coarse = window.matchMedia?.('(pointer: coarse)').matches;
+    const minFrameMs = coarse ? 33 : 0;
+    const start = performance.now();
+
+    const tick = (now) => {
+      if (!isPaused && now - lastPaint >= minFrameMs) {
+        lastPaint = now;
+        const offset = -(((now - start) % LOOP_MS) / LOOP_MS) * perimeter;
+        paths.forEach((el) => el.setAttribute('stroke-dashoffset', offset.toFixed(2)));
+      }
+      frameId = requestAnimationFrame(tick);
+    };
+
+    const handleVisibilityChange = () => {
+      isPaused = document.hidden;
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    frameId = requestAnimationFrame(tick);
+
     return () => {
-      animations.forEach((a) => a.cancel());
-      paths.forEach((el) => el.classList.remove('laser-orbit-animating'));
+      cancelAnimationFrame(frameId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [ready, perimeter]);
 
