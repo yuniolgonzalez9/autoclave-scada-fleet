@@ -1857,20 +1857,15 @@ button, a, label, input, select, textarea, [role="button"] { touch-action: manip
 }
 
 /* ===== Tema Industrial (ISA-101 · HMI de alto rendimiento) =====
-   Superficies grises sólidas, sin desenfoques ni brillos: el color se
-   reserva para estados y alarmas. Es el tema predeterminado. */
+   Paleta gris sobria y sin brillos neón. Respeta los ajustes del engranaje:
+   transparencia (--glass-opacity) y fondo de pantalla elegido. */
 [data-theme="industrial"] {
   --glass-bg: 36 40 47;
   --surface-glow: 110 120 132;
   --accent-color: #5b9bd5;
   --card-border: rgba(148, 163, 184, 0.2);
-  --laser-gradient: none;
+  --laser-gradient: linear-gradient(90deg, transparent, #94a3b8, #cbd5e1, #94a3b8, transparent);
   --laser-glow: none;
-}
-
-html[data-theme="industrial"],
-html[data-theme="industrial"] body {
-  background: #1b1e23 !important;
 }
 
 [data-theme="industrial"] .app-shell {
@@ -1878,35 +1873,28 @@ html[data-theme="industrial"] body {
   font-variant-numeric: tabular-nums;
 }
 
-[data-theme="industrial"] .particle-background,
-[data-theme="industrial"] .header-laser-orbit,
-[data-theme="industrial"] .app-shell::before,
-[data-theme="industrial"] .app-shell::after {
+[data-theme="industrial"] .particle-background {
   display: none !important;
-}
-
-[data-theme="industrial"] #scada-background {
-  background-image: none !important;
-  background-color: #1b1e23 !important;
 }
 
 [data-theme="industrial"] *,
 [data-theme="industrial"] *::before,
 [data-theme="industrial"] *::after {
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
   text-shadow: none !important;
 }
 
+/* Desenfoque solo cuando hay transparencia (al 100 % no cuesta nada en móvil) */
 [data-theme="industrial"] .ultra-glass {
-  background-color: rgb(var(--glass-bg)) !important;
+  background-color: rgb(var(--glass-bg) / var(--glass-opacity)) !important;
   background-image: none !important;
   border-color: var(--card-border) !important;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, calc(var(--glass-opacity) * 0.35)) !important;
+  backdrop-filter: blur(calc((1 - var(--glass-opacity)) * 14px)) !important;
+  -webkit-backdrop-filter: blur(calc((1 - var(--glass-opacity)) * 14px)) !important;
 }
 
 [data-theme="industrial"] .glass-cell {
-  background-color: #2b3037 !important;
+  background-color: rgb(43 48 55 / calc(var(--glass-opacity) * 0.85 + 0.15)) !important;
   background-image: none !important;
   border-color: var(--card-border) !important;
 }
@@ -1928,6 +1916,6 @@ html[data-theme="industrial"] body {
 }
 
 [data-theme="industrial"] .mobile-nav-shell {
-  background: #23272d !important;
+  background: rgb(35 39 45 / calc(var(--glass-opacity) * 0.8 + 0.2)) !important;
   border-color: rgba(148, 163, 184, 0.2) !important;
 }
