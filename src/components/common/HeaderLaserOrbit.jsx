@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 
 const LOOP_MS = 6400;
-const TAIL_RATIO = 0.18;
 
 /**
  * Genera el trazado SVG SVGPath de un rectángulo redondeado canónico.
@@ -15,8 +14,7 @@ function roundedRectPath(w, h, inset, r) {
 }
 
 /**
- * Cometa orbital: cabeza incandescente viajando por el perímetro del header
- * (animateMotion SMIL) con cola degradada en dos capas que la persigue.
+ * Línea láser larga y fina orbitando el perímetro del header (SMIL nativo).
  */
 export default function HeaderLaserOrbit() {
   const svgRef = useRef(null);
@@ -56,42 +54,19 @@ export default function HeaderLaserOrbit() {
     : 0;
 
   const d = ready ? roundedRectPath(w, h, inset, r) : '';
-  const coarsePointer = window.matchMedia?.('(pointer: coarse)').matches;
   const prefersReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
-  // Cola larga difusa + cola corta brillante terminando ambas en la cabeza
-  const tailLong = perimeter * (coarsePointer ? TAIL_RATIO : TAIL_RATIO * 0.8);
-  const tailShort = tailLong * 0.45;
-  const dur = `${LOOP_MS}ms`;
-
-  // El dash debe TERMINAR donde va la cabeza (offset = pos - len, pos: 0 -> perimeter)
-  const tailAnim = (len) => (
+  // Línea larga: ~32% del perímetro
+  const dash = perimeter * 0.32;
+  const dasharray = `${dash} ${perimeter - dash}`;
+  const laserAnim = (
     <animate
       attributeName="stroke-dashoffset"
-      from={-len}
-      to={perimeter - len}
-      dur={dur}
+      from="0"
+      to={-perimeter}
+      dur={`${LOOP_MS}ms`}
       repeatCount="indefinite"
     />
-  );
-
-  const cometHead = (
-    <>
-      {/* halo difuso alrededor de la cabeza */}
-      <circle className="header-laser-orbit-halo" r={coarsePointer ? 7 : 9}>
-        <animateMotion dur={dur} repeatCount="indefinite" path={d} />
-      </circle>
-      {/* núcleo incandescente */}
-      <circle className="header-laser-orbit-head" r={coarsePointer ? 2.4 : 3}>
-        <animateMotion dur={dur} repeatCount="indefinite" path={d} />
-        <animate
-          attributeName="r"
-          values={`${coarsePointer ? 2.4 : 3};${coarsePointer ? 3.2 : 4};${coarsePointer ? 2.4 : 3}`}
-          dur="1.3s"
-          repeatCount="indefinite"
-        />
-      </circle>
-    </>
   );
 
   return (
@@ -107,27 +82,22 @@ export default function HeaderLaserOrbit() {
       )}
       {ready && !prefersReducedMotion && (
         <>
-          {/* riel sutil de contexto */}
-          <path className="header-laser-orbit-rail" d={d} opacity={0.08} />
-          {/* cola larga difusa */}
+          {/* halo cyan difuso bajo el núcleo */}
           <path
             className="header-laser-orbit-tail"
             d={d}
-            strokeDasharray={`${tailLong} ${perimeter - tailLong}`}
-            strokeDashoffset={-tailLong}
+            strokeDasharray={dasharray}
           >
-            {tailAnim(tailLong)}
+            {laserAnim}
           </path>
-          {/* cola corta brillante pegada a la cabeza */}
+          {/* núcleo fino y luminoso */}
           <path
             className="header-laser-orbit-comet"
             d={d}
-            strokeDasharray={`${tailShort} ${perimeter - tailShort}`}
-            strokeDashoffset={-tailShort}
+            strokeDasharray={dasharray}
           >
-            {tailAnim(tailShort)}
+            {laserAnim}
           </path>
-          {cometHead}
         </>
       )}
     </svg>
