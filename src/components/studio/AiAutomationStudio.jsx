@@ -42,7 +42,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
     {
       id: 'init_msg',
       sender: 'ai',
-      texto: 'BioFleet SCADA Enterprise v2.0 listo con transcripción por voz y control total. Escríbeme o pulsa el micrófono para dictarme instrucciones operativas o de diseño.'
+      texto: 'BioFleet SCADA Enterprise v2.0 operativo. Escriba o utilice el micrófono para dictar instrucciones de proceso, configuración de hardware o generación de interfaces.'
     }
   ]);
   const [compilando, setCompilando] = useState(false);
@@ -82,7 +82,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
   const macList = Object.keys(fleet || {});
   const [selectedMac, setSelectedMac] = useState(() => {
     if (initialDeviceMac) return initialDeviceMac.toUpperCase().replace(/[:\-]/g, '');
-    const onlineMac = macList.find(m => (Date.now() - (fleet[m]?.lastSeen || 0)) < 12000);
+    const onlineMac = macList.find((m) => (Date.now() - (fleet[m]?.lastSeen || 0)) < 15000);
     return onlineMac || macList[0] || '';
   });
 
@@ -103,7 +103,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
   const [perfilesGuardados, setPerfilesGuardados] = useState([]);
   const [loadingLib, setLoadingLib] = useState(false);
 
-  // Pointer Events Suaves (con requestAnimationFrame para evitar lag de mouse)
+  // Pointer Events Suaves
   const canvasRef = useRef(null);
   const activeInteraction = useRef({
     type: null,
@@ -127,19 +127,22 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
       recognition.lang = 'es-ES';
 
       recognition.onresult = (event) => {
-        const transcript = Array.from(event.results).map(r => r[0].transcript).join('');
+        const transcript = Array.from(event.results).map((r) => r[0].transcript).join('');
         setPrompt(transcript);
       };
 
       recognition.onend = () => setIsListening(false);
-      recognition.onerror = () => setIsListening(false);
+      recognition.onerror = (event) => {
+        console.warn('[VOICE INPUT]', event.error);
+        setIsListening(false);
+      };
       recognitionRef.current = recognition;
     }
   }, []);
 
   const toggleListening = () => {
     if (!recognitionRef.current) {
-      alert('Tu navegador no soporta reconocimiento de voz nativo (Web Speech API). Te recomendamos Google Chrome o Microsoft Edge.');
+      alert('El navegador en uso no soporta la interfaz de reconocimiento de voz Web Speech API.');
       return;
     }
     if (isListening) {
@@ -168,18 +171,20 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
     };
   }, []);
 
-  // Carga de Claves desde Supabase
+  // Carga de Claves desde Supabase (Enmascaradas)
   const cargarClavesSupabase = useCallback(async () => {
     setLoadingKeys(true);
     try {
       const { data, error } = await supabase
         .from('config_ai_keys')
-        .select('*')
+        .select('id, proveedor, descripcion, prioridad, activo, created_at')
         .order('prioridad', { ascending: true });
 
-      if (!error && data) setKeysList(data);
+      if (!error && data) {
+        setKeysList(data);
+      }
     } catch (e) {
-      console.warn('[AI STUDIO] Error cargando claves:', e);
+      console.warn('[AI STUDIO] Error consultando claves:', e);
     } finally {
       setLoadingKeys(false);
     }
@@ -215,14 +220,14 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
 
   useEffect(() => {
     if (dDev.reles) {
-      setRelesLocales(prev => ({ ...dDev.reles, ...prev }));
+      setRelesLocales((prev) => ({ ...dDev.reles, ...prev }));
     }
   }, [dDev.reles]);
 
   // CRUD de Claves en Supabase
   const handleInsertarClave = async (e) => {
     e.preventDefault();
-    if (!newKeyData.api_key.trim()) return alert('Introduce una API Key válida.');
+    if (!newKeyData.api_key.trim()) return alert('Debe proporcionar un token válido.');
 
     try {
       const detectedProv = newKeyData.proveedor || detectarProveedorApiKey(newKeyData.api_key);
@@ -236,16 +241,16 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
 
       if (error) throw error;
       setNewKeyData({ proveedor: 'GROQ', api_key: '', descripcion: '', prioridad: keysList.length + 1 });
-      setMsg('✅ Clave agregada al clúster de Supabase.');
+      setMsg('Clave agregada al clúster de inferencia de forma segura.');
       cargarClavesSupabase();
     } catch (err) {
-      alert('Error guardando clave: ' + err.message);
+      alert(`Error guardando clave: ${err.message}`);
     }
   };
 
   const handleToggleClaveActiva = async (item) => {
     const nextActivo = !item.activo;
-    setKeysList(prev => prev.map(k => k.id === item.id ? { ...k, activo: nextActivo } : k));
+    setKeysList((prev) => prev.map((k) => k.id === item.id ? { ...k, activo: nextActivo } : k));
 
     try {
       await supabase.from('config_ai_keys').update({ activo: nextActivo }).eq('id', item.id);
@@ -255,13 +260,13 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
   };
 
   const handleEliminarClave = async (id, desc) => {
-    if (!confirm(`¿Eliminar la clave "${desc || id}" de Supabase?`)) return;
-    setKeysList(prev => prev.filter(k => k.id !== id));
+    if (!confirm(`¿Confirma eliminar la credencial "${desc || id}" del repositorio central?`)) return;
+    setKeysList((prev) => prev.filter((k) => k.id !== id));
     try {
       await supabase.from('config_ai_keys').delete().eq('id', id);
-      setMsg('🗑️ Clave eliminada de Supabase.');
+      setMsg('Clave removida.');
     } catch (err) {
-      alert('Error: ' + err.message);
+      alert(`Error: ${err.message}`);
       cargarClavesSupabase();
     }
   };
@@ -269,7 +274,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
   // Toggle Manual de Relé
   const handleToggleRelayDirecto = (canal, currentState = null) => {
     if (!cleanMac) {
-      alert('Por favor selecciona una placa física.');
+      alert('Seleccione un equipo de destino antes de conmutar salidas.');
       return;
     }
 
@@ -277,7 +282,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
     const estadoActual = currentState !== null ? currentState : Boolean(relesLocales[`R${numCanal}`]);
     const nextVal = !estadoActual;
 
-    setRelesLocales(prev => ({
+    setRelesLocales((prev) => ({
       ...prev,
       [`R${numCanal}`]: nextVal ? 1 : 0
     }));
@@ -288,13 +293,13 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
         canal: numCanal,
         val: nextVal
       });
-      setMsg(`📡 R${numCanal} -> ${nextVal ? 'ON (ACTIVO)' : 'OFF (APAGADO)'}`);
+      setMsg(`R${numCanal} -> ${nextVal ? 'ENERGIZADO (ON)' : 'DESACTIVADO (OFF)'}`);
     }
   };
 
   // Despliegue a la placa física
   const handleDesplegarADispositivo = async () => {
-    if (!cleanMac) return alert('Selecciona una placa.');
+    if (!cleanMac) return alert('Seleccione una placa física destino.');
 
     setTransmitting(true);
     setMsg(`Desplegando lógica a LittleFS en [${cleanMac}]...`);
@@ -322,9 +327,9 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
         updated_at: new Date().toISOString()
       }, { onConflict: 'mac' });
 
-      setMsg(`⚡ ¡Lógica grabada en Flash LittleFS de [${cleanMac}]!`);
+      setMsg(`Lógica y controles grabados en memoria flash de [${cleanMac}].`);
     } catch (err) {
-      setMsg('Error Supabase: ' + err.message);
+      setMsg(`Aviso base de datos: ${err.message}`);
     } finally {
       setTransmitting(false);
     }
@@ -341,7 +346,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
         sendCommand(cleanMac, { cmd: 'ABORTAR_PROCESO', mac: cleanMac });
       }
       setRelesLocales({});
-      setMsg(`🚨 PARO DE EMERGENCIA CONFIRMADO EN [${cleanMac.slice(-4)}]`);
+      setMsg(`PARO DE EMERGENCIA EJECUTADO EN [${cleanMac.slice(-4)}]`);
     } else if (accion.tipo === 'CONMUTAR_RELE') {
       const ch = accion.payload?.canal || 1;
       handleToggleRelayDirecto(ch);
@@ -353,50 +358,36 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
   // Detener Secuencia FSM
   const handleDetenerTemporizador = () => {
     abortSequenceRef.current = true;
-    if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
+    }
     setTimerEjecutando(null);
     setRelesLocales({});
 
     if (cleanMac && sendCommand) {
       sendCommand(cleanMac, { cmd: 'ABORTAR_PROCESO', mac: cleanMac });
     }
-    setMsg('🛑 Secuencia detenida en placa física.');
+    setMsg('Secuencia detenida por el operador.');
   };
 
-  // Iniciar Secuencia FSM con Cancelación Real
+  // Iniciar Secuencia FSM Sincronizada
   const handleIniciarSecuenciaMultiPaso = async (widget) => {
     if (!cleanMac) {
-      alert('Por favor selecciona una placa física.');
+      alert('Seleccione un equipo antes de arrancar la secuencia.');
       return;
     }
 
     abortSequenceRef.current = false;
     if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
 
-    const recetaParaEnviar = recetaActiva || (widget.pasos && widget.pasos.length > 0 ? {
-      nombre_receta: widget.titulo,
-      enclavamientos: [],
-      total_pasos: widget.pasos.length,
-      pasos: widget.pasos.map(p => ({
-        nombre: p.nombre,
-        tipo_transicion: 'TEMPORIZADO',
-        tiempo_ms: p.tiempoMs || p.tiempo_ms || 3000,
-        acciones_encender: p.acciones_encender || [`R${p.canal}`],
-        acciones_apagar: p.acciones_apagar || []
-      }))
-    } : null);
-
-    if (recetaParaEnviar && sendCommand) {
-      sendCommand(cleanMac, {
-        cmd: 'APPLY_LOGICA_SECUENCIA',
-        mac: cleanMac,
-        receta: recetaParaEnviar
-      });
-      setMsg(`⚡ Receta FSM enviada al Core 1 de [${cleanMac.slice(-4)}]`);
+    const pasos = widget.pasos || (recetaActiva ? recetaActiva.pasos : []);
+    if (!pasos || pasos.length === 0) {
+      alert('El control seleccionado no posee etapas definidas en su receta.');
+      return;
     }
 
-    const pasos = widget.pasos || (recetaParaEnviar ? recetaParaEnviar.pasos : []);
-    const totalSegs = widget.totalSegundos || 6;
+    const totalSegs = widget.totalSegundos || Math.round(pasos.reduce((acc, p) => acc + (p.tiempoMs || p.tiempo_ms || 3000), 0) / 1000);
 
     setTimerEjecutando({
       widgetId: widget.id,
@@ -404,7 +395,24 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
       totalSegundos: totalSegs
     });
 
-    // Bucle con bandera de aborto
+    // Iniciar temporizador regresivo de control
+    let segsRestantes = totalSegs;
+    timerIntervalRef.current = setInterval(() => {
+      segsRestantes--;
+      if (segsRestantes <= 0 || abortSequenceRef.current) {
+        clearInterval(timerIntervalRef.current);
+        timerIntervalRef.current = null;
+        setTimerEjecutando(null);
+      } else {
+        setTimerEjecutando({
+          widgetId: widget.id,
+          segundosRestantes: segsRestantes,
+          totalSegundos: totalSegs
+        });
+      }
+    }, 1000);
+
+    // Ejecución secuencial exacta
     (async () => {
       for (let i = 0; i < pasos.length; i++) {
         if (abortSequenceRef.current) break;
@@ -414,9 +422,9 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
         const delayMs = Number(paso.tiempoMs || paso.tiempo_ms || 3000);
 
         if (canal >= 1 && canal <= 8) {
-          setRelesLocales(prev => {
+          setRelesLocales((prev) => {
             const copia = { ...prev };
-            Object.keys(copia).forEach(k => { copia[k] = 0; });
+            Object.keys(copia).forEach((k) => { copia[k] = 0; });
             copia[`R${canal}`] = 1;
             return copia;
           });
@@ -431,37 +439,21 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
           }
         }
 
-        setMsg(`⚡ Ejecutando: ${paso.nombre || 'Etapa ' + (i + 1)} (R${canal})`);
-        
-        // Espera fraccionada para respuesta instantánea de aborto
+        setMsg(`Ejecutando etapa ${i + 1}/${pasos.length}: ${paso.nombre || 'Etapa ' + (i + 1)} (R${canal})`);
+
         const slice = 100;
         let elapsed = 0;
         while (elapsed < delayMs && !abortSequenceRef.current) {
-          await new Promise(r => setTimeout(r, slice));
+          await new Promise((r) => setTimeout(r, slice));
           elapsed += slice;
         }
       }
 
       if (!abortSequenceRef.current) {
         setRelesLocales({});
-        setMsg('✅ Secuencia completada con éxito.');
+        setMsg('Secuencia finalizada con éxito.');
       }
     })();
-
-    let segs = totalSegs;
-    timerIntervalRef.current = setInterval(() => {
-      segs--;
-      if (segs <= 0 || abortSequenceRef.current) {
-        clearInterval(timerIntervalRef.current);
-        setTimerEjecutando(null);
-      } else {
-        setTimerEjecutando({
-          widgetId: widget.id,
-          segundosRestantes: segs,
-          totalSegundos: totalSegs
-        });
-      }
-    }, 1000);
   };
 
   // Enviar mensaje a la IA
@@ -475,7 +467,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
     const textoUsuario = prompt.trim();
     if (!textoUsuario) return;
 
-    setHistorialChat(prev => [...prev, { id: `u_${Date.now()}`, sender: 'user', texto: textoUsuario }]);
+    setHistorialChat((prev) => [...prev, { id: `u_${Date.now()}`, sender: 'user', texto: textoUsuario }]);
     setPrompt('');
     setCompilando(true);
     setMsg('');
@@ -485,14 +477,14 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
 
       const res = await conversarYCompilarConIA({
         prompt: textoUsuario,
-        historial: historialChat.map(h => ({ sender: h.sender, contenido: h.texto })),
+        historial: historialChat.map((h) => ({ sender: h.sender, contenido: h.texto })),
         hardwareInfo: targetDev?.meta?.config_deseada || targetDev?.datos?.cfg || { tipo: 'AUTOCLAVE' },
         widgetsActuales: widgets,
         recetaActual: recetaActiva,
         telemetriaActual: { reles: relesLocales, fase: dDev.fase, adc: adcFisico }
       });
 
-      setHistorialChat(prev => [
+      setHistorialChat((prev) => [
         ...prev,
         { id: `ai_${Date.now()}`, sender: 'ai', texto: res.mensajeChat }
       ]);
@@ -516,18 +508,18 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
 
       setHalPayload(res.halPayload || {});
       setJsonRaw(JSON.stringify(res, null, 2));
-      setMsg(`✨ ${res.titulo}`);
+      setMsg(`${res.titulo || 'Instrucción procesada'}`);
     } catch (err) {
-      setHistorialChat(prev => [
+      setHistorialChat((prev) => [
         ...prev,
-        { id: `ai_err_${Date.now()}`, sender: 'ai', texto: `⚠️ ${err.message}` }
+        { id: `ai_err_${Date.now()}`, sender: 'ai', texto: `Aviso del motor de inferencia: ${err.message}` }
       ]);
     } finally {
       setCompilando(false);
     }
   };
 
-  // POINTER EVENTS OPTIMIZADOS CON RAF
+  // Pointer events optimizados con RAF
   const handlePointerDown = (e, idx, action) => {
     if (!modoEdicion) return;
     e.stopPropagation();
@@ -559,7 +551,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
     if (rafId.current) cancelAnimationFrame(rafId.current);
 
     rafId.current = requestAnimationFrame(() => {
-      setWidgets(prev => prev.map((w, i) => {
+      setWidgets((prev) => prev.map((w, i) => {
         if (i !== widgetIdx) return w;
 
         if (type === 'DRAG') {
@@ -589,71 +581,76 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
     }
   };
 
-  const totalClavesActivas = keysList.filter(k => k.activo).length;
+  const totalClavesActivas = keysList.filter((k) => k.activo).length;
 
   return (
     <div className="space-y-4 font-mono text-xs select-none">
       
-      {/* 1. BARRA SUPERIOR */}
+      {/* Barra superior */}
       <div className="ultra-glass p-4 rounded-2xl border border-amber-500/30 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
         <div className="flex items-center gap-3">
           <div className="p-2.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300">
-            <Sparkles className="w-5 h-5 animate-pulse" />
+            <Sparkles className="w-5 h-5" />
           </div>
           <div>
             <h2 className="text-base font-bold text-white flex items-center gap-2">
-              BioFleet SCADA Enterprise v2.0
-              <span className="px-2 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[9px] flex items-center gap-1">
-                <ShieldCheck className="w-3 h-3" /> POOL SUPABASE: {totalClavesActivas} ACTIVAS
+              Automation Studio SCADA v2.0
+              <span className="px-2 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[9px] flex items-center gap-1 font-bold">
+                <ShieldCheck className="w-3 h-3" /> POOL CLOUD: {totalClavesActivas} DISPONIBLES
               </span>
             </h2>
             <p className="text-[11px] text-slate-300 font-sans">
-              Control industrial con reconocimiento de voz en vivo y rotación automática de claves.
+              Copiloto de ingeniería con procesamiento de lenguaje natural y ejecución industrial en tiempo real
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
           <button
+            type="button"
             onClick={() => { cargarClavesSupabase(); setShowKeyModal(true); }}
-            className="px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 border transition-all bg-slate-900 border-amber-500/60 text-amber-300 hover:border-amber-400 hover:bg-slate-800 shadow-md shadow-amber-500/10"
+            className="px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 border transition-all bg-slate-900 border-amber-500/60 text-amber-300 hover:border-amber-400 hover:bg-slate-800 shadow"
           >
             <Key className="w-3.5 h-3.5 text-amber-400" />
-            <span>🔑 Claves Cloud ({totalClavesActivas})</span>
+            <span>Pool Claves ({totalClavesActivas})</span>
           </button>
 
           <div className="flex p-0.5 bg-slate-950 border border-slate-800 rounded-xl">
             <button
+              type="button"
               onClick={() => setActiveTab('STUDIO')}
               className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-all ${
-                activeTab === 'STUDIO' ? 'bg-amber-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'
+                activeTab === 'STUDIO' ? 'bg-amber-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white'
               }`}
             >
               <LayoutGrid className="w-3.5 h-3.5" />
               <span>Copilot & SCADA</span>
             </button>
             <button
+              type="button"
               onClick={() => setActiveTab('HARDWARE_I2C')}
               className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-all ${
-                activeTab === 'HARDWARE_I2C' ? 'bg-cyan-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'
+                activeTab === 'HARDWARE_I2C' ? 'bg-cyan-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white'
               }`}
             >
               <Cpu className="w-3.5 h-3.5" />
               <span>Hardware & I2C</span>
             </button>
             <button
+              type="button"
               onClick={() => setActiveTab('BIBLIOTECA')}
               className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-all ${
-                activeTab === 'BIBLIOTECA' ? 'bg-emerald-500 text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'
+                activeTab === 'BIBLIOTECA' ? 'bg-emerald-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white'
               }`}
             >
               <Database className="w-3.5 h-3.5" />
-              <span>Nube</span>
+              <span>Biblioteca</span>
             </button>
             <button
+              type="button"
               onClick={() => setActiveTab('EDITOR_JSON')}
               className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-all ${
-                activeTab === 'EDITOR_JSON' ? 'bg-indigo-500 text-white shadow-md' : 'text-slate-400 hover:text-white'
+                activeTab === 'EDITOR_JSON' ? 'bg-indigo-500 text-white shadow' : 'text-slate-400 hover:text-white'
               }`}
             >
               <FileCode className="w-3.5 h-3.5" />
@@ -663,15 +660,16 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
 
           {activeTab === 'STUDIO' && (
             <button
+              type="button"
               onClick={() => { setModoEdicion(!modoEdicion); setWidgetEnEdicion(null); }}
               className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 border transition-all ${
                 modoEdicion 
-                  ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-lg shadow-amber-500/30 animate-pulse' 
+                  ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-lg shadow-amber-500/30' 
                   : 'bg-slate-900 border-slate-700 text-amber-300 hover:border-amber-400'
               }`}
             >
               <Settings2 className="w-3.5 h-3.5" />
-              <span>{modoEdicion ? '🛠️ Salir Edición' : '🛠️ Modo Edición'}</span>
+              <span>{modoEdicion ? 'Bloquear Posiciones' : 'Modo Edición'}</span>
             </button>
           )}
         </div>
@@ -683,25 +681,25 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
             <CheckCircle2 className="w-4 h-4 shrink-0" />
             <span>{msg}</span>
           </div>
-          <button onClick={() => setMsg('')}><X className="w-4 h-4 text-emerald-400" /></button>
+          <button type="button" onClick={() => setMsg('')} className="text-emerald-400 font-bold">✕</button>
         </div>
       )}
 
-      {/* 2. TAB STUDIO: CHAT & LIENZO */}
+      {/* TAB 1: STUDIO */}
       {activeTab === 'STUDIO' && (
         <div className="space-y-4">
           
-          {/* Tarjeta de Confirmación de Acción Ejecutiva */}
+          {/* Alerta de Confirmación de Acción Ejecutiva */}
           {accionPendiente && (
-            <div className="p-4 rounded-2xl bg-amber-500/20 border-2 border-amber-400 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xl animate-pulse">
+            <div className="p-4 rounded-2xl bg-amber-500/20 border-2 border-amber-400 text-white flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xl">
               <div className="flex items-center gap-2.5">
                 <AlertTriangle className="w-6 h-6 text-amber-300 shrink-0" />
                 <div>
                   <span className="font-bold text-xs uppercase tracking-wider block text-amber-300">
-                    Confirmación de Seguridad Requerida:
+                    Interlock de Seguridad Clínico Requerido:
                   </span>
                   <p className="text-xs text-white">
-                    {accionPendiente.mensaje_confirmacion || `¿Confirmas ejecutar la acción [${accionPendiente.tipo}] en [${cleanMac.slice(-4)}]?`}
+                    {accionPendiente.mensaje_confirmacion || `¿Confirma la ejecución de la orden [${accionPendiente.tipo}] en [${cleanMac.slice(-4)}]?`}
                   </p>
                 </div>
               </div>
@@ -716,7 +714,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                 <button
                   type="button"
                   onClick={() => handleEjecutarAccionConfirmada(accionPendiente)}
-                  className="px-3 py-1.5 rounded-lg bg-amber-500 text-slate-950 text-xs font-bold shadow-lg hover:bg-amber-400"
+                  className="px-3 py-1.5 rounded-lg bg-amber-500 text-slate-950 text-xs font-bold shadow hover:bg-amber-400"
                 >
                   Confirmar y Ejecutar
                 </button>
@@ -729,14 +727,14 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
             <div className="flex justify-between items-center border-b border-slate-800 pb-2">
               <span className="text-amber-300 font-bold uppercase text-[11px] flex items-center gap-1.5">
                 <Bot className="w-4 h-4 text-emerald-400" />
-                Diálogo con el Ingeniero IA:
+                Copiloto Industrial de Configuración:
               </span>
               <button
                 type="button"
-                onClick={() => setHistorialChat([{ id: 'reset', sender: 'ai', texto: 'Historial reiniciado. Dime qué nuevo requerimiento deseas programar.' }])}
+                onClick={() => setHistorialChat([{ id: 'reset', sender: 'ai', texto: 'Historial reiniciado. Indique los requerimientos del proceso.' }])}
                 className="text-[10px] text-slate-400 hover:text-white"
               >
-                Limpiar Chat
+                Limpiar Consola
               </button>
             </div>
 
@@ -759,15 +757,15 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
               <div ref={chatBottomRef} />
             </div>
 
-            {/* Input con Micrófono */}
+            {/* Input con micrófono */}
             <form onSubmit={handleEnviarMensaje} className="flex items-center gap-2 pt-1">
               <input
                 type="text"
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
-                placeholder={isListening ? '🎙️ Escuchando tu voz... habla con naturalidad' : 'Escribe o presiona el micrófono para hablar...'}
+                placeholder={isListening ? 'Escuchando instrucción vocal...' : 'Escriba o active el micrófono para dictar instrucciones...'}
                 className={`flex-1 bg-slate-950 border rounded-xl px-3 py-2 text-white font-sans text-xs focus:outline-none transition-all ${
-                  isListening ? 'border-rose-500 ring-2 ring-rose-500/30 animate-pulse placeholder-rose-300' : 'border-slate-700 focus:border-amber-400'
+                  isListening ? 'border-rose-500 ring-2 ring-rose-500/30 animate-pulse' : 'border-slate-700 focus:border-amber-400'
                 }`}
               />
 
@@ -777,8 +775,8 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                 title={isListening ? 'Detener dictado' : 'Hablar por micrófono'}
                 className={`p-2 rounded-xl border transition-all shrink-0 ${
                   isListening 
-                    ? 'bg-rose-600 text-white border-rose-400 shadow-lg shadow-rose-500/30 animate-bounce' 
-                    : 'bg-slate-900 border-slate-700 text-slate-300 hover:text-white hover:border-amber-400'
+                    ? 'bg-rose-600 text-white border-rose-400 shadow-lg' 
+                    : 'bg-slate-900 border-slate-700 text-slate-300 hover:text-white'
                 }`}
               >
                 {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
@@ -787,10 +785,10 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
               <button
                 type="submit"
                 disabled={compilando || !prompt.trim()}
-                className="px-4 py-2 bg-gradient-to-r from-amber-500 to-emerald-500 hover:opacity-90 text-slate-950 font-bold rounded-xl flex items-center gap-1.5 shadow-lg disabled:opacity-50 shrink-0 font-mono"
+                className="px-4 py-2 bg-gradient-to-r from-amber-500 to-emerald-500 hover:opacity-90 text-slate-950 font-bold rounded-xl flex items-center gap-1.5 shadow disabled:opacity-50 shrink-0 font-mono"
               >
                 {compilando ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-                <span>{compilando ? 'Procesando...' : 'Enviar'}</span>
+                <span>{compilando ? 'Compilando...' : 'Transmitir'}</span>
               </button>
             </form>
           </div>
@@ -813,9 +811,9 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
               <select
                 value={selectedMac}
                 onChange={(e) => setSelectedMac(e.target.value)}
-                className="bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-cyan-300 font-bold"
+                className="bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-cyan-300 font-bold font-mono"
               >
-                <option value="">-- Placa Destino --</option>
+                <option value="">-- Seleccionar Placa --</option>
                 {macList.map((m) => (
                   <option key={m} value={m}>
                     {fleet[m]?.meta?.alias || m} ({m.slice(-4)})
@@ -827,10 +825,10 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                 type="button"
                 onClick={handleDesplegarADispositivo}
                 disabled={transmitting || !selectedMac}
-                className="px-3.5 py-1.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:opacity-90 text-white font-bold rounded-lg flex items-center gap-1.5 shadow-md disabled:opacity-40"
+                className="px-3.5 py-1.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:opacity-90 text-white font-bold rounded-lg flex items-center gap-1.5 shadow disabled:opacity-40"
               >
                 <Send className="w-3.5 h-3.5" />
-                <span>{transmitting ? 'Enviando...' : 'Desplegar a Placa'}</span>
+                <span>{transmitting ? 'Enviando...' : 'Desplegar a Hardware'}</span>
               </button>
             </div>
           </div>
@@ -840,21 +838,21 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
             <div className="flex justify-between items-center border-b border-slate-800 pb-2">
               <span className="text-white font-bold flex items-center gap-2">
                 <LayoutGrid className="w-4 h-4 text-cyan-400" />
-                Lienzo SCADA ({widgets.length} Controles):
+                Lienzo de Controles SCADA ({widgets.length}):
               </span>
-              <span className="text-[10px] text-amber-300">
+              <span className="text-[10px] text-amber-300 font-bold">
                 {timerEjecutando 
-                  ? `⏱️ SECUENCIA EN EJECUCIÓN: ${timerEjecutando.segundosRestantes}s RESTANTES` 
+                  ? `SECUENCIA EN EJECUCIÓN: ${timerEjecutando.segundosRestantes}s RESTANTES` 
                   : modoEdicion 
-                  ? '🛠️ Arrastra la barra superior para mover y la esquina para redimensionar' 
-                  : '👁️ Modo Operador: Control en tiempo real'}
+                  ? 'Arrastre la barra para posicionar y la esquina para redimensionar' 
+                  : 'Modo Control: Interacción en tiempo real'}
               </span>
             </div>
 
             {widgets.length === 0 ? (
-              <div className="py-16 border-2 border-dashed border-slate-800 rounded-xl text-center text-slate-500 space-y-2">
-                <Sparkles className="w-8 h-8 mx-auto text-amber-500/40 animate-pulse" />
-                <p>Pídele a la IA mediante voz o texto que genere controles para tu proceso.</p>
+              <div className="py-16 border-2 border-dashed border-slate-800 rounded-xl text-center text-slate-500 space-y-2 font-sans">
+                <Sparkles className="w-8 h-8 mx-auto text-amber-500/40" />
+                <p>No hay controles en el lienzo. Indique a la IA mediante texto o voz los componentes requeridos.</p>
               </div>
             ) : (
               <div
@@ -889,7 +887,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                           'border-cyan-500/40 text-cyan-300'
                         }`}
                       >
-                        {/* Cabecera del Widget */}
+                        {/* Cabecera del Control */}
                         <div
                           onPointerDown={(e) => handlePointerDown(e, idx, 'DRAG')}
                           onPointerMove={handlePointerMove}
@@ -926,15 +924,15 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                           )}
                         </div>
 
-                        {/* Cuerpo del Widget */}
+                        {/* Cuerpo del Control */}
                         <div className="flex-1 p-3 flex flex-col justify-center overflow-hidden" onPointerDown={(e) => e.stopPropagation()}>
                           
-                          {/* 1. Temporizador FSM */}
+                          {/* Control FSM */}
                           {w.tipo === 'SEQUENCE_TIMER' && (
                             <div className="flex flex-col justify-between h-full space-y-2">
                               <div className="flex items-center justify-between">
-                                <span className="text-[10px] text-slate-400 font-sans">Secuencia FSM:</span>
-                                <span className={`text-2xl font-bold font-mono tracking-wider ${esTimerActivo ? 'text-amber-400 animate-pulse' : 'text-white'}`}>
+                                <span className="text-[10px] text-slate-400 font-sans">Etapas FSM:</span>
+                                <span className={`text-2xl font-bold font-mono tracking-wider ${esTimerActivo ? 'text-amber-400' : 'text-white'}`}>
                                   {segRest}s
                                 </span>
                               </div>
@@ -965,7 +963,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                                   <button
                                     type="button"
                                     onClick={handleDetenerTemporizador}
-                                    className="w-full py-2 bg-rose-600 hover:bg-rose-500 font-bold text-white rounded-xl flex items-center justify-center gap-1.5 shadow-md"
+                                    className="w-full py-2 bg-rose-600 hover:bg-rose-500 font-bold text-white rounded-xl flex items-center justify-center gap-1.5 shadow"
                                   >
                                     <Square className="w-3.5 h-3.5 fill-white" />
                                     <span>Cancelar Secuencia</span>
@@ -974,23 +972,23 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                                   <button
                                     type="button"
                                     onClick={() => handleIniciarSecuenciaMultiPaso(w)}
-                                    className="w-full py-2 bg-gradient-to-r from-emerald-500 to-cyan-500 hover:opacity-90 font-bold text-slate-950 rounded-xl flex items-center justify-center gap-1.5 shadow-md"
+                                    className="w-full py-2 bg-gradient-to-r from-emerald-500 to-cyan-500 hover:opacity-90 font-bold text-slate-950 rounded-xl flex items-center justify-center gap-1.5 shadow"
                                   >
                                     <Play className="w-3.5 h-3.5 fill-slate-950" />
-                                    <span>Iniciar Secuencia ({w.totalSegundos || 6}s)</span>
+                                    <span>Ejecutar Secuencia ({w.totalSegundos || 6}s)</span>
                                   </button>
                                 )}
                               </div>
                             </div>
                           )}
 
-                          {/* 2. Interruptor Switch */}
+                          {/* Control Switch */}
                           {w.tipo === 'SWITCH_TOGGLE' && (
                             <div
                               onClick={() => handleToggleRelayDirecto(w.canal || 1)}
                               className="flex items-center justify-between w-full px-3 cursor-pointer py-2.5 bg-slate-950/60 rounded-xl border border-slate-800 hover:border-cyan-400 transition-colors"
                             >
-                              <span className="text-[10px] text-slate-300 font-bold">R{numCanal} • {w.titulo}</span>
+                              <span className="text-[10px] text-slate-300 font-bold">R{numCanal} · {w.titulo}</span>
                               <div
                                 className={`w-12 h-6 rounded-full border border-current p-0.5 flex items-center transition-all ${
                                   isRelayActive ? 'justify-end bg-cyan-500/20' : 'justify-start bg-slate-950'
@@ -1001,12 +999,12 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                             </div>
                           )}
 
-                          {/* 3. Botón de Acción Directo */}
+                          {/* Control Botón */}
                           {w.tipo === 'ACTION_BUTTON' && (
                             <button
                               type="button"
                               onClick={() => handleToggleRelayDirecto(w.canal || 1)}
-                              className="w-full py-3.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-lg bg-slate-950 border border-current text-cyan-300 hover:brightness-125"
+                              className="w-full py-3.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow bg-slate-950 border border-current text-cyan-300 hover:brightness-125"
                             >
                               <Play className="w-3.5 h-3.5 fill-current" />
                               <span>{w.titulo}</span>
@@ -1020,7 +1018,6 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                             onPointerDown={(e) => handlePointerDown(e, idx, 'RESIZE')}
                             onPointerMove={handlePointerMove}
                             onPointerUp={handlePointerUp}
-                            title="Arrastra para redimensionar"
                             className="absolute bottom-0 right-0 w-6 h-6 flex items-center justify-center cursor-nwse-resize z-30 touch-none group"
                           >
                             <div className="w-2.5 h-2.5 border-r-2 border-b-2 border-amber-400 group-hover:w-3.5 group-hover:h-3.5 transition-all" />
@@ -1036,7 +1033,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
         </div>
       )}
 
-      {/* 3. TAB HARDWARE I2C */}
+      {/* TAB 2: HARDWARE I2C */}
       {activeTab === 'HARDWARE_I2C' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 space-y-4">
@@ -1045,7 +1042,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
               Provisión de Hardware
             </h3>
             <div>
-              <label className="text-slate-300 block mb-1">MAC Dispositivo:</label>
+              <label className="text-slate-300 block mb-1">Dirección MAC de Destino:</label>
               <input
                 type="text"
                 value={selectedMac}
@@ -1056,9 +1053,9 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
             <button
               type="button"
               onClick={handleDesplegarADispositivo}
-              className="w-full py-3 bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold rounded-xl shadow-lg"
+              className="w-full py-3 bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold rounded-xl shadow"
             >
-              ⚡ APROVISIONAR Y ENVIAR AL ESP32
+              APROVISIONAR Y GRABAR EN DISPOSITIVO
             </button>
           </div>
 
@@ -1071,7 +1068,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
               <button
                 type="button"
                 onClick={() => {
-                  if (!cleanMac) return alert('Selecciona una placa.');
+                  if (!cleanMac) return alert('Seleccione una placa.');
                   setScanningI2C(true);
                   if (sendCommand) sendCommand(cleanMac, { cmd: 'SCAN_HARDWARE' });
                 }}
@@ -1083,7 +1080,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
               </button>
             </div>
             <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1">
-              {[1, 2, 3, 4, 5, 6, 7, 8].map(num => {
+              {[1, 2, 3, 4, 5, 6, 7, 8].map((num) => {
                 const isRelayOn = Boolean(relesLocales[`R${num}`]);
                 return (
                   <div key={num} className="p-2.5 bg-slate-950 rounded-lg border border-slate-800 space-y-1.5">
@@ -1096,7 +1093,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                           isRelayOn ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-slate-300'
                         }`}
                       >
-                        {isRelayOn ? 'PROBANDO (ON)' : 'TEST (OFF)'}
+                        {isRelayOn ? 'ENERGIZADO (ON)' : 'DESACTIVADO (OFF)'}
                       </button>
                     </div>
                   </div>
@@ -1107,7 +1104,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
         </div>
       )}
 
-      {/* 4. TAB BIBLIOTECA NUBE */}
+      {/* TAB 3: BIBLIOTECA NUBE */}
       {activeTab === 'BIBLIOTECA' && (
         <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 space-y-4">
           <div className="flex justify-between items-center border-b border-cyan-500/20 pb-3">
@@ -1115,8 +1112,8 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
               <Database className="w-4 h-4 text-cyan-400" />
               Biblioteca en Supabase ({perfilesGuardados.length})
             </h3>
-            <button onClick={cargarBiblioteca} className="px-2.5 py-1 bg-slate-900 border border-slate-700 text-slate-300 rounded-lg text-xs">
-              🔄 Recargar
+            <button type="button" onClick={cargarBiblioteca} className="px-2.5 py-1 bg-slate-900 border border-slate-700 text-slate-300 rounded-lg text-xs">
+              Actualizar
             </button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -1128,6 +1125,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                 </div>
                 <div className="flex items-center gap-2 pt-2 border-t border-slate-800">
                   <button
+                    type="button"
                     onClick={() => {
                       setPerfilNombre(p.nombre);
                       const j = p.perfil_json || {};
@@ -1135,7 +1133,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                       setHalPayload(j.hal || {});
                       setRecetaActiva(j.receta || null);
                       setActiveTab('STUDIO');
-                      setMsg(`📂 Perfil "${p.nombre}" cargado.`);
+                      setMsg(`Perfil "${p.nombre}" cargado en el lienzo.`);
                     }}
                     className="flex-1 py-1 bg-cyan-600 text-white rounded font-bold text-[10px]"
                   >
@@ -1148,12 +1146,12 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
         </div>
       )}
 
-      {/* 5. TAB EDITOR JSON */}
+      {/* TAB 4: EDITOR JSON */}
       {activeTab === 'EDITOR_JSON' && (
         <div className="ultra-glass p-5 rounded-2xl border border-indigo-500/30 space-y-3">
           <h3 className="text-sm font-bold text-indigo-300 flex items-center gap-2 border-b border-indigo-500/20 pb-2">
             <FileCode className="w-4 h-4" />
-            Editor JSON Manifiesto
+            Editor JSON del Manifiesto de Proceso
           </h3>
           <textarea
             rows={18}
@@ -1165,16 +1163,16 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
         </div>
       )}
 
-      {/* 6. MODAL GESTOR DE CLAVES CLOUD (createPortal) */}
+      {/* MODAL GESTOR DE CLAVES CLOUD */}
       {showKeyModal && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-[999999] bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
           <div className="ultra-glass border-2 border-amber-500/60 p-6 rounded-2xl max-w-2xl w-full space-y-4 shadow-2xl font-mono text-xs">
             <div className="flex justify-between items-center border-b border-slate-800 pb-2">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
                 <Key className="w-4 h-4 text-amber-400" />
-                Pool de API Keys en Supabase Cloud (`config_ai_keys`)
+                Pool de Inferencia AI (`config_ai_keys`)
               </h3>
-              <button onClick={() => setShowKeyModal(false)} className="text-slate-400 hover:text-white">
+              <button type="button" onClick={() => setShowKeyModal(false)} className="text-slate-400 hover:text-white">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -1186,24 +1184,24 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                     <th className="p-2 text-center w-12">Prio</th>
                     <th className="p-2">Proveedor</th>
                     <th className="p-2">Descripción</th>
-                    <th className="p-2">Clave</th>
+                    <th className="p-2">Token</th>
                     <th className="p-2 text-center">Estado</th>
                     <th className="p-2 text-center">Acción</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800 bg-slate-900/60 text-slate-300">
                   {loadingKeys ? (
-                    <tr><td colSpan="6" className="p-4 text-center text-slate-400">Consultando Supabase...</td></tr>
+                    <tr><td colSpan="6" className="p-4 text-center text-slate-400">Consultando registros...</td></tr>
                   ) : keysList.length === 0 ? (
-                    <tr><td colSpan="6" className="p-4 text-center text-slate-500">No hay claves registradas en la tabla.</td></tr>
+                    <tr><td colSpan="6" className="p-4 text-center text-slate-500 font-sans">No hay credenciales registradas en la tabla.</td></tr>
                   ) : (
                     keysList.map((k) => (
                       <tr key={k.id} className="hover:bg-slate-800/40">
                         <td className="p-2 text-center font-bold text-amber-400">{k.prioridad}</td>
                         <td className="p-2 font-bold text-white">{k.proveedor}</td>
-                        <td className="p-2 text-slate-400">{k.descripcion || '--'}</td>
+                        <td className="p-2 text-slate-400">{k.descripcion || '—'}</td>
                         <td className="p-2 font-mono text-[10px] text-cyan-300">
-                          {k.api_key.substring(0, 6)}...{k.api_key.slice(-4)}
+                          ••••••••••••••••
                         </td>
                         <td className="p-2 text-center">
                           <button
@@ -1234,7 +1232,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
 
             <form onSubmit={handleInsertarClave} className="p-3 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
               <span className="text-amber-400 font-bold block text-[10px] uppercase">
-                + Agregar Nueva API Key:
+                + Agregar Nueva Credencial de Inferencia:
               </span>
               <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
                 <div>
@@ -1251,7 +1249,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                   </select>
                 </div>
                 <div className="sm:col-span-2">
-                  <label className="block text-slate-400 text-[9px] mb-0.5">API Key</label>
+                  <label className="block text-slate-400 text-[9px] mb-0.5">API Key / Token Secreto</label>
                   <input
                     type="password"
                     required
@@ -1284,7 +1282,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                   type="submit"
                   className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-[10px]"
                 >
-                  Guardar en Supabase
+                  Registrar Token
                 </button>
               </div>
             </form>

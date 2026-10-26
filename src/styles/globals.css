@@ -338,10 +338,7 @@ button:active, .btn-touch:active {
 
 .header-laser-orbit path {
   fill: none;
-  stroke-dasharray: 150 850;
-  animation: headerLaserOrbit 6.4s linear infinite;
-  will-change: stroke-dashoffset;
-  transform: translateZ(0);
+  stroke-linecap: round;
 }
 
 .header-laser-orbit-glow {
@@ -349,17 +346,12 @@ button:active, .btn-touch:active {
   stroke-width: 5;
   opacity: 0.72;
   filter: drop-shadow(0 0 5px var(--accent-color)) drop-shadow(0 0 12px color-mix(in srgb, var(--accent-color) 70%, transparent));
-  will-change: filter;
-  transform: translateZ(0);
 }
 
 .header-laser-orbit-core {
   stroke: #f4fbff;
   stroke-width: 1.6;
   opacity: 0.95;
-  animation-delay: -0.045s !important;
-  will-change: stroke-dashoffset;
-  transform: translateZ(0);
 }
 
 .brand-emitter {
@@ -369,15 +361,11 @@ button:active, .btn-touch:active {
   color: var(--accent-color) !important;
   box-shadow: 0 0 16px color-mix(in srgb, var(--accent-color) 16%, transparent), inset 0 1px rgba(255,255,255,0.08);
   animation: brandEmitterPulse 3.6s ease-in-out infinite;
-  will-change: box-shadow;
-  transform: translateZ(0);
 }
 
 .brand-emitter svg {
   animation: brandIconFloat 4.2s ease-in-out infinite;
   filter: drop-shadow(0 0 5px color-mix(in srgb, var(--accent-color) 45%, transparent));
-  will-change: transform, filter;
-  transform: translateZ(0);
 }
 
 .brand-emitter::after {
@@ -425,10 +413,6 @@ button:active, .btn-touch:active {
 
 .login-brand-name {
   font-size: 10px;
-}
-
-@keyframes headerLaserOrbit {
-  to { stroke-dashoffset: -1000; }
 }
 
 @keyframes brandEmitterPulse {
@@ -656,47 +640,6 @@ button:active, .btn-touch:active {
   .fleet-search-control,
   .fleet-sort-control {
     min-height: 44px;
-  }
-
-  /* Optimizaciones para móvil - reducir efectos pesados */
-  .header-laser-orbit-glow {
-    filter: none;
-    opacity: 0.5;
-  }
-
-  .brand-emitter svg {
-    filter: none;
-  }
-
-  .brand-emitter::after {
-    display: none;
-  }
-
-  .brand-emitter::before {
-    display: none;
-  }
-
-  .particle-background::before {
-    animation-duration: 120s;
-    opacity: 0.2;
-  }
-
-  /* Deshabilitar blur pesado en móvil */
-  .ultra-glass {
-    backdrop-filter: blur(8px) !important;
-    -webkit-backdrop-filter: blur(8px) !important;
-  }
-
-  /* Reducir animaciones de glow en móvil */
-  .glow-border::before {
-    animation: none;
-    opacity: 0.3;
-  }
-
-  /* Simplificar efectos de partículas */
-  .app-shell::before,
-  .app-shell::after {
-    display: none;
   }
 }
 
@@ -990,7 +933,8 @@ button:active, .btn-touch:active {
 @media (prefers-reduced-motion: reduce) {
   .fleet-overview-live span,
   .fixed.inset-0 > .ultra-glass,
-  .header-laser-orbit path,
+  .particle-background::before,
+  .glass-shine::after,
   .brand-emitter,
   .brand-emitter::before,
   .brand-emitter::after,
@@ -1530,17 +1474,49 @@ button:active::after, .btn:active::after {
   border-top: 1px solid var(--card-border);
 }
 
-.mobile-nav-shell::before {
-  content: '';
+.mobile-nav-indicator {
   position: absolute;
   top: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 40%;
+  left: 0;
+  width: 20%;
   height: 4px;
+  pointer-events: none;
+  transition: transform 0.35s cubic-bezier(0.2, 0.85, 0.25, 1), opacity 0.2s ease;
+}
+
+.mobile-nav-indicator::after {
+  content: '';
+  position: absolute;
+  inset: 0 22%;
   background: var(--accent-color);
   border-radius: 0 0 4px 4px;
   box-shadow: 0 0 10px var(--accent-color);
+}
+
+@keyframes swipeEnterNext {
+  from { opacity: 0; transform: translateX(36px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes swipeEnterPrev {
+  from { opacity: 0; transform: translateX(-36px); }
+  to { opacity: 1; transform: none; }
+}
+
+.swipe-enter-next {
+  animation: swipeEnterNext 0.26s cubic-bezier(0.2, 0.85, 0.25, 1) both;
+}
+
+.swipe-enter-prev {
+  animation: swipeEnterPrev 0.26s cubic-bezier(0.2, 0.85, 0.25, 1) both;
+}
+
+main[data-nav-dir="next"] .app-view-panel:not([hidden]) {
+  animation-name: swipeEnterNext;
+}
+
+main[data-nav-dir="prev"] .app-view-panel:not([hidden]) {
+  animation-name: swipeEnterPrev;
 }
 
 /* 27. EFECTO DE ESCANEO EN TARJETAS */
@@ -1717,4 +1693,142 @@ button:active::after, .btn:active::after {
   100% {
     transform: rotate(0deg);
   }
+}
+
+/* =========================================================================
+   RENDIMIENTO EN MÓVILES Y TABLETS
+   ========================================================================= */
+html { -webkit-text-size-adjust: 100%; overscroll-behavior-x: none; }
+body { -webkit-tap-highlight-color: transparent; overscroll-behavior-x: none; }
+button, a, label, input, select, textarea, [role="button"] { touch-action: manipulation; }
+
+@media (hover: none), (pointer: coarse), (max-width: 1023px) {
+  .ultra-glass {
+    backdrop-filter: blur(8px) !important;
+    -webkit-backdrop-filter: blur(8px) !important;
+  }
+
+  .glass-cell {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background-color: rgb(var(--glass-bg) / calc(var(--glass-opacity) * 0.85 + 0.12)) !important;
+  }
+
+  .mobile-nav-shell {
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+
+  .app-shell::before,
+  .app-shell::after {
+    filter: none;
+  }
+
+  .particle-background::before {
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: calc(100% + 200px);
+    animation: particleDriftMobile 40s linear infinite;
+    will-change: transform;
+  }
+
+  .glass-shine::after { display: none; }
+
+  .glow-border::before,
+  .btn-glow-effect::before,
+  .matrix-text {
+    animation: none;
+  }
+
+  .neon-text {
+    animation: none;
+    text-shadow: 0 0 6px var(--accent-color);
+  }
+
+  .brand-wordmark { filter: none; }
+
+  .header-laser-orbit-glow {
+    filter: none;
+    stroke-width: 6;
+    opacity: 0.4;
+  }
+
+  .header-laser-orbit-core { stroke-width: 2; }
+}
+
+@keyframes particleDriftMobile {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(0, -200px, 0); }
+}
+
+@media (hover: none) {
+  .scale-3d:hover,
+  .zoom-hover:hover img,
+  .notification-item:hover,
+  .scada-input:focus,
+  .scada-select:focus {
+    transform: none;
+  }
+
+  .ultra-glass:hover::after { opacity: 0; }
+
+  .icon-glow:hover { filter: drop-shadow(0 0 8px var(--accent-color)); }
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.device-section-nav {
+  scroll-margin-top: 4rem;
+}
+
+.control-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 28px;
+  background: transparent;
+  touch-action: pan-y;
+}
+
+.control-range::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent, #22d3ee) var(--fill, 50%), rgba(51, 65, 85, 0.9) var(--fill, 50%));
+}
+
+.control-range::-moz-range-track {
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent, #22d3ee) var(--fill, 50%), rgba(51, 65, 85, 0.9) var(--fill, 50%));
+}
+
+.control-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 24px;
+  height: 24px;
+  margin-top: -8px;
+  border-radius: 50%;
+  background: #fff;
+  border: 3px solid var(--accent, #22d3ee);
+  box-shadow: 0 0 12px var(--accent, #22d3ee);
+}
+
+.control-range::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  border: 3px solid var(--accent, #22d3ee);
+  box-shadow: 0 0 12px var(--accent, #22d3ee);
+}
+
+.control-tile {
+  -webkit-tap-highlight-color: transparent;
+  min-height: 56px;
 }

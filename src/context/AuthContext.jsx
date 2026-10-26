@@ -56,6 +56,7 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [pendingRequests, setPendingRequests] = useState([]);
   const [recoveryRequests, setRecoveryRequests] = useState([]);
+  const [requestsLoadedAt, setRequestsLoadedAt] = useState(null);
 
   const loadPendingRequests = useCallback(async () => {
     try {
@@ -78,6 +79,8 @@ export const AuthProvider = ({ children }) => {
 
         if (recoveries) setRecoveryRequests(recoveries);
       } catch (_) {}
+
+      setRequestsLoadedAt(Date.now());
     } catch (e) {
       console.warn('[AUTH] Carga de solicitudes:', e);
     }
@@ -364,6 +367,7 @@ export const AuthProvider = ({ children }) => {
       authMode: Boolean(user),
       pendingRequests,
       recoveryRequests,
+      requestsLoadedAt,
       loadPendingRequests,
       loginWithCredentials,
       requestPasswordRecovery,

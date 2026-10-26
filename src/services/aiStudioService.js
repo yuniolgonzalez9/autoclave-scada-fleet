@@ -157,3 +157,52 @@ export async function conversarYCompilarConIA({
 
   throw new Error(`Error procesando orden con IA: ${ultimoError}`);
 }
+
+export async function mejorarTextoConIA(texto, contexto = '') {
+  const t = (texto || '').trim();
+  if (!t) return '';
+  let pool = [];
+  try {
+    const { data } = await supabase.from('config_ai_keys').select('*').eq('activo', true).order('prioridad', { ascending: true });
+    if (data?.length) pool = data;
+  } catch (_) {}
+  const local = localStorage.getItem('biofleet_ai_key');
+  if (!pool.length && local) pool = [{ proveedor: detectarProveedorApiKey(local), api_key: local.trim() }];
+  if (!pool.length) throw new Error('No hay claves de IA activas.');
+
+  const system = 'Eres un editor técnico de mantenimiento biomédico. Corrige ortografía, acentos y redacción en español neutro, ordena el contenido en frases claras o viñetas (•) y usa terminología técnica correcta. No inventes datos, valores ni acciones que no estén en el texto. Devuelve solo el texto corregido.';
+  const endpoints = {
+    OPENAI: ['https://api.openai.com/v1/chat/completions', 'gpt-4o-mini'],
+    OPENROUTER: ['https://openrouter.ai/api/v1/chat/completions', 'meta-llama/llama-3.3-70b-instruct'],
+    GROQ: ['https://api.groq.com/openai/v1/chat/completions', 'llama-3.3-70b-versatile']
+  };
+  let lastError = null;
+  for (const item of pool) {
+    const prov = (item.proveedor || detectarProveedorApiKey(item.api_key)).toUpperCase();
+    const [endpoint, model] = endpoints[prov] || endpoints.GROQ;
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${item.api_key}` },
+        body: JSON.stringify({
+          model,
+          temperature: 0.2,
+          messages: [
+            { role: 'system', content: system },
+            { role: 'user', content: `${contexto ? `Campo: ${contexto}\n` : ''}Texto:\n${t}` }
+          ]
+        })
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const out = json?.choices?.[0]?.message?.content?.trim();
+        if (out) return out;
+      } else {
+        lastError = `HTTP ${res.status}`;
+      }
+    } catch (e) {
+      lastError = e.message;
+    }
+  }
+  throw new Error(`La IA no respondió (${lastError || 'sin detalle'}).`);
+}

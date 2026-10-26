@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { X, Save, Cpu, Car, Activity, ShieldCheck, CheckCircle2 } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
+import { X, Save, Cpu, Car, Activity, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { supabase } from '../../services/supabase';
 
 const CATALOGO_MODELOS = {
@@ -35,22 +36,70 @@ export default function DeviceAssignmentModal({
   sendCommand, 
   onAssignmentUpdated 
 }) {
-  if (!isOpen || !device) return null;
+  const currentMeta = device?.meta || {};
+  const currentDatos = device?.datos || {};
+  
+  const initialType = useMemo(() => {
+    return (currentMeta.config_deseada?.tipo || currentMeta.tipo || currentDatos.tipo || 'AUTOCLAVE').toUpperCase();
+  }, [currentMeta, currentDatos]);
 
-  const currentMeta = device.meta || {};
-  const currentDatos = device.datos || {};
-  const initialType = (currentMeta.config_deseada?.tipo || currentMeta.tipo || currentDatos.tipo || 'AUTOCLAVE').toUpperCase();
+  const initialBrand = useMemo(() => {
+    const brands = Object.keys(CATALOGO_MODELOS[initialType] || CATALOGO_MODELOS.AUTOCLAVE);
+    return currentMeta.marca && brands.includes(currentMeta.marca) ? currentMeta.marca : brands[0] || 'GENERICO';
+  }, [initialType, currentMeta.marca]);
+
+  const initialModel = useMemo(() => {
+    const models = CATALOGO_MODELOS[initialType]?.[initialBrand] || ['Universal'];
+    return currentMeta.modelo && models.includes(currentMeta.modelo) ? currentMeta.modelo : models[0] || 'Universal';
+  }, [initialType, initialBrand, currentMeta.modelo]);
 
   const [tipo, setTipo] = useState(initialType);
-  const [alias, setAlias] = useState(currentMeta.alias || `EQUIPO [${device.mac?.slice(-4) || 'SCADA'}]`);
-  const [cliente, setCliente] = useState(currentMeta.cliente || 'Hospital Central');
-  const [usuarioAsignado, setUsuarioAsignado] = useState(currentMeta.usuario_asignado || '');
-  const [marca, setMarca] = useState(currentMeta.marca || Object.keys(CATALOGO_MODELOS[initialType] || CATALOGO_MODELOS.AUTOCLAVE)[0]);
-  const [modelo, setModelo] = useState(currentMeta.modelo || (CATALOGO_MODELOS[initialType]?.[marca]?.[0] || 'Universal'));
-  const [limiteMant, setLimiteMant] = useState(currentDatos.cfg?.lim_mant || currentMeta.limiteMantenimiento || 200);
+  const [alias, setAlias] = useState('');
+  const [cliente, setCliente] = useState('');
+  const [usuarioAsignado, setUsuarioAsignado] = useState('');
+  const [marca, setMarca] = useState(initialBrand);
+  const [modelo, setModelo] = useState(initialModel);
+  const [limiteMant, setLimiteMant] = useState('200');
 
   const [guardando, setGuardando] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
   const [mensajeExito, setMensajeExito] = useState(false);
+
+  // Inicialización de campos al abrir el modal con el dispositivo seleccionado
+  useEffect(() => {
+    if (device) {
+      const metaObj = device.meta || {};
+      const datosObj = device.datos || {};
+      const devType = (metaObj.config_deseada?.tipo || metaObj.tipo || datosObj.tipo || 'AUTOCLAVE').toUpperCase();
+      const brands = Object.keys(CATALOGO_MODELOS[devType] || CATALOGO_MODELOS.AUTOCLAVE);
+      const devBrand = metaObj.marca && brands.includes(metaObj.marca) ? metaObj.marca : brands[0] || 'GENERICO';
+      const models = CATALOGO_MODELOS[devType]?.[devBrand] || ['Universal'];
+      const devModel = metaObj.modelo && models.includes(metaObj.modelo) ? metaObj.modelo : models[0] || 'Universal';
+      const devLimit = datosObj.cfg?.lim_mant || metaObj.limite_mantenimiento || metaObj.limiteMantenimiento || 200;
+
+      setTipo(devType);
+      setAlias(metaObj.alias || `EQUIPO [${device.mac?.slice(-4) || 'SCADA'}]`);
+      setCliente(metaObj.cliente || 'Central Hospitalaria');
+      setUsuarioAsignado(metaObj.usuario_asignado || '');
+      setMarca(devBrand);
+      setModelo(devModel);
+      setLimiteMant(String(devLimit));
+      setErrorMsg('');
+      setMensajeExito(false);
+    }
+  }, [device]);
+
+  // Manejo de tecla Escape
+  const handleKeyDown = useCallback((e) => {
+    if (e.key === 'Escape') onClose();
+  }, [onClose]);
+
+  useEffect(() => {
+    if (isOpen) {
+      window.addEventListener('keydown', handleKeyDown);
+    }
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, handleKeyDown]);
 
   // Actualiza lista de marcas al cambiar de tipo de dispositivo
   const handleTipoChange = (newTipo) => {
@@ -69,49 +118,80 @@ export default function DeviceAssignmentModal({
 
   const handleGuardar = async (e) => {
     e.preventDefault();
+    setErrorMsg('');
+
+    const cleanAlias = alias.trim();
+    const cleanCliente = cliente.trim();
+    const cleanUsuario = usuarioAsignado.trim().toLowerCase();
+    
+    // Validación de límites numéricos
+    const parsedLimit = parseInt(limiteMant, 10);
+    if (isNaN(parsedLimit) || parsedLimit < 10) {
+      setErrorMsg('El límite de mantenimiento debe ser un número entero mayor o igual a 10 ciclos.');
+      return;
+    }
+
+    if (!cleanAlias) {
+      setErrorMsg('Debe asignar un nombre o alias identificador al equipo.');
+      return;
+    }
+
     setGuardando(true);
     setMensajeExito(false);
 
+    const cleanMac = (device.mac || '').toUpperCase().replace(/[:\-]/g, '');
+
     const updatedData = {
-      mac: device.mac,
-      alias,
-      cliente,
-      usuario_asignado: usuarioAsignado,
+      mac: cleanMac,
+      alias: cleanAlias,
+      cliente: cleanCliente || 'Central Hospitalaria',
+      usuario_asignado: cleanUsuario || null,
       tipo,
       marca,
       modelo,
-      limiteMantenimiento: Number(limiteMant),
+      limite_mantenimiento: parsedLimit,
       config_deseada: {
+        ...(currentMeta.config_deseada || {}),
         tipo,
         marca,
-        modelo
+        modelo,
+        lim_mant: parsedLimit
       }
     };
 
     try {
-      // 1. Guardar metadatos en Supabase
-      if (supabase) {
-        await supabase.from('dispositivos_scada').upsert({
-          mac: device.mac,
-          alias: alias,
-          cliente: cliente,
-          usuario_asignado: usuarioAsignado,
-          tipo: tipo,
-          modelo: `${marca} - ${modelo}`,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'mac' });
-      }
+      // 1. Persistencia atómica en Supabase
+      const { error: dbError } = await supabase.from('asignaciones_equipos').upsert({
+        mac: cleanMac,
+        alias: cleanAlias,
+        cliente: cleanCliente || 'Central Hospitalaria',
+        usuario_asignado: cleanUsuario || null,
+        tipo,
+        marca,
+        modelo,
+        limite_mantenimiento: parsedLimit,
+        config_deseada: updatedData.config_deseada,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'mac' });
 
-      // 2. Enviar configuración de hardware vía MQTT si hay comando disponible
+      if (dbError) throw dbError;
+
+      // 2. Transmisión del comando ejecutivo por MQTT al microcontrolador
       if (sendCommand) {
-        sendCommand(device.mac, {
+        sendCommand(cleanMac, {
           cmd: 'SET_CONFIG',
-          cfg: { lim_mant: Number(limiteMant) },
-          meta: { alias, cliente, tipo, modelo }
+          cfg: { lim_mant: parsedLimit },
+          meta: { 
+            alias: cleanAlias, 
+            cliente: cleanCliente, 
+            tipo, 
+            modelo,
+            marca 
+          }
         });
       }
 
-      // 3. Notificar al estado de React
+      // 3. Notificación al estado en memoria de React
       if (onAssignmentUpdated) {
         onAssignmentUpdated(updatedData);
       }
@@ -120,9 +200,10 @@ export default function DeviceAssignmentModal({
       setTimeout(() => {
         setMensajeExito(false);
         onClose();
-      }, 1200);
+      }, 900);
     } catch (err) {
-      console.error('Error al guardar configuración del equipo:', err);
+      console.error('[DEVICE ASSIGNMENT ERROR]', err);
+      setErrorMsg(`Error al guardar configuración: ${err.message || 'Fallo de base de datos'}`);
     } finally {
       setGuardando(false);
     }
@@ -131,19 +212,27 @@ export default function DeviceAssignmentModal({
   const marcasActuales = Object.keys(CATALOGO_MODELOS[tipo] || {});
   const modelosActuales = CATALOGO_MODELOS[tipo]?.[marca] || ['Universal'];
 
-  return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-      <div className="ultra-glass border border-cyan-500/40 rounded-2xl max-w-lg w-full p-5 sm:p-6 text-white shadow-2xl relative font-mono">
-        
+  if (!isOpen || !device || typeof document === 'undefined') return null;
+
+  return createPortal(
+    <div 
+      className="fixed inset-0 z-[99999] bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 select-none font-mono text-xs"
+      onClick={onClose}
+    >
+      <div 
+        className="ultra-glass border border-cyan-500/40 rounded-2xl max-w-lg w-full p-5 sm:p-6 text-white shadow-2xl relative"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Cabecera */}
         <div className="flex justify-between items-center pb-4 border-b border-cyan-500/20">
           <div>
             <h2 className="text-base sm:text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-emerald-400">
               Configuración de Identidad y Catálogo
             </h2>
-            <p className="text-[11px] text-slate-400">MAC: {device.mac}</p>
+            <p className="text-[11px] text-slate-400">Identificador MAC: {device.mac}</p>
           </div>
           <button 
+            type="button"
             onClick={onClose} 
             className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
           >
@@ -151,8 +240,23 @@ export default function DeviceAssignmentModal({
           </button>
         </div>
 
+        {/* Notificaciones de error o éxito */}
+        {errorMsg && (
+          <div className="mt-3 p-3 rounded-xl bg-rose-500/15 border border-rose-500/40 text-rose-300 flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            <span className="font-sans text-xs">{errorMsg}</span>
+          </div>
+        )}
+
+        {mensajeExito && (
+          <div className="mt-3 p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+            <span className="font-sans text-xs">¡Parámetros actualizados y transmitidos a la placa!</span>
+          </div>
+        )}
+
         {/* Formulario */}
-        <form onSubmit={handleGuardar} className="mt-4 space-y-4 text-xs">
+        <form onSubmit={handleGuardar} className="mt-4 space-y-4">
           
           {/* Selector de Tipo de Dispositivo */}
           <div>
@@ -230,7 +334,7 @@ export default function DeviceAssignmentModal({
               <select
                 value={marca}
                 onChange={(e) => handleMarcaChange(e.target.value)}
-                className="w-full bg-slate-950/80 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-cyan-400"
+                className="w-full bg-slate-950/80 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-cyan-400 font-mono"
               >
                 {marcasActuales.map((m) => (
                   <option key={m} value={m}>{m.replace(/_/g, ' ')}</option>
@@ -243,7 +347,7 @@ export default function DeviceAssignmentModal({
               <select
                 value={modelo}
                 onChange={(e) => setModelo(e.target.value)}
-                className="w-full bg-slate-950/80 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-cyan-400"
+                className="w-full bg-slate-950/80 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-cyan-400 font-mono"
               >
                 {modelosActuales.map((mod) => (
                   <option key={mod} value={mod}>{mod}</option>
@@ -258,10 +362,10 @@ export default function DeviceAssignmentModal({
               <label className="block text-slate-400 mb-1">Operador / Usuario Asignado</label>
               <input
                 type="text"
-                placeholder="Ej: dr_ramirez o dejar en blanco"
+                placeholder="Identificador de usuario (opcional)"
                 value={usuarioAsignado}
                 onChange={(e) => setUsuarioAsignado(e.target.value)}
-                className="w-full bg-slate-950/80 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-cyan-400"
+                className="w-full bg-slate-950/80 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-cyan-400 font-mono"
               />
             </div>
 
@@ -270,21 +374,15 @@ export default function DeviceAssignmentModal({
               <input
                 type="number"
                 min="10"
-                max="5000"
+                max="10000"
+                step="1"
                 value={limiteMant}
                 onChange={(e) => setLimiteMant(e.target.value)}
-                className="w-full bg-slate-950/80 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-cyan-400"
+                className="w-full bg-slate-950/80 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-cyan-400 font-mono"
+                required
               />
             </div>
           </div>
-
-          {/* Mensaje de Confirmación */}
-          {mensajeExito && (
-            <div className="p-2.5 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-              <span>¡Parámetros actualizados y sincronizados con éxito!</span>
-            </div>
-          )}
 
           {/* Acciones */}
           <div className="pt-3 border-t border-cyan-500/20 flex gap-2 justify-end">
@@ -308,6 +406,7 @@ export default function DeviceAssignmentModal({
         </form>
 
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

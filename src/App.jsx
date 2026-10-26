@@ -3,12 +3,12 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import LoginModal from './components/auth/LoginModal';
 import UserManagementModal from './components/admin/UserManagementModal';
 import UserManagementView from './components/admin/UserManagementView';
-import AuthUserManagementView from './components/admin/AuthUserManagementView';
 import CloudDiagnosticsModal from './components/admin/CloudDiagnosticsModal';
 import DeviceDetailView from './components/dashboard/DeviceDetailView';
 import ClinicalAuditView from './components/reports/ClinicalAuditView';
 import FotaHubView from './components/fota/FotaHubView';
 import FleetManagementView from './components/fleet/FleetManagementView';
+import ServiceReportsView from './components/service/ServiceReportsView';
 import AiAutomationStudio from './components/studio/AiAutomationStudio';
 import GearMenu, { WALLPAPERS_LIST } from './components/common/GearMenu';
 import ClinicalTooltip from './components/common/ClinicalTooltip';
@@ -16,11 +16,15 @@ import ContextMenu from './components/common/ContextMenu';
 import DeviceAssignmentModal from './components/admin/DeviceAssignmentModal';
 import SurgicalQRLabel from './components/labels/SurgicalQRLabel';
 import NotificationsPanel from './components/common/NotificationsPanel';
+import SwipeDots from './components/common/SwipeDots';
+import { useSwipe, stepThrough } from './hooks/useSwipe';
+import { useNotificationCenter } from './hooks/useNotificationCenter';
 import { useMqttFleet } from './hooks/useMqttFleet';
 import { useAccountAppearance } from './hooks/useAccountAppearance';
 import { startIndustrialSiren, stopIndustrialSiren, initAudioUnlock } from './services/audioAlarm';
 import { sendCriticalAlarmWithButtons } from './services/telegram';
 import { supabase } from './services/supabase';
+import HeaderLaserOrbit from './components/common/HeaderLaserOrbit';
 import { 
   Activity, 
   Flame, 
@@ -37,10 +41,12 @@ import {
   Rocket,
   Search,
   ArrowDownAZ,
-  X
+  X,
+  ChevronLeft
 } from 'lucide-react';
 
-const APP_SECTIONS = new Set(['flota', 'gestion', 'studio', 'usuarios', 'fota', 'auditoria', 'detalle']);
+const APP_SECTIONS = new Set(['flota', 'gestion', 'servicio', 'studio', 'usuarios', 'fota', 'auditoria', 'detalle']);
+const MOBILE_SECTIONS = ['flota', 'gestion', 'studio', 'usuarios', 'fota'];
 
 function getInitialActiveSection() {
   const urlParams = new URLSearchParams(window.location.search);
@@ -53,9 +59,21 @@ function getInitialActiveSection() {
 }
 
 function ScadaAppContent() {
-  const { user, profile, loading, pendingRequests, logout, authMode } = useAuth();
-  const { fleet, mqttConnected, sendDeviceCommand } = useMqttFleet();
-  const { appearance, setAppearance, syncStatus: appearanceSyncStatus } = useAccountAppearance(profile, authMode);
+  const {
+    user,
+    profile,
+    loading,
+    pendingRequests,
+    recoveryRequests,
+    requestsLoadedAt,
+    loadPendingRequests,
+    updateUserStatus,
+    resetUserPassword,
+    logout,
+    authMode
+  } = useAuth();
+  const { fleet, mqttConnected, sendDeviceCommand, patchDeviceMeta } = useMqttFleet();
+  const { appearance, setAppearance } = useAccountAppearance(profile, authMode);
   const currentTheme = appearance.theme;
   const currentBg = appearance.background;
   const opacity = appearance.opacity;
@@ -177,8 +195,8 @@ function ScadaAppContent() {
   const [qrModalDevice, setQrModalDevice] = useState(null);
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [notificationsCleared, setNotificationsCleared] = useState(false);
   const [sirenActive, setSirenActive] = useState(false);
+  const sirenActiveRef = useRef(false);
 
   const handleDeviceContextMenu = useCallback((e, dev) => {
     e.preventDefault();
@@ -190,11 +208,12 @@ function ScadaAppContent() {
     });
   }, []);
 
-  // Reloj de inactividad
+  // Reloj de inactividad con throttle
   const [showTimeoutModal, setShowTimeoutModal] = useState(false);
   const [countdown, setCountdown] = useState(60);
   const idleTimerRef = useRef(null);
   const countdownIntervalRef = useRef(null);
+  const lastActivityTimestamp = useRef(Date.now());
 
   const resetIdleTimer = useCallback(() => {
     if (!user) return;
@@ -227,12 +246,19 @@ function ScadaAppContent() {
   }, [showTimeoutModal, logout]);
 
   useEffect(() => {
+    const handleThrottledActivity = () => {
+      const now = Date.now();
+      if (now - lastActivityTimestamp.current > 5000) {
+        lastActivityTimestamp.current = now;
+        resetIdleTimer();
+      }
+    };
+
     const events = ['mousemove', 'mousedown', 'keydown', 'touchstart'];
-    const handleActivity = () => resetIdleTimer();
-    events.forEach((evt) => window.addEventListener(evt, handleActivity, { passive: true }));
+    events.forEach((evt) => window.addEventListener(evt, handleThrottledActivity, { passive: true }));
     resetIdleTimer();
     return () => {
-      events.forEach((evt) => window.removeEventListener(evt, handleActivity));
+      events.forEach((evt) => window.removeEventListener(evt, handleThrottledActivity));
       clearTimeout(idleTimerRef.current);
     };
   }, [resetIdleTimer]);
@@ -280,16 +306,19 @@ function ScadaAppContent() {
       }
     }
 
-    if (hasCriticalAlarm && !sirenActive) {
-      startIndustrialSiren();
+    if (hasCriticalAlarm && !sirenActiveRef.current) {
+      sirenActiveRef.current = true;
       setSirenActive(true);
-    } else if (!hasCriticalAlarm && sirenActive) {
-      stopIndustrialSiren();
+      startIndustrialSiren();
+    } else if (!hasCriticalAlarm && sirenActiveRef.current) {
+      sirenActiveRef.current = false;
       setSirenActive(false);
+      stopIndustrialSiren();
     }
-  }, [fleet, sirenActive]);
+  }, [fleet]);
 
   const handleSilenceSiren = useCallback(() => {
+    sirenActiveRef.current = false;
     stopIndustrialSiren();
     setSirenActive(false);
   }, []);
@@ -311,11 +340,11 @@ function ScadaAppContent() {
 
   const allowedDevices = useMemo(() => {
     const macKeys = Object.keys(fleet);
-    if (isAdmin) return macKeys.map((k) => fleet[k]);
+    if (isAdmin) return macKeys.map((k) => fleet[k]).filter(Boolean);
 
     const userHospital = (profile?.departamento || '').toLowerCase().trim();
     const currentUsername = (profile?.user || profile?.usuario || user?.email || '').toLowerCase().trim();
-    const userAuthMacs = (profile?.equipos_autorizados || '').toUpperCase().split(',').map((x) => x.trim());
+    const userAuthMacs = (profile?.equipos_autorizados || '').toUpperCase().split(',').map((x) => x.trim()).filter(Boolean);
 
     return macKeys
       .map((k) => fleet[k])
@@ -329,6 +358,24 @@ function ScadaAppContent() {
         return false;
       });
   }, [fleet, isAdmin, profile, user]);
+
+  const notificationCenter = useNotificationCenter({
+    enabled: Boolean(user),
+    fleet,
+    allowedDevices,
+    isAdmin,
+    profile,
+    mqttConnected,
+    pendingRequests,
+    recoveryRequests,
+    requestsLoadedAt,
+    loadPendingRequests,
+    updateUserStatus,
+    resetUserPassword,
+    sendDeviceCommand
+  });
+  const bellCount = notificationCenter.counts.unattended;
+  const bellCritical = notificationCenter.counts.criticalNew > 0;
 
   const getDeviceHealthData = useCallback((dev) => {
     if (!dev || !dev.lastSeen || dev.lastSeen === 0) {
@@ -410,13 +457,39 @@ function ScadaAppContent() {
     return filteredDevices[0] || null;
   }, [inspectingMacToUse, fleet, filteredDevices]);
 
+  const mainRef = useRef(null);
+  const [navDir, setNavDir] = useState('none');
+  const navIndex = MOBILE_SECTIONS.indexOf(activeSection === 'detalle' ? 'flota' : activeSection === 'servicio' ? 'gestion' : activeSection);
+
+  const goToSection = useCallback((next) => {
+    const to = MOBILE_SECTIONS.indexOf(next);
+    setNavDir(navIndex === -1 || to === -1 || navIndex === to ? 'none' : to > navIndex ? 'next' : 'prev');
+    setActiveSection(next);
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }, [navIndex]);
+
+  const detailIndex = filteredDevices.findIndex((d) => d.mac === selectedMac);
+  const goToDevice = useCallback((delta) => {
+    const next = filteredDevices[detailIndex + delta];
+    if (detailIndex === -1 || !next) return false;
+    setNavDir(delta > 0 ? 'next' : 'prev');
+    setSelectedMac(next.mac);
+    return true;
+  }, [filteredDevices, detailIndex]);
+
+  useSwipe(mainRef, {
+    enabled: Boolean(user) && !kioskMac,
+    onSwipeLeft: () => (activeSection === 'detalle' ? false : stepThrough(MOBILE_SECTIONS, activeSection, 1, goToSection)),
+    onSwipeRight: () => (activeSection === 'detalle' ? false : stepThrough(MOBILE_SECTIONS, activeSection, -1, goToSection))
+  });
+
   const bgObj = useMemo(() => WALLPAPERS_LIST.find((b) => b.id === currentBg) || WALLPAPERS_LIST[0], [currentBg]);
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#070913] flex flex-col items-center justify-center">
+      <div className="min-h-screen bg-[#070913] flex flex-col items-center justify-center font-mono">
         <Activity className="w-8 h-8 text-cyan-400 animate-spin mb-3" />
-        <p className="text-xs font-mono text-cyan-400 tracking-wider">SINCRONIZANDO SESIÓN BIOMÉDICA CENTRAL...</p>
+        <p className="text-xs text-cyan-400 tracking-wider">SINCRONIZANDO SESIÓN BIOMÉDICA CENTRAL...</p>
       </div>
     );
   }
@@ -466,10 +539,7 @@ function ScadaAppContent() {
 
         {/* Header Superior */}
         <header className="header-shell speedtest-laser-header border-b border-cyan-500/20 px-3 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between sticky top-0 z-40 w-full glass-shine">
-          <svg className="header-laser-orbit" viewBox="0 0 1440 100" preserveAspectRatio="none" aria-hidden="true" focusable="false">
-            <path className="header-laser-orbit-glow" d="M12 2 H1428 Q1438 2 1438 12 V88 Q1438 98 1428 98 H12 Q2 98 2 88 V12 Q2 2 12 2" pathLength="1000" />
-            <path className="header-laser-orbit-core" d="M12 2 H1428 Q1438 2 1438 12 V88 Q1438 98 1428 98 H12 Q2 98 2 88 V12 Q2 2 12 2" pathLength="1000" />
-          </svg>
+          <HeaderLaserOrbit />
           <div className="brand-lockup flex items-center gap-2 sm:gap-3 min-w-0">
             <div className="brand-emitter p-1.5 sm:p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 shrink-0">
               <Activity className="w-5 h-5 sm:w-6 sm:h-6 animate-pulse" />
@@ -549,14 +619,18 @@ function ScadaAppContent() {
                 className="relative p-1.5 sm:p-2 rounded-xl bg-slate-900/90 border border-cyan-500/40 text-cyan-300 shrink-0 ultra-glass hover:bg-cyan-500/20 transition-all group"
                 title="Notificaciones"
               >
-                <Bell className={`w-4 h-4 sm:w-5 sm:h-5 ${pendingRequests.length > 0 && !notificationsCleared ? 'animate-[ring_2s_ease-in-out_infinite]' : ''}`} />
-                {pendingRequests.length > 0 && !notificationsCleared && (
-                  <span className="absolute -top-1 -right-1 px-1.5 py-0.2 rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 text-slate-950 text-[9px] font-bold status-indicator animate-bounce shadow-[0_0_12px_rgba(34,211,238,0.6)]">
-                    {pendingRequests.length}
+                <Bell className={`w-4 h-4 sm:w-5 sm:h-5 ${bellCritical ? 'text-rose-300 animate-[ring_2s_ease-in-out_infinite]' : ''}`} />
+                {bellCount > 0 && (
+                  <span className={`absolute -top-1 -right-1 min-w-[16px] px-1 rounded-full text-[9px] font-bold leading-4 text-center status-indicator ${
+                    bellCritical
+                      ? 'bg-rose-500 text-white shadow-[0_0_12px_rgba(244,63,94,0.7)]'
+                      : 'bg-amber-400 text-slate-950 shadow-[0_0_10px_rgba(251,191,36,0.6)]'
+                  }`}>
+                    {bellCount > 99 ? '99+' : bellCount}
                   </span>
                 )}
-                {pendingRequests.length > 0 && !notificationsCleared && (
-                  <div className="absolute inset-0 rounded-xl bg-cyan-500/10 animate-pulse"></div>
+                {bellCritical && (
+                  <div className="absolute inset-0 rounded-xl bg-rose-500/10 animate-pulse"></div>
                 )}
               </button>
             )}
@@ -575,6 +649,7 @@ function ScadaAppContent() {
                   kioskMac={kioskMac}
                   onUnlockKiosk={() => toggleKioskMode(null)}
                   onOpenDiagnostics={isAdmin ? () => setCloudDiagType('hivemq') : null}
+                  appearanceSyncStatus={appearanceSyncStatus}
                 />
               </div>
             )}
@@ -600,6 +675,15 @@ function ScadaAppContent() {
               }`}
             >
               🏢 Gestión Flota
+            </button>
+
+            <button
+              onClick={() => setActiveSection('servicio')}
+              className={`fleet-nav-pill px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
+                activeSection === 'servicio' ? 'fleet-nav-pill--active text-slate-950' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              🛠️ Reportes técnicos
             </button>
 
             <button
@@ -649,27 +733,59 @@ function ScadaAppContent() {
             <LoginModal />
           </main>
         ) : (
-          <main className="flex-1 p-3 md:p-6 max-w-7xl mx-auto w-full flex flex-col gap-4 android-view-transition">
+          <main ref={mainRef} data-nav-dir={navDir} className="flex-1 p-3 md:p-6 max-w-7xl mx-auto w-full flex flex-col gap-4 android-view-transition">
             
             <>
               {inspectingDevice && (kioskMac || selectedMac) && (visitedSections.has('detalle') || activeSection === 'detalle' || kioskMac) && (
                 <div className="app-view-panel" hidden={!(kioskMac || activeSection === 'detalle')}>
-                  <DeviceDetailView
-                    key={inspectingMacToUse}
-                    device={inspectingDevice}
-                    onBack={() => { setActiveSection('flota'); setSelectedMac(null); }}
-                    sendCommand={sendDeviceCommand}
-                    operatorName={displayName}
-                    userRole={displayRole}
-                    isKioskMode={Boolean(kioskMac)}
-                    onToggleKiosk={() => toggleKioskMode(inspectingMacToUse)}
-                  />
+                  {!kioskMac && detailIndex !== -1 && filteredDevices.length > 1 && (
+                    <div className="flex items-center justify-between gap-2 mb-3">
+                      <button
+                        type="button"
+                        onClick={() => goToDevice(-1)}
+                        disabled={detailIndex <= 0}
+                        aria-label="Equipo anterior"
+                        className="p-2 rounded-xl border border-slate-700 bg-slate-900/60 text-slate-300 hover:text-white disabled:opacity-30"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </button>
+                      <div className="flex flex-col items-center gap-1.5 min-w-0">
+                        <span className="text-[10px] font-mono text-slate-400 text-center">
+                          Equipo {detailIndex + 1} de {filteredDevices.length}
+                        </span>
+                        {filteredDevices.length <= 12 && <SwipeDots count={filteredDevices.length} index={detailIndex} />}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => goToDevice(1)}
+                        disabled={detailIndex >= filteredDevices.length - 1}
+                        aria-label="Equipo siguiente"
+                        className="p-2 rounded-xl border border-slate-700 bg-slate-900/60 text-slate-300 hover:text-white disabled:opacity-30"
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+                  <div key={inspectingMacToUse} className={navDir === 'next' ? 'swipe-enter-next' : navDir === 'prev' ? 'swipe-enter-prev' : ''}>
+                    <DeviceDetailView
+                      key={inspectingMacToUse}
+                      device={inspectingDevice}
+                      onBack={() => { setActiveSection('flota'); setSelectedMac(null); }}
+                      sendCommand={sendDeviceCommand}
+                      operatorName={displayName}
+                      userRole={displayRole}
+                      isKioskMode={Boolean(kioskMac)}
+                      onToggleKiosk={() => toggleKioskMode(inspectingMacToUse)}
+                      onDeviceUpdated={(row) => patchDeviceMeta(inspectingMacToUse, row)}
+                      isAdmin={isAdmin}
+                    />
+                  </div>
                 </div>
               )}
 
-                {(visitedSections.has('flota') || activeSection === 'flota') && (
-                  <div className="app-view-panel" hidden={activeSection !== 'flota'}>
-                    <div className="space-y-4">
+              {(visitedSections.has('flota') || activeSection === 'flota') && (
+                <div className="app-view-panel" hidden={activeSection !== 'flota'}>
+                  <div className="space-y-4">
                     <section className="fleet-overview flex flex-col lg:flex-row lg:items-center justify-between gap-5 px-4 py-4 sm:px-5 sm:py-5 rounded-xl">
                       <div className="relative z-10 flex items-start gap-3">
                         <div className="fleet-overview-mark flex items-center justify-center w-11 h-11 rounded-lg shrink-0">
@@ -795,8 +911,16 @@ function ScadaAppContent() {
                           const isVeh = devTipo === 'VEHICULO';
                           const isPlc = devTipo === 'UNIVERSAL_PLC' || devTipo === 'PLC_GENERICO';
 
-                          const cCount = Number(dDev?.cfg?.ciclos || dev?.meta?.ciclosCompletados || 0);
-                          const cLim = Number(dDev?.cfg?.lim_mant || dev?.meta?.limiteMantenimiento || 200);
+                          const fase = String(dDev.fase || 'EN ESPERA').toUpperCase();
+                          const faseActiva = !/^(EN[ _]?ESPERA|ESPERA|APAGADO|CANCELADO|FINALIZADO.*|LISTO|IDLE)$/.test(fase.trim());
+                          const faseTone = /ALARM|ERROR|FALL|ABORT|CANCEL/.test(fase)
+                            ? 'border-rose-500/40 bg-rose-500/10 text-rose-200'
+                            : /FINALIZ|EXITO|ÉXITO/.test(fase)
+                              ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200'
+                              : faseActiva
+                                ? 'border-amber-500/40 bg-amber-500/10 text-amber-200'
+                                : 'border-slate-700 bg-slate-900/60 text-slate-300';
+                          const segRest = Number(dDev.seg_restantes || 0);
 
                           const tempNum = parseFloat(dDev.temp_camara ?? 25.0);
                           const presNum = parseFloat(dDev.presion ?? 0.0);
@@ -883,33 +1007,37 @@ function ScadaAppContent() {
                                     </div>
                                   </div>
                                 ) : (
-                                  <>
-                                    <div className="grid grid-cols-2 gap-2 my-3">
-                                      <div className="p-2.5 rounded-xl glass-cell hologram text-center w-full scale-3d">
-                                        <span className="text-[10px] font-mono text-cyan-400 block">TEMPERATURA</span>
-                                        <span className="text-xl font-bold font-mono text-white">
-                                          {isNaN(tempNum) ? '25.0' : tempNum.toFixed(1)}°C
-                                        </span>
-                                      </div>
-                                      <div className="p-2.5 rounded-xl glass-cell hologram text-center w-full scale-3d">
-                                        <span className="text-[10px] font-mono text-pink-400 block">PRESIÓN</span>
-                                        <span className="text-xl font-bold font-mono text-white">
-                                          {isNaN(presNum) ? '0.00' : presNum.toFixed(2)}b
-                                        </span>
-                                      </div>
+                                  <div className="grid grid-cols-2 gap-2 my-3">
+                                    <div className="p-2.5 rounded-xl glass-cell hologram text-center w-full scale-3d">
+                                      <span className="text-[10px] font-mono text-cyan-400 block">TEMPERATURA</span>
+                                      <span className="text-xl font-bold font-mono text-white">
+                                        {isNaN(tempNum) ? '25.0' : tempNum.toFixed(1)}°C
+                                      </span>
                                     </div>
-
-                                    <div className="space-y-1 mb-3 w-full">
-                                      <div className="flex justify-between text-[10px] font-mono text-slate-400">
-                                        <span>Odómetro: {cCount}/{cLim} ciclos</span>
-                                        <span>{Math.round((cCount / (cLim || 1)) * 100)}%</span>
-                                      </div>
-                                      <div className="w-full bg-slate-800/80 rounded-full h-1.5 overflow-hidden">
-                                        <div className="progress-glow h-full" style={{ width: `${Math.min(100, (cCount / (cLim || 1)) * 100)}%` }}></div>
-                                      </div>
+                                    <div className="p-2.5 rounded-xl glass-cell hologram text-center w-full scale-3d">
+                                      <span className="text-[10px] font-mono text-pink-400 block">PRESIÓN</span>
+                                      <span className="text-xl font-bold font-mono text-white">
+                                        {isNaN(presNum) ? '0.00' : presNum.toFixed(2)}b
+                                      </span>
                                     </div>
-                                  </>
+                                  </div>
                                 )}
+
+                                <div className={`flex items-center justify-between gap-2 mb-3 px-3 py-2 rounded-xl border ${faseTone}`}>
+                                  <span className="flex items-center gap-2 min-w-0">
+                                    <span className="relative flex w-2.5 h-2.5 shrink-0">
+                                      {faseActiva && <span className="absolute inset-0 rounded-full bg-current opacity-60 animate-ping" />}
+                                      <span className="relative w-2.5 h-2.5 rounded-full bg-current" />
+                                    </span>
+                                    <span className="text-[10px] font-mono uppercase tracking-wider opacity-70">Fase</span>
+                                    <span className="text-xs font-bold font-mono truncate">{fase}</span>
+                                  </span>
+                                  {segRest > 0 && (
+                                    <span className="text-[11px] font-mono font-bold tabular-nums shrink-0">
+                                      {Math.floor(segRest / 60)}:{String(segRest % 60).padStart(2, '0')}
+                                    </span>
+                                  )}
+                                </div>
                               </div>
 
                               <div className="fleet-device-cta pt-3 border-t border-white/10 flex items-center justify-between text-xs font-mono text-cyan-400 font-bold w-full rounded-b-xl">
@@ -922,49 +1050,60 @@ function ScadaAppContent() {
                       )}
                     </div>
                   </div>
-                  </div>
-                )}
+                </div>
+              )}
 
-                {(visitedSections.has('gestion') || activeSection === 'gestion') && (
-                  <div className="app-view-panel" hidden={activeSection !== 'gestion'}>
-                    <FleetManagementView
-                      fleet={fleet}
-                      sendCommand={sendDeviceCommand}
-                      onSelectDevice={(mac) => { setSelectedMac(mac); setActiveSection('detalle'); }}
-                    />
-                  </div>
-                )}
+              {(visitedSections.has('gestion') || activeSection === 'gestion') && (
+                <div className="app-view-panel" hidden={activeSection !== 'gestion'}>
+                  <FleetManagementView
+                    fleet={fleet}
+                    sendCommand={sendDeviceCommand}
+                    onSelectDevice={(mac) => { setSelectedMac(mac); setActiveSection('detalle'); }}
+                    onOpenReports={() => setActiveSection('servicio')}
+                  />
+                </div>
+              )}
 
-                {(visitedSections.has('studio') || activeSection === 'studio') && (
-                  <div className="app-view-panel" hidden={activeSection !== 'studio'}>
-                    <AiAutomationStudio
-                      fleet={fleet}
-                      sendCommand={sendDeviceCommand}
-                      initialDeviceMac={selectedMac}
-                    />
-                  </div>
-                )}
+              {(visitedSections.has('servicio') || activeSection === 'servicio') && (
+                <div className="app-view-panel" hidden={activeSection !== 'servicio'}>
+                  <ServiceReportsView
+                    fleet={Object.fromEntries(allowedDevices.map((d) => [d.mac, d]))}
+                    operatorName={displayName}
+                    isAdmin={isAdmin}
+                  />
+                </div>
+              )}
 
-                {(visitedSections.has('usuarios') || activeSection === 'usuarios') && (
-                  <div className="app-view-panel" hidden={activeSection !== 'usuarios'}>
-                    <UserManagementView
-                      fleet={fleet}
-                      onFleetUpdated={() => {}}
-                    />
-                  </div>
-                )}
+              {(visitedSections.has('studio') || activeSection === 'studio') && (
+                <div className="app-view-panel" hidden={activeSection !== 'studio'}>
+                  <AiAutomationStudio
+                    fleet={fleet}
+                    sendCommand={sendDeviceCommand}
+                    initialDeviceMac={selectedMac}
+                  />
+                </div>
+              )}
 
-                {(visitedSections.has('fota') || activeSection === 'fota') && (
-                  <div className="app-view-panel" hidden={activeSection !== 'fota'}>
-                    <FotaHubView fleet={fleet} sendCommand={sendDeviceCommand} />
-                  </div>
-                )}
+              {(visitedSections.has('usuarios') || activeSection === 'usuarios') && (
+                <div className="app-view-panel" hidden={activeSection !== 'usuarios'}>
+                  <UserManagementView
+                    fleet={fleet}
+                    onFleetUpdated={() => {}}
+                  />
+                </div>
+              )}
 
-                {(visitedSections.has('auditoria') || activeSection === 'auditoria') && (
-                  <div className="app-view-panel" hidden={activeSection !== 'auditoria'}>
-                    <ClinicalAuditView />
-                  </div>
-                )}
+              {(visitedSections.has('fota') || activeSection === 'fota') && (
+                <div className="app-view-panel" hidden={activeSection !== 'fota'}>
+                  <FotaHubView fleet={fleet} sendCommand={sendDeviceCommand} />
+                </div>
+              )}
+
+              {(visitedSections.has('auditoria') || activeSection === 'auditoria') && (
+                <div className="app-view-panel" hidden={activeSection !== 'auditoria'}>
+                  <ClinicalAuditView />
+                </div>
+              )}
             </>
 
           </main>
@@ -972,10 +1111,14 @@ function ScadaAppContent() {
 
         {/* Barra Inferior Celular */}
         {user && !kioskMac && (
-          <nav className="mobile-nav-shell lg:hidden fixed bottom-0 left-0 right-0 h-16 border-t border-cyan-500/30 backdrop-blur-xl flex items-center justify-around z-50 px-2">
+          <nav className="mobile-nav-shell lg:hidden fixed bottom-0 left-0 right-0 h-16 border-t border-cyan-500/30 backdrop-blur-xl flex items-center justify-around z-50">
+            <span
+              className="mobile-nav-indicator"
+              style={{ transform: `translateX(${Math.max(navIndex, 0) * 100}%)`, opacity: navIndex === -1 ? 0 : 1 }}
+            />
             <button
-              onClick={() => setActiveSection('flota')}
-              className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-[10px] font-mono transition-all ${
+              onClick={() => goToSection('flota')}
+              className={`flex-1 flex flex-col items-center gap-1 py-1 px-1 rounded-lg text-[10px] font-mono transition-all ${
                 activeSection === 'flota' || activeSection === 'detalle' ? 'text-cyan-400 font-bold scale-110' : 'text-slate-400 hover:text-cyan-300'
               }`}
             >
@@ -984,8 +1127,8 @@ function ScadaAppContent() {
             </button>
 
             <button
-              onClick={() => setActiveSection('gestion')}
-              className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-[10px] font-mono transition-all ${
+              onClick={() => goToSection('gestion')}
+              className={`flex-1 flex flex-col items-center gap-1 py-1 px-1 rounded-lg text-[10px] font-mono transition-all ${
                 activeSection === 'gestion' ? 'text-cyan-400 font-bold scale-110' : 'text-slate-400 hover:text-cyan-300'
               }`}
             >
@@ -994,8 +1137,8 @@ function ScadaAppContent() {
             </button>
 
             <button
-              onClick={() => setActiveSection('studio')}
-              className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-[10px] font-mono transition-all ${
+              onClick={() => goToSection('studio')}
+              className={`flex-1 flex flex-col items-center gap-1 py-1 px-1 rounded-lg text-[10px] font-mono transition-all ${
                 activeSection === 'studio' ? 'text-amber-400 font-bold scale-110' : 'text-slate-400 hover:text-amber-300'
               }`}
             >
@@ -1004,8 +1147,8 @@ function ScadaAppContent() {
             </button>
 
             <button
-              onClick={() => setActiveSection('usuarios')}
-              className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-[10px] font-mono transition-all ${
+              onClick={() => goToSection('usuarios')}
+              className={`flex-1 flex flex-col items-center gap-1 py-1 px-1 rounded-lg text-[10px] font-mono transition-all ${
                 activeSection === 'usuarios' ? 'text-cyan-400 font-bold scale-110' : 'text-slate-400 hover:text-cyan-300'
               }`}
             >
@@ -1014,8 +1157,8 @@ function ScadaAppContent() {
             </button>
 
             <button
-              onClick={() => setActiveSection('fota')}
-              className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-[10px] font-mono transition-all ${
+              onClick={() => goToSection('fota')}
+              className={`flex-1 flex flex-col items-center gap-1 py-1 px-1 rounded-lg text-[10px] font-mono transition-all ${
                 activeSection === 'fota' ? 'text-cyan-400 font-bold scale-110' : 'text-slate-400 hover:text-cyan-300'
               }`}
             >
@@ -1113,28 +1256,16 @@ function ScadaAppContent() {
         <NotificationsPanel
           isOpen={showNotifications}
           onClose={() => setShowNotifications(false)}
-          pendingRequests={pendingRequests}
-          onNavigateToFleet={(filter) => {
-            setActiveSection('flota');
-            if (filter) {
-              setHealthFilter(filter);
-            }
-          }}
-          onNavigateToAudit={() => {
-            setActiveSection('auditoria');
-          }}
-          onNavigateToStudio={() => {
-            setActiveSection('studio');
-          }}
+          center={notificationCenter}
+          isAdmin={isAdmin}
+          sirenActive={sirenActive}
+          onSilenceSiren={handleSilenceSiren}
           onOpenAdminModal={() => {
             setShowAdminModal(true);
           }}
           onNavigateToDetail={(mac) => {
             setSelectedMac(mac);
             setActiveSection('detalle');
-          }}
-          onCleared={() => {
-            setNotificationsCleared(true);
           }}
         />
       </div>

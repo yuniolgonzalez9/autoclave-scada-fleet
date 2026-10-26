@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useId } from 'react';
 import { createPortal } from 'react-dom';
 
 export default function ClinicalTooltip({ 
@@ -12,45 +12,49 @@ export default function ClinicalTooltip({
 }) {
   const [visible, setVisible] = useState(false);
   const [coords, setCoords] = useState({ top: 0, left: 0, actualPos: position });
+  
   const triggerRef = useRef(null);
   const timerRef = useRef(null);
   const rafRef = useRef(null);
+  const tooltipId = useId();
 
-  // Calcula posición sin forzar reflow continuo
+  // Cálculo de coordenadas adaptativo con auto-flip
   const updateCoords = useCallback(() => {
     if (!triggerRef.current) return;
     const rect = triggerRef.current.getBoundingClientRect();
-    const tooltipWidth = 280;
-    const tooltipHeight = 120; // Estimación segura de altura
+    
+    const tooltipWidth = 290;
+    // Estimación calibrada según presencia de detalles enriquecidos
+    const estimatedHeight = extraDetails ? 180 : 120;
 
     let actualPos = position;
     let top = rect.bottom + 8;
 
-    // Auto-Flip si se sale por la parte inferior de la pantalla
-    if (position === 'bottom' && (top + tooltipHeight > window.innerHeight - 10)) {
+    // Volteo automático si se sale por el margen inferior del monitor
+    if (position === 'bottom' && (top + estimatedHeight > window.innerHeight - 12)) {
       actualPos = 'top';
-      top = rect.top - tooltipHeight - 8;
+      top = Math.max(12, rect.top - estimatedHeight - 8);
     } else if (position === 'top') {
-      top = rect.top - tooltipHeight - 8;
-      if (top < 10) {
+      top = rect.top - estimatedHeight - 8;
+      if (top < 12) {
         actualPos = 'bottom';
         top = rect.bottom + 8;
       }
     }
 
-    // Centrado horizontal con márgenes de seguridad en pantalla
-    let left = rect.left + rect.width / 2 - tooltipWidth / 2;
+    // Centrado horizontal con márgenes de seguridad en el viewport
+    let left = rect.left + (rect.width / 2) - (tooltipWidth / 2);
     left = Math.max(12, Math.min(left, window.innerWidth - tooltipWidth - 12));
 
-    setCoords({ top, left, actualPos });
-  }, [position]);
+    setCoords({ top: Math.round(top), left: Math.round(left), actualPos });
+  }, [position, extraDetails]);
 
   const handleMouseEnter = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {
       updateCoords();
       setVisible(true);
-    }, 180);
+    }, 150);
   };
 
   const handleMouseLeave = () => {
@@ -63,19 +67,19 @@ export default function ClinicalTooltip({
     timerRef.current = setTimeout(() => {
       updateCoords();
       setVisible(true);
-    }, 300);
+    }, 250);
   };
 
   const handleTouchEnd = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
     if (visible) {
-      timerRef.current = setTimeout(() => setVisible(false), 2500);
+      timerRef.current = setTimeout(() => setVisible(false), 3000);
     }
   };
 
-  // Ocultar suavemente al hacer scroll para no recalcular la pantalla
+  // Ocultar de inmediato ante desplazamiento de pantalla
   useEffect(() => {
-    if (!visible) return;
+    if (!visible) return undefined;
 
     const handleScrollOrResize = () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
@@ -94,7 +98,7 @@ export default function ClinicalTooltip({
     };
   }, [visible]);
 
-  // Limpieza al desmontar
+  // Limpieza total de temporizadores al desmontar
   useEffect(() => {
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
@@ -105,46 +109,57 @@ export default function ClinicalTooltip({
   return (
     <div 
       ref={triggerRef}
-      className="inline-flex items-center cursor-help"
+      className="inline-flex items-center cursor-help select-none"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
+      aria-describedby={visible ? tooltipId : undefined}
     >
       {children}
 
-      {/* Montado en raíz de documento con portal */}
+      {/* Renderizado mediante portal en document.body */}
       {visible && typeof document !== 'undefined' && createPortal(
         <div 
-          style={{ top: `${coords.top}px`, left: `${coords.left}px` }}
-          className="fixed z-[99999] pointer-events-none w-[280px] p-3.5 rounded-2xl ultra-glass border-2 border-cyan-400 shadow-[0_20px_50px_rgba(0,0,0,0.95)] backdrop-blur-2xl animate-in fade-in zoom-in-95 duration-100 text-left select-none"
+          id={tooltipId}
+          role="tooltip"
+          style={{ 
+            top: `${coords.top}px`, 
+            left: `${coords.left}px` 
+          }}
+          className="fixed z-[999999] pointer-events-none w-[290px] p-3.5 rounded-2xl ultra-glass border-2 border-cyan-400 shadow-[0_20px_50px_rgba(0,0,0,0.95)] backdrop-blur-2xl animate-in fade-in zoom-in-95 duration-100 text-left select-none font-mono"
         >
+          {/* Cabecera del tooltip */}
           <div className="flex items-center justify-between gap-1.5 border-b border-cyan-500/30 pb-1.5 mb-2">
-            <span className="font-mono text-xs font-bold text-white tracking-wide uppercase truncate">
+            <span className="text-xs font-bold text-white tracking-wide uppercase truncate">
               {title}
             </span>
             {badge && (
-              <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-cyan-500/20 border border-cyan-400/40 text-cyan-300 shrink-0">
+              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-cyan-500/20 border border-cyan-400/40 text-cyan-300 shrink-0">
                 {badge}
               </span>
             )}
           </div>
 
-          <p className="text-[11px] text-slate-200 font-sans leading-relaxed mb-1.5">
-            {description}
-          </p>
+          {/* Descripción clínica */}
+          {description && (
+            <p className="text-[11px] text-slate-200 font-sans leading-relaxed mb-1.5">
+              {description}
+            </p>
+          )}
 
           {/* Ficha enriquecida */}
           {extraDetails && (
-            <div className="my-2 py-1.5 border-t border-b border-white/10 text-[10px] font-mono space-y-1">
+            <div className="my-2 py-1.5 border-t border-b border-white/10 text-[10px] space-y-1">
               {extraDetails}
             </div>
           )}
 
+          {/* Pie con atajo o estado */}
           {shortcut && (
-            <div className="mt-1 pt-1 border-t border-white/10 flex items-center justify-between text-[9px] font-mono text-slate-400">
-              <span>ESTADO:</span>
-              <span className="text-cyan-300 font-bold">{shortcut}</span>
+            <div className="mt-1 pt-1 border-t border-white/10 flex items-center justify-between text-[9px] text-slate-400">
+              <span>ESTADO / ACCIÓN:</span>
+              <strong className="text-cyan-300">{shortcut}</strong>
             </div>
           )}
         </div>,
