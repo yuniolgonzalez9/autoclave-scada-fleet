@@ -384,7 +384,7 @@ button:active, .btn-touch:active {
   position: absolute;
   left: calc(100% + 2px);
   top: 50%;
-  width: 4.5rem;
+  width: 6rem;
   height: 2px;
   border-radius: 999px;
   background: linear-gradient(90deg, var(--accent-color), #f4fbff 42%, transparent);
@@ -1750,34 +1750,29 @@ button, a, label, input, select, textarea, [role="button"] { touch-action: manip
     will-change: transform;
   }
 
-  .glass-shine::after { display: none; }
-
-  .glow-border::before,
-  .btn-glow-effect::before,
-  .matrix-text {
-    animation: none;
-  }
-
-  .neon-text {
-    animation: none;
-    text-shadow: 0 0 6px var(--accent-color);
-  }
-
   .brand-wordmark { filter: none; }
 
-  /* Rayo logo->nombre más presente en móvil (ciclo más corto) */
+  /* Rayo logo->OS™: más largo y ciclo más corto en móvil */
   .brand-emitter::after {
+    width: 7rem;
     animation-duration: 4.2s;
-    height: 3px;
   }
 
+  /* Láser orbital: delgado y elegante, brillo sin filtro caro */
   .header-laser-orbit-glow {
     filter: none;
-    stroke-width: 8;
-    opacity: 0.85;
+    stroke-width: 5;
+    opacity: 0.6;
   }
 
-  .header-laser-orbit-core { stroke-width: 2.6; }
+  .header-laser-orbit-core { stroke-width: 1.8; }
+
+  /* Micro-feedback táctil: las tarjetas/botones responden al toque */
+  button:active,
+  [role='button']:active {
+    transform: scale(0.97);
+    transition: transform 0.12s ease-out;
+  }
 }
 
 @keyframes particleDriftMobile {
