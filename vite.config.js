@@ -14,6 +14,18 @@ if (existsSync(path.resolve(__dirname, '.env'))) {
   }
 }
 
+// Identificador único de cada publicación: la web lo compara con
+// /version.json para recargarse sola cuando hay una versión nueva.
+const BUILD_ID = String(Date.now());
+function buildVersionFile() {
+  return {
+    name: 'build-version-file',
+    generateBundle() {
+      this.emitFile({ type: 'asset', fileName: 'version.json', source: JSON.stringify({ build: BUILD_ID }) });
+    }
+  };
+}
+
 // Monta los handlers de /api/*.js (estilo Vercel) dentro del dev server.
 function apiMiddleware() {
   return {
@@ -56,7 +68,7 @@ function apiMiddleware() {
 }
 
 export default defineConfig({
-  plugins: [react(), apiMiddleware()],
+  plugins: [react(), apiMiddleware(), buildVersionFile()],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
@@ -64,6 +76,7 @@ export default defineConfig({
   },
   define: {
     'global': 'window',
+    __BUILD_ID__: JSON.stringify(BUILD_ID),
   },
   build: {
     rollupOptions: {
