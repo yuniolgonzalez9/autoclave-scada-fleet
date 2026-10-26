@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 const LOOP_MS = 6400;
 const DASH_RATIO = 0.15;
@@ -53,63 +53,11 @@ export default function HeaderLaserOrbit() {
     ? 2 * (w - 2 * inset - 2 * r) + 2 * (h - 2 * inset - 2 * r) + 2 * Math.PI * r
     : 0;
 
-  // Animación del pulso láser orbital con pausa en segundo plano
-  useEffect(() => {
-    if (!ready || perimeter <= 0) return undefined;
-
-    // Respeto de accesibilidad: si el usuario prefiere movimiento reducido, detener animación continua
-    const prefersReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    
-    const coarsePointer = window.matchMedia?.('(pointer: coarse)').matches;
-    const dash = perimeter * (coarsePointer ? 0.22 : DASH_RATIO);
-    const paths = [glowRef.current, coreRef.current].filter(Boolean);
-
-    if (prefersReducedMotion) {
-      paths.forEach((el) => {
-        el.setAttribute('stroke-dasharray', 'none');
-        el.setAttribute('stroke-dashoffset', '0');
-        el.style.opacity = '0.35';
-      });
-      return undefined;
-    }
-
-    paths.forEach((el) => {
-      el.setAttribute('stroke-dasharray', `${dash} ${perimeter - dash}`);
-      el.setAttribute('stroke-dashoffset', '0');
-      el.style.opacity = '';
-    });
-
-    // rAF universal (WAAPI con valores sin unidad falla en varios móviles).
-    // En pantallas táctiles se limita a ~30fps: imperceptible en un ciclo de 6.4s.
-    let frameId = 0;
-    let isPaused = document.hidden;
-    let lastPaint = 0;
-    const minFrameMs = coarsePointer ? 33 : 0;
-    const start = performance.now();
-
-    const tick = (now) => {
-      if (!isPaused && now - lastPaint >= minFrameMs) {
-        lastPaint = now;
-        const offset = -(((now - start) % LOOP_MS) / LOOP_MS) * perimeter;
-        paths.forEach((el) => el.setAttribute('stroke-dashoffset', offset.toFixed(2)));
-      }
-      frameId = requestAnimationFrame(tick);
-    };
-
-    const handleVisibilityChange = () => {
-      isPaused = document.hidden;
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    frameId = requestAnimationFrame(tick);
-
-    return () => {
-      cancelAnimationFrame(frameId);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [ready, perimeter]);
-
   const d = ready ? roundedRectPath(w, h, inset, r) : '';
+  const coarsePointer = window.matchMedia?.('(pointer: coarse)').matches;
+  const prefersReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  const dash = perimeter * (coarsePointer ? 0.22 : DASH_RATIO);
+  const dasharray = prefersReducedMotion ? 'none' : `${dash} ${perimeter - dash}`;
 
   return (
     <svg
@@ -121,8 +69,40 @@ export default function HeaderLaserOrbit() {
     >
       {ready && (
         <>
-          <path ref={glowRef} className="header-laser-orbit-glow" d={d} />
-          <path ref={coreRef} className="header-laser-orbit-core" d={d} />
+          <path
+            ref={glowRef}
+            className="header-laser-orbit-glow"
+            d={d}
+            strokeDasharray={dasharray}
+            opacity={prefersReducedMotion ? 0.35 : undefined}
+          >
+            {!prefersReducedMotion && (
+              <animate
+                attributeName="stroke-dashoffset"
+                from="0"
+                to={-perimeter}
+                dur={`${LOOP_MS}ms`}
+                repeatCount="indefinite"
+              />
+            )}
+          </path>
+          <path
+            ref={coreRef}
+            className="header-laser-orbit-core"
+            d={d}
+            strokeDasharray={dasharray}
+            opacity={prefersReducedMotion ? 0.35 : undefined}
+          >
+            {!prefersReducedMotion && (
+              <animate
+                attributeName="stroke-dashoffset"
+                from="0"
+                to={-perimeter}
+                dur={`${LOOP_MS}ms`}
+                repeatCount="indefinite"
+              />
+            )}
+          </path>
         </>
       )}
     </svg>

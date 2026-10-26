@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Biofleet Diag</title>
+<style>
+  body { background: #06121f; color: #d9f4ff; font-family: monospace; margin: 0; padding: 16px; }
+  .box { position: relative; border: 1px solid #1d4f63; border-radius: 14px; height: 90px; margin-bottom: 16px; overflow: hidden; }
+  svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .glow { fill: none; stroke: #00cfff; stroke-width: 8; opacity: .85; }
+  .core { fill: none; stroke: #eaffff; stroke-width: 2.6; }
+  pre { font-size: 12px; white-space: pre-wrap; word-break: break-all; line-height: 1.6; }
+  h1 { font-size: 15px; color: #4fd8ff; }
+  .ok { color: #4dff9d; } .bad { color: #ff5f6e; }
+</style>
+</head>
+<body>
+<h1>DIAGNÓSTICO BIOFLEET</h1>
+<div class="box" id="laserbox">
+  <!-- SVG con animacion SMIL nativa: el laser DEBE moverse sin JS -->
+  <svg viewBox="0 0 360 90" preserveAspectRatio="none">
+    <path class="glow" id="g" />
+    <path class="core" id="c" />
+  </svg>
+  <div style="position:absolute;left:12px;top:30px;color:#9fd8ea">BIOFLEET OS&#8482;</div>
+</div>
+<pre id="out">Cargando...</pre>
+<script>
+(function () {
+  var out = [];
+  function line(k, v) { out.push(k + ': ' + v); }
+  try {
+    // Rect redondeado fijo 360x90, perimetro aprox 2*(360-24+90-24)+2*pi*10 ~= 866
+    var per = 866;
+    var dash = Math.round(per * 0.22);
+    var d = 'M12 2 H348 Q358 2 358 12 V78 Q358 88 348 88 H12 Q2 88 2 78 V12 Q2 2 12 2 Z';
+    var anim = '<animate attributeName="stroke-dashoffset" from="0" to="-' + per + '" dur="4s" repeatCount="indefinite"/>';
+    ['g', 'c'].forEach(function (id) {
+      var p = document.getElementById(id);
+      p.setAttribute('d', d);
+      p.setAttribute('stroke-dasharray', dash + ' ' + (per - dash));
+      p.innerHTML = anim;
+    });
+  } catch (e) { line('svg_error', e.message); }
+
+  var mm = function (q) { try { return window.matchMedia(q).matches ? 'SI' : 'no'; } catch (e) { return 'ERR'; } };
+  line('reduced_motion', mm('(prefers-reduced-motion: reduce)'));
+  line('pointer_coarse', mm('(pointer: coarse)'));
+  line('viewport', window.innerWidth + 'x' + window.innerHeight);
+  line('dpr', window.devicePixelRatio);
+  line('raf', 'midiendo...');
+  line('sw', 'serviceWorker' in navigator ? 'SI' : 'no');
+  line('ua', navigator.userAgent);
+  var net = navigator.connection || {};
+  line('net', (net.effectiveType || '?') + ' saveData=' + (net.saveData || false));
+
+  var n = 0, t0 = Date.now();
+  function count() { n++; if (Date.now() - t0 < 1000) requestAnimationFrame(count); else {
+    out[4] = 'raf: ' + n + ' fps';
+    document.getElementById('out').innerHTML = out.join('\n');
+  } }
+  requestAnimationFrame(count);
+})();
+</script>
+</body>
+</html>
