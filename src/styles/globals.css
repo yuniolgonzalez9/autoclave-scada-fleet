@@ -341,17 +341,31 @@ button:active, .btn-touch:active {
   stroke-linecap: round;
 }
 
-.header-laser-orbit-glow {
+.header-laser-orbit-rail {
   stroke: var(--accent-color);
-  stroke-width: 5;
-  opacity: 0.72;
-  filter: drop-shadow(0 0 5px var(--accent-color)) drop-shadow(0 0 12px color-mix(in srgb, var(--accent-color) 70%, transparent));
+  stroke-width: 1;
 }
 
-.header-laser-orbit-core {
-  stroke: #f4fbff;
-  stroke-width: 1.6;
-  opacity: 0.95;
+.header-laser-orbit-tail {
+  stroke: var(--accent-color);
+  stroke-width: 4;
+  opacity: 0.32;
+}
+
+.header-laser-orbit-comet {
+  stroke: #b7f3ff;
+  stroke-width: 1.8;
+  opacity: 0.9;
+}
+
+.header-laser-orbit-halo {
+  fill: var(--accent-color);
+  opacity: 0.3;
+}
+
+.header-laser-orbit-head {
+  fill: #f4fbff;
+  filter: drop-shadow(0 0 4px var(--accent-color)) drop-shadow(0 0 9px color-mix(in srgb, var(--accent-color) 65%, transparent));
 }
 
 .laser-orbit-animating {
@@ -1758,14 +1772,12 @@ button, a, label, input, select, textarea, [role="button"] { touch-action: manip
     animation-duration: 4.2s;
   }
 
-  /* Láser orbital: delgado y elegante, brillo sin filtro caro */
-  .header-laser-orbit-glow {
-    filter: none;
-    stroke-width: 5;
-    opacity: 0.6;
-  }
+  /* Cometa orbital: brillo vía halo SMIL, sin filtros caros */
+  .header-laser-orbit-head { filter: none; }
 
-  .header-laser-orbit-core { stroke-width: 1.8; }
+  .header-laser-orbit-tail { stroke-width: 3; }
+
+  .header-laser-orbit-comet { stroke-width: 1.4; }
 
   /* Micro-feedback táctil: las tarjetas/botones responden al toque */
   button:active,
