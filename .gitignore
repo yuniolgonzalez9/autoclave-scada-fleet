@@ -20,3 +20,4 @@ supabase/.temp/
 .env*
 .vite/
 e2e-shots/
+.tmp-shots/
