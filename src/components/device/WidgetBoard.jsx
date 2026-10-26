@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, ArrowRight, Check, LayoutGrid, Pencil, Plus, RotateCcw, Save, Trash2, X } from 'lucide-react';
+import { Check, GripVertical, LayoutGrid, Move, Pencil, Plus, RotateCcw, Save, Trash2, X } from 'lucide-react';
 import {
   DATA_KEYS, LIBRARY_BY_TYPE, WIDGET_COLORS, WIDGET_LIBRARY,
   createWidget, normalizeWidget, readValue
@@ -10,12 +10,57 @@ import { ActionTile, LedTile, ToggleTile, iconFor } from './controls';
 import { Power, Zap } from 'lucide-react';
 import { mergeDeviceConfig } from '../../services/deviceService';
 
-const SPAN_CLASS = {
-  1: 'col-span-1',
-  2: 'col-span-2',
-  3: 'col-span-2 sm:col-span-3',
-  4: 'col-span-2 sm:col-span-4'
-};
+// Asigna posiciones libres (fx/fy en %, fw en %, fh en px) a widgets que aún no las tienen
+function autoLayout(list) {
+  let x = 2;
+  let y = 0;
+  let rowH = 0;
+  // Los widgets ya posicionados reservan su espacio: los nuevos se apilan debajo
+  const maxY = list.reduce((m, w) => (w.fx != null ? Math.max(m, (w.fy || 0) + (w.fh || 110)) : m), 0);
+  if (maxY > 0) {
+    y = maxY + 10;
+  }
+  return list.map((w) => {
+    if (w.fx != null) return w;
+    const fw = w.span >= 3 || w.widget_type === 'TREND' ? 96 : 47;
+    const fh = ['GAUGE', 'TREND'].includes(w.widget_type) ? 170 : 118;
+    if (x + fw > 99) {
+      x = 2;
+      y += rowH + 10;
+      rowH = 0;
+    }
+    const item = { ...w, fx: x, fy: y, fw, fh };
+    x += fw + 2;
+    rowH = Math.max(rowH, fh);
+    return item;
+  });
+}
+
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+
+// Compacta el tablero: respeta el orden visual actual (arriba->abajo, izq->der)
+// y empaqueta sin huecos con distancias uniformes.
+const PACK_GAP_X = 2;  // % del ancho
+const PACK_GAP_Y = 10; // px
+function packWidgets(list) {
+  const ordered = [...list].sort((a, b) => ((a.fy || 0) - (b.fy || 0)) || ((a.fx || 0) - (b.fx || 0)));
+  let x = PACK_GAP_X;
+  let y = PACK_GAP_Y;
+  let rowH = 0;
+  return ordered.map((w) => {
+    const fw = Math.min(w.fw || 47, 100 - PACK_GAP_X * 2);
+    const fh = w.fh || 118;
+    if (x + fw > 100 - PACK_GAP_X + 0.5) {
+      x = PACK_GAP_X;
+      y += rowH + PACK_GAP_Y;
+      rowH = 0;
+    }
+    const item = { ...w, fx: x, fy: y, fw, fh };
+    x += fw + PACK_GAP_X;
+    rowH = Math.max(rowH, fh);
+    return item;
+  });
+}
 
 
 function Gauge({ value, min, max, color, unit }) {
@@ -193,7 +238,7 @@ function WidgetBody({ w, device, sendCommand, onConfirm, enCicloActivo, odometer
   }
 }
 
-function WidgetEditor({ widget, onChange, onClose }) {
+function WidgetEditor({ widget, onChange, onApplySize, onClose }) {
   const lib = LIBRARY_BY_TYPE[widget.widget_type];
   const set = (patch) => onChange({ ...widget, ...patch });
   const usesKey = ['GAUGE', 'VALUE', 'STATUS_LED', 'SLIDER'].includes(widget.widget_type);
@@ -273,6 +318,23 @@ function WidgetEditor({ widget, onChange, onClose }) {
             className="control-range w-full mt-1" style={{ '--fill': `${((widget.scale || 1) - 0.6) * 100}%`, '--accent': '#22d3ee' }}
           />
         </div>
+        <div className="grid grid-cols-2 gap-2">
+          <label className="text-[11px] text-slate-400">Ancho exacto (%)
+            <input type="number" min="10" max="100" className={field} value={Math.round(widget.fw ?? 47)} onChange={(e) => set({ fw: Math.min(100, Math.max(10, Number(e.target.value))) })} />
+          </label>
+          <label className="text-[11px] text-slate-400">Alto exacto (px)
+            <input type="number" min="60" max="800" className={field} value={Math.round(widget.fh ?? 118)} onChange={(e) => set({ fh: Math.min(800, Math.max(60, Number(e.target.value))) })} />
+          </label>
+        </div>
+        {onApplySize && (
+          <button
+            type="button"
+            onClick={() => onApplySize(widget.fw ?? 47, widget.fh ?? 118)}
+            className="w-full py-2 rounded-xl border border-cyan-500/40 text-cyan-200 text-[11px] font-bold hover:bg-cyan-500/10"
+          >
+            Aplicar este tamaño a todos los widgets
+          </button>
+        )}
         <button type="button" onClick={onClose} className="w-full py-2.5 rounded-xl bg-cyan-500 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5"><Check className="w-4 h-4" />Listo</button>
       </div>
     </div>,
@@ -295,18 +357,92 @@ export default function WidgetBoard({ device, canEdit, sendCommand, onConfirm, e
   const [showLibrary, setShowLibrary] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const boardRef = useRef(null);
+  const dragRef = useRef(null);
+  const draftRef = useRef(draft);
+  const [guides, setGuides] = useState([]);
 
-  useEffect(() => { if (!editing) setDraft(stored); }, [stored, editing]);
+  useEffect(() => { draftRef.current = draft; }, [draft]);
 
-  const widgets = editing ? draft : stored;
-  const move = (i, delta) => setDraft((list) => {
-    const next = [...list];
-    const j = i + delta;
-    if (j < 0 || j >= next.length) return list;
-    [next[i], next[j]] = [next[j], next[i]];
-    return next;
-  });
+  useEffect(() => { if (!editing) setDraft(autoLayout(stored)); }, [stored, editing]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const widgets = autoLayout(editing ? draft : stored);
+  const canvasH = Math.max(140, ...widgets.map((w) => (w.fy || 0) + (w.fh || 110))) + 12;
+
+  // Drag libre (mover) y resize libre (esquina inferior derecha) — puntero y táctil
+  const startDrag = (e, widget, mode) => {
+    if (!editing) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = boardRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    dragRef.current = { id: widget.id, mode, startX: e.clientX, startY: e.clientY, w0: widget, bw: rect.width };
+
+    const onMove = (ev) => {
+      const d = dragRef.current;
+      if (!d) return;
+      const dx = ((ev.clientX - d.startX) / d.bw) * 100;
+      const dy = ev.clientY - d.startY;
+      const list = draftRef.current;
+      const it = list.find((x) => x.id === d.id);
+      if (!it) return;
+      const others = list.filter((x) => x.id !== d.id);
+      const gs = [];
+      const SNAP_X = 1.6; // % del ancho
+      const SNAP_Y = 9;   // px
+      const snapX = (edge) => {
+        for (const o of others) {
+          for (const v of [o.fx, o.fx + o.fw, 0, 50, 98]) {
+            if (Math.abs(edge - v) < SNAP_X) { gs.push({ v }); return v; }
+          }
+        }
+        return null;
+      };
+      const snapY = (edge) => {
+        for (const o of others) {
+          for (const v of [o.fy, o.fy + o.fh, 0]) {
+            if (Math.abs(edge - v) < SNAP_Y) { gs.push({ h: v }); return v; }
+          }
+        }
+        return null;
+      };
+
+      if (d.mode === 'move') {
+        let nfx = clamp(d.w0.fx + dx, 0, 100 - it.fw);
+        let nfy = Math.max(0, d.w0.fy + dy);
+        const sL = snapX(nfx);
+        const sR = snapX(nfx + it.fw);
+        const sT = snapY(nfy);
+        const sB = snapY(nfy + it.fh);
+        if (sL != null) nfx = sL;
+        else if (sR != null) nfx = sR - it.fw;
+        if (sT != null) nfy = sT;
+        else if (sB != null) nfy = sB - it.fh;
+        setGuides(gs);
+        setDraft((l) => l.map((x) => (x.id === d.id ? { ...x, fx: nfx, fy: nfy } : x)));
+      } else {
+        let nfw = clamp(d.w0.fw + dx, 15, 100 - it.fx);
+        let nfh = Math.max(64, d.w0.fh + dy);
+        const sR = snapX(it.fx + nfw);
+        const sB = snapY(it.fy + nfh);
+        // imán también a tamaños iguales de otros widgets
+        if (sR == null) for (const o of others) { if (Math.abs(nfw - o.fw) < SNAP_X) { nfw = o.fw; gs.push({ v: it.fx + o.fw }); break; } }
+        else nfw = sR - it.fx;
+        if (sB == null) for (const o of others) { if (Math.abs(nfh - o.fh) < SNAP_Y) { nfh = o.fh; gs.push({ h: it.fy + o.fh }); break; } }
+        else nfh = sB - it.fy;
+        setGuides(gs);
+        setDraft((l) => l.map((x) => (x.id === d.id ? { ...x, fw: nfw, fh: nfh } : x)));
+      }
+    };
+    const onUp = () => {
+      dragRef.current = null;
+      setGuides([]);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  };
   const save = async () => {
     setSaving(true);
     setError('');
@@ -329,12 +465,13 @@ export default function WidgetBoard({ device, canEdit, sendCommand, onConfirm, e
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <p className="text-[11px] text-slate-400 font-sans">
-          {editing ? 'Ordena, edita o elimina widgets. Los cambios se guardan en la nube para este equipo.' : `${config.custom_dashboard?.widgets?.length ? 'Panel personalizado' : 'Diseñado automáticamente'} · ${capabilitySummary(caps)} (fuente: ${caps.source})`}
+          {editing ? 'Arrastra para mover libremente · estira la esquina ◢ para dimensionar · Guardar conserva tu diseño en la nube.' : `${config.custom_dashboard?.widgets?.length ? 'Panel personalizado' : 'Diseñado automáticamente'} · ${capabilitySummary(caps)} (fuente: ${caps.source})`}
         </p>
         {canEdit && (
           <div className="flex gap-1.5">
             {editing ? (
               <>
+                <button type="button" onClick={() => setDraft((l) => packWidgets(l))} className="px-2.5 py-1.5 rounded-lg border border-cyan-500/50 bg-cyan-500/10 text-cyan-200 text-[11px] font-bold flex items-center gap-1"><LayoutGrid className="w-3.5 h-3.5" />Ordenar</button>
                 <button type="button" onClick={() => setDraft(autoWidgetsFor(device))} className="px-2.5 py-1.5 rounded-lg border border-slate-700 text-slate-300 text-[11px] font-bold flex items-center gap-1"><RotateCcw className="w-3.5 h-3.5" />Auto-diseñar</button>
                 <button type="button" onClick={() => { setEditing(false); setDraft(stored); }} className="px-2.5 py-1.5 rounded-lg border border-slate-700 text-slate-300 text-[11px] font-bold">Cancelar</button>
                 <button type="button" onClick={save} disabled={saving} className="px-3 py-1.5 rounded-lg bg-emerald-500 text-slate-950 text-[11px] font-bold flex items-center gap-1 disabled:opacity-50"><Save className="w-3.5 h-3.5" />{saving ? 'Guardando…' : 'Guardar'}</button>
@@ -347,35 +484,60 @@ export default function WidgetBoard({ device, canEdit, sendCommand, onConfirm, e
       </div>
       {error && <p className="text-[11px] text-rose-300">{error}</p>}
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-        {widgets.map((w, i) => {
+      <div ref={boardRef} className="relative" style={{ height: canvasH }}>
+        {guides.map((g, i) => (
+          g.v != null
+            ? <div key={`gv${i}`} className="absolute top-0 bottom-0 w-px bg-cyan-400/80 z-50 pointer-events-none" style={{ left: `${g.v}%`, boxShadow: '0 0 6px rgba(34,211,238,0.8)' }} />
+            : <div key={`gh${i}`} className="absolute left-0 right-0 h-px bg-cyan-400/80 z-50 pointer-events-none" style={{ top: g.h, boxShadow: '0 0 6px rgba(34,211,238,0.8)' }} />
+        ))}
+        {widgets.map((w) => {
           const c = WIDGET_COLORS[w.color];
           const isControl = CONTROL_TYPES.includes(w.widget_type);
           return (
-            <div key={w.id} className={`${SPAN_CLASS[w.span] || 'col-span-1'} relative flex flex-col gap-2 ${isControl ? '' : `widget-card rounded-2xl border ${c.ring} bg-gradient-to-br from-slate-900/70 to-slate-950/80 p-3.5 min-h-[104px]`} ${editing ? 'outline outline-1 outline-dashed outline-slate-600 rounded-2xl' : ''}`}>
+            <div
+              key={w.id}
+              className={`absolute flex flex-col gap-2 ${isControl ? '' : `widget-card rounded-2xl border ${c.ring} bg-gradient-to-br from-slate-900/70 to-slate-950/80 p-3.5`} ${editing ? 'outline outline-1 outline-dashed outline-cyan-500/50 rounded-2xl' : ''}`}
+              style={{ left: `${w.fx}%`, top: w.fy, width: `${w.fw}%`, height: w.fh, overflow: 'hidden' }}
+            >
               <div className={`flex items-center justify-between gap-1 ${isControl && !editing ? 'hidden' : ''}`}>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 truncate">{isControl ? '' : w.label}</span>
+                {editing ? (
+                  <button
+                    type="button" aria-label="Arrastrar para mover"
+                    onPointerDown={(e) => startDrag(e, w, 'move')}
+                    className="flex items-center gap-1 -ml-1 px-1 py-0.5 rounded text-cyan-300/80 hover:text-cyan-200 cursor-grab active:cursor-grabbing touch-none"
+                  >
+                    <Move className="w-3.5 h-3.5" />
+                  </button>
+                ) : null}
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 truncate flex-1">{isControl ? '' : w.label}</span>
                 {editing && (
                   <div className="flex gap-0.5 shrink-0">
-                    <button type="button" aria-label="Mover antes" onClick={() => move(i, -1)} className="p-1 rounded hover:bg-white/10 text-slate-300"><ArrowLeft className="w-3.5 h-3.5" /></button>
-                    <button type="button" aria-label="Mover después" onClick={() => move(i, 1)} className="p-1 rounded hover:bg-white/10 text-slate-300"><ArrowRight className="w-3.5 h-3.5" /></button>
                     <button type="button" aria-label="Editar" onClick={() => setEditingId(w.id)} className="p-1 rounded hover:bg-white/10 text-cyan-300"><Pencil className="w-3.5 h-3.5" /></button>
                     <button type="button" aria-label="Eliminar" onClick={() => setDraft((list) => list.filter((x) => x.id !== w.id))} className="p-1 rounded hover:bg-rose-500/20 text-rose-300"><Trash2 className="w-3.5 h-3.5" /></button>
                   </div>
                 )}
               </div>
-              <div className="flex-1 flex flex-col justify-center" style={{ zoom: w.scale || 1 }}>
+              <div className="flex-1 flex flex-col justify-center min-h-0" style={{ zoom: w.scale || 1 }}>
                 <WidgetBody w={w} device={device} sendCommand={sendCommand} onConfirm={onConfirm} enCicloActivo={enCicloActivo} odometer={odometer} editing={editing} />
               </div>
+              {editing && (
+                <button
+                  type="button" aria-label="Estirar para dimensionar"
+                  onPointerDown={(e) => startDrag(e, w, 'resize')}
+                  className="absolute bottom-0.5 right-0.5 p-1.5 text-cyan-300/80 hover:text-cyan-200 cursor-nwse-resize touch-none"
+                >
+                  <GripVertical className="w-3.5 h-3.5 rotate-45" />
+                </button>
+              )}
             </div>
           );
         })}
-        {editing && (
-          <button type="button" onClick={() => setShowLibrary(true)} className="col-span-1 min-h-[96px] rounded-2xl border-2 border-dashed border-cyan-500/40 text-cyan-300 flex flex-col items-center justify-center gap-1 text-[11px] font-bold hover:bg-cyan-500/10">
-            <Plus className="w-5 h-5" />Añadir widget
-          </button>
-        )}
       </div>
+      {editing && (
+        <button type="button" onClick={() => setShowLibrary(true)} className="mt-2 w-full min-h-[64px] rounded-2xl border-2 border-dashed border-cyan-500/40 text-cyan-300 flex flex-col items-center justify-center gap-1 text-[11px] font-bold hover:bg-cyan-500/10">
+          <Plus className="w-5 h-5" />Añadir widget
+        </button>
+      )}
 
       {showLibrary && createPortal(
         <div className="fixed inset-0 z-[9999] bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center" onClick={() => setShowLibrary(false)}>
@@ -410,6 +572,7 @@ export default function WidgetBoard({ device, canEdit, sendCommand, onConfirm, e
         <WidgetEditor
           widget={editingWidget}
           onChange={(next) => setDraft((list) => list.map((w) => (w.id === next.id ? next : w)))}
+          onApplySize={(fw, fh) => setDraft((list) => list.map((w) => ({ ...w, fw, fh })))}
           onClose={() => setEditingId(null)}
         />
       )}
