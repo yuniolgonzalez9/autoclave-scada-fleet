@@ -10,7 +10,12 @@ import { ActionTile, LedTile, ToggleTile, iconFor } from './controls';
 import { Power, Zap } from 'lucide-react';
 import { mergeDeviceConfig } from '../../services/deviceService';
 
-const SIZE_CLASS = { sm: 'col-span-1', md: 'col-span-2', lg: 'col-span-2 sm:col-span-4' };
+const SPAN_CLASS = {
+  1: 'col-span-1',
+  2: 'col-span-2',
+  3: 'col-span-2 sm:col-span-3',
+  4: 'col-span-2 sm:col-span-4'
+};
 
 
 function Gauge({ value, min, max, color, unit }) {
@@ -253,12 +258,20 @@ function WidgetEditor({ widget, onChange, onClose }) {
           </div>
         </div>
         <div>
-          <span className="text-[11px] text-slate-400">Tamaño</span>
-          <div className="grid grid-cols-3 gap-2 mt-1">
-            {[['sm', 'Pequeño'], ['md', 'Mediano'], ['lg', 'Ancho']].map(([id, label]) => (
-              <button key={id} type="button" onClick={() => set({ size: id })} className={`py-1.5 rounded-lg text-[11px] font-bold border ${widget.size === id ? 'bg-cyan-500/20 border-cyan-400 text-cyan-200' : 'border-slate-700 text-slate-400'}`}>{label}</button>
+          <span className="text-[11px] text-slate-400">Ancho en la cuadrícula</span>
+          <div className="grid grid-cols-4 gap-2 mt-1">
+            {[[1, '¼'], [2, '½'], [3, '¾'], [4, 'Todo']].map(([n, label]) => (
+              <button key={n} type="button" onClick={() => set({ span: n })} className={`py-1.5 rounded-lg text-[11px] font-bold border ${widget.span === n ? 'bg-cyan-500/20 border-cyan-400 text-cyan-200' : 'border-slate-700 text-slate-400'}`}>{label}</button>
             ))}
           </div>
+        </div>
+        <div>
+          <span className="text-[11px] text-slate-400">Escala del contenido <span className="text-cyan-300 font-mono">{Math.round((widget.scale || 1) * 100)}%</span></span>
+          <input
+            type="range" min="0.6" max="1.6" step="0.05" value={widget.scale || 1}
+            onChange={(e) => set({ scale: Number(e.target.value) })}
+            className="control-range w-full mt-1" style={{ '--fill': `${((widget.scale || 1) - 0.6) * 100}%`, '--accent': '#22d3ee' }}
+          />
         </div>
         <button type="button" onClick={onClose} className="w-full py-2.5 rounded-xl bg-cyan-500 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5"><Check className="w-4 h-4" />Listo</button>
       </div>
@@ -339,7 +352,7 @@ export default function WidgetBoard({ device, canEdit, sendCommand, onConfirm, e
           const c = WIDGET_COLORS[w.color];
           const isControl = CONTROL_TYPES.includes(w.widget_type);
           return (
-            <div key={w.id} className={`${SIZE_CLASS[w.size]} relative flex flex-col gap-2 ${isControl ? '' : `widget-card rounded-2xl border ${c.ring} bg-gradient-to-br from-slate-900/70 to-slate-950/80 p-3.5 min-h-[104px]`} ${editing ? 'outline outline-1 outline-dashed outline-slate-600 rounded-2xl' : ''}`}>
+            <div key={w.id} className={`${SPAN_CLASS[w.span] || 'col-span-1'} relative flex flex-col gap-2 ${isControl ? '' : `widget-card rounded-2xl border ${c.ring} bg-gradient-to-br from-slate-900/70 to-slate-950/80 p-3.5 min-h-[104px]`} ${editing ? 'outline outline-1 outline-dashed outline-slate-600 rounded-2xl' : ''}`}>
               <div className={`flex items-center justify-between gap-1 ${isControl && !editing ? 'hidden' : ''}`}>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 truncate">{isControl ? '' : w.label}</span>
                 {editing && (
@@ -351,7 +364,7 @@ export default function WidgetBoard({ device, canEdit, sendCommand, onConfirm, e
                   </div>
                 )}
               </div>
-              <div className="flex-1 flex flex-col justify-center">
+              <div className="flex-1 flex flex-col justify-center" style={{ zoom: w.scale || 1 }}>
                 <WidgetBody w={w} device={device} sendCommand={sendCommand} onConfirm={onConfirm} enCicloActivo={enCicloActivo} odometer={odometer} editing={editing} />
               </div>
             </div>

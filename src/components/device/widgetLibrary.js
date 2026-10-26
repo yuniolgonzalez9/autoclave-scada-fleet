@@ -58,7 +58,11 @@ export function normalizeWidget(raw, index = 0) {
     canal,
     unit: raw?.unit ?? info?.unit ?? '',
     min: Number(raw?.min ?? info?.min ?? base.min ?? 0),
-    max: Number(raw?.max ?? info?.max ?? base.max ?? 100)
+    max: Number(raw?.max ?? info?.max ?? base.max ?? 100),
+    span: [1, 2, 3, 4].includes(Number(raw?.span))
+      ? Number(raw.span)
+      : ({ sm: 1, md: 2, lg: 4 })[['sm', 'md', 'lg'].includes(raw?.size) ? raw.size : base.size] || 1,
+    scale: Number.isFinite(Number(raw?.scale)) ? Math.min(2.5, Math.max(0.5, Number(raw.scale))) : 1
   };
 }
 

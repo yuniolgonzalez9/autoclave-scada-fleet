@@ -86,7 +86,11 @@ export function autoWidgetsFor(device) {
   const w = [];
   w.push({ widget_type: 'PHASE', id: 'auto_phase', size: 'md' });
   if (caps.hasTimer) w.push({ widget_type: 'TIMER', id: 'auto_timer' });
-  caps.sensors.forEach((s, i) => w.push({
+  const orderedSensors = [
+    ...caps.sensors.filter((s) => s.key === 'f0_score'),
+    ...caps.sensors.filter((s) => s.key !== 'f0_score')
+  ];
+  orderedSensors.forEach((s, i) => w.push({
     widget_type: i < 2 ? 'GAUGE' : 'VALUE', id: `auto_s_${s.key}`, key: s.key, label: s.label, unit: s.unit, min: s.min, max: s.max, color: colors[i % colors.length]
   }));
   if (caps.sensors.some((s) => s.key === 'temp_camara')) w.push({ widget_type: 'TREND', id: 'auto_trend', key: 'temperature', label: 'Curva de temperatura', size: 'lg', color: 'emerald' });
