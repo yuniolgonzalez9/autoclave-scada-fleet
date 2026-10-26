@@ -155,7 +155,8 @@ export default function UserManagementView({ fleet = {}, onFleetUpdated }) {
     rejectAccessRequest,
     updateUserStatus,
     updateUserProfile,
-    resetUserPassword
+    resetUserPassword,
+    profile: actorProfile
   } = useAuth();
 
   const [activeTab, setActiveTab] = useState('directorio');
@@ -276,6 +277,7 @@ export default function UserManagementView({ fleet = {}, onFleetUpdated }) {
       await supabase.from('auditoria_accesos').insert([{
         usuario: cleanUser,
         evento: 'CAMBIO_ESTADO',
+        rol: actorProfile?.role || 'SUPERADMIN',
         detalles: `Alta administrativa de cuenta con rol [${uRol}] y ${assignedMacs.length} equipo(s).`,
         dispositivo: navigator.userAgent.slice(0, 100)
       }]);
@@ -310,6 +312,7 @@ export default function UserManagementView({ fleet = {}, onFleetUpdated }) {
       await supabase.from('auditoria_accesos').insert([{
         usuario: username,
         evento: 'CAMBIO_ESTADO',
+        rol: actorProfile?.role || 'SUPERADMIN',
         detalles: `Estado modificado a: ${newStatus}`,
         dispositivo: navigator.userAgent.slice(0, 100)
       }]);
@@ -334,6 +337,7 @@ export default function UserManagementView({ fleet = {}, onFleetUpdated }) {
       await supabase.from('auditoria_accesos').insert([{
         usuario: username,
         evento: 'CAMBIO_ESTADO',
+        rol: actorProfile?.role || 'SUPERADMIN',
         detalles: 'Actualización administrativa de contraseña.',
         dispositivo: navigator.userAgent.slice(0, 100)
       }]);
@@ -379,6 +383,7 @@ export default function UserManagementView({ fleet = {}, onFleetUpdated }) {
       await supabase.from('auditoria_accesos').insert([{
         usuario: username,
         evento: 'CAMBIO_ESTADO',
+        rol: actorProfile?.role || 'SUPERADMIN',
         detalles: `Equipos autorizados actualizados (${newAssignedMacs.length} asignados).`,
         dispositivo: navigator.userAgent.slice(0, 100)
       }]);
@@ -430,6 +435,7 @@ export default function UserManagementView({ fleet = {}, onFleetUpdated }) {
       await supabase.from('auditoria_accesos').insert([{
         usuario: username,
         evento: 'CAMBIO_ESTADO',
+        rol: actorProfile?.role || 'SUPERADMIN',
         detalles: 'Eliminación definitiva de cuenta de operador.',
         dispositivo: navigator.userAgent.slice(0, 100)
       }]);
@@ -448,6 +454,7 @@ export default function UserManagementView({ fleet = {}, onFleetUpdated }) {
       await supabase.from('auditoria_accesos').insert([{
         usuario: username,
         evento: 'CAMBIO_ESTADO',
+        rol: actorProfile?.role || 'SUPERADMIN',
         detalles: `Solicitud aprobada con rol [${roleToAssign}].`,
         dispositivo: navigator.userAgent.slice(0, 100)
       }]);

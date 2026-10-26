@@ -215,6 +215,7 @@ export const AuthProvider = ({ children }) => {
       await supabase.from('auditoria_accesos').insert([{
         usuario: matchedUser.user,
         evento: 'INICIO_SESION_EXITOSO',
+        rol: matchedUser.rol || 'OPERADOR',
         dispositivo: navigator.userAgent.slice(0, 80)
       }]);
     } catch (_) {}
