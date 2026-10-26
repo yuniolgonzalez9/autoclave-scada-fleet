@@ -65,6 +65,16 @@ export default defineConfig({
   define: {
     'global': 'window',
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom'],
+          'vendor-supabase': ['@supabase/supabase-js']
+        }
+      }
+    }
+  },
   server: {
     port: 3000,
     open: true

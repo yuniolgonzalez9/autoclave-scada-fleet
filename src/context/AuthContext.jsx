@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { supabase } from '../services/supabase';
-import { sendTelegramAlert } from '../services/telegram';
+import { sendTelegramEvent } from '../services/telegram';
 
 const AuthContext = createContext({});
 
@@ -231,9 +231,7 @@ export const AuthProvider = ({ children }) => {
       .rpc('resolve_login_email', { p_identifier: cleanEmail });
 
     if (!authEmail) {
-      await sendTelegramAlert(
-        `🚨 <b>ALERTA DE SEGURIDAD</b>\n\nIntento de recuperación con correo no registrado: <code>${cleanEmail}</code>`
-      );
+      await sendTelegramEvent('recovery_unknown', { identificador: cleanEmail });
       return {
         isMaster: false,
         message: 'Si el correo existe en la base clínica, se ha notificado a la Administración.'
@@ -241,10 +239,10 @@ export const AuthProvider = ({ children }) => {
     }
 
     try {
-      await supabase.from('auditoria_accesos').insert([{
-        usuario: cleanEmail,
-        evento: 'SOLICITUD_RECUPERACION_PENDIENTE'
-      }]);
+      await supabase.rpc('log_auth_event', {
+        p_evento: 'SOLICITUD_RECUPERACION_PENDIENTE',
+        p_usuario: cleanEmail
+      });
     } catch (_) {}
 
     const { error } = await supabase.auth.resetPasswordForEmail(authEmail, {
@@ -252,9 +250,7 @@ export const AuthProvider = ({ children }) => {
     });
 
     if (error) {
-      await sendTelegramAlert(
-        `🔔 <b>SOLICITUD DE RECUPERACIÓN</b>\n\n🆔 <b>Identificador:</b> <code>${cleanEmail}</code>\n\nEl envío automático de correo no está disponible; gestione el restablecimiento desde el Centro Maestro de Personal.`
-      );
+      await sendTelegramEvent('recovery_request', { identificador: cleanEmail });
       return {
         isMaster: false,
         message: 'Solicitud enviada a la Dirección Biomédica.'
@@ -329,12 +325,11 @@ export const AuthProvider = ({ children }) => {
 
     if (error) throw new Error(error.message);
 
-    await sendTelegramAlert(
-      `🆕 <b>NUEVA SOLICITUD DE ACCESO</b>\n\n` +
-      `👤 <b>Nombre:</b> ${nombre_completo}\n` +
-      `🆔 <b>Usuario:</b> <code>${(usuario || '').trim().toLowerCase()}</code>\n` +
-      `🏥 <b>Área:</b> ${departamento}`
-    );
+    await sendTelegramEvent('access_request', {
+      nombre: nombre_completo,
+      usuario: (usuario || '').trim().toLowerCase(),
+      departamento
+    });
   };
 
   const updateUserStatus = useCallback(async (userId, nuevoEstado, nuevoRol = null) => {

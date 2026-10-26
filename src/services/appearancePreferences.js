@@ -1,15 +1,16 @@
 import { supabase } from './supabase';
 
 export const DEFAULT_APPEARANCE = {
-  theme: 'tactical',
-  background: 'circuit-pcb',
-  opacity: 82
+  theme: 'industrial',
+  background: 'solid',
+  opacity: 100
 };
 
 function normalizeAppearance(value = {}) {
   return {
-    theme: ['tactical', 'cyber', 'hybrid'].includes(value.theme) ? value.theme : DEFAULT_APPEARANCE.theme,
+    theme: ['industrial', 'tactical', 'cyber', 'hybrid'].includes(value.theme) ? value.theme : DEFAULT_APPEARANCE.theme,
     background: [
+      'solid',
       'circuit-pcb',
       'planet-nodes',
       'cyber-matrix',

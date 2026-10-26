@@ -3,7 +3,7 @@ import { CheckCircle2, KeyRound, Loader2, RotateCcw, Save, ShieldCheck, UserPlus
 import { WALLPAPERS_LIST } from '../common/GearMenu';
 import { adminAccountRequest } from '../../services/adminAccounts';
 
-const DEFAULT_APPEARANCE = { theme: 'tactical', background: 'circuit-pcb', opacity: 82 };
+const DEFAULT_APPEARANCE = { theme: 'industrial', background: 'solid', opacity: 100 };
 const ROLES = ['OPERADOR', 'CLIENTE', 'TECNICO', 'AUDITOR_CALIDAD', 'ADMIN', 'DIRECTOR', 'SUPERADMIN'];
 const STATUSES = ['PENDIENTE', 'ACTIVO', 'INACTIVO', 'SUSPENDIDO'];
 
@@ -212,7 +212,7 @@ export default function AuthUserManagementView({ profile }) {
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <label className="space-y-1 text-slate-400">Tema
                         <select value={draft.theme} onChange={(event) => setAppearanceField(item.user_id, 'theme', event.target.value)} className="auth-admin-input">
-                          <option value="tactical">Tactical</option><option value="cyber">Cyber</option><option value="hybrid">Hybrid</option>
+                          <option value="industrial">Industrial</option><option value="tactical">Tactical</option><option value="cyber">Cyber</option><option value="hybrid">Hybrid</option>
                         </select>
                       </label>
                       <label className="space-y-1 text-slate-400">Fondo

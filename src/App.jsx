@@ -1,13 +1,9 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspense } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import LoginModal from './components/auth/LoginModal';
-import UserManagementModal from './components/admin/UserManagementModal';
-import CloudDiagnosticsModal from './components/admin/CloudDiagnosticsModal';
 import GearMenu, { WALLPAPERS_LIST } from './components/common/GearMenu';
 import ClinicalTooltip from './components/common/ClinicalTooltip';
 import ContextMenu from './components/common/ContextMenu';
-import DeviceAssignmentModal from './components/admin/DeviceAssignmentModal';
-import SurgicalQRLabel from './components/labels/SurgicalQRLabel';
 import NotificationsPanel from './components/common/NotificationsPanel';
 import SwipeDots from './components/common/SwipeDots';
 import { useSwipe, stepThrough } from './hooks/useSwipe';
@@ -26,6 +22,10 @@ const ServiceReportsView = lazy(() => import('./components/service/ServiceReport
 const AiAutomationStudio = lazy(() => import('./components/studio/AiAutomationStudio'));
 const UserManagementView = lazy(() => import('./components/admin/UserManagementView'));
 const FotaHubView = lazy(() => import('./components/fota/FotaHubView'));
+const UserManagementModal = lazy(() => import('./components/admin/UserManagementModal'));
+const CloudDiagnosticsModal = lazy(() => import('./components/admin/CloudDiagnosticsModal'));
+const DeviceAssignmentModal = lazy(() => import('./components/admin/DeviceAssignmentModal'));
+const SurgicalQRLabel = lazy(() => import('./components/labels/SurgicalQRLabel'));
 const ClinicalAuditView = lazy(() => import('./components/reports/ClinicalAuditView'));
 
 const ViewLoader = () => (
@@ -80,7 +80,7 @@ function ScadaAppContent() {
     logout,
     authMode
   } = useAuth();
-  const { fleet, mqttConnected, sendDeviceCommand, patchDeviceMeta } = useMqttFleet();
+  const { fleet, mqttConnected, sendDeviceCommand, patchDeviceMeta } = useMqttFleet(Boolean(user));
   const { appearance, setAppearance, syncStatus: appearanceSyncStatus } = useAccountAppearance(profile, authMode);
   const currentTheme = appearance.theme;
   const currentBg = appearance.background;
@@ -518,12 +518,14 @@ function ScadaAppContent() {
         id="scada-background"
         className="fixed inset-0 z-0 pointer-events-none bg-cover bg-center bg-no-repeat transition-[background-image] duration-500"
         style={{
-          backgroundImage: currentBg === 'oled'
+          backgroundImage: currentBg === 'solid'
+            ? 'none'
+            : currentBg === 'oled'
             ? 'radial-gradient(circle at 50% -5%, rgba(139, 92, 246, 0.25) 0%, transparent 55%), radial-gradient(circle at 100% 100%, rgba(0, 243, 255, 0.18) 0%, transparent 50%)'
             : bgObj?.url
             ? `linear-gradient(to bottom, rgba(4, 7, 18, 0.30), rgba(4, 7, 18, 0.60)), url('${bgObj.url}')`
             : 'none',
-          backgroundColor: '#030712'
+          backgroundColor: currentBg === 'solid' ? '#1b1e23' : '#030712'
         }}
       />
 
@@ -730,7 +732,7 @@ function ScadaAppContent() {
                 activeSection === 'auditoria' ? 'fleet-nav-pill--active text-slate-950' : 'text-slate-400 hover:text-white'
               }`}
             >
-              📋 Auditoría Supabase
+              📋 Auditoría
             </button>
           </div>
         )}
@@ -1213,6 +1215,7 @@ function ScadaAppContent() {
           </div>
         )}
 
+        <Suspense fallback={null}>
         {Boolean(cloudDiagType) && (
           <CloudDiagnosticsModal
             isOpen={Boolean(cloudDiagType)}
@@ -1223,6 +1226,7 @@ function ScadaAppContent() {
             supabaseConnected={supabaseConnected}
           />
         )}
+        </Suspense>
 
         <ContextMenu
           isOpen={contextMenu.isOpen}
@@ -1242,6 +1246,7 @@ function ScadaAppContent() {
           onOpenQR={(dev) => setQrModalDevice(dev)}
         />
 
+        <Suspense fallback={null}>
         {assignModal.isOpen && (
           <DeviceAssignmentModal
             isOpen={assignModal.isOpen}
@@ -1257,7 +1262,9 @@ function ScadaAppContent() {
             }}
           />
         )}
+        </Suspense>
 
+        <Suspense fallback={null}>
         {qrModalDevice !== null && (
           <SurgicalQRLabel
             isOpen={qrModalDevice !== null}
@@ -1266,13 +1273,16 @@ function ScadaAppContent() {
             operatorName={displayName}
           />
         )}
+        </Suspense>
 
+        <Suspense fallback={null}>
         {showAdminModal && (
           <UserManagementModal
             isOpen={showAdminModal}
             onClose={() => setShowAdminModal(false)}
           />
         )}
+        </Suspense>
 
         {/* Panel de Notificaciones */}
         <NotificationsPanel

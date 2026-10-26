@@ -7,7 +7,7 @@ import { mergeDeviceConfig } from '../services/deviceService';
 const CACHE_KEY = 'biofleet_fleet_cache_v2';
 const PERSIST_INTERVAL_MS = 4000;
 
-export function useMqttFleet() {
+export function useMqttFleet(enabled = true) {
   const [fleet, setFleet] = useState(() => {
     try {
       const cached = sessionStorage.getItem(CACHE_KEY);
@@ -97,9 +97,9 @@ export function useMqttFleet() {
       } catch (err) {}
     };
 
-    loadRegisteredDevices();
+    if (enabled) loadRegisteredDevices();
     return () => { isMounted = false; };
-  }, []);
+  }, [enabled]);
 
   const persistSessionReport = useCallback(async (cleanMac, payload, currentMeta) => {
     try {
@@ -133,6 +133,7 @@ export function useMqttFleet() {
   useEffect(() => {
     // Buffer de mensajes: agrupa telemetría y aplica una sola
     // actualización de estado cada ~600ms (evita re-render por paquete)
+    if (!enabled) return undefined;
     let pendingPackets = [];
 
     const { client, sendCommand } = connectMqttFleet(
@@ -266,14 +267,14 @@ export function useMqttFleet() {
       clearInterval(flushTimer);
       if (client) client.end();
     };
-  }, [persistSessionReport]);
+  }, [persistSessionReport, enabled]);
 
   const sendDeviceCommand = useCallback((mac, cmd) => {
     const cleanMac = (mac || '').toUpperCase().replace(/[:\-]/g, '');
     if (!cleanMac) return;
 
     if (sendCommandRef.current) {
-      sendCommandRef.current(cleanMac, cmd);
+      Promise.resolve(sendCommandRef.current(cleanMac, cmd)).catch(() => {});
 
       setFleet((prev) => {
         const dev = prev[cleanMac];
