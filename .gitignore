@@ -18,3 +18,4 @@ temp_backup/
 autoclave-scada-fleet/
 supabase/.temp/
 .env*
+.vite/
