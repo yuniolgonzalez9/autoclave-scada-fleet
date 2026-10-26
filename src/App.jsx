@@ -204,6 +204,21 @@ function ScadaAppContent() {
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [sirenActive, setSirenActive] = useState(false);
+  const [commandError, setCommandError] = useState(null);
+
+  useEffect(() => {
+    let timer = null;
+    const onError = (event) => {
+      setCommandError(event.detail || null);
+      clearTimeout(timer);
+      timer = setTimeout(() => setCommandError(null), 6000);
+    };
+    window.addEventListener('biofleet:command-error', onError);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('biofleet:command-error', onError);
+    };
+  }, []);
   const sirenActiveRef = useRef(false);
 
   const handleDeviceContextMenu = useCallback((e, dev) => {
@@ -530,6 +545,13 @@ function ScadaAppContent() {
       />
 
       <div className="relative z-10 flex-1 flex flex-col w-full max-w-full">
+
+        {commandError && (
+          <div role="alert" className="fixed top-3 left-1/2 -translate-x-1/2 z-[9999] max-w-[92vw] bg-rose-700 text-white text-xs font-semibold px-4 py-2 rounded-lg shadow-lg flex items-center gap-3">
+            <span>Comando no enviado{commandError.mac ? ` a ${commandError.mac}` : ''}: {commandError.message}</span>
+            <button type="button" onClick={() => setCommandError(null)} className="opacity-80 hover:opacity-100">✕</button>
+          </div>
+        )}
 
         {/* Banner de Emergencia */}
         {sirenActive && (

@@ -190,6 +190,30 @@ begin
 end;
 $$;
 
+-- Predeterminado: tema Industrial y fondo solido (antes tactical/circuit-pcb).
+create or replace function public.get_my_appearance_preferences()
+returns jsonb language plpgsql stable security definer set search_path = '' as $$
+declare
+  current_user_id uuid := (select auth.uid());
+  personal jsonb;
+  managed jsonb;
+begin
+  if current_user_id is null then
+    raise exception 'Authentication required.' using errcode = '42501';
+  end if;
+  select preferences into personal from public.user_appearance_preferences where user_id = current_user_id;
+  select overrides into managed from public.admin_appearance_overrides where user_id = current_user_id;
+  return jsonb_build_object('theme', 'industrial', 'background', 'solid', 'opacity', 100)
+    || coalesce(personal, '{}'::jsonb)
+    || coalesce(managed, '{}'::jsonb);
+end;
+$$;
+
+-- Las cuentas existentes pasan al tema Industrial (pueden volver a otro desde el engranaje).
+update public.user_appearance_preferences
+  set preferences = preferences || '{"theme":"industrial","background":"solid","opacity":100}'::jsonb,
+      updated_at = now();
+
 -- ---------- Tabla heredada con contrasenas en texto plano ----------
 do $$
 begin

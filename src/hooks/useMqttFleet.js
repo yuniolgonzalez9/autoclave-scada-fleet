@@ -273,8 +273,13 @@ export function useMqttFleet(enabled = true) {
     const cleanMac = (mac || '').toUpperCase().replace(/[:\-]/g, '');
     if (!cleanMac) return;
 
-    if (sendCommandRef.current) {
-      Promise.resolve(sendCommandRef.current(cleanMac, cmd)).catch(() => {});
+    if (!cleanMac) return Promise.resolve({ ok: false, error: 'Equipo no indicado.' });
+    if (!sendCommandRef.current) return Promise.resolve({ ok: false, error: 'Sin conexión con el servidor.' });
+
+    const result = Promise.resolve(sendCommandRef.current(cleanMac, cmd))
+      .then(() => ({ ok: true }), (e) => ({ ok: false, error: e?.message || 'Comando rechazado.' }));
+
+    {
 
       setFleet((prev) => {
         const dev = prev[cleanMac];
@@ -327,9 +332,10 @@ export function useMqttFleet(enabled = true) {
 
       if (!cmd.cmd || cmd.cmd === 'APPLY_HAL_MAP' || cmd.cmd === 'SET_ALERTA_MANT') {
         const { cmd: _ignored, ...patch } = cmd;
-        mergeDeviceConfig(cleanMac, patch).catch(() => {});
+        result.then((r) => { if (r.ok) mergeDeviceConfig(cleanMac, patch).catch(() => {}); });
       }
     }
+    return result;
   }, []);
 
   const patchDeviceMeta = useCallback((mac, patch) => {
