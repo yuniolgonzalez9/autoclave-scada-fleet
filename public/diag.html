@@ -58,7 +58,27 @@
   var n = 0, t0 = Date.now();
   function count() { n++; if (Date.now() - t0 < 1000) requestAnimationFrame(count); else {
     out[4] = 'raf: ' + n + ' fps';
-    document.getElementById('out').innerHTML = out.join('\n');
+    var txt = out.join('\n');
+    document.getElementById('out').innerHTML = txt + '\n\nenviando...';
+    // Envia el diagnostico a Supabase automaticamente
+    try {
+      fetch('https://gjtqyodpgwfvfvkhlhik.supabase.co/rest/v1/mobile_diag', {
+        method: 'POST',
+        headers: {
+          'apikey': 'sb_publishable_r7Oz_wW66N2Vea2_g9c3MA_wT2v-iPQ',
+          'Authorization': 'Bearer sb_publishable_r7Oz_wW66N2Vea2_g9c3MA_wT2v-iPQ',
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal'
+        },
+        body: JSON.stringify({ payload: { report: txt, ts: new Date().toISOString() } })
+      }).then(function (r) {
+        document.getElementById('out').innerHTML = txt + '\n\nENVIADO ' + r.status + ' - ya puedes cerrar';
+      }).catch(function (e) {
+        document.getElementById('out').innerHTML = txt + '\n\nerror envio: ' + e.message;
+      });
+    } catch (e) {
+      document.getElementById('out').innerHTML = txt + '\n\nerror: ' + e.message;
+    }
   } }
   requestAnimationFrame(count);
 })();
