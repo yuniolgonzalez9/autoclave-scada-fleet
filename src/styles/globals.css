@@ -1856,66 +1856,108 @@ button, a, label, input, select, textarea, [role="button"] { touch-action: manip
   min-height: 56px;
 }
 
-/* ===== Tema Industrial (ISA-101 · HMI de alto rendimiento) =====
-   Paleta gris sobria y sin brillos neón. Respeta los ajustes del engranaje:
-   transparencia (--glass-opacity) y fondo de pantalla elegido. */
+/* ===== Tema Industrial Azul =====
+   Azul acero profundo con el mismo tratamiento vivo que los demás temas:
+   acento azul industrial, láser azul, brillos y partículas activos. */
 [data-theme="industrial"] {
-  --glass-bg: 36 40 47;
-  --surface-glow: 110 120 132;
-  --accent-color: #5b9bd5;
-  --card-border: rgba(148, 163, 184, 0.2);
-  --laser-gradient: linear-gradient(90deg, transparent, #94a3b8, #cbd5e1, #94a3b8, transparent);
-  --laser-glow: none;
+  --glass-bg: 13 29 48;
+  --surface-glow: 56 130 205;
+  --accent-color: #4da3ff;
+  --card-border: rgba(96, 165, 250, 0.32);
+  --laser-gradient: linear-gradient(90deg, transparent, #60a5fa, #bfdbfe, #3b82f6, #60a5fa, transparent);
+  --laser-glow: 0 0 16px rgba(96, 165, 250, 0.45), 0 0 10px rgba(59, 130, 246, 0.22);
 }
 
-[data-theme="industrial"] .app-shell {
-  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif !important;
-  font-variant-numeric: tabular-nums;
+/* ===== AI Studio — rediseño ===== */
+.studio-title-gradient {
+  background: linear-gradient(92deg, #fbbf24 5%, #34d399 48%, #22d3ee 95%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
-[data-theme="industrial"] .particle-background {
-  display: none !important;
+.studio-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #34d399;
+  box-shadow: 0 0 8px #34d399;
+  animation: studioStatusPulse 2s ease-in-out infinite;
 }
 
-[data-theme="industrial"] *,
-[data-theme="industrial"] *::before,
-[data-theme="industrial"] *::after {
-  text-shadow: none !important;
+@keyframes studioStatusPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.82); }
 }
 
-/* Desenfoque solo cuando hay transparencia (al 100 % no cuesta nada en móvil) */
-[data-theme="industrial"] .ultra-glass {
-  background-color: rgb(var(--glass-bg) / var(--glass-opacity)) !important;
-  background-image: none !important;
-  border-color: var(--card-border) !important;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, calc(var(--glass-opacity) * 0.35)) !important;
-  backdrop-filter: blur(calc((1 - var(--glass-opacity)) * 14px)) !important;
-  -webkit-backdrop-filter: blur(calc((1 - var(--glass-opacity)) * 14px)) !important;
+.studio-msg-ai {
+  background: linear-gradient(135deg, rgba(41, 32, 12, 0.55), rgba(10, 15, 30, 0.94) 55%);
+  border: 1px solid rgba(251, 191, 36, 0.30);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
-[data-theme="industrial"] .glass-cell {
-  background-color: rgb(43 48 55 / calc(var(--glass-opacity) * 0.85 + 0.15)) !important;
-  background-image: none !important;
-  border-color: var(--card-border) !important;
+.studio-msg-user {
+  background: linear-gradient(135deg, rgba(8, 47, 73, 0.82), rgba(10, 15, 30, 0.92) 60%);
+  border: 1px solid rgba(34, 211, 238, 0.32);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.30), inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
-[data-theme="industrial"] [class*="shadow-[0_0"],
-[data-theme="industrial"] [class*="shadow-cyan"],
-[data-theme="industrial"] [class*="shadow-emerald"],
-[data-theme="industrial"] [class*="shadow-blue"] {
-  box-shadow: none !important;
+.studio-avatar-ai {
+  box-shadow: 0 0 10px rgba(52, 211, 153, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
-[data-theme="industrial"] .text-cyan-300,
-[data-theme="industrial"] .text-cyan-400 { color: #8db4dc !important; }
-[data-theme="industrial"] .text-cyan-500 { color: #6f9fcf !important; }
-
-[data-theme="industrial"] .animate-pulse:not(.alert-wave),
-[data-theme="industrial"] .animate-ping {
-  animation: none !important;
+.studio-avatar-user {
+  box-shadow: 0 0 10px rgba(34, 211, 238, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
-[data-theme="industrial"] .mobile-nav-shell {
-  background: rgb(35 39 45 / calc(var(--glass-opacity) * 0.8 + 0.2)) !important;
-  border-color: rgba(148, 163, 184, 0.2) !important;
+.studio-typing {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  padding: 2px 0;
+}
+
+.studio-typing i {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #fbbf24;
+  box-shadow: 0 0 6px rgba(251, 191, 36, 0.7);
+  animation: studioTyping 1.15s ease-in-out infinite;
+}
+
+.studio-typing i:nth-child(2) { animation-delay: 0.16s; }
+.studio-typing i:nth-child(3) { animation-delay: 0.32s; }
+
+@keyframes studioTyping {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+
+.studio-chip {
+  background: linear-gradient(135deg, rgba(30, 27, 75, 0.5), rgba(15, 23, 42, 0.9));
+  transition: border-color 0.2s ease, color 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
+}
+
+.studio-chip:hover {
+  box-shadow: 0 0 14px rgba(251, 191, 36, 0.18);
+  transform: translateY(-1px);
+}
+
+.studio-chip:active { transform: scale(0.96); }
+
+.studio-provider-select {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, #34d399 50%), linear-gradient(135deg, #34d399 50%, transparent 50%);
+  background-position: calc(100% - 14px) 55%, calc(100% - 9px) 55%;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+}
+
+.studio-send-btn {
+  box-shadow: 0 0 18px rgba(245, 158, 11, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.studio-send-btn:hover:not(:disabled) {
+  box-shadow: 0 0 26px rgba(245, 158, 11, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }

@@ -165,7 +165,7 @@ export default function GearMenu({
               </label>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
                 {[
-                  { id: 'industrial', label: 'Industrial', desc: 'Profesional' },
+                  { id: 'industrial', label: '🏭 Industrial', desc: 'Azul Acero' },
                   { id: 'tactical', label: '🛡️ Pizarra', desc: 'Cian' },
                   { id: 'cyber', label: '🌙 Cyber', desc: 'Azul' },
                   { id: 'hybrid', label: '⚡ Híbrido', desc: 'Esmeralda' }

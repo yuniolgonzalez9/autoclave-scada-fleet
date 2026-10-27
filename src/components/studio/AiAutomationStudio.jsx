@@ -620,20 +620,22 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
     <div className="space-y-4 font-mono text-xs select-none">
       
       {/* Barra superior */}
-      <div className="ultra-glass p-4 rounded-2xl border border-amber-500/30 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+      <div className="ultra-glass p-4 rounded-2xl border border-amber-500/30 relative overflow-hidden flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+        <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-amber-400/70 to-transparent pointer-events-none" />
         <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300">
+          <div className="p-2.5 rounded-xl bg-gradient-to-br from-amber-500/30 to-emerald-500/20 border border-amber-500/50 text-amber-300 shadow-[0_0_16px_rgba(251,191,36,0.25)]">
             <Sparkles className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-base font-bold text-white flex items-center gap-2">
-              Automation Studio SCADA v2.0
-              <span className="px-2 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[9px] flex items-center gap-1 font-bold">
-                <ShieldCheck className="w-3 h-3" /> POOL CLOUD: {totalClavesActivas} DISPONIBLES
+            <h2 className="text-base font-bold flex items-center gap-2 flex-wrap">
+              <span className="studio-title-gradient">BIOFLEET AI · Automation Studio</span>
+              <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/40 text-[9px] flex items-center gap-1.5 font-bold">
+                <span className="studio-status-dot" />
+                POOL CLOUD · {totalClavesActivas} ACTIVAS
               </span>
             </h2>
             <p className="text-[11px] text-slate-300 font-sans">
-              Copiloto de ingeniería con procesamiento de lenguaje natural y ejecución industrial en tiempo real
+              Copiloto ejecutivo de ingeniería — visión total de flota, lenguaje natural y control industrial en tiempo real
             </p>
           </div>
         </div>
@@ -643,7 +645,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
             value={proveedorSel}
             onChange={(e) => { setProveedorSel(e.target.value); localStorage.setItem('biofleet_ai_provider', e.target.value); }}
             title="Motor de inferencia preferido"
-            className="bg-slate-950 border border-emerald-500/50 text-emerald-300 rounded-xl px-2 py-1.5 font-bold"
+            className="studio-provider-select bg-slate-950 border border-emerald-500/50 text-emerald-300 rounded-xl pl-2.5 pr-6 py-1.5 font-bold cursor-pointer hover:border-emerald-400 transition-colors"
           >
             <option value="AUTO">🧠 AUTO</option>
             {['GROQ', 'GEMINI', 'OPENAI', 'OPENROUTER']
@@ -779,7 +781,8 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
             <div className="flex justify-between items-center border-b border-slate-800 pb-2">
               <span className="text-amber-300 font-bold uppercase text-[11px] flex items-center gap-1.5">
                 <Bot className="w-4 h-4 text-emerald-400" />
-                Copiloto Industrial de Configuración:
+                Consola Ejecutiva BIOFLEET AI
+                <span className="studio-status-dot" title="Motor en línea" />
               </span>
               <button
                 type="button"
@@ -794,18 +797,31 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
               {historialChat.map((msgItem) => (
                 <div
                   key={msgItem.id}
-                  className={`p-2.5 rounded-xl text-xs flex gap-2 ${
+                  className={`p-2.5 rounded-xl text-xs flex gap-2.5 ${
                     msgItem.sender === 'user'
-                      ? 'bg-slate-900 border border-cyan-500/30 ml-8 text-cyan-200'
-                      : 'bg-slate-950/90 border border-amber-500/40 mr-8 text-slate-200'
+                      ? 'studio-msg-user ml-8 text-cyan-100'
+                      : 'studio-msg-ai mr-8 text-slate-200'
                   }`}
                 >
-                  <div className="mt-0.5 shrink-0">
-                    {msgItem.sender === 'user' ? <User className="w-3.5 h-3.5 text-cyan-400" /> : <Bot className="w-3.5 h-3.5 text-emerald-400" />}
+                  <div className={`mt-0.5 shrink-0 w-6 h-6 rounded-lg flex items-center justify-center ${
+                    msgItem.sender === 'user'
+                      ? 'bg-cyan-500/20 border border-cyan-400/40 studio-avatar-user'
+                      : 'bg-emerald-500/15 border border-emerald-400/40 studio-avatar-ai'
+                  }`}>
+                    {msgItem.sender === 'user' ? <User className="w-3.5 h-3.5 text-cyan-300" /> : <Bot className="w-3.5 h-3.5 text-emerald-300" />}
                   </div>
                   <div className="flex-1 whitespace-pre-wrap leading-relaxed font-sans">{msgItem.texto}</div>
                 </div>
               ))}
+              {compilando && (
+                <div className="studio-msg-ai mr-8 p-2.5 rounded-xl text-xs flex gap-2.5 items-center text-slate-300">
+                  <div className="shrink-0 w-6 h-6 rounded-lg flex items-center justify-center bg-emerald-500/15 border border-emerald-400/40 studio-avatar-ai">
+                    <Bot className="w-3.5 h-3.5 text-emerald-300" />
+                  </div>
+                  <span className="studio-typing"><i /><i /><i /></span>
+                  <span className="text-[10px] text-slate-400 font-sans">procesando en el motor de inferencia…</span>
+                </div>
+              )}
               <div ref={chatBottomRef} />
             </div>
 
@@ -816,7 +832,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                   key={q}
                   type="button"
                   onClick={() => setPrompt(q)}
-                  className="px-2.5 py-1 rounded-full bg-slate-900 border border-amber-500/30 text-[10px] text-amber-200/80 hover:border-amber-400 hover:text-amber-200 transition-all font-sans"
+                  className="studio-chip px-2.5 py-1 rounded-full border border-amber-500/30 text-[10px] text-amber-200/80 hover:border-amber-400 hover:text-amber-200 font-sans"
                 >
                   {q}
                 </button>
@@ -851,7 +867,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
               <button
                 type="submit"
                 disabled={compilando || !prompt.trim()}
-                className="px-4 py-2 bg-gradient-to-r from-amber-500 to-emerald-500 hover:opacity-90 text-slate-950 font-bold rounded-xl flex items-center gap-1.5 shadow disabled:opacity-50 shrink-0 font-mono"
+                className="studio-send-btn px-4 py-2 bg-gradient-to-r from-amber-500 to-emerald-500 hover:opacity-90 text-slate-950 font-bold rounded-xl flex items-center gap-1.5 disabled:opacity-50 shrink-0 font-mono transition-all"
               >
                 {compilando ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
                 <span>{compilando ? 'Compilando...' : 'Transmitir'}</span>
