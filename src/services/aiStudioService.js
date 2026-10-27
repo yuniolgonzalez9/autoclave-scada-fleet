@@ -116,38 +116,75 @@ export async function conversarYCompilarConIA({
       let headers = { 'Content-Type': 'application/json' };
 
             if (prov === 'GEMINI') {
-        // Google AI Studio API (modelo gemini-2.5-flash / gemini-3.5-flash)
-        model = 'gemini-3.5-flash';
-        endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${item.api_key.trim()}`;
-        
-        // Formato Gemini contents / systemInstruction
-        const contents = [];
-        // Añadir instrucción de sistema como systemInstruction o primer mensaje
-        contents.push({
-          role: 'user',
-          parts: [{ text: `${SYSTEM_PROMPT_AUTORIDAD_TOTAL}\n\nCONTEXTO ACTUAL:\n${JSON.stringify({ hardwareInfo, widgetsActuales, recetaActual, telemetriaActual })}` }]
-        });
+              const geminiModels = ['gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-1.5-flash', 'gemini-1.5-flash-8b'];
+              let successResult = null;
 
-        for (const h of historial) {
-          contents.push({
-            role: h.sender === 'user' ? 'user' : 'model',
-            parts: [{ text: typeof h.contenido === 'string' ? h.contenido : JSON.stringify(h.contenido) }]
-          });
-        }
+              for (const m of geminiModels) {
+                model = m;
+                endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${item.api_key.trim()}`;
 
-        contents.push({
-          role: 'user',
-          parts: [{ text: p }]
-        });
+                const contents = [];
+                contents.push({
+                  role: 'user',
+                  parts: [{ text: `${SYSTEM_PROMPT_AUTORIDAD_TOTAL}\n\nCONTEXTO ACTUAL:\n${JSON.stringify({ hardwareInfo, widgetsActuales, recetaActual, telemetriaActual })}` }]
+                });
 
-        bodyData = {
-          contents,
-          generationConfig: {
-            temperature: 0.1,
-            responseMimeType: 'application/json'
-          }
-        };
-      } else {
+                for (const h of historial) {
+                  contents.push({
+                    role: h.sender === 'user' ? 'user' : 'model',
+                    parts: [{ text: typeof h.contenido === 'string' ? h.contenido : JSON.stringify(h.contenido) }]
+                  });
+                }
+
+                contents.push({
+                  role: 'user',
+                  parts: [{ text: p }]
+                });
+
+                bodyData = {
+                  contents,
+                  generationConfig: {
+                    temperature: 0.1,
+                    responseMimeType: 'application/json'
+                  }
+                };
+
+                try {
+                  const res = await fetch(endpoint, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify(bodyData)
+                  });
+
+                  if (res.ok) {
+                    const json = await res.json();
+                    const textoRespuesta = json?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                    const parseado = sanitizarJson(textoRespuesta);
+                    if (parseado) {
+                      successResult = {
+                        exito: true,
+                        mensajeChat: parseado.mensaje_chat || 'Orden procesada con éxito.',
+                        titulo: parseado.titulo_programa || 'Control BioFleet',
+                        tipo: parseado.tipo || hardwareInfo.tipo || 'AUTOCLAVE',
+                        accionPropuesta: parseado.accion_propuesta || null,
+                        receta: parseado.receta || recetaActual,
+                        halPayload: parseado.hal_payload || hardwareInfo,
+                        dashboardWidgets: parseado.dashboard || widgetsActuales
+                      };
+                      break;
+                    }
+                  } else {
+                    const errText = await res.text();
+                    ultimoError = `${model} -> HTTP ${res.status}: ${errText}`;
+                  }
+                } catch (err) {
+                  ultimoError = `${model} -> ${err.message}`;
+                }
+              }
+
+              if (successResult) return successResult;
+              continue;
+            } else {
         // OpenAI / Groq / OpenRouter OpenAI-compatible
         endpoint = 'https://api.groq.com/openai/v1/chat/completions';
         model = 'llama-3.3-70b-versatile';
@@ -233,26 +270,40 @@ export async function mejorarTextoConIA(texto, contexto = '') {
     const prov = (item.proveedor || detectarProveedorApiKey(item.api_key)).toUpperCase();
     try {
       let res;
-            if (prov === 'GEMINI') {
-        const model = 'gemini-3.5-flash';
-        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${item.api_key.trim()}`;
-        res = await fetch(endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [
-              { role: 'user', parts: [{ text: `${system}\n\n${contexto ? `Campo: ${contexto}\n` : ''}Texto:\n${t}` }] }
-            ],
-            generationConfig: { temperature: 0.2 }
-          })
-        });
-        if (res.ok) {
-          const json = await res.json();
-          const out = json?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-          if (out) return out;
-        } else {
-          lastError = `HTTP ${res.status}`;
+                        if (prov === 'GEMINI') {
+        const geminiModels = ['gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-1.5-flash', 'gemini-1.5-flash-8b'];
+        let successOut = null;
+
+        for (const m of geminiModels) {
+          const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${item.api_key.trim()}`;
+          try {
+            const res = await fetch(endpoint, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [
+                  { role: 'user', parts: [{ text: `${system}\n\n${contexto ? `Campo: ${contexto}\n` : ''}Texto:\n${t}` }] }
+                ],
+                generationConfig: { temperature: 0.2 }
+              })
+            });
+            if (res.ok) {
+              const json = await res.json();
+              const out = json?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+              if (out) {
+                successOut = out;
+                break;
+              }
+            } else {
+              lastError = `${m} -> HTTP ${res.status}`;
+            }
+          } catch (e) {
+            lastError = `${m} -> ${e.message}`;
+          }
         }
+
+        if (successOut) return successOut;
+        continue;
       } else {
         const [endpoint, model] = endpoints[prov] || endpoints.GROQ;
         res = await fetch(endpoint, {
