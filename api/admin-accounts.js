@@ -460,7 +460,7 @@ export default async function handler(req, res) {
 
       const { error: markError } = await adminClient
         .from('access_requests')
-        .update({ status: 'APROBADA' })
+        .update({ status: 'APROBADA', requested_password: null })
         .eq('id', requestId);
       if (markError) throw markError;
 
@@ -473,7 +473,7 @@ export default async function handler(req, res) {
 
       const { error: markError } = await adminClient
         .from('access_requests')
-        .update({ status: 'RECHAZADA' })
+        .update({ status: 'RECHAZADA', requested_password: null })
         .eq('id', requestId)
         .eq('status', 'PENDIENTE');
       if (markError) throw markError;
