@@ -192,6 +192,7 @@ static char txMqttBuffer[2048];
 
 QueueHandle_t     xQueuePLC;
 SemaphoreHandle_t xMutexSnap;
+SemaphoreHandle_t xMutexMqtt;   // serializa publish/loop entre Core 0 y Core 1
 PLCSnapshot       globalSnap;
 
 WiFiClientSecure ethSecureClient;
@@ -297,11 +298,20 @@ void registrarEvento(const char* fase) {
 }
 
 // =============================================================================
-// PUBLICACIONES MQTT (Core 0 las usa, Core 1 solo las encola vía publish directo
-// desde su propio contexto — PubSubClient es seguro aquí porque Core 0 es el
-// único que llama a mqtt.loop; las publicaciones desde Core 1 se serializan
-// por el heap interno de la librería en este proyecto).
+// PUBLICACIONES MQTT — PubSubClient NO es thread-safe: toda llamada a
+// publish/loop/connect pasa por xMutexMqtt para que Core 0 y Core 1
+// nunca pisen el socket simultáneamente.
 // =============================================================================
+bool mqttPublishSafe(const char* topic, const char* payload, bool retained = false) {
+  if (!mqtt.connected() || xMutexMqtt == NULL) return false;
+  bool ok = false;
+  if (xSemaphoreTake(xMutexMqtt, pdMS_TO_TICKS(150)) == pdTRUE) {
+    ok = mqtt.publish(topic, payload, retained);
+    xSemaphoreGive(xMutexMqtt);
+  }
+  return ok;
+}
+
 void publicarAlertaCritica() {
   if (!mqtt.connected()) return;
   StaticJsonDocument<384> doc;
@@ -314,7 +324,7 @@ void publicarAlertaCritica() {
   doc["ts"] = millis();
   char buf[384];
   serializeJson(doc, buf);
-  mqtt.publish(topicAlerta.c_str(), buf);
+  mqttPublishSafe(topicAlerta.c_str(), buf);
 }
 
 void publicarMeta() {
@@ -328,7 +338,7 @@ void publicarMeta() {
   doc["version"] = SYS_VERSION;
   char buf[512];
   serializeJson(doc, buf);
-  mqtt.publish(topicMeta.c_str(), buf, true); // retained
+  mqttPublishSafe(topicMeta.c_str(), buf, true); // retained
 }
 
 void publicarHwProfile() {
@@ -350,7 +360,7 @@ void publicarHwProfile() {
   prog["custom_slot"] = 6;
   char buf[1024];
   serializeJson(doc, buf);
-  mqtt.publish(topicHwProfile.c_str(), buf, true); // retained
+  mqttPublishSafe(topicHwProfile.c_str(), buf, true); // retained
 }
 
 // Descriptor de capacidades → la web genera widgets/comandos automáticamente
@@ -383,7 +393,7 @@ void publicarEsquema() {
   }
   char buf[2048];
   serializeJson(doc, buf);
-  mqtt.publish(topicEsquema.c_str(), buf, true); // retained
+  mqttPublishSafe(topicEsquema.c_str(), buf, true); // retained
 }
 
 void publicarLogicaAck(bool ok, const char* detalle) {
@@ -395,7 +405,7 @@ void publicarLogicaAck(bool ok, const char* detalle) {
   doc["ts"] = millis();
   char buf[256];
   serializeJson(doc, buf);
-  mqtt.publish(topicLogicaAck.c_str(), buf);
+  mqttPublishSafe(topicLogicaAck.c_str(), buf);
 }
 
 void publicarFotaStatus(const char* estado, const char* detalle) {
@@ -406,7 +416,7 @@ void publicarFotaStatus(const char* estado, const char* detalle) {
   doc["detalle"] = detalle;
   char buf[256];
   serializeJson(doc, buf);
-  mqtt.publish(topicFotaStatus.c_str(), buf);
+  mqttPublishSafe(topicFotaStatus.c_str(), buf);
 }
 
 // Emisión del Reporte Médico Formal a Supabase al Concluir el Ciclo
@@ -439,7 +449,7 @@ void emitirReporteCicloSupabase(bool exito, const char* motivoFinal) {
 
   char bufRep[2048];
   serializeJson(rep, bufRep);
-  mqtt.publish(topicReporte.c_str(), bufRep);
+  mqttPublishSafe(topicReporte.c_str(), bufRep);
   Serial.printf("📋 [AUDITORIA] Reporte clinico emitido: %s\n", exito ? "CONFORME" : motivoFinal);
 }
 
@@ -495,10 +505,10 @@ void escanearBusI2C() {
   doc["total"] = chips.size();
 
   char buf[1024];
-  size_t n = serializeJson(doc, buf);
+  serializeJson(doc, buf);
   if (mqtt.connected()) {
-    mqtt.publish(topicI2CReport.c_str(), buf);
-    mqtt.publish(topicHwScan.c_str(), buf);
+    mqttPublishSafe(topicI2CReport.c_str(), buf);
+    mqttPublishSafe(topicHwScan.c_str(), buf);
   }
   Serial.printf("🔍 [I2C] Escaneo completo: %d chips detectados\n", chips.size());
   emitirBeep(60);
@@ -714,6 +724,12 @@ void TaskFota(void* p) {
 // =============================================================================
 // RED
 // =============================================================================
+// Nombres de eventos: core 2.x usa ARDUINO_EVENT_*, cores viejos SYSTEM_EVENT_*
+#ifndef ARDUINO_EVENT_ETH_GOT_IP
+  #define ARDUINO_EVENT_ETH_GOT_IP       SYSTEM_EVENT_ETH_GOT_IP
+  #define ARDUINO_EVENT_ETH_DISCONNECTED SYSTEM_EVENT_ETH_DISCONNECTED
+#endif
+
 void onWiFiEvent(WiFiEvent_t event) {
   if (event == ARDUINO_EVENT_ETH_GOT_IP) {
     ethConnected = true;
@@ -735,8 +751,13 @@ void reconectarMQTT() {
   if (!ethConnected) return;
   while (!mqtt.connected() && ethConnected) {
     String cid = "HKL_EA8_" + macId;
-    if (mqtt.connect(cid.c_str(), mqttUser, mqttPass)) {
-      mqtt.subscribe(topicComando.c_str(), 1);
+    bool ok = false;
+    if (xSemaphoreTake(xMutexMqtt, pdMS_TO_TICKS(500)) == pdTRUE) {
+      ok = mqtt.connect(cid.c_str(), mqttUser, mqttPass);
+      if (ok) mqtt.subscribe(topicComando.c_str(), 1);
+      xSemaphoreGive(xMutexMqtt);
+    }
+    if (ok) {
       // Anuncio de identidad/capacidades al conectar
       publicarMeta();
       publicarHwProfile();
@@ -757,7 +778,10 @@ void TaskCore0_Comms(void* p) {
   for (;;) {
     if (ethConnected) {
       if (!mqtt.connected()) reconectarMQTT();
-      mqtt.loop();
+      if (mqtt.connected() && xSemaphoreTake(xMutexMqtt, pdMS_TO_TICKS(50)) == pdTRUE) {
+        mqtt.loop();
+        xSemaphoreGive(xMutexMqtt);
+      }
 
       if (forceTelemetryFlag || millis() - lastTelemetryMillis >= 800) {
         forceTelemetryFlag = false;
@@ -799,7 +823,7 @@ void TaskCore0_Comms(void* p) {
           bypasses["nivel_agua"] = bypassSwNivelAgua;
 
           serializeJson(txTelemetriaDoc, txMqttBuffer, sizeof(txMqttBuffer));
-          mqtt.publish(topicTelemetria.c_str(), txMqttBuffer);
+          mqttPublishSafe(topicTelemetria.c_str(), txMqttBuffer);
         }
       }
     }
@@ -1199,9 +1223,16 @@ void setup() {
 
   xQueuePLC  = xQueueCreate(16, sizeof(PLCCommand));
   xMutexSnap = xSemaphoreCreateMutex();
+  xMutexMqtt = xSemaphoreCreateMutex();
 
   WiFi.onEvent(onWiFiEvent);
+#if ESP_ARDUINO_VERSION_MAJOR >= 3
+  // Core 3.x: ETH.begin(type, addr, power, mdc, mdio, clk)
+  ETH.begin(ETH_PHY_TYPE, ETH_PHY_ADDR, ETH_PHY_POWER, ETH_PHY_MDC, ETH_PHY_MDIO, ETH_CLK_MODE);
+#else
+  // Core 2.x: ETH.begin(type, addr, mdc, mdio, power, clk)
   ETH.begin(ETH_PHY_TYPE, ETH_PHY_ADDR, ETH_PHY_MDC, ETH_PHY_MDIO, ETH_PHY_POWER, ETH_CLK_MODE);
+#endif
 
   delay(200);
   macId = ETH.macAddress();

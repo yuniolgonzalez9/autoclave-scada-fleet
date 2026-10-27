@@ -2,11 +2,22 @@
 
 Motor clínico de autoclave con contrato completo contra la web SCADA.
 
-## Compilación
+## Compilación (Arduino IDE)
 
-- **Placa**: ESP32 con Ethernet LAN8720 (Arduino core ESP32 2.x/3.x)
-- **Librerías**: PubSubClient, ArduinoJson 6.x, LiquidCrystal_I2C (además de las nativas: ETH, WiFiClientSecure, Preferences, LittleFS, HTTPClient, Update)
-- **Partición**: cualquier esquema OTA (la app ocupa ~1.4 MB con OTA habilitado)
+- **Placa**: ESP32 con Ethernet LAN8720 — el firmware es compatible con
+  **Arduino core ESP32 2.x y 3.x** (la firma de `ETH.begin` y el watchdog se
+  seleccionan automáticamente con `ESP_ARDUINO_VERSION_MAJOR`)
+- **Librerías** (Gestor de Librerías del IDE):
+  - `PubSubClient` 2.8 (Nick O'Leary)
+  - `ArduinoJson` **6.21.x** (Benoit Blanchon) — ⚠️ NO instalar 7.x, la API
+    `createNestedObject` fue eliminada
+  - `LiquidCrystal_I2C` 1.1.x
+  - Las demás (ETH, WiFiClientSecure, Preferences, LittleFS, HTTPClient,
+    Update, esp_task_wdt) ya vienen con el core ESP32
+- **Partición**: cualquier esquema con OTA (p. ej. "Default 4MB with spiffs")
+  para que `TRIGGER_FOTA` pueda escribir la segunda partición
+- **Estructura**: abrir `biofleet_hkl_ea8.ino` — el IDE carga `secrets.h`
+  automáticamente como pestaña si está en la misma carpeta
 
 ## Credenciales (OBLIGATORIO)
 
