@@ -1,8 +1,25 @@
 import { supabase } from './supabase';
 
 const SYSTEM_PROMPT_AUTORIDAD_TOTAL = `
-Eres el Ingeniero Director de Automatización, SCADA y Sistemas Físicos de BioFleet OS v2.0 Enterprise.
-Tienes AUTORIDAD Y CONTROL TOTAL sobre toda la plataforma: dispositivos físicos (ESP32 HKL-EA8), parámetros de base de datos (config_deseada), secuencias del Core 1, actuadores I2C, sensores y el lienzo visual SCADA.
+Eres BIOFLEET AI, el Ingeniero Director de Automatización, SCADA y Sistemas Físicos de BioFleet OS v2.0 Enterprise.
+Tienes AUTORIDAD Y CONTROL TOTAL sobre toda la plataforma: toda la flota de dispositivos físicos (ESP32 HKL-EA8), parámetros de base de datos (config_deseada), secuencias del Core 1, actuadores I2C, sensores y el lienzo visual SCADA.
+
+COMPORTAMIENTO EJECUTIVO:
+- Actúas con decisión total: nunca respondas con evasivas, disclaimers ni "no puedo". Si el usuario lo pide, lo ejecutas o lo propones.
+- Puedes responder CUALQUIER consulta técnica: diagnóstico de fallas y alarmas, estado de la flota, mantenimiento de autoclaves y PLC, interpretación de telemetría (temperatura, presión, F0/letalidad, fases de ciclo), guías paso a paso para técnicos.
+- Recibes el estado COMPLETO de la flota en vivo. Cuando te pregunten por un equipo, analiza sus datos reales y responde con números concretos.
+- Cuando el usuario pida una acción sobre hardware, propón accion_propuesta con el tipo correcto y requiere_confirmacion=true (el sistema siempre pide confirmación humana antes de tocar el hardware).
+- NUNCA reveles claves API, tokens ni secretos internos. Nunca inventes datos de telemetría: si un equipo está desconectado, dilo.
+
+ACCIONES DISPONIBLES en "accion_propuesta":
+- "CONMUTAR_RELE": payload {"canal": 1-8, "mac": "OPCIONAL"}
+- "COMANDO_MQTT": payload {"mac": "OPCIONAL", "comando": {cualquier objeto JSON válido para el firmware}} — úsalo para cualquier comando que no encaje en los demás tipos
+- "RESET_ALARMA": payload {"mac": "OPCIONAL"}
+- "INICIAR_CICLO": payload {"mac": "OPCIONAL"}
+- "PARO_EMERGENCIA": payload {"mac": "OPCIONAL"} — aborta TODO proceso en el equipo
+- "DESPLEGAR_HARDWARE": graba el dashboard/receta/HAL actual en la placa seleccionada
+- "NINGUNA": para consultas que no requieren acción física
+Si "mac" se omite, la acción aplica al equipo seleccionado en la consola.
 
 PUEDES CREAR CUALQUIER TIPO DE WIDGET en el campo "dashboard" según los requerimientos del usuario. Cada widget en "dashboard" debe tener un objeto JSON con las siguientes propiedades:
 - "id": string único (ej. "w_relay_1", "w_temp_1", "w_valve_2")
@@ -21,7 +38,7 @@ ESTRUCTURA DE RESPUESTA OBLIGATORIA (JSON PURO):
   "titulo_programa": "Nombre del perfil o sistema",
   "tipo": "AUTOCLAVE" | "UNIVERSAL_PLC" | "VEHICULO",
   "accion_propuesta": {
-    "tipo": "NINGUNA" | "DESPLEGAR_HARDWARE" | "INICIAR_CICLO" | "PARO_EMERGENCIA" | "CONMUTAR_RELE",
+    "tipo": "NINGUNA" | "DESPLEGAR_HARDWARE" | "INICIAR_CICLO" | "PARO_EMERGENCIA" | "CONMUTAR_RELE" | "COMANDO_MQTT" | "RESET_ALARMA",
     "requiere_confirmacion": true | false,
     "mensaje_confirmacion": "¿Confirmas la operación en la placa física?",
     "payload": {}
@@ -88,14 +105,29 @@ export function detectarProveedorApiKey(key = '') {
   return 'GEMINI';
 }
 
-export async function conversarYCompilarConIA({ 
-  prompt, 
-  historial = [], 
-  hardwareInfo = {}, 
-  widgetsActuales = [], 
-  recetaActual = null, 
-  telemetriaActual = {}, 
-  apiKey = null 
+function resumirFlota(flota = {}) {
+  const ahora = Date.now();
+  return Object.values(flota || {}).map((d) => ({
+    mac: d.mac,
+    alias: d.meta?.alias || d.mac,
+    tipo: d.meta?.tipo || d.datos?.tipo,
+    cliente: d.meta?.cliente,
+    online: d.lastSeen ? ahora - d.lastSeen < 15000 : false,
+    datos: d.datos || {}
+  }));
+}
+
+export async function conversarYCompilarConIA({
+  prompt,
+  historial = [],
+  hardwareInfo = {},
+  widgetsActuales = [],
+  recetaActual = null,
+  telemetriaActual = {},
+  flota = {},
+  rolUsuario = 'SUPERADMIN',
+  proveedorPreferido = 'AUTO',
+  apiKey = null
 }) {
   const p = prompt ? prompt.trim() : '';
   if (!p) throw new Error('Por favor introduce tu requerimiento u orden.');
@@ -119,8 +151,26 @@ export async function conversarYCompilarConIA({
     }
   }
 
+  const pref = (proveedorPreferido || 'AUTO').toUpperCase();
+  if (pref !== 'AUTO') {
+    poolClaves = [...poolClaves].sort((a, b) => {
+      const provA = (a.proveedor || detectarProveedorApiKey(a.api_key)).toUpperCase() === pref ? 0 : 1;
+      const provB = (b.proveedor || detectarProveedorApiKey(b.api_key)).toUpperCase() === pref ? 0 : 1;
+      return provA - provB;
+    });
+  }
+
+  const contexto = {
+    rol_usuario: rolUsuario,
+    hardwareInfo,
+    widgetsActuales,
+    recetaActual,
+    telemetriaActual,
+    flota: resumirFlota(flota)
+  };
+
   const messages = [
-    { role: 'system', content: `${SYSTEM_PROMPT_AUTORIDAD_TOTAL}\n\nCONTEXTO:\n${JSON.stringify({ hardwareInfo, widgetsActuales, recetaActual, telemetriaActual })}` },
+    { role: 'system', content: `${SYSTEM_PROMPT_AUTORIDAD_TOTAL}\n\nCONTEXTO:\n${JSON.stringify(contexto)}` },
     ...historial.map(h => ({
       role: h.sender === 'user' ? 'user' : 'assistant',
       content: typeof h.contenido === 'string' ? h.contenido : JSON.stringify(h.contenido)
@@ -149,7 +199,7 @@ export async function conversarYCompilarConIA({
                 const contents = [];
                 contents.push({
                   role: 'user',
-                  parts: [{ text: `${SYSTEM_PROMPT_AUTORIDAD_TOTAL}\n\nCONTEXTO ACTUAL:\n${JSON.stringify({ hardwareInfo, widgetsActuales, recetaActual, telemetriaActual })}` }]
+                  parts: [{ text: `${SYSTEM_PROMPT_AUTORIDAD_TOTAL}\n\nCONTEXTO ACTUAL:\n${JSON.stringify(contexto)}` }]
                 });
 
                 for (const h of historial) {

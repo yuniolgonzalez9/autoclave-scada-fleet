@@ -31,18 +31,27 @@ import {
 
 const SNAP_GRID = 10;
 
-export default function AiAutomationStudio({ fleet = {}, sendCommand = null, initialDeviceMac = null }) {
+const CONSULTAS_RAPIDAS = [
+  '¿Cuál es el estado actual de toda la flota?',
+  'Diagnostica el equipo seleccionado y explica sus alarmas',
+  'Guía de mantenimiento preventivo para este equipo',
+  '¿Qué equipo necesita atención urgente y por qué?',
+  'Crea un panel de control con relés y sensores para este equipo'
+];
+
+export default function AiAutomationStudio({ fleet = {}, sendCommand = null, initialDeviceMac = null, isAdmin = true, userRole = 'SUPERADMIN' }) {
   const [activeTab, setActiveTab] = useState('STUDIO'); // 'STUDIO' | 'HARDWARE_I2C' | 'BIBLIOTECA' | 'EDITOR_JSON'
   const [modoEdicion, setModoEdicion] = useState(false);
   const [widgetEnEdicion, setWidgetEnEdicion] = useState(null);
 
   // Chat y Dictado por Voz
   const [prompt, setPrompt] = useState('');
+  const [proveedorSel, setProveedorSel] = useState(() => localStorage.getItem('biofleet_ai_provider') || 'GROQ');
   const [historialChat, setHistorialChat] = useState([
     {
       id: 'init_msg',
       sender: 'ai',
-      texto: 'BioFleet SCADA Enterprise v2.0 operativo. Escriba o utilice el micrófono para dictar instrucciones de proceso, configuración de hardware o generación de interfaces.'
+      texto: 'BIOFLEET AI en línea. Tengo visión total de la flota, telemetría en vivo y control ejecutivo del hardware. Consulte, ordene o dicte cualquier instrucción: diagnósticos, mantenimiento, secuencias, relés o configuración completa.'
     }
   ]);
   const [compilando, setCompilando] = useState(false);
@@ -161,6 +170,10 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [historialChat]);
+
+  useEffect(() => {
+    if (!isAdmin && activeTab === 'EDITOR_JSON') setActiveTab('STUDIO');
+  }, [isAdmin, activeTab]);
 
   // Limpieza al desmontar
   useEffect(() => {
@@ -338,18 +351,35 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
   // Ejecución de Acciones Confirmadas
   const handleEjecutarAccionConfirmada = (accion) => {
     if (!accion) return;
+    const targetMac = (accion.payload?.mac || cleanMac || '').toUpperCase().replace(/[:\-]/g, '');
 
     if (accion.tipo === 'DESPLEGAR_HARDWARE') {
       handleDesplegarADispositivo();
     } else if (accion.tipo === 'PARO_EMERGENCIA') {
-      if (cleanMac && sendCommand) {
-        sendCommand(cleanMac, { cmd: 'ABORTAR_PROCESO', mac: cleanMac });
+      if (targetMac && sendCommand) {
+        sendCommand(targetMac, { cmd: 'ABORTAR_PROCESO', mac: targetMac });
       }
       setRelesLocales({});
-      setMsg(`PARO DE EMERGENCIA EJECUTADO EN [${cleanMac.slice(-4)}]`);
+      setMsg(`PARO DE EMERGENCIA EJECUTADO EN [${targetMac.slice(-4)}]`);
     } else if (accion.tipo === 'CONMUTAR_RELE') {
       const ch = accion.payload?.canal || 1;
       handleToggleRelayDirecto(ch);
+    } else if (accion.tipo === 'RESET_ALARMA') {
+      if (targetMac && sendCommand) {
+        sendCommand(targetMac, { cmd: 'RESET_ALARMA', mac: targetMac });
+        setMsg(`Reseteo de alarma transmitido a [${targetMac.slice(-4)}]`);
+      }
+    } else if (accion.tipo === 'INICIAR_CICLO') {
+      if (targetMac && sendCommand) {
+        sendCommand(targetMac, { cmd: 'INICIAR_CICLO', mac: targetMac, receta: recetaActiva });
+        setMsg(`Orden de inicio de ciclo enviada a [${targetMac.slice(-4)}]`);
+      }
+    } else if (accion.tipo === 'COMANDO_MQTT') {
+      const comando = accion.payload?.comando || {};
+      if (targetMac && sendCommand) {
+        sendCommand(targetMac, { ...comando, mac: comando.mac || targetMac });
+        setMsg(`Comando MQTT transmitido a [${targetMac.slice(-4)}]: ${JSON.stringify(comando).slice(0, 80)}`);
+      }
     }
 
     setAccionPendiente(null);
@@ -481,7 +511,10 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
         hardwareInfo: targetDev?.meta?.config_deseada || targetDev?.datos?.cfg || { tipo: 'AUTOCLAVE' },
         widgetsActuales: widgets,
         recetaActual: recetaActiva,
-        telemetriaActual: { reles: relesLocales, fase: dDev.fase, adc: adcFisico }
+        telemetriaActual: { reles: relesLocales, fase: dDev.fase, adc: adcFisico },
+        flota: fleet,
+        rolUsuario: userRole,
+        proveedorPreferido: proveedorSel
       });
 
       setHistorialChat((prev) => [
@@ -606,14 +639,31 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          <button
-            type="button"
-            onClick={() => { cargarClavesSupabase(); setShowKeyModal(true); }}
-            className="px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 border transition-all bg-slate-900 border-amber-500/60 text-amber-300 hover:border-amber-400 hover:bg-slate-800 shadow"
+          <select
+            value={proveedorSel}
+            onChange={(e) => { setProveedorSel(e.target.value); localStorage.setItem('biofleet_ai_provider', e.target.value); }}
+            title="Motor de inferencia preferido"
+            className="bg-slate-950 border border-emerald-500/50 text-emerald-300 rounded-xl px-2 py-1.5 font-bold"
           >
-            <Key className="w-3.5 h-3.5 text-amber-400" />
-            <span>Pool Claves ({totalClavesActivas})</span>
-          </button>
+            <option value="AUTO">🧠 AUTO</option>
+            {['GROQ', 'GEMINI', 'OPENAI', 'OPENROUTER']
+              .filter((p, i, arr) => arr.indexOf(p) === i)
+              .map((p) => {
+                const disponible = keysList.some((k) => k.activo && (k.proveedor || '').toUpperCase() === p);
+                return <option key={p} value={p}>{p}{disponible ? '' : ' (sin clave)'}</option>;
+              })}
+          </select>
+
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => { cargarClavesSupabase(); setShowKeyModal(true); }}
+              className="px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 border transition-all bg-slate-900 border-amber-500/60 text-amber-300 hover:border-amber-400 hover:bg-slate-800 shadow"
+            >
+              <Key className="w-3.5 h-3.5 text-amber-400" />
+              <span>Pool Claves ({totalClavesActivas})</span>
+            </button>
+          )}
 
           <div className="flex p-0.5 bg-slate-950 border border-slate-800 rounded-xl">
             <button
@@ -646,16 +696,18 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
               <Database className="w-3.5 h-3.5" />
               <span>Biblioteca</span>
             </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('EDITOR_JSON')}
-              className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-all ${
-                activeTab === 'EDITOR_JSON' ? 'bg-indigo-500 text-white shadow' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <FileCode className="w-3.5 h-3.5" />
-              <span>JSON</span>
-            </button>
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => setActiveTab('EDITOR_JSON')}
+                className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-all ${
+                  activeTab === 'EDITOR_JSON' ? 'bg-indigo-500 text-white shadow' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <FileCode className="w-3.5 h-3.5" />
+                <span>JSON</span>
+              </button>
+            )}
           </div>
 
           {activeTab === 'STUDIO' && (
@@ -738,7 +790,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
               </button>
             </div>
 
-            <div className="max-h-48 overflow-y-auto space-y-2 pr-1">
+            <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
               {historialChat.map((msgItem) => (
                 <div
                   key={msgItem.id}
@@ -755,6 +807,20 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
                 </div>
               ))}
               <div ref={chatBottomRef} />
+            </div>
+
+            {/* Consultas rápidas */}
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {CONSULTAS_RAPIDAS.map((q) => (
+                <button
+                  key={q}
+                  type="button"
+                  onClick={() => setPrompt(q)}
+                  className="px-2.5 py-1 rounded-full bg-slate-900 border border-amber-500/30 text-[10px] text-amber-200/80 hover:border-amber-400 hover:text-amber-200 transition-all font-sans"
+                >
+                  {q}
+                </button>
+              ))}
             </div>
 
             {/* Input con micrófono */}

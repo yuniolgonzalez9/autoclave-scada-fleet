@@ -290,6 +290,10 @@ function ScadaAppContent() {
   const isAdmin = userRole.includes('admin') || userRole.includes('director');
   const canEditHardware = isAdmin || userRole.includes('tecnico');
   const isOperator = userRole.includes('operador') || userRole.includes('cliente');
+  const mobileSections = useMemo(
+    () => MOBILE_SECTIONS.filter((s) => s !== 'studio' || canEditHardware),
+    [canEditHardware]
+  );
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', currentTheme);
@@ -481,14 +485,18 @@ function ScadaAppContent() {
 
   const mainRef = useRef(null);
   const [navDir, setNavDir] = useState('none');
-  const navIndex = MOBILE_SECTIONS.indexOf(activeSection === 'detalle' ? 'flota' : activeSection === 'servicio' ? 'gestion' : activeSection);
+  const navIndex = mobileSections.indexOf(activeSection === 'detalle' ? 'flota' : activeSection === 'servicio' ? 'gestion' : activeSection);
 
   const goToSection = useCallback((next) => {
-    const to = MOBILE_SECTIONS.indexOf(next);
+    const to = mobileSections.indexOf(next);
     setNavDir(navIndex === -1 || to === -1 || navIndex === to ? 'none' : to > navIndex ? 'next' : 'prev');
     setActiveSection(next);
     window.scrollTo({ top: 0, behavior: 'auto' });
-  }, [navIndex]);
+  }, [navIndex, mobileSections]);
+
+  useEffect(() => {
+    if (activeSection === 'studio' && !canEditHardware) setActiveSection('flota');
+  }, [activeSection, canEditHardware]);
 
   const detailIndex = filteredDevices.findIndex((d) => d.mac === selectedMac);
   const goToDevice = useCallback((delta) => {
@@ -501,8 +509,8 @@ function ScadaAppContent() {
 
   useSwipe(mainRef, {
     enabled: Boolean(user) && !kioskMac,
-    onSwipeLeft: () => (activeSection === 'detalle' ? false : stepThrough(MOBILE_SECTIONS, activeSection, 1, goToSection)),
-    onSwipeRight: () => (activeSection === 'detalle' ? false : stepThrough(MOBILE_SECTIONS, activeSection, -1, goToSection))
+    onSwipeLeft: () => (activeSection === 'detalle' ? false : stepThrough(mobileSections, activeSection, 1, goToSection)),
+    onSwipeRight: () => (activeSection === 'detalle' ? false : stepThrough(mobileSections, activeSection, -1, goToSection))
   });
 
   const bgObj = useMemo(() => WALLPAPERS_LIST.find((b) => b.id === currentBg) || WALLPAPERS_LIST[0], [currentBg]);
@@ -1111,13 +1119,15 @@ function ScadaAppContent() {
                 </div>
               )}
 
-              {(visitedSections.has('studio') || activeSection === 'studio') && (
+              {canEditHardware && (visitedSections.has('studio') || activeSection === 'studio') && (
                 <div className="app-view-panel" hidden={activeSection !== 'studio'}>
                   <Suspense fallback={<ViewLoader />}>
                   <AiAutomationStudio
                     fleet={fleet}
                     sendCommand={sendDeviceCommand}
                     initialDeviceMac={selectedMac}
+                    isAdmin={isAdmin}
+                    userRole={displayRole}
                   />
                   </Suspense>
                 </div>
@@ -1159,7 +1169,11 @@ function ScadaAppContent() {
           <nav className="mobile-nav-shell lg:hidden fixed bottom-0 left-0 right-0 h-16 border-t border-cyan-500/30 backdrop-blur-xl flex items-center justify-around z-50">
             <span
               className="mobile-nav-indicator"
-              style={{ transform: `translateX(${Math.max(navIndex, 0) * 100}%)`, opacity: navIndex === -1 ? 0 : 1 }}
+              style={{
+                width: `${100 / mobileSections.length}%`,
+                transform: `translateX(${Math.max(navIndex, 0) * 100}%)`,
+                opacity: navIndex === -1 ? 0 : 1
+              }}
             />
             <button
               onClick={() => goToSection('flota')}
@@ -1181,15 +1195,17 @@ function ScadaAppContent() {
               <span>Gestión</span>
             </button>
 
-            <button
-              onClick={() => goToSection('studio')}
-              className={`flex-1 flex flex-col items-center gap-1 py-1 px-1 rounded-lg text-[10px] font-mono transition-all ${
-                activeSection === 'studio' ? 'text-amber-400 font-bold scale-110' : 'text-slate-400 hover:text-amber-300'
-              }`}
-            >
-              <Sparkles className={`w-5 h-5 ${activeSection === 'studio' ? 'icon-glow' : ''}`} />
-              <span>Studio</span>
-            </button>
+            {canEditHardware && (
+              <button
+                onClick={() => goToSection('studio')}
+                className={`flex-1 flex flex-col items-center gap-1 py-1 px-1 rounded-lg text-[10px] font-mono transition-all ${
+                  activeSection === 'studio' ? 'text-amber-400 font-bold scale-110' : 'text-slate-400 hover:text-amber-300'
+                }`}
+              >
+                <Sparkles className={`w-5 h-5 ${activeSection === 'studio' ? 'icon-glow' : ''}`} />
+                <span>Studio</span>
+              </button>
+            )}
 
             <button
               onClick={() => goToSection('usuarios')}
