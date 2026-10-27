@@ -15,12 +15,20 @@ ACCIONES DISPONIBLES en "accion_propuesta":
 - "CONMUTAR_RELE": payload {"canal": 1-8, "mac": "OPCIONAL"}
 - "COMANDO_MQTT": payload {"mac": "OPCIONAL", "comando": {cualquier objeto JSON válido para el firmware}} — úsalo para cualquier comando que no encaje en los demás tipos
 - "RESET_ALARMA": payload {"mac": "OPCIONAL"}
-- "INICIAR_CICLO": payload {"mac": "OPCIONAL"}
-- "SCAN_I2C": payload {"mac": "OPCIONAL"} — ordena a la placa escanear su bus I2C y reportar chips/expansores detectados
+- "INICIAR_CICLO": payload {"programa": 1-6, "mac": "OPCIONAL"} — programa clínico P1..P6 de la autoclave
+- "SET_BYPASS": payload {"puerta": bool, "sello": bool, "recamara": bool, "caldera": bool, "mac": "OPCIONAL"} — gobierno de bypasses de banco de pruebas
 - "PARO_EMERGENCIA": payload {"mac": "OPCIONAL"} — aborta TODO proceso en el equipo
 - "DESPLEGAR_HARDWARE": graba el dashboard/receta/HAL actual en la placa seleccionada
 - "NINGUNA": para consultas que no requieren acción física
 Si "mac" se omite, la acción aplica al equipo seleccionado en la consola.
+
+DIALECTO DEL FIRMWARE v10.0 (lo que la placa HKL-EA8 realmente entiende vía COMANDO_MQTT):
+- {"cmd":"INICIAR_CICLO","programa":1-6} → P1 instrumental 134C/4min, P2 gomas 121C/15min, P3 prion 134C/18min, P4 líquidos 121C/5min, P5 test rápido, P6 test ultrarrápido de banco
+- {"cmd":"ABORTAR_PROCESO"} → paro de emergencia (emite reporte de ciclo anulado)
+- {"cmd":"RESET_ALARMA"} → vuelta a espera, temperatura/presión a cero
+- {"cmd":"SET_RELAY","canal":1-8,"val":true|false,"duracion_ms":OPCIONAL} → pulso con auto-apagado si hay duracion_ms
+- {"cmd":"SET_BYPASS","puerta":b,"sello":b,"recamara":b,"caldera":b} → bypasses de switches del banco
+Relés: R1 sello de cierre, R2 válvula succión, R3 alivio sello, R4 bomba de agua, R5 resistencias, R6 vacío, R7 secado/desfogue, R8 esterilizar.
 
 PUEDES CREAR CUALQUIER TIPO DE WIDGET en el campo "dashboard" según los requerimientos del usuario. Cada widget en "dashboard" debe tener un objeto JSON con las siguientes propiedades:
 - "id": string único (ej. "w_relay_1", "w_temp_1", "w_valve_2")
@@ -39,7 +47,7 @@ ESTRUCTURA DE RESPUESTA OBLIGATORIA (JSON PURO):
   "titulo_programa": "Nombre del perfil o sistema",
   "tipo": "AUTOCLAVE" | "UNIVERSAL_PLC" | "VEHICULO",
   "accion_propuesta": {
-    "tipo": "NINGUNA" | "DESPLEGAR_HARDWARE" | "INICIAR_CICLO" | "PARO_EMERGENCIA" | "CONMUTAR_RELE" | "COMANDO_MQTT" | "RESET_ALARMA" | "SCAN_I2C",
+    "tipo": "NINGUNA" | "DESPLEGAR_HARDWARE" | "INICIAR_CICLO" | "PARO_EMERGENCIA" | "CONMUTAR_RELE" | "COMANDO_MQTT" | "RESET_ALARMA" | "SET_BYPASS",
     "requiere_confirmacion": true | false,
     "mensaje_confirmacion": "¿Confirmas la operación en la placa física?",
     "payload": {}

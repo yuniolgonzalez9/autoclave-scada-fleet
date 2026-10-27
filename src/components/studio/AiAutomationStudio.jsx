@@ -362,14 +362,22 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
       }
     } else if (accion.tipo === 'INICIAR_CICLO') {
       if (targetMac && sendCommand) {
-        sendCommand(targetMac, { cmd: 'INICIAR_CICLO', mac: targetMac, receta: recetaActiva });
-        setMsg(`Orden de inicio de ciclo enviada a [${targetMac.slice(-4)}]`);
+        const prog = Math.min(6, Math.max(1, Number(accion.payload?.programa) || 1));
+        sendCommand(targetMac, { cmd: 'INICIAR_CICLO', programa: prog, mac: targetMac });
+        setMsg(`Programa clínico P${prog} ordenado a [${targetMac.slice(-4)}]`);
       }
-    } else if (accion.tipo === 'SCAN_I2C') {
+    } else if (accion.tipo === 'SET_BYPASS') {
       if (targetMac && sendCommand) {
-        setScanningI2C(true);
-        sendCommand(targetMac, { cmd: 'SCAN_HARDWARE', mac: targetMac });
-        setMsg(`Escaneo I2C ordenado a [${targetMac.slice(-4)}] — esperando reporte de la placa.`);
+        const bp = accion.payload || {};
+        sendCommand(targetMac, {
+          cmd: 'SET_BYPASS',
+          mac: targetMac,
+          puerta: bp.puerta,
+          sello: bp.sello,
+          recamara: bp.recamara,
+          caldera: bp.caldera
+        });
+        setMsg(`Bypasses de banco actualizados en [${targetMac.slice(-4)}]`);
       }
     } else if (accion.tipo === 'COMANDO_MQTT') {
       const comando = accion.payload?.comando || {};
