@@ -16,6 +16,7 @@ ACCIONES DISPONIBLES en "accion_propuesta":
 - "COMANDO_MQTT": payload {"mac": "OPCIONAL", "comando": {cualquier objeto JSON válido para el firmware}} — úsalo para cualquier comando que no encaje en los demás tipos
 - "RESET_ALARMA": payload {"mac": "OPCIONAL"}
 - "INICIAR_CICLO": payload {"mac": "OPCIONAL"}
+- "SCAN_I2C": payload {"mac": "OPCIONAL"} — ordena a la placa escanear su bus I2C y reportar chips/expansores detectados
 - "PARO_EMERGENCIA": payload {"mac": "OPCIONAL"} — aborta TODO proceso en el equipo
 - "DESPLEGAR_HARDWARE": graba el dashboard/receta/HAL actual en la placa seleccionada
 - "NINGUNA": para consultas que no requieren acción física
@@ -38,7 +39,7 @@ ESTRUCTURA DE RESPUESTA OBLIGATORIA (JSON PURO):
   "titulo_programa": "Nombre del perfil o sistema",
   "tipo": "AUTOCLAVE" | "UNIVERSAL_PLC" | "VEHICULO",
   "accion_propuesta": {
-    "tipo": "NINGUNA" | "DESPLEGAR_HARDWARE" | "INICIAR_CICLO" | "PARO_EMERGENCIA" | "CONMUTAR_RELE" | "COMANDO_MQTT" | "RESET_ALARMA",
+    "tipo": "NINGUNA" | "DESPLEGAR_HARDWARE" | "INICIAR_CICLO" | "PARO_EMERGENCIA" | "CONMUTAR_RELE" | "COMANDO_MQTT" | "RESET_ALARMA" | "SCAN_I2C",
     "requiere_confirmacion": true | false,
     "mensaje_confirmacion": "¿Confirmas la operación en la placa física?",
     "payload": {}

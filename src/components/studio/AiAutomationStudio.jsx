@@ -18,10 +18,8 @@ import {
   Database, 
   X, 
   Settings2, 
-  GripHorizontal, 
-  Search, 
-  Building2, 
-  Bot, 
+  GripHorizontal,
+  Bot,
   User, 
   ShieldCheck, 
   Mic, 
@@ -31,16 +29,8 @@ import {
 
 const SNAP_GRID = 10;
 
-const CONSULTAS_RAPIDAS = [
-  '¿Cuál es el estado actual de toda la flota?',
-  'Diagnostica el equipo seleccionado y explica sus alarmas',
-  'Guía de mantenimiento preventivo para este equipo',
-  '¿Qué equipo necesita atención urgente y por qué?',
-  'Crea un panel de control con relés y sensores para este equipo'
-];
-
 export default function AiAutomationStudio({ fleet = {}, sendCommand = null, initialDeviceMac = null, isAdmin = true, userRole = 'SUPERADMIN' }) {
-  const [activeTab, setActiveTab] = useState('STUDIO'); // 'STUDIO' | 'HARDWARE_I2C' | 'BIBLIOTECA' | 'EDITOR_JSON'
+  const [activeTab, setActiveTab] = useState('STUDIO'); // 'STUDIO' | 'BIBLIOTECA' | 'EDITOR_JSON'
   const [modoEdicion, setModoEdicion] = useState(false);
   const [widgetEnEdicion, setWidgetEnEdicion] = useState(null);
 
@@ -57,7 +47,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
   const [compilando, setCompilando] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef(null);
-  const chatBottomRef = useRef(null);
+  const chatScrollRef = useRef(null);
 
   // Acción Ejecutiva Pendiente de Confirmación
   const [accionPendiente, setAccionPendiente] = useState(null);
@@ -168,8 +158,9 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
   };
 
   useEffect(() => {
-    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [historialChat]);
+    const el = chatScrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [historialChat, compilando]);
 
   useEffect(() => {
     if (!isAdmin && activeTab === 'EDITOR_JSON') setActiveTab('STUDIO');
@@ -373,6 +364,12 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
       if (targetMac && sendCommand) {
         sendCommand(targetMac, { cmd: 'INICIAR_CICLO', mac: targetMac, receta: recetaActiva });
         setMsg(`Orden de inicio de ciclo enviada a [${targetMac.slice(-4)}]`);
+      }
+    } else if (accion.tipo === 'SCAN_I2C') {
+      if (targetMac && sendCommand) {
+        setScanningI2C(true);
+        sendCommand(targetMac, { cmd: 'SCAN_HARDWARE', mac: targetMac });
+        setMsg(`Escaneo I2C ordenado a [${targetMac.slice(-4)}] — esperando reporte de la placa.`);
       }
     } else if (accion.tipo === 'COMANDO_MQTT') {
       const comando = accion.payload?.comando || {};
@@ -667,42 +664,32 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
             </button>
           )}
 
-          <div className="flex p-0.5 bg-slate-950 border border-slate-800 rounded-xl">
+          <div className="flex p-0.5 bg-slate-950 border border-slate-800 rounded-xl overflow-x-auto no-scrollbar max-w-full">
             <button
               type="button"
               onClick={() => setActiveTab('STUDIO')}
-              className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-all ${
+              className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-all whitespace-nowrap ${
                 activeTab === 'STUDIO' ? 'bg-amber-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white'
               }`}
             >
               <LayoutGrid className="w-3.5 h-3.5" />
-              <span>Copilot & SCADA</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('HARDWARE_I2C')}
-              className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-all ${
-                activeTab === 'HARDWARE_I2C' ? 'bg-cyan-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <Cpu className="w-3.5 h-3.5" />
-              <span>Hardware & I2C</span>
+              <span>Consola IA</span>
             </button>
             <button
               type="button"
               onClick={() => setActiveTab('BIBLIOTECA')}
-              className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-all ${
+              className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-all whitespace-nowrap ${
                 activeTab === 'BIBLIOTECA' ? 'bg-emerald-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white'
               }`}
             >
               <Database className="w-3.5 h-3.5" />
-              <span>Biblioteca</span>
+              <span>Perfiles</span>
             </button>
             {isAdmin && (
               <button
                 type="button"
                 onClick={() => setActiveTab('EDITOR_JSON')}
-                className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-all ${
+                className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-all whitespace-nowrap ${
                   activeTab === 'EDITOR_JSON' ? 'bg-indigo-500 text-white shadow' : 'text-slate-400 hover:text-white'
                 }`}
               >
@@ -711,21 +698,6 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
               </button>
             )}
           </div>
-
-          {activeTab === 'STUDIO' && (
-            <button
-              type="button"
-              onClick={() => { setModoEdicion(!modoEdicion); setWidgetEnEdicion(null); }}
-              className={`px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 border transition-all ${
-                modoEdicion 
-                  ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-lg shadow-amber-500/30' 
-                  : 'bg-slate-900 border-slate-700 text-amber-300 hover:border-amber-400'
-              }`}
-            >
-              <Settings2 className="w-3.5 h-3.5" />
-              <span>{modoEdicion ? 'Bloquear Posiciones' : 'Modo Edición'}</span>
-            </button>
-          )}
         </div>
       </div>
 
@@ -776,159 +748,166 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
             </div>
           )}
 
-          {/* Consola de Diálogo */}
-          <div className="ultra-glass p-4 rounded-2xl border border-amber-500/30 space-y-3">
-            <div className="flex justify-between items-center border-b border-slate-800 pb-2">
-              <span className="text-amber-300 font-bold uppercase text-[11px] flex items-center gap-1.5">
-                <Bot className="w-4 h-4 text-emerald-400" />
-                Consola Ejecutiva BIOFLEET AI
-                <span className="studio-status-dot" title="Motor en línea" />
-              </span>
-              <button
-                type="button"
-                onClick={() => setHistorialChat([{ id: 'reset', sender: 'ai', texto: 'Historial reiniciado. Indique los requerimientos del proceso.' }])}
-                className="text-[10px] text-slate-400 hover:text-white"
-              >
-                Limpiar Consola
-              </button>
+          <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
+            {/* Columna izquierda: Consola IA + Destino */}
+            <div className="xl:col-span-5 space-y-4 min-w-0">
+              {/* Consola de Diálogo */}
+              <div className="ultra-glass p-4 rounded-2xl border border-amber-500/30 space-y-3">
+                <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+                  <span className="text-amber-300 font-bold uppercase text-[11px] flex items-center gap-1.5">
+                    <Bot className="w-4 h-4 text-emerald-400" />
+                    Consola Ejecutiva
+                    <span className="studio-status-dot" title="Motor en línea" />
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setHistorialChat([{ id: 'reset', sender: 'ai', texto: 'Historial reiniciado. Indique los requerimientos del proceso.' }])}
+                    className="text-[10px] text-slate-400 hover:text-white"
+                  >
+                    Limpiar
+                  </button>
+                </div>
+
+                <div ref={chatScrollRef} className="h-[300px] xl:h-[400px] overflow-y-auto space-y-2 pr-1">
+                  {historialChat.map((msgItem) => (
+                    <div
+                      key={msgItem.id}
+                      className={`p-2.5 rounded-xl text-xs flex gap-2.5 ${
+                        msgItem.sender === 'user'
+                          ? 'studio-msg-user ml-8 text-cyan-100'
+                          : 'studio-msg-ai mr-8 text-slate-200'
+                      }`}
+                    >
+                      <div className={`mt-0.5 shrink-0 w-6 h-6 rounded-lg flex items-center justify-center ${
+                        msgItem.sender === 'user'
+                          ? 'bg-cyan-500/20 border border-cyan-400/40 studio-avatar-user'
+                          : 'bg-emerald-500/15 border border-emerald-400/40 studio-avatar-ai'
+                      }`}>
+                        {msgItem.sender === 'user' ? <User className="w-3.5 h-3.5 text-cyan-300" /> : <Bot className="w-3.5 h-3.5 text-emerald-300" />}
+                      </div>
+                      <div className="flex-1 whitespace-pre-wrap leading-relaxed font-sans">{msgItem.texto}</div>
+                    </div>
+                  ))}
+                  {compilando && (
+                    <div className="studio-msg-ai mr-8 p-2.5 rounded-xl text-xs flex gap-2.5 items-center text-slate-300">
+                      <div className="shrink-0 w-6 h-6 rounded-lg flex items-center justify-center bg-emerald-500/15 border border-emerald-400/40 studio-avatar-ai">
+                        <Bot className="w-3.5 h-3.5 text-emerald-300" />
+                      </div>
+                      <span className="studio-typing"><i /><i /><i /></span>
+                      <span className="text-[10px] text-slate-400 font-sans">procesando en el motor de inferencia…</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Input con micrófono */}
+                <form onSubmit={handleEnviarMensaje} className="flex items-center gap-1.5 pt-1">
+                  <input
+                    type="text"
+                    value={prompt}
+                    onChange={(e) => setPrompt(e.target.value)}
+                    placeholder={isListening ? 'Escuchando...' : 'Ordene o consulte a la IA...'}
+                    className={`flex-1 min-w-0 bg-slate-950 border rounded-xl px-3 py-2 text-white font-sans text-xs focus:outline-none transition-all ${
+                      isListening ? 'border-rose-500 ring-2 ring-rose-500/30 animate-pulse' : 'border-slate-700 focus:border-amber-400'
+                    }`}
+                  />
+
+                  <button
+                    type="button"
+                    onClick={toggleListening}
+                    title={isListening ? 'Detener dictado' : 'Hablar por micrófono'}
+                    className={`p-2 rounded-xl border transition-all shrink-0 ${
+                      isListening
+                        ? 'bg-rose-600 text-white border-rose-400 shadow-lg'
+                        : 'bg-slate-900 border-slate-700 text-slate-300 hover:text-white'
+                    }`}
+                  >
+                    {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={compilando || !prompt.trim()}
+                    className="studio-send-btn px-3.5 py-2 bg-gradient-to-r from-amber-500 to-emerald-500 hover:opacity-90 text-slate-950 font-bold rounded-xl flex items-center gap-1.5 disabled:opacity-50 shrink-0 font-mono transition-all"
+                  >
+                    {compilando ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                    <span className="hidden sm:inline">{compilando ? 'Procesando' : 'Transmitir'}</span>
+                  </button>
+                </form>
+              </div>
+
+              {/* Destino y Despliegue */}
+              <div className="ultra-glass p-4 rounded-2xl border border-slate-800 space-y-3">
+                <span className="text-white font-bold text-[11px] uppercase flex items-center gap-2 border-b border-slate-800 pb-2">
+                  <Cpu className="w-4 h-4 text-cyan-400" />
+                  Destino &amp; Despliegue
+                </span>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={perfilNombre}
+                    onChange={(e) => setPerfilNombre(e.target.value)}
+                    className="flex-1 min-w-0 bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white font-bold text-xs focus:outline-none focus:border-cyan-400"
+                  />
+                  <span className="px-2 py-1 rounded bg-slate-900 border border-slate-800 text-amber-400 font-bold text-[10px] shrink-0">
+                    {tipoEquipo}
+                  </span>
+                </div>
+
+                <select
+                  value={selectedMac}
+                  onChange={(e) => setSelectedMac(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-2 text-cyan-300 font-bold font-mono"
+                >
+                  <option value="">-- Seleccionar Placa --</option>
+                  {macList.map((m) => (
+                    <option key={m} value={m}>
+                      {fleet[m]?.meta?.alias || m} ({m.slice(-4)})
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  type="button"
+                  onClick={handleDesplegarADispositivo}
+                  disabled={transmitting || !selectedMac}
+                  className="w-full py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:opacity-90 text-white font-bold rounded-xl flex items-center justify-center gap-1.5 shadow disabled:opacity-40"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>{transmitting ? 'Enviando...' : 'Desplegar a Hardware'}</span>
+                </button>
+              </div>
             </div>
 
-            <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
-              {historialChat.map((msgItem) => (
-                <div
-                  key={msgItem.id}
-                  className={`p-2.5 rounded-xl text-xs flex gap-2.5 ${
-                    msgItem.sender === 'user'
-                      ? 'studio-msg-user ml-8 text-cyan-100'
-                      : 'studio-msg-ai mr-8 text-slate-200'
+            {/* Lienzo SCADA */}
+            <div className="xl:col-span-7 min-w-0">
+          <div className="ultra-glass p-4 rounded-2xl border border-slate-800 space-y-3">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-2 gap-2">
+              <span className="text-white font-bold flex items-center gap-2 min-w-0 truncate">
+                <LayoutGrid className="w-4 h-4 text-cyan-400 shrink-0" />
+                Lienzo SCADA ({widgets.length})
+              </span>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-[10px] text-amber-300 font-bold hidden md:inline">
+                  {timerEjecutando
+                    ? `SECUENCIA: ${timerEjecutando.segundosRestantes}s`
+                    : modoEdicion
+                    ? 'Arrastre para posicionar · esquina para dimensionar'
+                    : 'Control en tiempo real'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => { setModoEdicion(!modoEdicion); setWidgetEnEdicion(null); }}
+                  className={`px-2.5 py-1 rounded-lg font-bold flex items-center gap-1.5 border transition-all text-[10px] ${
+                    modoEdicion
+                      ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-lg shadow-amber-500/30'
+                      : 'bg-slate-900 border-slate-700 text-amber-300 hover:border-amber-400'
                   }`}
                 >
-                  <div className={`mt-0.5 shrink-0 w-6 h-6 rounded-lg flex items-center justify-center ${
-                    msgItem.sender === 'user'
-                      ? 'bg-cyan-500/20 border border-cyan-400/40 studio-avatar-user'
-                      : 'bg-emerald-500/15 border border-emerald-400/40 studio-avatar-ai'
-                  }`}>
-                    {msgItem.sender === 'user' ? <User className="w-3.5 h-3.5 text-cyan-300" /> : <Bot className="w-3.5 h-3.5 text-emerald-300" />}
-                  </div>
-                  <div className="flex-1 whitespace-pre-wrap leading-relaxed font-sans">{msgItem.texto}</div>
-                </div>
-              ))}
-              {compilando && (
-                <div className="studio-msg-ai mr-8 p-2.5 rounded-xl text-xs flex gap-2.5 items-center text-slate-300">
-                  <div className="shrink-0 w-6 h-6 rounded-lg flex items-center justify-center bg-emerald-500/15 border border-emerald-400/40 studio-avatar-ai">
-                    <Bot className="w-3.5 h-3.5 text-emerald-300" />
-                  </div>
-                  <span className="studio-typing"><i /><i /><i /></span>
-                  <span className="text-[10px] text-slate-400 font-sans">procesando en el motor de inferencia…</span>
-                </div>
-              )}
-              <div ref={chatBottomRef} />
-            </div>
-
-            {/* Consultas rápidas */}
-            <div className="flex flex-wrap gap-1.5 pt-1">
-              {CONSULTAS_RAPIDAS.map((q) => (
-                <button
-                  key={q}
-                  type="button"
-                  onClick={() => setPrompt(q)}
-                  className="studio-chip px-2.5 py-1 rounded-full border border-amber-500/30 text-[10px] text-amber-200/80 hover:border-amber-400 hover:text-amber-200 font-sans"
-                >
-                  {q}
+                  <Settings2 className="w-3.5 h-3.5" />
+                  <span>{modoEdicion ? 'Bloquear' : 'Editar'}</span>
                 </button>
-              ))}
-            </div>
-
-            {/* Input con micrófono */}
-            <form onSubmit={handleEnviarMensaje} className="flex items-center gap-2 pt-1">
-              <input
-                type="text"
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                placeholder={isListening ? 'Escuchando instrucción vocal...' : 'Escriba o active el micrófono para dictar instrucciones...'}
-                className={`flex-1 bg-slate-950 border rounded-xl px-3 py-2 text-white font-sans text-xs focus:outline-none transition-all ${
-                  isListening ? 'border-rose-500 ring-2 ring-rose-500/30 animate-pulse' : 'border-slate-700 focus:border-amber-400'
-                }`}
-              />
-
-              <button
-                type="button"
-                onClick={toggleListening}
-                title={isListening ? 'Detener dictado' : 'Hablar por micrófono'}
-                className={`p-2 rounded-xl border transition-all shrink-0 ${
-                  isListening 
-                    ? 'bg-rose-600 text-white border-rose-400 shadow-lg' 
-                    : 'bg-slate-900 border-slate-700 text-slate-300 hover:text-white'
-                }`}
-              >
-                {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-              </button>
-
-              <button
-                type="submit"
-                disabled={compilando || !prompt.trim()}
-                className="studio-send-btn px-4 py-2 bg-gradient-to-r from-amber-500 to-emerald-500 hover:opacity-90 text-slate-950 font-bold rounded-xl flex items-center gap-1.5 disabled:opacity-50 shrink-0 font-mono transition-all"
-              >
-                {compilando ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-                <span>{compilando ? 'Compilando...' : 'Transmitir'}</span>
-              </button>
-            </form>
-          </div>
-
-          {/* Barra de Destino y Despliegue */}
-          <div className="ultra-glass p-3 rounded-xl border border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              <input
-                type="text"
-                value={perfilNombre}
-                onChange={(e) => setPerfilNombre(e.target.value)}
-                className="bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-white font-bold text-xs focus:outline-none focus:border-cyan-400 w-full sm:w-64"
-              />
-              <span className="px-2 py-1 rounded bg-slate-900 border border-slate-800 text-amber-400 font-bold text-[10px]">
-                {tipoEquipo}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
-              <select
-                value={selectedMac}
-                onChange={(e) => setSelectedMac(e.target.value)}
-                className="bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-cyan-300 font-bold font-mono"
-              >
-                <option value="">-- Seleccionar Placa --</option>
-                {macList.map((m) => (
-                  <option key={m} value={m}>
-                    {fleet[m]?.meta?.alias || m} ({m.slice(-4)})
-                  </option>
-                ))}
-              </select>
-
-              <button
-                type="button"
-                onClick={handleDesplegarADispositivo}
-                disabled={transmitting || !selectedMac}
-                className="px-3.5 py-1.5 bg-gradient-to-r from-cyan-500 to-blue-600 hover:opacity-90 text-white font-bold rounded-lg flex items-center gap-1.5 shadow disabled:opacity-40"
-              >
-                <Send className="w-3.5 h-3.5" />
-                <span>{transmitting ? 'Enviando...' : 'Desplegar a Hardware'}</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Lienzo SCADA */}
-          <div className="ultra-glass p-4 rounded-2xl border border-slate-800 space-y-3">
-            <div className="flex justify-between items-center border-b border-slate-800 pb-2">
-              <span className="text-white font-bold flex items-center gap-2">
-                <LayoutGrid className="w-4 h-4 text-cyan-400" />
-                Lienzo de Controles SCADA ({widgets.length}):
-              </span>
-              <span className="text-[10px] text-amber-300 font-bold">
-                {timerEjecutando 
-                  ? `SECUENCIA EN EJECUCIÓN: ${timerEjecutando.segundosRestantes}s RESTANTES` 
-                  : modoEdicion 
-                  ? 'Arrastre la barra para posicionar y la esquina para redimensionar' 
-                  : 'Modo Control: Interacción en tiempo real'}
-              </span>
+              </div>
             </div>
 
             {widgets.length === 0 ? (
@@ -1112,81 +1091,12 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
               </div>
             )}
           </div>
-        </div>
-      )}
-
-      {/* TAB 2: HARDWARE I2C */}
-      {activeTab === 'HARDWARE_I2C' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 space-y-4">
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              <Building2 className="w-4 h-4 text-cyan-400" />
-              Provisión de Hardware
-            </h3>
-            <div>
-              <label className="text-slate-300 block mb-1">Dirección MAC de Destino:</label>
-              <input
-                type="text"
-                value={selectedMac}
-                onChange={(e) => setSelectedMac(e.target.value)}
-                className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-bold"
-              />
-            </div>
-            <button
-              type="button"
-              onClick={handleDesplegarADispositivo}
-              className="w-full py-3 bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-bold rounded-xl shadow"
-            >
-              APROVISIONAR Y GRABAR EN DISPOSITIVO
-            </button>
-          </div>
-
-          <div className="ultra-glass p-5 rounded-2xl border border-amber-500/30 space-y-4">
-            <div className="flex justify-between items-center border-b border-amber-500/20 pb-2">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <Cpu className="w-4 h-4 text-amber-400" />
-                Escáner I2C & Mapeo de Salidas
-              </h3>
-              <button
-                type="button"
-                onClick={() => {
-                  if (!cleanMac) return alert('Seleccione una placa.');
-                  setScanningI2C(true);
-                  if (sendCommand) sendCommand(cleanMac, { cmd: 'SCAN_HARDWARE' });
-                }}
-                disabled={scanningI2C}
-                className="py-1.5 px-3 bg-amber-500 text-slate-950 font-bold rounded-xl text-xs flex items-center gap-1.5"
-              >
-                <Search className={`w-3.5 h-3.5 ${scanningI2C ? 'animate-spin' : ''}`} />
-                <span>{scanningI2C ? 'Escaneando...' : 'Escanear I2C'}</span>
-              </button>
-            </div>
-            <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1">
-              {[1, 2, 3, 4, 5, 6, 7, 8].map((num) => {
-                const isRelayOn = Boolean(relesLocales[`R${num}`]);
-                return (
-                  <div key={num} className="p-2.5 bg-slate-950 rounded-lg border border-slate-800 space-y-1.5">
-                    <div className="flex justify-between items-center">
-                      <span className="text-white font-bold">Salida R{num}:</span>
-                      <button
-                        type="button"
-                        onClick={() => handleToggleRelayDirecto(num, isRelayOn)}
-                        className={`px-3 py-1 rounded text-[10px] font-bold ${
-                          isRelayOn ? 'bg-emerald-500 text-slate-950' : 'bg-slate-800 text-slate-300'
-                        }`}
-                      >
-                        {isRelayOn ? 'ENERGIZADO (ON)' : 'DESACTIVADO (OFF)'}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
             </div>
           </div>
         </div>
       )}
 
-      {/* TAB 3: BIBLIOTECA NUBE */}
+      {/* TAB 2: BIBLIOTECA NUBE */}
       {activeTab === 'BIBLIOTECA' && (
         <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 space-y-4">
           <div className="flex justify-between items-center border-b border-cyan-500/20 pb-3">
