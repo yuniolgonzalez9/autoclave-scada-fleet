@@ -115,9 +115,9 @@ export async function conversarYCompilarConIA({
       let bodyData = {};
       let headers = { 'Content-Type': 'application/json' };
 
-      if (prov === 'GEMINI') {
-        // Google AI Studio API (gratuita / estándar para modelos Gemini)
-        model = 'gemini-1.5-flash';
+            if (prov === 'GEMINI') {
+        // Google AI Studio API (modelo gemini-2.5-flash / gemini-3.5-flash)
+        model = 'gemini-3.5-flash';
         endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${item.api_key.trim()}`;
         
         // Formato Gemini contents / systemInstruction
@@ -226,15 +226,15 @@ export async function mejorarTextoConIA(texto, contexto = '') {
     OPENAI: ['https://api.openai.com/v1/chat/completions', 'gpt-4o-mini'],
     OPENROUTER: ['https://openrouter.ai/api/v1/chat/completions', 'meta-llama/llama-3.3-70b-instruct'],
     GROQ: ['https://api.groq.com/openai/v1/chat/completions', 'llama-3.3-70b-versatile'],
-    GEMINI: ['', 'gemini-1.5-flash']
+    GEMINI: ['', 'gemini-3.5-flash']
   };
   let lastError = null;
   for (const item of pool) {
     const prov = (item.proveedor || detectarProveedorApiKey(item.api_key)).toUpperCase();
     try {
       let res;
-      if (prov === 'GEMINI') {
-        const model = 'gemini-1.5-flash';
+            if (prov === 'GEMINI') {
+        const model = 'gemini-3.5-flash';
         const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${item.api_key.trim()}`;
         res = await fetch(endpoint, {
           method: 'POST',
