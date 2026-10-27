@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { conversarYCompilarConIA, detectarProveedorApiKey } from '../../services/aiCompiler';
+import { conversarYCompilarConIA, detectarProveedorApiKey } from '../../services/aiStudioService';
 import { supabase } from '../../services/supabase';
 import { 
   Sparkles, 

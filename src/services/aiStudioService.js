@@ -58,10 +58,11 @@ function sanitizarJson(textoCrudo) {
 
 export function detectarProveedorApiKey(key = '') {
   const k = (key || '').trim();
+  if (k.startsWith('AIza')) return 'GEMINI';
   if (k.startsWith('gsk_')) return 'GROQ';
   if (k.startsWith('sk-or-')) return 'OPENROUTER';
   if (k.startsWith('sk-')) return 'OPENAI';
-  return 'GROQ';
+  return 'GEMINI';
 }
 
 export async function conversarYCompilarConIA({ 
@@ -106,37 +107,84 @@ export async function conversarYCompilarConIA({
 
   let ultimoError = null;
 
-  for (const item of poolClaves) {
+    for (const item of poolClaves) {
     try {
       const prov = (item.proveedor || detectarProveedorApiKey(item.api_key)).toUpperCase();
-      let endpoint = 'https://api.groq.com/openai/v1/chat/completions';
-      let model = 'llama-3.3-70b-versatile';
+      let endpoint = '';
+      let model = '';
+      let bodyData = {};
+      let headers = { 'Content-Type': 'application/json' };
 
-      if (prov === 'OPENAI') {
-        endpoint = 'https://api.openai.com/v1/chat/completions';
-        model = 'gpt-4o-mini';
-      } else if (prov === 'OPENROUTER') {
-        endpoint = 'https://openrouter.ai/api/v1/chat/completions';
-        model = 'meta-llama/llama-3.3-70b-instruct';
-      }
+      if (prov === 'GEMINI') {
+        // Google AI Studio API (gratuita / estándar para modelos Gemini)
+        model = 'gemini-1.5-flash';
+        endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${item.api_key.trim()}`;
+        
+        // Formato Gemini contents / systemInstruction
+        const contents = [];
+        // Añadir instrucción de sistema como systemInstruction o primer mensaje
+        contents.push({
+          role: 'user',
+          parts: [{ text: `${SYSTEM_PROMPT_AUTORIDAD_TOTAL}\n\nCONTEXTO ACTUAL:\n${JSON.stringify({ hardwareInfo, widgetsActuales, recetaActual, telemetriaActual })}` }]
+        });
 
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${item.api_key}`
-        },
-        body: JSON.stringify({
+        for (const h of historial) {
+          contents.push({
+            role: h.sender === 'user' ? 'user' : 'model',
+            parts: [{ text: typeof h.contenido === 'string' ? h.contenido : JSON.stringify(h.contenido) }]
+          });
+        }
+
+        contents.push({
+          role: 'user',
+          parts: [{ text: p }]
+        });
+
+        bodyData = {
+          contents,
+          generationConfig: {
+            temperature: 0.1,
+            responseMimeType: 'application/json'
+          }
+        };
+      } else {
+        // OpenAI / Groq / OpenRouter OpenAI-compatible
+        endpoint = 'https://api.groq.com/openai/v1/chat/completions';
+        model = 'llama-3.3-70b-versatile';
+
+        if (prov === 'OPENAI') {
+          endpoint = 'https://api.openai.com/v1/chat/completions';
+          model = 'gpt-4o-mini';
+        } else if (prov === 'OPENROUTER') {
+          endpoint = 'https://openrouter.ai/api/v1/chat/completions';
+          model = 'meta-llama/llama-3.3-70b-instruct';
+        }
+
+        headers['Authorization'] = `Bearer ${item.api_key}`;
+        bodyData = {
           model,
           messages,
           response_format: { type: 'json_object' },
           temperature: 0.1
-        })
+        };
+      }
+
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(bodyData)
       });
 
       if (res.ok) {
         const json = await res.json();
-        const parseado = sanitizarJson(json?.choices?.[0]?.message?.content);
+        let textoRespuesta = '';
+        if (prov === 'GEMINI') {
+          textoRespuesta = json?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        } else {
+          textoRespuesta = json?.choices?.[0]?.message?.content || '';
+        }
+
+        const parseado = sanitizarJson(textoRespuesta);
         if (parseado) {
           return {
             exito: true,
@@ -149,6 +197,9 @@ export async function conversarYCompilarConIA({
             dashboardWidgets: parseado.dashboard || widgetsActuales
           };
         }
+      } else {
+        const errText = await res.text();
+        ultimoError = `HTTP ${res.status}: ${errText}`;
       }
     } catch (err) {
       ultimoError = err.message;
@@ -171,34 +222,58 @@ export async function mejorarTextoConIA(texto, contexto = '') {
   if (!pool.length) throw new Error('No hay claves de IA activas.');
 
   const system = 'Eres un editor técnico de mantenimiento biomédico. Corrige ortografía, acentos y redacción en español neutro, ordena el contenido en frases claras o viñetas (•) y usa terminología técnica correcta. No inventes datos, valores ni acciones que no estén en el texto. Devuelve solo el texto corregido.';
-  const endpoints = {
+    const endpoints = {
     OPENAI: ['https://api.openai.com/v1/chat/completions', 'gpt-4o-mini'],
     OPENROUTER: ['https://openrouter.ai/api/v1/chat/completions', 'meta-llama/llama-3.3-70b-instruct'],
-    GROQ: ['https://api.groq.com/openai/v1/chat/completions', 'llama-3.3-70b-versatile']
+    GROQ: ['https://api.groq.com/openai/v1/chat/completions', 'llama-3.3-70b-versatile'],
+    GEMINI: ['', 'gemini-1.5-flash']
   };
   let lastError = null;
   for (const item of pool) {
     const prov = (item.proveedor || detectarProveedorApiKey(item.api_key)).toUpperCase();
-    const [endpoint, model] = endpoints[prov] || endpoints.GROQ;
     try {
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${item.api_key}` },
-        body: JSON.stringify({
-          model,
-          temperature: 0.2,
-          messages: [
-            { role: 'system', content: system },
-            { role: 'user', content: `${contexto ? `Campo: ${contexto}\n` : ''}Texto:\n${t}` }
-          ]
-        })
-      });
-      if (res.ok) {
-        const json = await res.json();
-        const out = json?.choices?.[0]?.message?.content?.trim();
-        if (out) return out;
+      let res;
+      if (prov === 'GEMINI') {
+        const model = 'gemini-1.5-flash';
+        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${item.api_key.trim()}`;
+        res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [
+              { role: 'user', parts: [{ text: `${system}\n\n${contexto ? `Campo: ${contexto}\n` : ''}Texto:\n${t}` }] }
+            ],
+            generationConfig: { temperature: 0.2 }
+          })
+        });
+        if (res.ok) {
+          const json = await res.json();
+          const out = json?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+          if (out) return out;
+        } else {
+          lastError = `HTTP ${res.status}`;
+        }
       } else {
-        lastError = `HTTP ${res.status}`;
+        const [endpoint, model] = endpoints[prov] || endpoints.GROQ;
+        res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${item.api_key}` },
+          body: JSON.stringify({
+            model,
+            temperature: 0.2,
+            messages: [
+              { role: 'system', content: system },
+              { role: 'user', content: `${contexto ? `Campo: ${contexto}\n` : ''}Texto:\n${t}` }
+            ]
+          })
+        });
+        if (res.ok) {
+          const json = await res.json();
+          const out = json?.choices?.[0]?.message?.content?.trim();
+          if (out) return out;
+        } else {
+          lastError = `HTTP ${res.status}`;
+        }
       }
     } catch (e) {
       lastError = e.message;
