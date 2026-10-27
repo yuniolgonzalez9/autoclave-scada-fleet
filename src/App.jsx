@@ -365,7 +365,9 @@ function ScadaAppContent() {
     const macKeys = Object.keys(fleet);
     if (isAdmin) return macKeys.map((k) => fleet[k]).filter(Boolean);
 
-    const userHospital = (profile?.departamento || '').toLowerCase().trim();
+    // Cierre estricto por usuario: solo equipos asignados explícitamente.
+    // (1) MAC listada en equipos_autorizados del perfil, o
+    // (2) equipo con usuario_asignado == su username.
     const currentUsername = (profile?.user || profile?.usuario || user?.email || '').toLowerCase().trim();
     const userAuthMacs = (profile?.equipos_autorizados || '').toUpperCase().split(',').map((x) => x.trim()).filter(Boolean);
 
@@ -375,10 +377,7 @@ function ScadaAppContent() {
         if (!dev) return false;
         if (userAuthMacs.includes(dev.mac)) return true;
         const devAssignedUser = (dev?.meta?.usuario_asignado || '').toLowerCase().trim();
-        if (devAssignedUser && devAssignedUser === currentUsername) return true;
-        const devHospital = (dev?.meta?.cliente || '').toLowerCase().trim();
-        if (userHospital && devHospital && (devHospital.includes(userHospital) || userHospital.includes(devHospital))) return true;
-        return false;
+        return Boolean(devAssignedUser && devAssignedUser === currentUsername);
       });
   }, [fleet, isAdmin, profile, user]);
 
