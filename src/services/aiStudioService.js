@@ -22,12 +22,22 @@ ACCIONES DISPONIBLES en "accion_propuesta":
 - "NINGUNA": para consultas que no requieren acción física
 Si "mac" se omite, la acción aplica al equipo seleccionado en la consola.
 
-DIALECTO DEL FIRMWARE v10.0 (lo que la placa HKL-EA8 realmente entiende vía COMANDO_MQTT):
+DIALECTO DEL FIRMWARE v10.1 (lo que la placa HKL-EA8 realmente entiende vía COMANDO_MQTT):
 - {"cmd":"INICIAR_CICLO","programa":1-6} → P1 instrumental 134C/4min, P2 gomas 121C/15min, P3 prion 134C/18min, P4 líquidos 121C/5min, P5 test rápido, P6 test ultrarrápido de banco
 - {"cmd":"ABORTAR_PROCESO"} → paro de emergencia (emite reporte de ciclo anulado)
 - {"cmd":"RESET_ALARMA"} → vuelta a espera, temperatura/presión a cero
 - {"cmd":"SET_RELAY","canal":1-8,"val":true|false,"duracion_ms":OPCIONAL} → pulso con auto-apagado si hay duracion_ms
-- {"cmd":"SET_BYPASS","puerta":b,"sello":b,"recamara":b,"caldera":b} → bypasses de switches del banco
+- {"cmd":"SET_BYPASS","puerta":b,"sello":b,"recamara":b,"caldera":b,"nivel_agua":b} → bypasses de switches del banco
+- {"cmd":"SCAN_HARDWARE"} → escaneo físico del bus I2C, la placa publica i2c_report
+- {"cmd":"CMD_ABRIR_PUERTA"} → libera sello/alivio SOLO en reposo y sin presión (enclavado)
+- {"cmd":"CMD_CIERRE_PUERTA"} → activa sello de puerta en reposo
+- {"cmd":"SET_CONFIG","cfg":{"lim_mant":n,"alerta_pct":n,"programa":1-6,"sp_temp":121-140}} → config persistente
+- {"cmd":"RESET_ODOMETRO"} → reinicia contador de ciclos completados
+- {"cmd":"APPLY_HAL_MAP","roles_reles":{...},"tipo":"..."} → remapea roles de relés en caliente
+- {"cmd":"APPLY_LOGICA_SECUENCIA","receta":{...}} → receta clínica persistente en LittleFS
+- {"cmd":"APPLY_HARDWARE_PROVISION","provision":{"alias":"...","cliente":"...","modelo":"...","tipo":"..."}} → identidad del equipo
+- {"cmd":"PING"} → fuerza telemetría + meta + hw_profile inmediatos
+- {"cmd":"TRIGGER_FOTA","url":"https://..."} → OTA firmware remoto (solo en reposo)
 Relés: R1 sello de cierre, R2 válvula succión, R3 alivio sello, R4 bomba de agua, R5 resistencias, R6 vacío, R7 secado/desfogue, R8 esterilizar.
 
 PUEDES CREAR CUALQUIER TIPO DE WIDGET en el campo "dashboard" según los requerimientos del usuario. Cada widget en "dashboard" debe tener un objeto JSON con las siguientes propiedades:

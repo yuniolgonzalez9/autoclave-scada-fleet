@@ -21,3 +21,7 @@ supabase/.temp/
 .vite/
 e2e-shots/
 .tmp-shots/
+
+# Firmware — credenciales locales de la placa (copiar desde secrets.example.h)
+**/secrets.h
+firmware/**/build/
