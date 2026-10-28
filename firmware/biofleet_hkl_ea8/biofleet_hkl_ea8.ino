@@ -36,6 +36,8 @@
 #include <Update.h>
 #include "esp_task_wdt.h"
 #include <esp_arduino_version.h>
+#include <esp_event.h>
+#include <esp_eth.h>
 #include "time.h"
 
 // -----------------------------------------------------------------------------
@@ -724,10 +726,18 @@ void TaskFota(void* p) {
 // =============================================================================
 // RED
 // =============================================================================
-// Nombres de eventos: core 2.x usa ARDUINO_EVENT_*, cores viejos SYSTEM_EVENT_*
-#ifndef ARDUINO_EVENT_ETH_GOT_IP
-  #define ARDUINO_EVENT_ETH_GOT_IP       SYSTEM_EVENT_ETH_GOT_IP
-  #define ARDUINO_EVENT_ETH_DISCONNECTED SYSTEM_EVENT_ETH_DISCONNECTED
+// Nombres de eventos según el core ESP32:
+//  - core 2.x/3.x : ARDUINO_EVENT_ETH_*   (ya definidos, nada que hacer)
+//  - cores viejos : SYSTEM_EVENT_ETH_*    (los mapeamos)
+//  - core 4.x+    : solo existen los enums IDF IP_EVENT_* / ETHERNET_EVENT_*
+#if !defined(ARDUINO_EVENT_ETH_GOT_IP)
+  #if defined(SYSTEM_EVENT_ETH_GOT_IP)
+    #define ARDUINO_EVENT_ETH_GOT_IP       SYSTEM_EVENT_ETH_GOT_IP
+    #define ARDUINO_EVENT_ETH_DISCONNECTED SYSTEM_EVENT_ETH_DISCONNECTED
+  #else
+    #define ARDUINO_EVENT_ETH_GOT_IP       IP_EVENT_ETH_GOT_IP
+    #define ARDUINO_EVENT_ETH_DISCONNECTED ETHERNET_EVENT_DISCONNECTED
+  #endif
 #endif
 
 void onWiFiEvent(WiFiEvent_t event) {
