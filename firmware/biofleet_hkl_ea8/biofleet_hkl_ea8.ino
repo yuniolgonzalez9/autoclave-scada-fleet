@@ -746,6 +746,17 @@ void onWiFiEvent(WiFiEvent_t event) {
 
 void actualizarEstadoRed() {
   bool linkOk = ETH.linkUp() && (ETH.localIP() != IPAddress(0, 0, 0, 0));
+
+  // Diagnóstico mientras no haya red: cada 4s dice si el fallo es de
+  // enlace físico (cable/PHY) o de IP (DHCP)
+  static unsigned long lastDiag = 0;
+  if (!linkOk && millis() - lastDiag >= 4000) {
+    lastDiag = millis();
+    Serial.printf("⏳ [ETH] link=%s | ip=%s\n",
+                  ETH.linkUp() ? "UP" : "DOWN",
+                  ETH.localIP().toString().c_str());
+  }
+
   if (linkOk && !ethConnected) {
     ethConnected = true;
     if (!ntpConfigured) {
@@ -1249,7 +1260,9 @@ void setup() {
   // Orden de pines idéntico al v10.0: (type, addr, mdc, mdio, power, clk)
   // Verificado en ETH.h del core 4.0.0-alpha1 instalado — coincide con 2.x.
   WiFi.onEvent(onWiFiEvent);
-  ETH.begin(ETH_PHY_TYPE, ETH_PHY_ADDR, ETH_PHY_MDC, ETH_PHY_MDIO, ETH_PHY_POWER, ETH_CLK_MODE);
+  bool ethOk = ETH.begin(ETH_PHY_TYPE, ETH_PHY_ADDR, ETH_PHY_MDC, ETH_PHY_MDIO, ETH_PHY_POWER, ETH_CLK_MODE);
+  Serial.printf("🔌 [ETH] begin() -> %s (PHY LAN8720 addr=%d MDC=%d MDIO=%d PWR=%d CLK=GPIO17_OUT)\n",
+                ethOk ? "OK" : "FALLO", ETH_PHY_ADDR, ETH_PHY_MDC, ETH_PHY_MDIO, ETH_PHY_POWER);
 
   delay(200);
   macId = ETH.macAddress();
