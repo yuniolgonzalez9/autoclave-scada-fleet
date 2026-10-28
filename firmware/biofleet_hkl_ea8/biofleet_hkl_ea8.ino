@@ -726,26 +726,23 @@ void TaskFota(void* p) {
 // =============================================================================
 // RED
 // =============================================================================
-// Nombres de eventos según el core ESP32:
-//  - core 2.x/3.x : ARDUINO_EVENT_ETH_*   (ya definidos, nada que hacer)
-//  - cores viejos : SYSTEM_EVENT_ETH_*    (los mapeamos)
-//  - core 4.x+    : solo existen los enums IDF IP_EVENT_* / ETHERNET_EVENT_*
-#if !defined(ARDUINO_EVENT_ETH_GOT_IP)
-  #if defined(SYSTEM_EVENT_ETH_GOT_IP)
-    #define ARDUINO_EVENT_ETH_GOT_IP       SYSTEM_EVENT_ETH_GOT_IP
-    #define ARDUINO_EVENT_ETH_DISCONNECTED SYSTEM_EVENT_ETH_DISCONNECTED
-  #else
-    #define ARDUINO_EVENT_ETH_GOT_IP       IP_EVENT_ETH_GOT_IP
-    #define ARDUINO_EVENT_ETH_DISCONNECTED ETHERNET_EVENT_DISCONNECTED
-  #endif
-#endif
+// Estado de red: NO usamos WiFi.onEvent porque los nombres/valores de los
+// eventos ETH cambian entre cores (2.x/3.x/4.x). En su lugar el Core 0
+// sondea ETH.linkUp() + ETH.localIP() — funciona en todos los cores.
+static bool ntpConfigured = false;
 
-void onWiFiEvent(WiFiEvent_t event) {
-  if (event == ARDUINO_EVENT_ETH_GOT_IP) {
+void actualizarEstadoRed() {
+  bool linkOk = ETH.linkUp() && (ETH.localIP() != IPAddress(0, 0, 0, 0));
+  if (linkOk && !ethConnected) {
     ethConnected = true;
-    configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
-  } else if (event == ARDUINO_EVENT_ETH_DISCONNECTED) {
+    if (!ntpConfigured) {
+      ntpConfigured = true;
+      configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+    }
+    Serial.printf("🌐 [ETH] Enlace activo. IP: %s\n", ETH.localIP().toString().c_str());
+  } else if (!linkOk && ethConnected) {
     ethConnected = false;
+    Serial.println("🌐 [ETH] Enlace perdido.");
   }
 }
 
@@ -786,6 +783,7 @@ void TaskCore0_Comms(void* p) {
   unsigned long lastTelemetryMillis = 0;
 
   for (;;) {
+    actualizarEstadoRed();
     if (ethConnected) {
       if (!mqtt.connected()) reconectarMQTT();
       if (mqtt.connected() && xSemaphoreTake(xMutexMqtt, pdMS_TO_TICKS(50)) == pdTRUE) {
@@ -1235,12 +1233,11 @@ void setup() {
   xMutexSnap = xSemaphoreCreateMutex();
   xMutexMqtt = xSemaphoreCreateMutex();
 
-  WiFi.onEvent(onWiFiEvent);
-#if ESP_ARDUINO_VERSION_MAJOR >= 3
-  // Core 3.x: ETH.begin(type, addr, power, mdc, mdio, clk)
+  // ETH.begin: el orden (type, addr, mdc, mdio, power, clk) es el del core
+  // 2.x y 4.x (verificado en ETH.h de 4.0.0-alpha1). Solo el 3.x lo invirtió.
+#if ESP_ARDUINO_VERSION_MAJOR == 3
   ETH.begin(ETH_PHY_TYPE, ETH_PHY_ADDR, ETH_PHY_POWER, ETH_PHY_MDC, ETH_PHY_MDIO, ETH_CLK_MODE);
 #else
-  // Core 2.x: ETH.begin(type, addr, mdc, mdio, power, clk)
   ETH.begin(ETH_PHY_TYPE, ETH_PHY_ADDR, ETH_PHY_MDC, ETH_PHY_MDIO, ETH_PHY_POWER, ETH_CLK_MODE);
 #endif
 
