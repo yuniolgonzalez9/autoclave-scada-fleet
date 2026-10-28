@@ -1247,7 +1247,16 @@ void setup() {
   mqtt.setServer(mqttServer, mqttPort);
   mqtt.setCallback(mqttCallback);
 
-  esp_task_wdt_init(WDT_TIMEOUT_S, true);
+  // Watchdog: IDF 5.x usa esp_task_wdt_config_t; si el core Arduino ya lo
+  // inicializó, se reconfigura en su lugar
+  esp_task_wdt_config_t wdtCfg = {
+    .timeout_ms = WDT_TIMEOUT_S * 1000,
+    .idle_core_mask = 0,
+    .trigger_panic = true
+  };
+  if (esp_task_wdt_init(&wdtCfg) == ESP_ERR_INVALID_STATE) {
+    esp_task_wdt_reconfigure(&wdtCfg);
+  }
 
   xTaskCreatePinnedToCore(TaskCore1_PLC, "TaskCore1_PLC", 8192, NULL, 5, NULL, 1);
   xTaskCreatePinnedToCore(TaskCore0_Comms, "TaskCore0_Comms", 8192, NULL, 2, NULL, 0);
