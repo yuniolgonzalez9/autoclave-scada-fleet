@@ -726,10 +726,23 @@ void TaskFota(void* p) {
 // =============================================================================
 // RED
 // =============================================================================
-// Estado de red: NO usamos WiFi.onEvent porque los nombres/valores de los
-// eventos ETH cambian entre cores (2.x/3.x/4.x). En su lugar el Core 0
-// sondea ETH.linkUp() + ETH.localIP() — funciona en todos los cores.
+// Detección de red — DOBLE mecanismo como seguridad:
+//  a) Eventos ETH (igual que el v10.0 original — ARDUINO_EVENT_ETH_* son
+//     enums definidos en NetworkEvents.h y sí llegan por WiFi.h)
+//  b) Sondeo ETH.linkUp() + localIP() en Core 0 por si el evento no dispara
 static bool ntpConfigured = false;
+
+void onWiFiEvent(WiFiEvent_t event) {
+  if (event == ARDUINO_EVENT_ETH_GOT_IP) {
+    ethConnected = true;
+    if (!ntpConfigured) {
+      ntpConfigured = true;
+      configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+    }
+  } else if (event == ARDUINO_EVENT_ETH_DISCONNECTED) {
+    ethConnected = false;
+  }
+}
 
 void actualizarEstadoRed() {
   bool linkOk = ETH.linkUp() && (ETH.localIP() != IPAddress(0, 0, 0, 0));
@@ -1233,13 +1246,10 @@ void setup() {
   xMutexSnap = xSemaphoreCreateMutex();
   xMutexMqtt = xSemaphoreCreateMutex();
 
-  // ETH.begin: el orden (type, addr, mdc, mdio, power, clk) es el del core
-  // 2.x y 4.x (verificado en ETH.h de 4.0.0-alpha1). Solo el 3.x lo invirtió.
-#if ESP_ARDUINO_VERSION_MAJOR == 3
-  ETH.begin(ETH_PHY_TYPE, ETH_PHY_ADDR, ETH_PHY_POWER, ETH_PHY_MDC, ETH_PHY_MDIO, ETH_CLK_MODE);
-#else
+  // Orden de pines idéntico al v10.0: (type, addr, mdc, mdio, power, clk)
+  // Verificado en ETH.h del core 4.0.0-alpha1 instalado — coincide con 2.x.
+  WiFi.onEvent(onWiFiEvent);
   ETH.begin(ETH_PHY_TYPE, ETH_PHY_ADDR, ETH_PHY_MDC, ETH_PHY_MDIO, ETH_PHY_POWER, ETH_CLK_MODE);
-#endif
 
   delay(200);
   macId = ETH.macAddress();
