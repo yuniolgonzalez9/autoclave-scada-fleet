@@ -1,25 +1,29 @@
 /*
  * =========================================================================================
  * PROYECTO: BIOFLEET OS™ v2.0 ENTERPRISE
- * CONTROLADOR MAESTRO HKL-EA8 - FIRMWARE v10.1 MOTOR CLÍNICO + PROTOCOLO WEB COMPLETO
+ * CONTROLADOR MAESTRO HKL-EA8 - FIRMWARE v11.0 (basado en prueba_clientge_servidor v10.0)
  *
  * CORE 0: ETHERNET LAN8720 + HIVEMQ TLS 8883 + TELEMETRÍA (800ms) + REPORTES MÉDICOS + FOTA
  * CORE 1: AUTÓMATA CLÍNICO (P1..P6) + BYPASSES + RELÉS I2C (0x24) + LCD + SCAN BUS I2C
  *
- * NOVEDADES v10.1 (contrato total con la web):
- *  - SCAN_HARDWARE: escaneo real del bus I2C → publica i2c_report
- *  - APPLY_HAL_MAP: remapea roles de relés en caliente + persiste en LittleFS
- *  - APPLY_LOGICA_SECUENCIA: receta clínica persistente + ack en logica/ack
- *  - APPLY_HARDWARE_PROVISION: alias/cliente/modelo → publica meta + hw_profile
- *  - SET_CONFIG / SET_ALERTA_MANT: configuración persistente (Preferences)
+ * IGUAL AL ORIGINAL: pines, inicialización Ethernet (WiFi.onEvent + ETH.begin),
+ * autómata clínico, PCF8574, LCD, credenciales. El original NO fue modificado.
+ *
+ * NUEVO vs v10.0 (contrato total con la web):
+ *  - SCAN_HARDWARE: escaneo real del bus I2C → publica i2c_report + hardware_scan
+ *  - APPLY_HAL_MAP: remapea roles de relés en caliente + LittleFS + logica/ack
+ *  - APPLY_LOGICA_SECUENCIA: receta persistente en /logica.json + ack
+ *  - APPLY_HARDWARE_PROVISION: alias/cliente/modelo → meta + hw_profile
+ *  - SET_CONFIG / SET_ALERTA_MANT: lim_mant, alerta_pct, programa, sp_temp → NVS
  *  - RESET_ODOMETRO: reinicio protegido del contador de ciclos
- *  - CMD_ABRIR_PUERTA / CMD_CIERRE_PUERTA: control manual enclavado del sello
- *  - PING: fuerza publicación de telemetría + meta + hw_profile
- *  - TRIGGER_FOTA / FOTA_DEPLOY: OTA por HTTP(s) solo en estado REPOSO
- *  - alerta_critica: publicación inmediata ante alarma
- *  - esquema: descriptor de capacidades publicado en arranque (widgets auto)
- *  - Credenciales en secrets.h (fuera del repo) + CA validable
- *  - Watchdog real en Core 1 + persistencia de contadores en flash
+ *  - CMD_ABRIR_PUERTA / CMD_CIERRE_PUERTA: control manual enclavado
+ *  - PING: telemetría + meta + perfil inmediatos
+ *  - TRIGGER_FOTA / FOTA_DEPLOY: OTA por HTTP solo en REPOSO → fota_status
+ *  - alerta_critica: publicación inmediata ante alarma nueva
+ *  - esquema/meta/hw_profile retained al conectar (la web descubre la placa)
+ *  - Persistencia NVS: ciclos, mantenimiento, bypasses, identidad
+ *  - Mutex MQTT dual-core + watchdog real en Core 1
+ *  - Diagnóstico de red en serial: ETH.begin() retorno + link/IP cada 4s
  * =========================================================================================
  */
 
@@ -35,27 +39,9 @@
 #include <HTTPClient.h>
 #include <Update.h>
 #include "esp_task_wdt.h"
-#include <esp_arduino_version.h>
-#include <esp_event.h>
-#include <esp_eth.h>
 #include "time.h"
 
-// -----------------------------------------------------------------------------
-// CREDENCIALES — viven en secrets.h (mismo directorio, excluido por .gitignore)
-// Copia secrets.example.h → secrets.h con tus valores reales.
-// -----------------------------------------------------------------------------
-#if __has_include("secrets.h")
-  #include "secrets.h"
-#else
-  #warning "secrets.h no encontrado — usando placeholders. La placa NO conectará."
-  #define MQTT_SERVER "CHANGE_ME.hivemq.cloud"
-  #define MQTT_PORT   8883
-  #define MQTT_USER   "CHANGE_ME"
-  #define MQTT_PASS   "CHANGE_ME"
-  #define HIVEMQ_ROOT_CA ""
-#endif
-
-#define SYS_VERSION "v10.1-TOTAL-WEB"
+#define SYS_VERSION "v11.0-TOTAL-WEB"
 #define WDT_TIMEOUT_S 8
 
 // Pines HKL-EA8
@@ -64,7 +50,7 @@
 #define PIN_BUZZER         12
 #define PIN_ONEWIRE        15
 
-// Ethernet LAN8720
+// Ethernet LAN8720 — IDÉNTICO AL ORIGINAL
 #define ETH_PHY_TYPE       ETH_PHY_LAN8720
 #define ETH_PHY_ADDR       0
 #define ETH_PHY_MDC        23
@@ -72,10 +58,19 @@
 #define ETH_PHY_POWER      -1
 #define ETH_CLK_MODE       ETH_CLOCK_GPIO17_OUT
 
-const char* mqttServer = MQTT_SERVER;
-const int   mqttPort   = MQTT_PORT;
-const char* mqttUser   = MQTT_USER;
-const char* mqttPass   = MQTT_PASS;
+// Credenciales HiveMQ — locales en secrets.h (gitignored), NUNCA en el repo
+#if __has_include("secrets.h")
+  #include "secrets.h"
+#else
+  #define MQTT_SERVER "CHANGE_ME.hivemq.cloud"
+  #define MQTT_PORT 8883
+  #define MQTT_USER "CHANGE_ME"
+  #define MQTT_PASS "CHANGE_ME"
+#endif
+const char* mqttServer  = MQTT_SERVER;
+const int   mqttPort    = MQTT_PORT;
+const char* mqttUser    = MQTT_USER;
+const char* mqttPass    = MQTT_PASS;
 
 const char* ntpServer   = "pool.ntp.org";
 const long  gmtOffset_sec = -14400; // GMT-4 AST
@@ -100,7 +95,7 @@ enum EstadoCiclo : uint8_t {
   PROC_CANCELADO = 8
 };
 
-// Asignación de Relés (PCF8574 en 0x24) — remapeable por APPLY_HAL_MAP
+// Asignación de Relés (PCF8574 en 0x24)
 uint8_t pinOutSelloCierre    = 0; // R1
 uint8_t pinOutValvSuccion    = 1; // R2
 uint8_t pinOutAlivioSello    = 2; // R3
@@ -118,21 +113,21 @@ uint8_t pinInCaldera   = 3;
 uint8_t pinInNivelBajo = 4;
 uint8_t pinInNivelAlto = 5;
 
-// BYPASSES DE BANCO DE PRUEBAS (persisten en flash)
+// BYPASSES DE BANCO DE PRUEBAS
 bool bypassSwPuerta    = true;
 bool bypassSwSello     = true;
 bool bypassSwChamber   = true;
 bool bypassSwCaldera   = true;
 bool bypassSwNivelAgua = true;
 
-// Tiempos de los 6 Programas Clínicos (Esterilizar, Secado, Vacío, Desfogue en min)
+// Tiempos de los 6 Programas Clínicos (Esterilizar, Secado, Vacío, Desfogue en minutos)
 float tiemposProcesos[6][4] = {
   { 4.0f,  3.0f, 1.0f, 1.0f }, // P1: 134°C Instrumental
   { 15.0f, 5.0f, 1.0f, 1.0f }, // P2: 121°C Gomas
   { 18.0f, 5.0f, 1.0f, 1.0f }, // P3: 134°C Prion
   { 5.0f,  5.0f, 1.0f, 1.0f }, // P4: Líquidos
   { 10.0f, 4.0f, 1.0f, 1.0f }, // P5: Test Rápido
-  { 1.0f,  1.0f, 0.5f, 0.5f }  // P6: Test Ultrarrápido de Banco
+  { 1.0f,  1.0f, 0.5f, 0.5f }  // P6: Test Ultrarrápido de Banco (1 min meseta)
 };
 
 int programaSeleccionado = 1;
@@ -150,7 +145,7 @@ int alertaMantPct = 80;
 int alarmaCodigo = 0;
 char alarmaMensaje[48] = "NORMAL";
 
-// Identidad provisionada (APPLY_HARDWARE_PROVISION)
+// Identidad provisionada
 char cfgAlias[48]   = "Autoclave Quirurgico";
 char cfgCliente[48] = "Central Hospitalaria";
 char cfgModelo[48]  = "Clase B HKL-EA8";
@@ -161,16 +156,14 @@ unsigned long tInicioFase = 0;
 unsigned long tUltimoSegundoF0 = 0;
 String horaInicioCiclo = "00:00:00";
 
-// Bitácora de eventos del ciclo (para reporte enriquecido)
+// Bitácora de eventos del ciclo
 struct EventoCiclo { char fase[20]; uint32_t seg; };
 EventoCiclo eventosCiclo[16];
 int nEventosCiclo = 0;
 
-// Solicitud FOTA pendiente (la ejecuta su propia tarea en Core 0)
+// FOTA pendiente (corre en tarea dedicada Core 0)
 static String fotaUrlPendiente = "";
 static volatile bool fotaEnCurso = false;
-
-// PING: fuerza la siguiente telemetría lo antes posible
 static volatile bool forceTelemetryFlag = false;
 
 struct PLCCommand { char payload[2048]; };
@@ -194,7 +187,7 @@ static char txMqttBuffer[2048];
 
 QueueHandle_t     xQueuePLC;
 SemaphoreHandle_t xMutexSnap;
-SemaphoreHandle_t xMutexMqtt;   // serializa publish/loop entre Core 0 y Core 1
+SemaphoreHandle_t xMutexMqtt;   // serializa publish/connect/loop entre cores
 PLCSnapshot       globalSnap;
 
 WiFiClientSecure ethSecureClient;
@@ -203,22 +196,23 @@ Preferences      prefs;
 LiquidCrystal_I2C* lcdClinic = nullptr;
 
 static bool ethConnected = false;
+static bool ntpConfigured = false;
 String macId = "";
 String topicTelemetria = "";
 String topicComando    = "";
 String topicReporte    = "";
 String topicInventory  = "";
 String topicI2CReport  = "";
+String topicHwScan     = "";
 String topicMeta       = "";
 String topicHwProfile  = "";
 String topicLogicaAck  = "";
 String topicEsquema    = "";
 String topicAlerta     = "";
 String topicFotaStatus = "";
-String topicHwScan     = "";
 
 // =============================================================================
-// PERSISTENCIA (Preferences / NVS)
+// PERSISTENCIA (NVS)
 // =============================================================================
 void guardarPersistencia() {
   prefs.begin("biofleet", false);
@@ -240,9 +234,9 @@ void guardarPersistencia() {
 
 void cargarPersistencia() {
   prefs.begin("biofleet", true);
-  ciclosCompletados   = prefs.getInt("ciclos", 0);
-  limiteMantenimiento = prefs.getInt("lim_mant", 300);
-  alertaMantPct       = prefs.getInt("alerta_pct", 80);
+  ciclosCompletados    = prefs.getInt("ciclos", 0);
+  limiteMantenimiento  = prefs.getInt("lim_mant", 300);
+  alertaMantPct        = prefs.getInt("alerta_pct", 80);
   programaSeleccionado = prefs.getInt("programa", 1);
   bypassSwPuerta    = prefs.getBool("bp_puerta", true);
   bypassSwSello     = prefs.getBool("bp_sello", true);
@@ -300,9 +294,8 @@ void registrarEvento(const char* fase) {
 }
 
 // =============================================================================
-// PUBLICACIONES MQTT — PubSubClient NO es thread-safe: toda llamada a
-// publish/loop/connect pasa por xMutexMqtt para que Core 0 y Core 1
-// nunca pisen el socket simultáneamente.
+// PUBLICACIONES MQTT (serializadas por xMutexMqtt — PubSubClient no es
+// thread-safe entre Core 0 y Core 1)
 // =============================================================================
 bool mqttPublishSafe(const char* topic, const char* payload, bool retained = false) {
   if (!mqtt.connected() || xMutexMqtt == NULL) return false;
@@ -340,7 +333,7 @@ void publicarMeta() {
   doc["version"] = SYS_VERSION;
   char buf[512];
   serializeJson(doc, buf);
-  mqttPublishSafe(topicMeta.c_str(), buf, true); // retained
+  mqttPublishSafe(topicMeta.c_str(), buf, true);
 }
 
 void publicarHwProfile() {
@@ -357,15 +350,12 @@ void publicarHwProfile() {
   char lcdAddr[8];
   snprintf(lcdAddr, 8, "0x%02X", addrLcdAuto);
   io["lcd"] = lcdAddr;
-  JsonObject prog = doc.createNestedObject("programas");
-  prog["count"] = 6;
-  prog["custom_slot"] = 6;
+  doc["programas"] = 6;
   char buf[1024];
   serializeJson(doc, buf);
-  mqttPublishSafe(topicHwProfile.c_str(), buf, true); // retained
+  mqttPublishSafe(topicHwProfile.c_str(), buf, true);
 }
 
-// Descriptor de capacidades → la web genera widgets/comandos automáticamente
 void publicarEsquema() {
   if (!mqtt.connected()) return;
   StaticJsonDocument<2048> doc;
@@ -376,14 +366,14 @@ void publicarEsquema() {
   JsonArray comandos = doc.createNestedArray("comandos");
   struct CmdDesc { const char* label; const char* cmd; const char* extra; };
   const CmdDesc lista[] = {
-    { "▶ Iniciar P1 134C", "INICIAR_CICLO", "{\"programa\":1}" },
-    { "▶ Iniciar P2 121C", "INICIAR_CICLO", "{\"programa\":2}" },
-    { "▶ Iniciar P3 Prion", "INICIAR_CICLO", "{\"programa\":3}" },
-    { "■ Abortar", "ABORTAR_PROCESO", "{}" },
-    { "↺ Reset Alarma", "RESET_ALARMA", "{}" },
-    { "⟲ Escanear I2C", "SCAN_HARDWARE", "{}" },
-    { "⚠ Puerta: Abrir", "CMD_ABRIR_PUERTA", "{}" },
-    { "⚠ Puerta: Cerrar", "CMD_CIERRE_PUERTA", "{}" }
+    { "Iniciar P1 134C", "INICIAR_CICLO", "{\"programa\":1}" },
+    { "Iniciar P2 121C", "INICIAR_CICLO", "{\"programa\":2}" },
+    { "Iniciar P3 Prion", "INICIAR_CICLO", "{\"programa\":3}" },
+    { "Abortar", "ABORTAR_PROCESO", "{}" },
+    { "Reset Alarma", "RESET_ALARMA", "{}" },
+    { "Escanear I2C", "SCAN_HARDWARE", "{}" },
+    { "Puerta: Abrir", "CMD_ABRIR_PUERTA", "{}" },
+    { "Puerta: Cerrar", "CMD_CIERRE_PUERTA", "{}" }
   };
   for (const CmdDesc& cd : lista) {
     JsonObject c = comandos.createNestedObject();
@@ -395,7 +385,7 @@ void publicarEsquema() {
   }
   char buf[2048];
   serializeJson(doc, buf);
-  mqttPublishSafe(topicEsquema.c_str(), buf, true); // retained
+  mqttPublishSafe(topicEsquema.c_str(), buf, true);
 }
 
 void publicarLogicaAck(bool ok, const char* detalle) {
@@ -421,7 +411,7 @@ void publicarFotaStatus(const char* estado, const char* detalle) {
   mqttPublishSafe(topicFotaStatus.c_str(), buf);
 }
 
-// Emisión del Reporte Médico Formal a Supabase al Concluir el Ciclo
+// Reporte médico formal al concluir el ciclo
 void emitirReporteCicloSupabase(bool exito, const char* motivoFinal) {
   StaticJsonDocument<2048> rep;
   rep["session_id"] = "SES-" + macId + "-" + String(millis());
@@ -479,7 +469,7 @@ void pintarLCDClinica(const PLCSnapshot& snap) {
 }
 
 // =============================================================================
-// ESCANEO BUS I2C (SCAN_HARDWARE) — corre en Core 1, publica i2c_report
+// ESCANEO BUS I2C (SCAN_HARDWARE)
 // =============================================================================
 void escanearBusI2C() {
   StaticJsonDocument<1024> doc;
@@ -495,14 +485,14 @@ void escanearBusI2C() {
       char dir[8];
       snprintf(dir, 8, "0x%02X", addr);
       chip["dir"] = dir;
-      chip["addr"] = dir; // compatibilidad con lectores que usan 'addr'
+      chip["addr"] = dir;
       if (addr == ADDR_PCF_RELES)        chip["rol"] = "PCF8574-RELES";
       else if (addr == ADDR_PCF_INPUTS)  chip["rol"] = "PCF8574-ENTRADAS";
       else if (addr == ADDR_ADC_ADS1115) chip["rol"] = "ADS1115-ADC";
       else if (addr == addrLcdAuto)      chip["rol"] = "LCD-1602";
       else                               chip["rol"] = "DETECTADO";
     }
-    vTaskDelay(pdMS_TO_TICKS(2)); // cede al watchdog entre direcciones
+    vTaskDelay(pdMS_TO_TICKS(2));
   }
   doc["total"] = chips.size();
 
@@ -517,8 +507,7 @@ void escanearBusI2C() {
 }
 
 // =============================================================================
-// HAL MAP — remapeo en caliente de roles de relés + persistencia LittleFS
-// roles_reles: {"R1":"SELLO","R5":"CALENTADOR",...} o {"sello":1,...}
+// HAL MAP — remapeo en caliente de roles de relés + persistencia
 // =============================================================================
 void aplicarHalMap(JsonDocument& doc) {
   bool changed = false;
@@ -526,7 +515,7 @@ void aplicarHalMap(JsonDocument& doc) {
   auto rolAIndice = [](const char* rol) -> int {
     String r = String(rol); r.toUpperCase();
     if (r == "SELLO" || r == "CIERRE" || r == "PUERTA") return 0;
-    if (r == "SUCCION" || r == "VALVULA" ) return 1;
+    if (r == "SUCCION" || r == "VALVULA") return 1;
     if (r == "ALIVIO") return 2;
     if (r == "BOMBA" || r == "AGUA") return 3;
     if (r == "RESISTENCIA" || r == "CALENTADOR" || r == "CALOR") return 4;
@@ -538,64 +527,45 @@ void aplicarHalMap(JsonDocument& doc) {
 
   if (doc["roles_reles"].is<JsonObject>()) {
     JsonObject roles = doc["roles_reles"].as<JsonObject>();
-    // Formato A: {"R1":"SELLO"} → rol→pin
-    // Formato B: {"sello":1}    → rol→pin directo
     for (JsonPair kv : roles) {
       const char* key = kv.key().c_str();
-      if (key[0] == 'R' || key[0] == 'r') { // Formato A
-        int pin = String(key + 1).toInt() - 1;
-        int rolIdx = rolAIndice(kv.value().as<const char*>());
-        if (pin >= 0 && pin < 8 && rolIdx >= 0) {
-          // intercambiar: asignar pin al rol
-          switch (rolIdx) {
-            case 0: pinOutSelloCierre = pin; break;
-            case 1: pinOutValvSuccion = pin; break;
-            case 2: pinOutAlivioSello = pin; break;
-            case 3: pinOutBombaAgua = pin; break;
-            case 4: pinOutResistencias = pin; break;
-            case 5: pinOutVacio = pin; break;
-            case 6: pinOutSecadoDesfogue = pin; break;
-            case 7: pinOutEsterilizar = pin; break;
-          }
-          changed = true;
+      int pin = -1;
+      int rolIdx = -1;
+      if (key[0] == 'R' || key[0] == 'r') {           // {"R1":"SELLO"}
+        pin = String(key + 1).toInt() - 1;
+        rolIdx = rolAIndice(kv.value().as<const char*>());
+      } else {                                        // {"sello":1}
+        pin = kv.value().as<int>() - 1;
+        rolIdx = rolAIndice(key);
+      }
+      if (pin >= 0 && pin < 8 && rolIdx >= 0) {
+        switch (rolIdx) {
+          case 0: pinOutSelloCierre = pin; break;
+          case 1: pinOutValvSuccion = pin; break;
+          case 2: pinOutAlivioSello = pin; break;
+          case 3: pinOutBombaAgua = pin; break;
+          case 4: pinOutResistencias = pin; break;
+          case 5: pinOutVacio = pin; break;
+          case 6: pinOutSecadoDesfogue = pin; break;
+          case 7: pinOutEsterilizar = pin; break;
         }
-      } else { // Formato B
-        int pin = kv.value().as<int>() - 1;
-        int rolIdx = rolAIndice(key);
-        if (pin >= 0 && pin < 8 && rolIdx >= 0) {
-          switch (rolIdx) {
-            case 0: pinOutSelloCierre = pin; break;
-            case 1: pinOutValvSuccion = pin; break;
-            case 2: pinOutAlivioSello = pin; break;
-            case 3: pinOutBombaAgua = pin; break;
-            case 4: pinOutResistencias = pin; break;
-            case 5: pinOutVacio = pin; break;
-            case 6: pinOutSecadoDesfogue = pin; break;
-            case 7: pinOutEsterilizar = pin; break;
-          }
-          changed = true;
-        }
+        changed = true;
       }
     }
   }
 
   if (doc["tipo"].is<const char*>()) {
-    String t = doc["tipo"].as<String>();
-    t.toCharArray(cfgTipo, 24);
+    String(doc["tipo"].as<const char*>()).toCharArray(cfgTipo, 24);
     changed = true;
   }
 
-  // Persistir HAL completo en LittleFS
   File f = LittleFS.open("/hal_map.json", "w");
-  if (f) {
-    serializeJson(doc, f);
-    f.close();
-  }
+  if (f) { serializeJson(doc, f); f.close(); }
 
   if (changed) {
     guardarPersistencia();
     publicarLogicaAck(true, "HAL_MAP_APLICADO");
-    publicarEsquema(); // refresca descriptor si cambió el tipo
+    publicarEsquema();
     Serial.println("🗺️ [HAL] Mapa de relés actualizado y persistido.");
   } else {
     publicarLogicaAck(true, "HAL_MAP_GUARDADO_SIN_CAMBIOS");
@@ -604,21 +574,14 @@ void aplicarHalMap(JsonDocument& doc) {
 
 // =============================================================================
 // LÓGICA / RECETA — APPLY_LOGICA_SECUENCIA
-// receta.pasos → se traduce al slot P6 (programa de banco) o al programa
-// indicado en receta.programa / receta.programa_num
 // =============================================================================
 void aplicarLogicaSecuencia(JsonDocument& doc) {
   JsonObject receta = doc["receta"].is<JsonObject>() ? doc["receta"].as<JsonObject>()
                       : doc.as<JsonObject>();
 
-  // Guardar receta completa en LittleFS
   File f = LittleFS.open("/logica.json", "w");
-  if (f) {
-    serializeJson(receta, f);
-    f.close();
-  }
+  if (f) { serializeJson(receta, f); f.close(); }
 
-  // Si la receta trae tiempos clínicos explícitos, se aplican a un programa
   int prog = receta["programa"] | receta["programa_num"] | 6;
   if (prog < 1 || prog > 6) prog = 6;
   float est = receta["min_esterilizar"] | receta["esterilizar_min"] | -1.0f;
@@ -642,10 +605,10 @@ void aplicarProvision(JsonDocument& doc) {
   JsonObject p = doc["provision"].is<JsonObject>() ? doc["provision"].as<JsonObject>()
                  : doc.as<JsonObject>();
 
-  if (p["alias"].is<const char*>())   { String(p["alias"].as<const char*>()).toCharArray(cfgAlias, 48); }
-  if (p["cliente"].is<const char*>()) { String(p["cliente"].as<const char*>()).toCharArray(cfgCliente, 48); }
-  if (p["modelo"].is<const char*>())  { String(p["modelo"].as<const char*>()).toCharArray(cfgModelo, 48); }
-  if (p["tipo"].is<const char*>())    { String(p["tipo"].as<const char*>()).toCharArray(cfgTipo, 24); }
+  if (p["alias"].is<const char*>())   String(p["alias"].as<const char*>()).toCharArray(cfgAlias, 48);
+  if (p["cliente"].is<const char*>()) String(p["cliente"].as<const char*>()).toCharArray(cfgCliente, 48);
+  if (p["modelo"].is<const char*>())  String(p["modelo"].as<const char*>()).toCharArray(cfgModelo, 48);
+  if (p["tipo"].is<const char*>())    String(p["tipo"].as<const char*>()).toCharArray(cfgTipo, 24);
 
   guardarPersistencia();
   publicarMeta();
@@ -656,21 +619,17 @@ void aplicarProvision(JsonDocument& doc) {
 }
 
 // =============================================================================
-// SET_CONFIG — campos seguros: lim_mant/limite_mantenimiento, alerta_pct,
-// sp_temp (solo en reposo), programa, bypasses embebidos
+// SET_CONFIG / SET_ALERTA_MANT — campos seguros
 // =============================================================================
 void aplicarSetConfig(JsonDocument& doc) {
   JsonObject cfg = doc["cfg"].is<JsonObject>() ? doc["cfg"].as<JsonObject>()
                    : doc.as<JsonObject>();
   bool persist = false;
 
-  if (cfg["lim_mant"].is<int>())              { limiteMantenimiento = cfg["lim_mant"].as<int>(); persist = true; }
-  if (cfg["limite_mantenimiento"].is<int>())  { limiteMantenimiento = cfg["limite_mantenimiento"].as<int>(); persist = true; }
-  if (cfg["alerta_pct"].is<int>())            { alertaMantPct = constrain(cfg["alerta_pct"].as<int>(), 1, 100); persist = true; }
-  if (cfg["programa"].is<int>()) {
-    int p = constrain(cfg["programa"].as<int>(), 1, 6);
-    programaSeleccionado = p; persist = true;
-  }
+  if (cfg["lim_mant"].is<int>())             { limiteMantenimiento = cfg["lim_mant"].as<int>(); persist = true; }
+  if (cfg["limite_mantenimiento"].is<int>()) { limiteMantenimiento = cfg["limite_mantenimiento"].as<int>(); persist = true; }
+  if (cfg["alerta_pct"].is<int>())           { alertaMantPct = constrain(cfg["alerta_pct"].as<int>(), 1, 100); persist = true; }
+  if (cfg["programa"].is<int>())             { programaSeleccionado = constrain(cfg["programa"].as<int>(), 1, 6); persist = true; }
   if (cfg["sp_temp"].is<float>() && estadoActual == PROC_REPOSO) {
     setpointTemp = constrain(cfg["sp_temp"].as<float>(), 100.0f, 140.0f);
     persist = true;
@@ -686,7 +645,7 @@ void aplicarSetConfig(JsonDocument& doc) {
 }
 
 // =============================================================================
-// FOTA — OTA por HTTP. Solo en REPOSO. Corre en tarea dedicada (Core 0).
+// FOTA — OTA por HTTP, solo en REPOSO
 // =============================================================================
 void TaskFota(void* p) {
   String url = fotaUrlPendiente;
@@ -704,7 +663,6 @@ void TaskFota(void* p) {
       size_t written = Update.writeStream(*stream);
       if (Update.end() && Update.isFinished() && written > 0) {
         publicarFotaStatus("OK", "Reiniciando");
-        Serial.println("📦 [FOTA] Escritura completa — reiniciando.");
         http.end();
         delay(500);
         ESP.restart();
@@ -724,14 +682,8 @@ void TaskFota(void* p) {
 }
 
 // =============================================================================
-// RED
+// RED — idéntica al original: WiFi.onEvent + ETH.begin
 // =============================================================================
-// Detección de red — DOBLE mecanismo como seguridad:
-//  a) Eventos ETH (igual que el v10.0 original — ARDUINO_EVENT_ETH_* son
-//     enums definidos en NetworkEvents.h y sí llegan por WiFi.h)
-//  b) Sondeo ETH.linkUp() + localIP() en Core 0 por si el evento no dispara
-static bool ntpConfigured = false;
-
 void onWiFiEvent(WiFiEvent_t event) {
   if (event == ARDUINO_EVENT_ETH_GOT_IP) {
     ethConnected = true;
@@ -739,16 +691,17 @@ void onWiFiEvent(WiFiEvent_t event) {
       ntpConfigured = true;
       configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
     }
+    Serial.printf("🌐 [ETH] Conectado. IP: %s\n", ETH.localIP().toString().c_str());
   } else if (event == ARDUINO_EVENT_ETH_DISCONNECTED) {
     ethConnected = false;
+    Serial.println("⚠️ [ETH] Desconectado.");
   }
 }
 
+// Respaldo por sondeo: si el evento nunca llega, esto activa ethConnected
 void actualizarEstadoRed() {
   bool linkOk = ETH.linkUp() && (ETH.localIP() != IPAddress(0, 0, 0, 0));
 
-  // Diagnóstico mientras no haya red: cada 4s dice si el fallo es de
-  // enlace físico (cable/PHY) o de IP (DHCP)
   static unsigned long lastDiag = 0;
   if (!linkOk && millis() - lastDiag >= 4000) {
     lastDiag = millis();
@@ -763,7 +716,7 @@ void actualizarEstadoRed() {
       ntpConfigured = true;
       configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
     }
-    Serial.printf("🌐 [ETH] Enlace activo. IP: %s\n", ETH.localIP().toString().c_str());
+    Serial.printf("🌐 [ETH] Enlace activo por sondeo. IP: %s\n", ETH.localIP().toString().c_str());
   } else if (!linkOk && ethConnected) {
     ethConnected = false;
     Serial.println("🌐 [ETH] Enlace perdido.");
@@ -789,7 +742,7 @@ void reconectarMQTT() {
       xSemaphoreGive(xMutexMqtt);
     }
     if (ok) {
-      // Anuncio de identidad/capacidades al conectar
+      Serial.printf("🚀 [MQTT] Conectado a HiveMQ. Suscrito a: %s\n", topicComando.c_str());
       publicarMeta();
       publicarHwProfile();
       publicarEsquema();
@@ -808,6 +761,7 @@ void TaskCore0_Comms(void* p) {
 
   for (;;) {
     actualizarEstadoRed();
+
     if (ethConnected) {
       if (!mqtt.connected()) reconectarMQTT();
       if (mqtt.connected() && xSemaphoreTake(xMutexMqtt, pdMS_TO_TICKS(50)) == pdTRUE) {
@@ -881,8 +835,7 @@ void TaskCore1_PLC(void* p) {
   Wire.write(0xFF);
   Wire.endTransmission();
 
-  // Watchdog: si el PLC se cuelga >8s, el ESP32 se reinicia
-  esp_task_wdt_add(NULL);
+  esp_task_wdt_add(NULL); // watchdog: cuelgue del PLC → reinicio seguro
 
   TickType_t xLastWakeTime = xTaskGetTickCount();
   const TickType_t xFrequency = pdMS_TO_TICKS(20);
@@ -903,7 +856,7 @@ void TaskCore1_PLC(void* p) {
         String c = rxJsonDoc["cmd"] | "";
         emitirBeep(25);
 
-        // ---- A. INICIAR CICLO CLÍNICO (P1 A P6) -----------------------------
+        // A. INICIAR CICLO CLÍNICO (P1 A P6)
         if (c == "INICIAR_CICLO" || c == "CMD_START_PROC") {
           programaSeleccionado = rxJsonDoc["programa"] | rxJsonDoc["proceso"] | 1;
           if (programaSeleccionado < 1 || programaSeleccionado > 6) programaSeleccionado = 1;
@@ -917,9 +870,9 @@ void TaskCore1_PLC(void* p) {
           tInicioFase = millis();
           segundosRestantesFase = 15;
           localReles = (1 << pinOutSelloCierre);
-          Serial.printf("🔥 [CICLO] Iniciando P%d (Setpoint: %.1fC)\n", programaSeleccionado, setpointTemp);
+          Serial.printf("🔥 [CICLO] Iniciando Programa P%d (Setpoint: %.1fC)\n", programaSeleccionado, setpointTemp);
         }
-        // ---- B. ABORTAR / PARO DE EMERGENCIA --------------------------------
+        // B. ABORTAR / PARO DE EMERGENCIA
         else if (c == "ABORTAR_CICLO" || c == "ABORTAR_PROCESO" || c == "CMD_CANCEL") {
           if (estadoActual != PROC_REPOSO && estadoActual != PROC_FINALIZADO) {
             registrarEvento("PARO_EMERGENCIA");
@@ -931,7 +884,7 @@ void TaskCore1_PLC(void* p) {
           alarmaCodigo = 5;
           strncpy(alarmaMensaje, "PARO MANUAL ACTIVADO", 47);
         }
-        // ---- C. RESET DE ALARMA ----------------------------------------------
+        // C. RESET DE ALARMA
         else if (c == "RESET_ALARMA") {
           estadoActual = PROC_REPOSO;
           alarmaCodigo = 0;
@@ -940,10 +893,10 @@ void TaskCore1_PLC(void* p) {
           presionBar = 0.0f;
           localReles = 0x00;
         }
-        // ---- D. TOGGLE DIRECTO DE RELÉ ---------------------------------------
+        // D. TOGGLE DIRECTO DE RELÉ
         else if (c == "SET_RELAY") {
-          int ch = rxJsonDoc["canal"] | rxJsonDoc["relay"] | 0;
-          if (ch < 1) ch = rxJsonDoc["pin"] | 1;
+          int ch = rxJsonDoc["canal"] | rxJsonDoc["relay"] | rxJsonDoc["pin"] | 0;
+          if (ch < 1) ch = 1;
           bool val = false;
           if (rxJsonDoc["val"].is<bool>()) val = rxJsonDoc["val"].as<bool>();
           else if (rxJsonDoc["val"].is<int>()) val = (rxJsonDoc["val"].as<int>() != 0);
@@ -961,7 +914,7 @@ void TaskCore1_PLC(void* p) {
             }
           }
         }
-        // ---- E. BYPASSES DE BANCO ---------------------------------------------
+        // E. BYPASSES DE BANCO
         else if (c == "SET_BYPASS") {
           if (rxJsonDoc.containsKey("puerta"))     bypassSwPuerta    = rxJsonDoc["puerta"];
           if (rxJsonDoc.containsKey("sello"))      bypassSwSello     = rxJsonDoc["sello"];
@@ -971,40 +924,39 @@ void TaskCore1_PLC(void* p) {
           guardarPersistencia();
           Serial.println("🛠️ [BYPASS] Bypasses actualizados desde la web.");
         }
-        // ---- F. ESCANEO BUS I2C ------------------------------------------------
+        // F. ESCANEO BUS I2C
         else if (c == "SCAN_HARDWARE" || c == "SCAN_I2C") {
           escanearBusI2C();
         }
-        // ---- G. HAL MAP --------------------------------------------------------
+        // G. HAL MAP
         else if (c == "APPLY_HAL_MAP") {
           aplicarHalMap(rxJsonDoc);
         }
-        // ---- H. LÓGICA / RECETA ------------------------------------------------
+        // H. LÓGICA / RECETA
         else if (c == "APPLY_LOGICA_SECUENCIA") {
           aplicarLogicaSecuencia(rxJsonDoc);
         }
-        // ---- I. PROVISION -------------------------------------------------------
+        // I. PROVISION
         else if (c == "APPLY_HARDWARE_PROVISION") {
           aplicarProvision(rxJsonDoc);
         }
-        // ---- J. SET_CONFIG / SET_ALERTA_MANT ------------------------------------
+        // J. SET_CONFIG / SET_ALERTA_MANT
         else if (c == "SET_CONFIG" || c == "SET_ALERTA_MANT") {
           aplicarSetConfig(rxJsonDoc);
         }
-        // ---- K. RESET ODÓMETRO ---------------------------------------------------
+        // K. RESET ODÓMETRO
         else if (c == "RESET_ODOMETRO") {
           ciclosCompletados = 0;
           guardarPersistencia();
           publicarLogicaAck(true, "ODOMETRO_RESET");
           Serial.println("🔄 [MANT] Odómetro de ciclos reiniciado.");
         }
-        // ---- L. PUERTA MANUAL (enclavada) -----------------------------------------
+        // L. PUERTA MANUAL (enclavada)
         else if (c == "CMD_ABRIR_PUERTA") {
-          // Solo se permite abrir en reposo/finalizado y sin presión
           if ((estadoActual == PROC_REPOSO || estadoActual == PROC_FINALIZADO) && presionBar < 0.1f) {
             localReles &= ~(1 << pinOutSelloCierre);
             localReles |= (1 << pinOutAlivioSello);
-            relayPulseOffTime[pinOutAlivioSello] = millis() + 3000; // pulso de alivio 3s
+            relayPulseOffTime[pinOutAlivioSello] = millis() + 3000;
             Serial.println("🚪 [PUERTA] Sello liberado — puerta desbloqueada.");
           } else {
             alarmaCodigo = 7;
@@ -1018,13 +970,13 @@ void TaskCore1_PLC(void* p) {
             Serial.println("🚪 [PUERTA] Sello activado — puerta bloqueada.");
           }
         }
-        // ---- M. PING / REFRESCO -----------------------------------------------------
+        // M. PING / REFRESCO
         else if (c == "PING" || c == "GET_STATUS") {
           publicarMeta();
           publicarHwProfile();
-          forceTelemetryFlag = true; // telemetría en el próximo tick (≤10ms)
+          forceTelemetryFlag = true;
         }
-        // ---- N. FOTA ------------------------------------------------------------------
+        // N. FOTA
         else if (c == "TRIGGER_FOTA" || c == "FOTA_DEPLOY") {
           String url = rxJsonDoc["url"] | rxJsonDoc["firmware_url"] | "";
           if (!fotaEnCurso && estadoActual == PROC_REPOSO && url.length() > 8) {
@@ -1035,13 +987,12 @@ void TaskCore1_PLC(void* p) {
             publicarFotaStatus("RECHAZADO", fotaEnCurso ? "FOTA_EN_CURSO" : (estadoActual != PROC_REPOSO ? "CICLO_ACTIVO" : "URL_INVALIDA"));
           }
         }
-        // ---- O. DOWNLOAD_JSON_SUPABASE (config fetch) — la web usa Supabase
-        //      directamente; aquí respondemos con meta para compatibilidad.
+        // O. Compatibilidad DOWNLOAD_JSON_SUPABASE
         else if (c == "DOWNLOAD_JSON_SUPABASE") {
           publicarMeta();
           publicarLogicaAck(true, "META_REPUBLISHED");
         }
-        // ---- P. LEGADO: claves sueltas sin "cmd" (PLC universal) -----------------------
+        // P. LEGADO: teclas sueltas sin "cmd"
         else if (c.length() == 0) {
           bool touched = false;
           if (rxJsonDoc["sp_temp"].is<float>() && estadoActual == PROC_REPOSO) {
@@ -1049,13 +1000,13 @@ void TaskCore1_PLC(void* p) {
             touched = true;
           }
           if (rxJsonDoc["vacio_ok"].is<bool>()) {
-            bool v = rxJsonDoc["vacio_ok"].as<bool>();
-            if (v) localReles |= (1 << pinOutVacio); else localReles &= ~(1 << pinOutVacio);
+            if (rxJsonDoc["vacio_ok"].as<bool>()) localReles |= (1 << pinOutVacio);
+            else localReles &= ~(1 << pinOutVacio);
             touched = true;
           }
           if (rxJsonDoc["mot_ok"].is<bool>()) {
-            bool v = rxJsonDoc["mot_ok"].as<bool>();
-            if (v) localReles |= (1 << pinOutBombaAgua); else localReles &= ~(1 << pinOutBombaAgua);
+            if (rxJsonDoc["mot_ok"].as<bool>()) localReles |= (1 << pinOutBombaAgua);
+            else localReles &= ~(1 << pinOutBombaAgua);
             touched = true;
           }
           if (touched) Serial.println("🕹️ [LEGADO] Teclas de test aplicadas.");
@@ -1197,7 +1148,7 @@ void TaskCore1_PLC(void* p) {
     Wire.write(~localReles);
     Wire.endTransmission();
 
-    // 6. Snapshot para Core 0 + disparo de alerta crítica ante nueva alarma
+    // 6. Snapshot + alerta crítica ante alarma nueva
     bool nuevaAlarma = (alarmaCodigo != 0 && alarmaCodigo != alarmaAnterior);
     alarmaAnterior = alarmaCodigo;
 
@@ -1243,7 +1194,7 @@ void TaskCore1_PLC(void* p) {
 }
 
 // =========================================================================
-// ARRANQUE DUAL-CORE
+// ARRANQUE DUAL-CORE — idéntico al original
 // =========================================================================
 void setup() {
   Serial.begin(115200);
@@ -1257,11 +1208,10 @@ void setup() {
   xMutexSnap = xSemaphoreCreateMutex();
   xMutexMqtt = xSemaphoreCreateMutex();
 
-  // Orden de pines idéntico al v10.0: (type, addr, mdc, mdio, power, clk)
-  // Verificado en ETH.h del core 4.0.0-alpha1 instalado — coincide con 2.x.
+  // Arranque de Red Ethernet Industrial — idéntico al original
   WiFi.onEvent(onWiFiEvent);
   bool ethOk = ETH.begin(ETH_PHY_TYPE, ETH_PHY_ADDR, ETH_PHY_MDC, ETH_PHY_MDIO, ETH_PHY_POWER, ETH_CLK_MODE);
-  Serial.printf("🔌 [ETH] begin() -> %s (PHY LAN8720 addr=%d MDC=%d MDIO=%d PWR=%d CLK=GPIO17_OUT)\n",
+  Serial.printf("🔌 [ETH] begin() -> %s (LAN8720 addr=%d MDC=%d MDIO=%d PWR=%d CLK=GPIO17_OUT)\n",
                 ethOk ? "OK" : "FALLO", ETH_PHY_ADDR, ETH_PHY_MDC, ETH_PHY_MDIO, ETH_PHY_POWER);
 
   delay(200);
@@ -1292,30 +1242,12 @@ void setup() {
   topicAlerta     = base + "alerta_critica";
   topicFotaStatus = base + "fota_status";
 
-  // TLS: validar CA si está provisionada; setInsecure() solo en banco
-  if (String(HIVEMQ_ROOT_CA).length() > 10) {
-    ethSecureClient.setCACert(HIVEMQ_ROOT_CA);
-    Serial.println("🔐 TLS: CA validada (producción)");
-  } else {
-    ethSecureClient.setInsecure();
-    Serial.println("⚠️ TLS: setInsecure() — SOLO BANCO DE PRUEBAS");
-  }
-
+  ethSecureClient.setInsecure();
   mqtt.setBufferSize(2560);
   mqtt.setServer(mqttServer, mqttPort);
   mqtt.setCallback(mqttCallback);
 
-  // Watchdog general (lo alimenta Core 1; Core 0 vive en el loop MQTT)
-  // La API cambió entre Arduino core ESP32 2.x y 3.x — se cubre ambos.
-#if ESP_ARDUINO_VERSION_MAJOR >= 3
-  esp_task_wdt_config_t wdtCfg = {};
-  wdtCfg.timeout_ms = WDT_TIMEOUT_S * 1000;
-  wdtCfg.idle_core_mask = 0;
-  wdtCfg.trigger_panic = true;
-  esp_task_wdt_reconfigure(&wdtCfg);
-#else
   esp_task_wdt_init(WDT_TIMEOUT_S, true);
-#endif
 
   xTaskCreatePinnedToCore(TaskCore1_PLC, "TaskCore1_PLC", 8192, NULL, 5, NULL, 1);
   xTaskCreatePinnedToCore(TaskCore0_Comms, "TaskCore0_Comms", 8192, NULL, 2, NULL, 0);
