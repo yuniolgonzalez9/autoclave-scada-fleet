@@ -30,20 +30,37 @@ import {
 const SNAP_GRID = 10;
 
 export default function AiAutomationStudio({ fleet = {}, sendCommand = null, initialDeviceMac = null, isAdmin = true, userRole = 'SUPERADMIN' }) {
-  const [activeTab, setActiveTab] = useState('STUDIO'); // 'STUDIO' | 'BIBLIOTECA' | 'EDITOR_JSON'
+  const STUDIO_INIT_MSG = {
+    id: 'init_msg',
+    sender: 'ai',
+    texto: 'BIOFLEET AI en línea. Tengo visión total de la flota, telemetría en vivo y control ejecutivo del hardware. Consulte, ordene o dicte cualquier instrucción: diagnósticos, mantenimiento, secuencias, relés o configuración completa.'
+  };
+
+  const [activeTab, setActiveTab] = useState(() => sessionStorage.getItem('biofleet_studio_tab') || 'STUDIO'); // 'STUDIO' | 'BIBLIOTECA' | 'EDITOR_JSON'
   const [modoEdicion, setModoEdicion] = useState(false);
   const [widgetEnEdicion, setWidgetEnEdicion] = useState(null);
 
   // Chat y Dictado por Voz
   const [prompt, setPrompt] = useState('');
   const [proveedorSel, setProveedorSel] = useState(() => localStorage.getItem('biofleet_ai_provider') || 'GROQ');
-  const [historialChat, setHistorialChat] = useState([
-    {
-      id: 'init_msg',
-      sender: 'ai',
-      texto: 'BIOFLEET AI en línea. Tengo visión total de la flota, telemetría en vivo y control ejecutivo del hardware. Consulte, ordene o dicte cualquier instrucción: diagnósticos, mantenimiento, secuencias, relés o configuración completa.'
+  const [historialChat, setHistorialChat] = useState(() => {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem('biofleet_studio_chat') || 'null');
+      return Array.isArray(saved) && saved.length ? saved : [STUDIO_INIT_MSG];
+    } catch (_) {
+      return [STUDIO_INIT_MSG];
     }
-  ]);
+  });
+
+  useEffect(() => {
+    sessionStorage.setItem('biofleet_studio_tab', activeTab);
+  }, [activeTab]);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem('biofleet_studio_chat', JSON.stringify(historialChat.slice(-60)));
+    } catch (_) {}
+  }, [historialChat]);
   const [compilando, setCompilando] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef(null);

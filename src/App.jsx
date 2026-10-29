@@ -521,8 +521,13 @@ function ScadaAppContent() {
   }, [navIndex, mobileSections]);
 
   useEffect(() => {
-    if (activeSection === 'studio' && !canEditHardware) setActiveSection('flota');
-  }, [activeSection, canEditHardware]);
+    // Solo expulsar cuando el rol ya resolvió: mientras el perfil carga
+    // canEditHardware es false provisional y expulsaría falsamente al
+    // usuario tras un F5 (bug que sacaba de Studio al recargar).
+    if (user && profile && activeSection === 'studio' && !canEditHardware) {
+      setActiveSection('flota');
+    }
+  }, [activeSection, canEditHardware, user, profile]);
 
   const detailIndex = filteredDevices.findIndex((d) => d.mac === selectedMac);
   const goToDevice = useCallback((delta) => {
