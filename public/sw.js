@@ -9,6 +9,8 @@ self.addEventListener('install', (event) => {
 });
 
 // 2. Al activarse: BORRA TODAS LAS CACHÉS VIEJAS DE RAÍZ (elimina v1.0 y previas)
+// y obliga a las pestañas abiertas a recargar con la versión nueva —
+// así un deploy que cambie sw.js se auto-propaga a dispositivos atascados.
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
@@ -19,6 +21,12 @@ self.addEventListener('activate', (event) => {
         })
       );
     }).then(() => self.clients.claim())
+      .then(() => self.clients.matchAll({ type: 'window' }))
+      .then((clients) => {
+        clients.forEach((client) => {
+          client.navigate(client.url).catch(() => {});
+        });
+      })
   );
 });
 

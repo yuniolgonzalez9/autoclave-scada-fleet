@@ -19,6 +19,26 @@
   </head>
   <body class="bg-[#030712] text-white">
     <div id="root"></div>
+    <script>
+      // Detección temprana de despliegue: corre ANTES de cargar la app.
+      // Compara el build servido con el último visto; si cambió, recarga
+      // una sola vez para que ningún dispositivo quede con app vieja.
+      (function () {
+        try {
+          fetch('/version.json?t=' + Date.now(), { cache: 'no-store' })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (v) {
+              if (!v || !v.build) return;
+              var key = 'biofleet_last_build';
+              var prev = null;
+              try { prev = localStorage.getItem(key); } catch (_) {}
+              try { localStorage.setItem(key, v.build); } catch (_) {}
+              if (prev && prev !== v.build) location.reload();
+            })
+            .catch(function () {});
+        } catch (_) {}
+      })();
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
