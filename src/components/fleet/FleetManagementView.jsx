@@ -51,6 +51,25 @@ export default function FleetManagementView({ fleet = {}, sendCommand, onSelectD
   // Edición completa de dispositivo existente
   const [editDevice, setEditDevice] = useState(null); // {mac, alias, cliente, modelo, area, tipo, hardware_rev}
   const [savingEdit, setSavingEdit] = useState(false);
+  const [sugeridos, setSugeridos] = useState({ clientes: [], aliases: [] });
+
+  // Sugerencias: clientes y alias ya registrados en la web
+  React.useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from('asignaciones_equipos')
+          .select('cliente, alias');
+        if (!mounted || !data) return;
+        setSugeridos({
+          clientes: [...new Set(data.map((r) => r.cliente).filter(Boolean))],
+          aliases: [...new Set(data.map((r) => r.alias).filter(Boolean))]
+        });
+      } catch (_) {}
+    })();
+    return () => { mounted = false; };
+  }, []);
 
   const openEditDevice = (mac, dev) => {
     setEditDevice({
@@ -574,18 +593,26 @@ export default function FleetManagementView({ fleet = {}, sendCommand, onSelectD
                 <input
                   value={editDevice.alias}
                   onChange={(e) => setEditDevice({ ...editDevice, alias: e.target.value })}
+                  list="fleet-aliases-sugeridos"
                   className="w-full bg-slate-900/70 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none focus:border-cyan-400"
                   placeholder="Autoclave Quirúrgico"
                 />
+                <datalist id="fleet-aliases-sugeridos">
+                  {sugeridos.aliases.map((a) => <option key={a} value={a} />)}
+                </datalist>
               </label>
               <label className="col-span-2 space-y-1">
                 <span className="text-[10px] text-slate-400">CLIENTE / CENTRO</span>
                 <input
                   value={editDevice.cliente}
                   onChange={(e) => setEditDevice({ ...editDevice, cliente: e.target.value })}
+                  list="fleet-clientes-sugeridos"
                   className="w-full bg-slate-900/70 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none focus:border-cyan-400"
                   placeholder="Central Hospitalaria"
                 />
+                <datalist id="fleet-clientes-sugeridos">
+                  {sugeridos.clientes.map((c) => <option key={c} value={c} />)}
+                </datalist>
               </label>
               <label className="space-y-1">
                 <span className="text-[10px] text-slate-400">ÁREA / SALA</span>
