@@ -1902,7 +1902,7 @@ button, a, label, input, select, textarea, [role="button"] { touch-action: manip
    Azul acero profundo con el mismo tratamiento vivo que los demás temas:
    acento azul industrial, láser azul, brillos y partículas activos. */
 [data-theme="industrial"] {
-  --glass-bg: 13 29 48;
+  --glass-bg: 7 14 30;
   --surface-glow: 62 138 216;
   --accent-color: #5eb2ff;
   --card-border: rgba(96, 165, 250, 0.4);
