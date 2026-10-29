@@ -2010,9 +2010,12 @@ button, a, label, input, select, textarea, [role="button"] { touch-action: manip
 
 .login-primary-btn {
   background-image: linear-gradient(135deg,
-    color-mix(in srgb, var(--accent-color) 92%, #ffffff),
-    color-mix(in srgb, var(--accent-color) 55%, #1e293b)) !important;
-  box-shadow: 0 10px 26px color-mix(in srgb, var(--accent-color) 28%, transparent) !important;
+    rgb(var(--surface-glow) / 0.95),
+    color-mix(in srgb, var(--surface-glow) 45%, #0a1526)) !important;
+  color: var(--accent-color) !important;
+  font-weight: 700;
+  border: 1px solid color-mix(in srgb, var(--accent-color) 40%, transparent);
+  box-shadow: 0 10px 26px rgb(var(--surface-glow) / 0.3), inset 0 1px rgba(255, 255, 255, 0.12) !important;
 }
 
 .brand-lockup {
