@@ -1139,6 +1139,7 @@ function ScadaAppContent() {
                     sendCommand={sendDeviceCommand}
                     onSelectDevice={(mac) => { setSelectedMac(mac); setActiveSection('detalle'); }}
                     onOpenReports={() => setActiveSection('servicio')}
+                    onOpenAssignModal={(dev) => setAssignModal({ isOpen: true, device: dev })}
                   />
                   </Suspense>
                 </div>

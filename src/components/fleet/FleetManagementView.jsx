@@ -33,7 +33,7 @@ const PERFILES_HARDWARE = [
   { id: 'GENERIC-DIY', nombre: 'Genérico ESP32 NodeMCU (Mapeo Libre GPIO)', tipoDefault: 'AUTOCLAVE' }
 ];
 
-export default function FleetManagementView({ fleet = {}, sendCommand, onSelectDevice, onOpenReports }) {
+export default function FleetManagementView({ fleet = {}, sendCommand, onSelectDevice, onOpenReports, onOpenAssignModal }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState('ALL');
 
@@ -453,7 +453,7 @@ export default function FleetManagementView({ fleet = {}, sendCommand, onSelectD
                     const dTipo = (dev.meta?.tipo || dDev.tipo || 'AUTOCLAVE').toUpperCase();
 
                     return (
-                      <tr key={mac} className="hover:bg-slate-800/40 transition-colors">
+                      <tr key={mac} onClick={() => openEditDevice(mac, dev)} className="hover:bg-slate-800/40 transition-colors cursor-pointer" title="Click para editar equipo">
                         <td className="p-3">
                           <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold border ${
                             isOnline ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
@@ -493,7 +493,7 @@ export default function FleetManagementView({ fleet = {}, sendCommand, onSelectD
                           )}
                         </td>
 
-                        <td className="p-3 text-center">
+                        <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-center gap-1.5">
                             <button
                               type="button"
@@ -631,6 +631,16 @@ export default function FleetManagementView({ fleet = {}, sendCommand, onSelectD
                 </select>
               </label>
             </div>
+
+            {onOpenAssignModal && (
+              <button
+                type="button"
+                onClick={() => { const dev = fleet[editDevice.mac]; setEditDevice(null); onOpenAssignModal(dev || { mac: editDevice.mac }); }}
+                className="w-full py-2 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 font-bold transition-all flex items-center justify-center gap-2"
+              >
+                👥 ASIGNAR A USUARIOS REGISTRADOS
+              </button>
+            )}
 
             <div className="flex gap-2 pt-1">
               <button
