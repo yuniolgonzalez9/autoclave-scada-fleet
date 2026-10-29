@@ -17,6 +17,7 @@ import {
   ExternalLink,
   RefreshCw,
   Wrench,
+  Pencil,
   AlertTriangle,
   X,
   Wifi,
@@ -46,6 +47,75 @@ export default function FleetManagementView({ fleet = {}, sendCommand, onSelectD
   const [submitting, setSubmitting] = useState(false);
   const [msg, setMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+
+  // Edición completa de dispositivo existente
+  const [editDevice, setEditDevice] = useState(null); // {mac, alias, cliente, modelo, area, tipo, hardware_rev}
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  const openEditDevice = (mac, dev) => {
+    setEditDevice({
+      mac,
+      alias: dev?.meta?.alias || '',
+      cliente: dev?.meta?.cliente || '',
+      modelo: dev?.meta?.modelo || '',
+      area: dev?.meta?.area || dev?.meta?.ubicacion || '',
+      tipo: (dev?.meta?.tipo || dev?.datos?.tipo || 'AUTOCLAVE').toUpperCase(),
+      hardware_rev: dev?.meta?.hardware_rev || 'HKL-EA8'
+    });
+  };
+
+  const handleSaveEdit = async (e) => {
+    e.preventDefault();
+    if (!editDevice) return;
+    setSavingEdit(true);
+    setMsg('');
+    setErrorMsg('');
+
+    const payload = {
+      mac: editDevice.mac,
+      alias: editDevice.alias.trim() || `EQUIPO [${editDevice.mac.slice(-4)}]`,
+      cliente: editDevice.cliente.trim() || 'Central Hospitalaria',
+      modelo: editDevice.modelo.trim() || 'Estándar',
+      area: editDevice.area.trim(),
+      tipo: editDevice.tipo,
+      hardware_rev: editDevice.hardware_rev,
+      config_deseada: {
+        tipo: editDevice.tipo,
+        hardware_rev: editDevice.hardware_rev,
+        alerta_pct: 80,
+        lim_mant: 200,
+        sp_temp: 121.0
+      },
+      updated_at: new Date().toISOString()
+    };
+
+    try {
+      const { error } = await supabase
+        .from('asignaciones_equipos')
+        .upsert(payload, { onConflict: 'mac' });
+      if (error) throw error;
+
+      if (sendCommand) {
+        sendCommand(editDevice.mac, {
+          cmd: 'APPLY_HARDWARE_PROVISION',
+          mac: editDevice.mac,
+          alias: payload.alias,
+          cliente: payload.cliente,
+          modelo: payload.modelo,
+          area: payload.area,
+          tipo: payload.tipo,
+          hardware_rev: payload.hardware_rev
+        });
+      }
+
+      setMsg(`Equipo [${editDevice.mac}] actualizado: "${payload.alias}".`);
+      setEditDevice(null);
+    } catch (err) {
+      setErrorMsg(`No se pudo guardar: ${err.message || 'error de base de datos'}`);
+    } finally {
+      setSavingEdit(false);
+    }
+  };
 
   const [view, setView] = useState('equipos'); // 'equipos' | 'alta'
   const rootRef = useRef(null);
@@ -437,6 +507,15 @@ export default function FleetManagementView({ fleet = {}, sendCommand, onSelectD
 
                             <button
                               type="button"
+                              onClick={() => openEditDevice(mac, dev)}
+                              className="p-1 bg-slate-800 hover:bg-slate-700 text-cyan-300 rounded-lg transition-all"
+                              title="Editar equipo (nombre, área, modelo)"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+
+                            <button
+                              type="button"
                               onClick={async () => {
                                 if (sendCommand) {
                                   const r = await sendCommand(mac, { cmd: 'SCAN_HARDWARE' });
@@ -469,6 +548,109 @@ export default function FleetManagementView({ fleet = {}, sendCommand, onSelectD
             </table>
           </div>
         </>
+      )}
+
+      {/* Modal: edición completa del dispositivo */}
+      {editDevice && (
+        <div className="fixed inset-0 z-[9999] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setEditDevice(null)}>
+          <form
+            onSubmit={handleSaveEdit}
+            onClick={(e) => e.stopPropagation()}
+            className="ultra-glass w-full max-w-md rounded-2xl p-5 space-y-3 font-mono text-xs shadow-2xl"
+          >
+            <div className="flex items-center justify-between border-b gear-divider pb-2.5">
+              <span className="font-bold text-white flex items-center gap-2">
+                <Pencil className="w-4 h-4 gear-accent-text" />
+                EDITAR EQUIPO [{editDevice.mac.slice(-4)}]
+              </span>
+              <button type="button" onClick={() => setEditDevice(null)} className="text-slate-400 hover:text-white p-1">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2.5">
+              <label className="col-span-2 space-y-1">
+                <span className="text-[10px] text-slate-400">NOMBRE / ALIAS</span>
+                <input
+                  value={editDevice.alias}
+                  onChange={(e) => setEditDevice({ ...editDevice, alias: e.target.value })}
+                  className="w-full bg-slate-900/70 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none focus:border-cyan-400"
+                  placeholder="Autoclave Quirúrgico"
+                />
+              </label>
+              <label className="col-span-2 space-y-1">
+                <span className="text-[10px] text-slate-400">CLIENTE / CENTRO</span>
+                <input
+                  value={editDevice.cliente}
+                  onChange={(e) => setEditDevice({ ...editDevice, cliente: e.target.value })}
+                  className="w-full bg-slate-900/70 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none focus:border-cyan-400"
+                  placeholder="Central Hospitalaria"
+                />
+              </label>
+              <label className="space-y-1">
+                <span className="text-[10px] text-slate-400">ÁREA / SALA</span>
+                <input
+                  value={editDevice.area}
+                  onChange={(e) => setEditDevice({ ...editDevice, area: e.target.value })}
+                  className="w-full bg-slate-900/70 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none focus:border-cyan-400"
+                  placeholder="Quirófano 2"
+                />
+              </label>
+              <label className="space-y-1">
+                <span className="text-[10px] text-slate-400">MODELO</span>
+                <input
+                  value={editDevice.modelo}
+                  onChange={(e) => setEditDevice({ ...editDevice, modelo: e.target.value })}
+                  className="w-full bg-slate-900/70 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none focus:border-cyan-400"
+                  placeholder="Clase B HKL-EA8"
+                />
+              </label>
+              <label className="space-y-1">
+                <span className="text-[10px] text-slate-400">TIPO</span>
+                <select
+                  value={editDevice.tipo}
+                  onChange={(e) => setEditDevice({ ...editDevice, tipo: e.target.value })}
+                  className="w-full bg-slate-900/70 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none"
+                >
+                  <option value="AUTOCLAVE">AUTOCLAVE</option>
+                  <option value="UNIVERSAL_PLC">UNIVERSAL_PLC</option>
+                  <option value="VEHICULO">VEHICULO</option>
+                  <option value="INCUBADORA">INCUBADORA</option>
+                </select>
+              </label>
+              <label className="space-y-1">
+                <span className="text-[10px] text-slate-400">HARDWARE</span>
+                <select
+                  value={editDevice.hardware_rev}
+                  onChange={(e) => setEditDevice({ ...editDevice, hardware_rev: e.target.value })}
+                  className="w-full bg-slate-900/70 border border-slate-700 rounded-lg px-3 py-2 text-white outline-none"
+                >
+                  {PERFILES_HARDWARE.map((p) => (
+                    <option key={p.id} value={p.id}>{p.id}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <div className="flex gap-2 pt-1">
+              <button
+                type="submit"
+                disabled={savingEdit}
+                className="flex-1 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-bold transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                <Send className="w-3.5 h-3.5" />
+                {savingEdit ? 'GUARDANDO…' : 'GUARDAR EQUIPO'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditDevice(null)}
+                className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold transition-all"
+              >
+                CANCELAR
+              </button>
+            </div>
+          </form>
+        </div>
       )}
     </div>
   );

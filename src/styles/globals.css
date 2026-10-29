@@ -635,6 +635,31 @@ button:active, .btn-touch:active {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-color) 14%, transparent);
 }
 
+/* Controles plegables: en escritorio colapsan a solo el icono y se
+   expanden al pasar el mouse o al enfocar — ahorran espacio de la barra */
+@media (min-width: 640px) {
+  .fleet-search-collapsible {
+    width: 2.75rem !important;
+    min-width: 2.75rem !important;
+    overflow: hidden;
+    cursor: text;
+    white-space: nowrap;
+    transition: width 0.28s ease, min-width 0.28s ease, border-color 0.2s ease;
+  }
+  .fleet-search-collapsible:hover,
+  .fleet-search-collapsible:focus-within,
+  .fleet-search-collapsible--filled {
+    width: 18rem !important;
+    min-width: 18rem !important;
+  }
+  .fleet-sort-control.fleet-search-collapsible:hover,
+  .fleet-sort-control.fleet-search-collapsible:focus-within,
+  .fleet-sort-control.fleet-search-collapsible--filled {
+    width: 12rem !important;
+    min-width: 12rem !important;
+  }
+}
+
 .fleet-search-control input::-webkit-search-cancel-button {
   display: none;
 }

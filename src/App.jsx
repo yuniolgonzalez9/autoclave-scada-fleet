@@ -938,7 +938,7 @@ function ScadaAppContent() {
                       </div>
 
                       <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                        <label className="fleet-search-control flex items-center gap-2 px-3 py-2 rounded-lg w-full sm:w-72">
+                        <label className={`fleet-search-control fleet-search-collapsible flex items-center gap-2 px-3 py-2 rounded-lg w-full sm:w-72 ${fleetSearch ? 'fleet-search-collapsible--filled' : ''}`}>
                           <Search className="w-4 h-4 shrink-0 text-slate-400" />
                           <input
                             type="search"
@@ -954,7 +954,7 @@ function ScadaAppContent() {
                             </button>
                           )}
                         </label>
-                        <label className="fleet-sort-control flex items-center gap-2 px-3 py-2 rounded-lg sm:min-w-48">
+                        <label className="fleet-sort-control fleet-search-collapsible flex items-center gap-2 px-3 py-2 rounded-lg sm:min-w-48">
                           <ArrowDownAZ className="w-4 h-4 shrink-0 text-slate-400" />
                           <select value={fleetSort} onChange={(event) => setFleetSort(event.target.value)} aria-label="Ordenar dispositivos" className="min-w-0 flex-1 bg-transparent text-xs text-white outline-none">
                             <option value="STATUS">Por estado</option>
