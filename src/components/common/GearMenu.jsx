@@ -163,9 +163,11 @@ export default function GearMenu({
                 <Palette className="w-3.5 h-3.5" />
                 <span>PALETA DE COLORES CLÍNICA:</span>
               </label>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
                 {[
                   { id: 'industrial', label: '🏭 Industrial', desc: 'Azul Acero' },
+                  { id: 'aurum', label: '👑 Aurum', desc: 'Marino + Oro' },
+                  { id: 'gold', label: '🥇 Gold', desc: 'Oro Puro' },
                   { id: 'tactical', label: '🛡️ Pizarra', desc: 'Cian' },
                   { id: 'cyber', label: '🌙 Cyber', desc: 'Azul' },
                   { id: 'hybrid', label: '⚡ Híbrido', desc: 'Esmeralda' }

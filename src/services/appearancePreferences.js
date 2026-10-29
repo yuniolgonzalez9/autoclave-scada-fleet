@@ -8,7 +8,7 @@ export const DEFAULT_APPEARANCE = {
 
 function normalizeAppearance(value = {}) {
   return {
-    theme: ['industrial', 'tactical', 'cyber', 'hybrid'].includes(value.theme) ? value.theme : DEFAULT_APPEARANCE.theme,
+    theme: ['industrial', 'aurum', 'gold', 'tactical', 'cyber', 'hybrid'].includes(value.theme) ? value.theme : DEFAULT_APPEARANCE.theme,
     background: [
       'solid',
       'circuit-pcb',
