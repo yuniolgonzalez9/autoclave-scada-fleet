@@ -29,6 +29,16 @@ function buildVersionFile() {
         fileName: 'version.json',
         source: JSON.stringify({ build: BUILD_ID, commit: COMMIT_SHA, version: APP_VERSION })
       });
+
+      // sw.js se genera por build con el BUILD_ID inyectado: cada deploy
+      // produce un script distinto → el navegador actualiza el SW →
+      // activate purga cachés y recarga las ventanas (auto-curado).
+      // URL limpia /sw.js para no afectar la instalación como PWA.
+      const templatePath = path.resolve(__dirname, 'sw.template.js');
+      if (existsSync(templatePath)) {
+        const source = readFileSync(templatePath, 'utf8').replaceAll('__SW_BUILD__', BUILD_ID);
+        this.emitFile({ type: 'asset', fileName: 'sw.js', source });
+      }
     }
   };
 }

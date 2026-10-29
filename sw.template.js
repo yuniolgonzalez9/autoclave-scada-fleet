@@ -1,7 +1,7 @@
 // =========================================================================
 // BIOFLEET OS v2.0 // SERVICE WORKER DE PURGA AUTOMÁTICA DE CACHÉ
 // =========================================================================
-const VERSION = 'biofleet-v2-build-' + Date.now();
+const VERSION = 'biofleet-v2-build-__SW_BUILD__';
 
 // 1. Forzar activación inmediata
 self.addEventListener('install', (event) => {

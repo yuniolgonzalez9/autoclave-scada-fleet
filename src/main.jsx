@@ -10,10 +10,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 );
 
 // Service worker: purga cachés viejas y sirve siempre la versión de red.
-// La URL lleva ?v=<BUILD_ID> para que CADA deploy genere un script distinto:
-// el navegador detecta el cambio, instala el SW nuevo y al activarse borra
-// todas las cachés viejas. Sin esto, un SW legacy seguiría sirviendo la app
-// vieja y la detección de versión jamás llegaría a ejecutarse.
+// sw.js se genera por build con el BUILD_ID inyectado → cada deploy cambia
+// el script → el navegador actualiza el SW → activate purga + recarga.
+// Registro en /sw.js limpio (sin ?v=) para la instalación como PWA.
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.getRegistrations().then((regs) => {
@@ -24,7 +23,7 @@ if ('serviceWorker' in navigator) {
     }).catch(() => {});
 
     navigator.serviceWorker
-      .register(`/sw.js?v=${__BUILD_ID__}`, { updateViaCache: 'none' })
+      .register('/sw.js', { updateViaCache: 'none' })
       .then((reg) => reg.update().catch(() => {}))
       .catch(() => {});
   });
