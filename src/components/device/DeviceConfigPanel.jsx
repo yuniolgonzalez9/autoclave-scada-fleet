@@ -78,7 +78,7 @@ export default function DeviceConfigPanel({ device, canEdit, sendCommand, onDevi
 
         <div className="space-y-2">
           <span className="text-[11px] text-slate-400">Tipo de equipo</span>
-          <div className="flex gap-1.5 overflow-x-auto pb-1" data-no-swipe>
+          <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar" data-no-swipe>
             {TIPOS_EQUIPO.map((t) => (
               <button key={t.id} type="button" onClick={() => set({ tipo: t.id, marca: '', modelo: '' })} className={`px-3 py-1.5 rounded-lg text-[11px] font-bold whitespace-nowrap border ${form.tipo === t.id ? 'bg-cyan-500 text-slate-950 border-cyan-400' : 'border-slate-700 text-slate-300'}`}>{t.label}</button>
             ))}

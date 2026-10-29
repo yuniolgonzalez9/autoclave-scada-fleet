@@ -568,7 +568,7 @@ export default function UserManagementView({ fleet = {}, onFleetUpdated }) {
           </div>
         </div>
 
-        <div ref={tabStripRef} className="px-2 sm:px-3 border-t border-slate-800/80 relative flex gap-1 overflow-x-auto">
+        <div ref={tabStripRef} className="px-2 sm:px-3 border-t border-slate-800/80 relative flex gap-1 overflow-x-auto no-scrollbar">
           {[
             { id: 'directorio', label: 'Personal Registrado', icon: Users, count: activeList.length },
             { id: 'crear', label: 'Alta de Operador', icon: UserPlus },
