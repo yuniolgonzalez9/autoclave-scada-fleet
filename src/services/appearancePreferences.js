@@ -1,8 +1,8 @@
 import { supabase } from './supabase';
 
 export const DEFAULT_APPEARANCE = {
-  theme: 'industrial',
-  background: 'solid',
+  theme: 'aurum',
+  background: 'planet-nodes',
   opacity: 100
 };
 

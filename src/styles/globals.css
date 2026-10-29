@@ -1989,6 +1989,40 @@ button, a, label, input, select, textarea, [role="button"] { touch-action: manip
   --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
 }
 
+/* ===== Login — obedece al tema activo ===== */
+.login-card .text-cyan-400,
+.login-card .text-cyan-300,
+.login-card .text-cyan-300\/80,
+.login-card .text-cyan-400\/80,
+.login-card .hover\:text-cyan-300:hover {
+  color: var(--accent-color) !important;
+}
+
+.login-card,
+.login-card .border-cyan-500\/30,
+.login-card .border-cyan-500\/40 {
+  border-color: color-mix(in srgb, var(--accent-color) 38%, transparent) !important;
+}
+
+.login-card .bg-cyan-500\/10 {
+  background-color: color-mix(in srgb, var(--accent-color) 14%, transparent) !important;
+}
+
+.login-primary-btn {
+  background-image: linear-gradient(135deg,
+    color-mix(in srgb, var(--accent-color) 92%, #ffffff),
+    color-mix(in srgb, var(--accent-color) 55%, #1e293b)) !important;
+  box-shadow: 0 10px 26px color-mix(in srgb, var(--accent-color) 28%, transparent) !important;
+}
+
+.brand-lockup {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.brand-lockup:hover {
+  opacity: 0.88;
+  transform: translateY(-1px);
+}
+
 /* ===== AI Studio — rediseño ===== */
 .studio-title-gradient {
   background: linear-gradient(92deg, #fbbf24 5%, #34d399 48%, #22d3ee 95%);

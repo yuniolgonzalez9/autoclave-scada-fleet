@@ -610,7 +610,13 @@ function ScadaAppContent() {
         {/* Header Superior */}
         <header className="header-shell speedtest-laser-header border-b border-cyan-500/20 px-3 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between sticky top-0 z-40 w-full glass-shine">
           <HeaderLaserOrbit />
-          <div className="brand-lockup flex items-center gap-2 sm:gap-3 min-w-0">
+          <div
+            className="brand-lockup flex items-center gap-2 sm:gap-3 min-w-0 cursor-pointer select-none"
+            onClick={() => { setActiveSection('flota'); setSelectedMac(null); }}
+            title="Ir a Home — Dispositivos en Línea"
+            role="button"
+            aria-label="Ir a Home, dispositivos en línea"
+          >
             <div className="brand-emitter p-1.5 sm:p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 shrink-0">
               <Activity className="w-5 h-5 sm:w-6 sm:h-6 animate-pulse" />
             </div>
