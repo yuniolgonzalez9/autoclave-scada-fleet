@@ -177,6 +177,32 @@ function ScadaAppContent() {
     sessionStorage.setItem('scada_fleet_sort', fleetSort);
   }, [fleetSort]);
 
+  // Persistencia de posición de scroll por sección: recargar la web te
+  // deja exactamente donde estabas dentro de cada apartado.
+  useEffect(() => {
+    const key = `scada_scroll_${activeSection}`;
+    const saved = parseInt(sessionStorage.getItem(key) || '0', 10);
+    if (saved > 0) {
+      const t = setTimeout(() => window.scrollTo(0, saved), 180);
+      return () => clearTimeout(t);
+    }
+  }, [activeSection]);
+
+  useEffect(() => {
+    let t;
+    const onScroll = () => {
+      clearTimeout(t);
+      t = setTimeout(() => {
+        sessionStorage.setItem(`scada_scroll_${activeSection}`, String(Math.round(window.scrollY)));
+      }, 200);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener('scroll', onScroll);
+    };
+  }, [activeSection]);
+
   const toggleKioskMode = useCallback((macToKiosk = null) => {
     if (kioskMac) {
       sessionStorage.removeItem('scada_tab_kiosk_mac');

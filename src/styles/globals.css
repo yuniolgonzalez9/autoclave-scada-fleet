@@ -1910,6 +1910,85 @@ button, a, label, input, select, textarea, [role="button"] { touch-action: manip
   --laser-glow: 0 0 18px rgba(96, 165, 250, 0.55), 0 0 11px rgba(59, 130, 246, 0.28);
 }
 
+/* ===== GearMenu — clases que obedecen al tema activo ===== */
+.gear-accent-text {
+  color: var(--accent-color) !important;
+}
+
+.gear-accent-border {
+  border-color: color-mix(in srgb, var(--accent-color) 45%, transparent) !important;
+}
+
+.gear-panel {
+  border-color: var(--card-border) !important;
+}
+
+.gear-divider {
+  border-color: color-mix(in srgb, var(--accent-color) 22%, transparent) !important;
+}
+
+.gear-theme-active {
+  background: color-mix(in srgb, var(--accent-color) 20%, transparent) !important;
+  border-color: color-mix(in srgb, var(--accent-color) 65%, transparent) !important;
+  color: #fff !important;
+  font-weight: 700;
+  box-shadow: 0 0 12px color-mix(in srgb, var(--accent-color) 38%, transparent);
+}
+
+.gear-select:focus,
+.gear-select:focus-visible {
+  border-color: var(--accent-color) !important;
+  outline: none;
+}
+
+/* Slider de opacidad con el acento del tema */
+.gear-panel input[type="range"] {
+  accent-color: var(--accent-color);
+}
+
+/* ===== Re-mapeo de cyan del shell → acento del tema activo =====
+   El header, nav móvil, panel gear y CTAs usan utilidades cyan fijas;
+   estas reglas las tiñen con el --accent-color de cada tema para que
+   la app entera se comporte como una sola identidad (ej. oro en Aurum). */
+.header-shell .text-cyan-400,
+.header-shell .text-cyan-300,
+.mobile-nav-shell .text-cyan-400,
+.mobile-nav-shell .text-cyan-300,
+.mobile-nav-shell .hover\:text-cyan-300:hover,
+.gear-panel .text-cyan-400,
+.gear-panel .text-cyan-300,
+.fleet-device-cta {
+  color: var(--accent-color) !important;
+}
+
+.header-shell,
+.mobile-nav-shell {
+  border-color: color-mix(in srgb, var(--accent-color) 28%, transparent) !important;
+}
+
+.header-shell .border-cyan-500\/30,
+.header-shell .border-cyan-500\/40,
+.header-shell .border-cyan-500\/20,
+.mobile-nav-shell .border-cyan-500\/30,
+.gear-panel .border-cyan-500\/30,
+.gear-panel .border-cyan-500\/40,
+.gear-panel .border-cyan-500\/20,
+.gear-panel .border-cyan-500\/50 {
+  border-color: color-mix(in srgb, var(--accent-color) 38%, transparent) !important;
+}
+
+.header-shell .bg-cyan-500\/10,
+.header-shell .bg-cyan-500\/20,
+.header-shell .hover\:bg-cyan-500\/20:hover {
+  background-color: color-mix(in srgb, var(--accent-color) 14%, transparent) !important;
+}
+
+.header-shell .from-cyan-500\/20 {
+  --tw-gradient-from: color-mix(in srgb, var(--accent-color) 20%, transparent) var(--tw-gradient-from-position) !important;
+  --tw-gradient-to: transparent var(--tw-gradient-to-position) !important;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
+}
+
 /* ===== AI Studio — rediseño ===== */
 .studio-title-gradient {
   background: linear-gradient(92deg, #fbbf24 5%, #34d399 48%, #22d3ee 95%);
