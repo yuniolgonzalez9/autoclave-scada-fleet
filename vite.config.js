@@ -16,12 +16,19 @@ if (existsSync(path.resolve(__dirname, '.env'))) {
 
 // Identificador único de cada publicación: la web lo compara con
 // /version.json para recargarse sola cuando hay una versión nueva.
+// El commit SHA (Vercel lo inyecta) identifica el deploy estilo GitHub.
 const BUILD_ID = String(Date.now());
+const COMMIT_SHA = (process.env.VERCEL_GIT_COMMIT_SHA || 'local').slice(0, 7);
+const APP_VERSION = JSON.parse(readFileSync(path.resolve(__dirname, 'package.json'), 'utf8')).version;
 function buildVersionFile() {
   return {
     name: 'build-version-file',
     generateBundle() {
-      this.emitFile({ type: 'asset', fileName: 'version.json', source: JSON.stringify({ build: BUILD_ID }) });
+      this.emitFile({
+        type: 'asset',
+        fileName: 'version.json',
+        source: JSON.stringify({ build: BUILD_ID, commit: COMMIT_SHA, version: APP_VERSION })
+      });
     }
   };
 }
@@ -77,6 +84,8 @@ export default defineConfig({
   define: {
     'global': 'window',
     __BUILD_ID__: JSON.stringify(BUILD_ID),
+    __COMMIT_SHA__: JSON.stringify(COMMIT_SHA),
+    __APP_VERSION__: JSON.stringify(APP_VERSION),
   },
   build: {
     rollupOptions: {

@@ -10,10 +10,23 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 );
 
 // Service worker: purga cachés viejas y sirve siempre la versión de red.
-// Sin este registro, el SW del sitio legacy seguía sirviendo la app vieja.
+// La URL lleva ?v=<BUILD_ID> para que CADA deploy genere un script distinto:
+// el navegador detecta el cambio, instala el SW nuevo y al activarse borra
+// todas las cachés viejas. Sin esto, un SW legacy seguiría sirviendo la app
+// vieja y la detección de versión jamás llegaría a ejecutarse.
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).catch(() => {});
+    navigator.serviceWorker.getRegistrations().then((regs) => {
+      regs.forEach((reg) => {
+        const script = reg.active?.scriptURL || reg.waiting?.scriptURL || reg.installing?.scriptURL || '';
+        if (!script.includes('/sw.js')) reg.unregister().catch(() => {});
+      });
+    }).catch(() => {});
+
+    navigator.serviceWorker
+      .register(`/sw.js?v=${__BUILD_ID__}`, { updateViaCache: 'none' })
+      .then((reg) => reg.update().catch(() => {}))
+      .catch(() => {});
   });
 }
 
@@ -42,6 +55,9 @@ if (import.meta.env.PROD) {
       setTimeout(() => window.location.reload(), 3000);
     } catch (_) {}
   };
+  // Chequeo inmediato al abrir la app + periódico + al volver a la pestaña
+  if (document.readyState === 'complete') checkForUpdate();
+  else window.addEventListener('load', checkForUpdate);
   setInterval(checkForUpdate, 60 * 1000);
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') checkForUpdate();

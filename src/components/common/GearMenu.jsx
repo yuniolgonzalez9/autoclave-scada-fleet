@@ -292,6 +292,12 @@ export default function GearMenu({
                 <span>Cerrar Sesión Activa</span>
               </button>
             </div>
+
+            {/* Versión del despliegue actual — ayuda a verificar que la app
+                se auto-actualizó tras un push a GitHub/Vercel */}
+            <div className="pt-1.5 text-center text-[9px] font-mono text-slate-600">
+              BIOFLEET OS v{__APP_VERSION__} · build {__COMMIT_SHA__}
+            </div>
           </div>
         </>,
         document.body
