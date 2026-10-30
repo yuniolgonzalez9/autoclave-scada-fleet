@@ -1,6 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 
-const LOOP_MS = 6400;
+// Velocidad constante ~7.5ms por píxel: el láser tarda lo mismo en
+// recorrer cada píxel en móvil y PC — en pantallas anchas el ciclo
+// completo es proporcionalmente más lento y fluido.
+const MS_PER_PX = 7.5;
 
 /**
  * Genera el trazado SVG SVGPath de un rectángulo redondeado canónico.
@@ -64,7 +67,7 @@ export default function HeaderLaserOrbit() {
       attributeName="stroke-dashoffset"
       from="0"
       to={-perimeter}
-      dur={`${LOOP_MS}ms`}
+      dur={`${Math.max(4000, Math.round(perimeter * MS_PER_PX))}ms`}
       repeatCount="indefinite"
     />
   );

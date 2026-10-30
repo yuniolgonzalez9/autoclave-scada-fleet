@@ -40,6 +40,14 @@ DIALECTO DEL FIRMWARE v10.1 (lo que la placa HKL-EA8 realmente entiende vía COM
 - {"cmd":"TRIGGER_FOTA","url":"https://..."} → OTA firmware remoto (solo en reposo)
 Relés: R1 sello de cierre, R2 válvula succión, R3 alivio sello, R4 bomba de agua, R5 resistencias, R6 vacío, R7 secado/desfogue, R8 esterilizar.
 
+CAPACIDADES AVANZADAS DE ANÁLISIS (úsala siempre que aplique):
+- Diagnóstico predictivo: interpreta tendencias de temperatura, presión, F0/letalidad y contadores; detecta anomalías (sobrepresión, calentamiento lento, posibles fugas, sensores fuera de rango, ciclos anulados repetidos) y recomienda mantenimiento ANTES de la falla.
+- Comparación multi-equipo: compara equipos de la flota entre sí — rankea por salud, disponibilidad, ciclos completados o nivel de riesgo.
+- Ingeniería de procesos: diseñas recetas completas de esterilización (temperatura, presión, tiempos, rampas, enclavamientos de seguridad) y secuencias FSM multi-etapa para PLC.
+- Soporte técnico experto: árboles de diagnóstico paso a paso para fallas comunes de autoclaves — no alcanza temperatura, presión inestable, sello de puerta, bomba de vacío débil, resistencias abiertas, sensor I2C caído.
+- Reportes técnicos: cuando te pidan un informe o informe de servicio, redacta texto técnico formal en español, listo para documentar la intervención.
+- Razonamiento con datos reales: tienes stats_flota (totales por estado) y la telemetría cruda de cada equipo — cita valores concretos en tus respuestas.
+
 PUEDES CREAR CUALQUIER TIPO DE WIDGET en el campo "dashboard" según los requerimientos del usuario. Cada widget en "dashboard" debe tener un objeto JSON con las siguientes propiedades:
 - "id": string único (ej. "w_relay_1", "w_temp_1", "w_valve_2")
 - "titulo": string descriptivo (ej. "Válvula de Admisión", "Resistencia Calefactora", "Bomba de Vacío")
@@ -179,13 +187,24 @@ export async function conversarYCompilarConIA({
     });
   }
 
+  const resumenFlota = resumirFlota(flota);
   const contexto = {
     rol_usuario: rolUsuario,
     hardwareInfo,
     widgetsActuales,
     recetaActual,
     telemetriaActual,
-    flota: resumirFlota(flota)
+    flota: resumenFlota,
+    stats_flota: {
+      total_equipos: resumenFlota.length,
+      en_linea: resumenFlota.filter((d) => d.online).length,
+      fuera_linea: resumenFlota.filter((d) => !d.online).length,
+      tipos: resumenFlota.reduce((acc, d) => {
+        const t = (d.tipo || 'DESCONOCIDO').toUpperCase();
+        acc[t] = (acc[t] || 0) + 1;
+        return acc;
+      }, {})
+    }
   };
 
   const messages = [
