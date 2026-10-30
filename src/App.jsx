@@ -10,7 +10,7 @@ import { useSwipe, stepThrough } from './hooks/useSwipe';
 import { useNotificationCenter } from './hooks/useNotificationCenter';
 import { useMqttFleet } from './hooks/useMqttFleet';
 import { useAccountAppearance } from './hooks/useAccountAppearance';
-import { startIndustrialSiren, stopIndustrialSiren, initAudioUnlock } from './services/audioAlarm';
+import { startIndustrialSiren, stopIndustrialSiren, initAudioUnlock, playBellChime } from './services/audioAlarm';
 import { sendCriticalAlarmWithButtons } from './services/telegram';
 import { supabase } from './services/supabase';
 import HeaderLaserOrbit from './components/common/HeaderLaserOrbit';
@@ -460,6 +460,32 @@ function ScadaAppContent() {
   });
   const bellCount = notificationCenter.counts.unattended;
   const bellCritical = notificationCenter.counts.criticalNew > 0;
+
+  // Timbre de campana acorde al sacudir — suena mientras haya alertas
+  // sin atender (sincronizado con la animación de la campanita).
+  useEffect(() => {
+    if (!user || bellCount <= 0) return undefined;
+    const chime = () => playBellChime();
+    chime();
+    const id = setInterval(chime, 3000);
+    return () => clearInterval(id);
+  }, [user, bellCount > 0]);
+
+  // Persistencia tipo app nativa: el botón Atrás nunca cierra la app —
+  // navega hacia Flota en su lugar (centinela de historial re-pushed).
+  useEffect(() => {
+    if (!user) return undefined;
+    const sentinel = () => {
+      try { history.pushState({ bf: 'stay' }, '', window.location.href); } catch (_) {}
+    };
+    sentinel();
+    const onPop = () => {
+      sentinel();
+      if (!kioskMac && activeSection !== 'flota') setActiveSection('flota');
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, [user, activeSection, kioskMac]);
 
   const getDeviceHealthData = useCallback((dev) => {
     if (!dev || !dev.lastSeen || dev.lastSeen === 0) {

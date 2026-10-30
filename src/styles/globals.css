@@ -1675,12 +1675,37 @@ button:active::after, .btn:active::after {
   50% { opacity: 1; }
 }
 
-/* Apagar TODAS las animaciones/transiciones (efectos off) */
-html[data-anim="off"] *,
-html[data-anim="off"] *::before,
-html[data-anim="off"] *::after {
+/* Apagar TODAS las animaciones/transiciones (efectos off) — EXCEPTO
+   la barra superior completa (logo, nombre, campana): es identidad
+   funcional de la app y sigue viva aunque los efectos estén off */
+html[data-anim="off"] *:not(.header-shell):not(.header-shell *),
+html[data-anim="off"] *:not(.header-shell):not(.header-shell *)::before,
+html[data-anim="off"] *:not(.header-shell):not(.header-shell *)::after {
   animation: none !important;
   transition: none !important;
+}
+
+/* Ventana tipo app nativa (WCO): los controles del navegador
+   (min/max/cerrar) quedan como overlay flotante sobre el header —
+   casi invisibles, aparecen al acercar el mouse. El header arrastra
+   la ventana; los botones internos no. */
+@media (display-mode: window-controls-overlay) {
+  .header-shell {
+    padding-left: env(titlebar-area-x, 0);
+    padding-top: env(titlebar-area-height, 8px);
+    -webkit-app-region: drag;
+    app-region: drag;
+  }
+  .header-shell button,
+  .header-shell a,
+  .header-shell input,
+  .header-shell select,
+  .header-shell label,
+  .gear-panel,
+  .user-chip {
+    -webkit-app-region: no-drag;
+    app-region: no-drag;
+  }
 }
 
 /* La campana de alertas es funcional, no decorativa: siempre vibra */

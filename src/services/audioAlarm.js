@@ -139,6 +139,37 @@ export const stopIndustrialSiren = () => {
 export const isSirenPlaying = () => sirenaActiva;
 
 /**
+ * Timbre de campana suave — dos tonos con decaimiento natural.
+ * Acompaña el sacudir visual de la campanita mientras haya alertas.
+ */
+export const playBellChime = () => {
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+
+    const t = ctx.currentTime;
+    // Timbre: golpe agudo + armónico, decaimiento tipo campanilla
+    [[1760, 0, 0.20], [1318, 0.02, 0.10], [2349, 0.14, 0.12]].forEach(([freq, dt, vol]) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, t + dt);
+
+      gain.gain.setValueAtTime(0.0001, t + dt);
+      gain.gain.exponentialRampToValueAtTime(vol, t + dt + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0008, t + dt + 0.55);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(t + dt);
+      osc.stop(t + dt + 0.6);
+    });
+  } catch (_) {}
+};
+
+/**
  * Beep corto de confirmación para acciones exitosas (QR, conmutación de relé)
  */
 export const playConfirmBeep = () => {
