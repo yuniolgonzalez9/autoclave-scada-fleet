@@ -1204,11 +1204,14 @@ function ScadaAppContent() {
         {/* Barra Inferior Celular */}
         {user && !kioskMac && (
           <nav className="mobile-nav-shell lg:hidden fixed bottom-0 left-0 right-0 h-16 border-t border-cyan-500/30 backdrop-blur-xl flex items-center justify-around z-50">
-            <div className="mobile-nav-dots" aria-hidden="true">
-              {mobileSections.map((s, i) => (
-                <span key={s} className={`mobile-nav-dot${navIndex === i ? ' mobile-nav-dot--active' : ''}`} />
-              ))}
-            </div>
+            <span
+              className="mobile-nav-indicator"
+              style={{
+                width: `${100 / mobileSections.length}%`,
+                transform: `translateX(${Math.max(navIndex, 0) * 100}%)`,
+                opacity: navIndex === -1 ? 0 : 1
+              }}
+            />
             <button
               onClick={() => goToSection('flota')}
               className={`flex-1 flex flex-col items-center gap-1 py-1 px-1 rounded-lg text-[10px] font-mono transition-all ${
