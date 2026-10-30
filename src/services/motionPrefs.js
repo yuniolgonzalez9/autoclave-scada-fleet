@@ -57,6 +57,7 @@ function installSpeedController() {
 
 export function applyMotionPrefs(prefs) {
   const p = { ...MOTION_DEFAULTS, ...prefs };
+  try { localStorage.setItem(KEY, JSON.stringify(p)); } catch (_) {}
   const el = document.documentElement;
   el.dataset.anim = p.animOn ? 'on' : 'off';
   el.dataset.laser = p.laserOn ? 'on' : 'off';

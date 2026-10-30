@@ -3,11 +3,21 @@ import { supabase } from './supabase';
 export const DEFAULT_APPEARANCE = {
   theme: 'aurum',
   background: 'planet-nodes',
-  opacity: 100
+  opacity: 100,
+  glassOn: true,
+  animOn: true,
+  animSpeed: 100,
+  laserOn: true,
+  laserSpeed: 100,
+  transOn: true,
+  transSpeed: 100
 };
 
+const MOTION_BOOL_KEYS = ['glassOn', 'animOn', 'laserOn', 'transOn'];
+const MOTION_SPEED_LIMITS = { animSpeed: 300, laserSpeed: 600, transSpeed: 300 };
+
 function normalizeAppearance(value = {}) {
-  return {
+  const base = {
     theme: ['industrial', 'aurum', 'gold', 'tactical', 'cyber', 'hybrid'].includes(value.theme) ? value.theme : DEFAULT_APPEARANCE.theme,
     background: [
       'solid',
@@ -23,6 +33,15 @@ function normalizeAppearance(value = {}) {
       ? Math.min(100, Math.max(0, Math.round(Number(value.opacity))))
       : DEFAULT_APPEARANCE.opacity
   };
+  MOTION_BOOL_KEYS.forEach((k) => {
+    base[k] = typeof value[k] === 'boolean' ? value[k] : DEFAULT_APPEARANCE[k];
+  });
+  Object.entries(MOTION_SPEED_LIMITS).forEach(([k, max]) => {
+    base[k] = Number.isFinite(Number(value[k]))
+      ? Math.min(max, Math.max(10, Math.round(Number(value[k]))))
+      : DEFAULT_APPEARANCE[k];
+  });
+  return base;
 }
 
 function localKey(userId) {

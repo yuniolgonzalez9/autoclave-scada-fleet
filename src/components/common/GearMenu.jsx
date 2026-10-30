@@ -42,12 +42,15 @@ export default function GearMenu({
   kioskMac,
   onUnlockKiosk,
   onOpenDiagnostics,
-  appearanceSyncStatus
+  appearanceSyncStatus,
+  motionPrefs,
+  onMotionChange
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [motion, setMotion] = useState(readMotionPrefs);
-  const updateMotion = (patch) => setMotion((m) => saveMotionPrefs({ ...m, ...patch }));
+  const [localMotion, setLocalMotion] = useState(readMotionPrefs);
+  const motion = motionPrefs || localMotion;
+  const updateMotion = onMotionChange || ((patch) => setLocalMotion((m) => saveMotionPrefs({ ...m, ...patch })));
 
   // Escuchar cambios de fullscreen nativo
   useEffect(() => {
@@ -214,36 +217,12 @@ export default function GearMenu({
               </select>
             </div>
 
-            {/* 3. Nivel de Transparencia Ultra-Glass */}
-            <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800 space-y-1.5">
-              <div className="flex justify-between text-xs gear-accent-text">
-                <span className="flex items-center gap-1">
-                  <Waves className="w-3.5 h-3.5" />
-                  <span>Opacidad de Cristal:</span>
-                </span>
-                <span className="font-bold font-mono">{opacity}%</span>
-              </div>
-              <input 
-                type="range" 
-                min="0" 
-                max="100" 
-                step="1"
-                value={opacity} 
-                onChange={(e) => setOpacity(Number(e.target.value))} 
-                className="gear-slider w-full h-1.5 rounded-lg appearance-none cursor-pointer"
-                aria-label="Ajustar transparencia ultra-glass"
-                aria-valuemin="0"
-                aria-valuemax="100"
-                aria-valuenow={opacity}
-              />
-            </div>
-
-            {/* 3.5 Controles de Movimiento — toggle + velocidad/porcentaje */}
+            {/* 3. Controles de Ajuste — transparencia + movimiento, toggle + slider cada uno */}
             <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800 space-y-3">
               {[
                 {
-                  key: 'glassOn', speedKey: null, icon: Waves, label: 'Transparencia',
-                  hint: 'Cristal glass en paneles', suffix: null
+                  key: 'glassOn', speedKey: 'opacity', icon: Waves, label: 'Transparencia',
+                  hint: 'Cristal glass en paneles', suffix: '%', min: 0, max: 100, step: 1
                 },
                 {
                   key: 'animOn', speedKey: 'animSpeed', icon: Zap, label: 'Efectos & Animaciones',
@@ -257,9 +236,10 @@ export default function GearMenu({
                   key: 'transOn', speedKey: 'transSpeed', icon: MoveRight, label: 'Transiciones de Sección',
                   hint: 'Cambio animado entre apartados', suffix: '%'
                 }
-              ].map(({ key, speedKey, icon: Icon, label, hint, suffix, max = 300 }) => {
+              ].map(({ key, speedKey, icon: Icon, label, hint, suffix, min = 10, max = 300, step = 5 }) => {
                 const on = motion[key] !== false;
-                const speed = speedKey ? (motion[speedKey] || 100) : opacity;
+                const isOpacity = speedKey === 'opacity';
+                const speed = isOpacity ? opacity : (motion[speedKey] || 100);
                 return (
                   <div key={key} className={`space-y-1.5 transition-opacity ${on ? '' : 'opacity-50'}`}>
                     <div className="flex justify-between items-center text-xs gear-accent-text">
@@ -268,7 +248,7 @@ export default function GearMenu({
                         <span>{label}</span>
                       </span>
                       <span className="flex items-center gap-2">
-                        {speedKey && <span className="font-bold font-mono text-[10px]">{speed}{suffix}</span>}
+                        <span className="font-bold font-mono text-[10px]">{speed}{suffix}</span>
                         <button
                           type="button"
                           role="switch"
@@ -281,24 +261,20 @@ export default function GearMenu({
                         </button>
                       </span>
                     </div>
-                    {speedKey ? (
-                      <input
-                        type="range"
-                        min="10"
-                        max={max}
-                        step="5"
-                        value={Math.min(speed, max)}
-                        disabled={!on}
-                        onChange={(e) => updateMotion({ [speedKey]: Number(e.target.value) })}
-                        className="gear-slider w-full h-1.5 rounded-lg appearance-none cursor-pointer disabled:cursor-not-allowed"
-                        aria-label={`Velocidad de ${label}`}
-                        aria-valuemin="10"
-                        aria-valuemax={max}
-                        aria-valuenow={speed}
-                      />
-                    ) : (
-                      <p className="text-[9px] text-slate-500 leading-none">{hint}</p>
-                    )}
+                    <input
+                      type="range"
+                      min={min}
+                      max={max}
+                      step={step}
+                      value={Math.min(speed, max)}
+                      disabled={!on}
+                      onChange={(e) => (isOpacity ? setOpacity(Number(e.target.value)) : updateMotion({ [speedKey]: Number(e.target.value) }))}
+                      className="gear-slider w-full h-1.5 rounded-lg appearance-none cursor-pointer disabled:cursor-not-allowed"
+                      aria-label={`Nivel de ${label}`}
+                      aria-valuemin={min}
+                      aria-valuemax={max}
+                      aria-valuenow={speed}
+                    />
                   </div>
                 );
               })}

@@ -14,7 +14,7 @@ import { startIndustrialSiren, stopIndustrialSiren, initAudioUnlock } from './se
 import { sendCriticalAlarmWithButtons } from './services/telegram';
 import { supabase } from './services/supabase';
 import HeaderLaserOrbit from './components/common/HeaderLaserOrbit';
-import { readMotionPrefs } from './services/motionPrefs';
+import { applyMotionPrefs } from './services/motionPrefs';
 
 // Vistas pesadas: carga diferida para acelerar el arranque en móviles
 const DeviceDetailView = lazy(() => import('./components/dashboard/DeviceDetailView'));
@@ -337,18 +337,30 @@ function ScadaAppContent() {
     document.documentElement.setAttribute('data-theme', currentTheme);
   }, [currentTheme]);
 
-  const [motionTick, setMotionTick] = useState(0);
+  // Preferencias de movimiento viven en `appearance` → sincronizan a
+  // Supabase por usuario como tema/fondo/opacidad.
+  const setMotion = (patch) => setAppearance((current) => ({ ...current, ...patch }));
   useEffect(() => {
-    const onMotion = () => setMotionTick((t) => t + 1);
-    window.addEventListener('bf:motion', onMotion);
-    return () => window.removeEventListener('bf:motion', onMotion);
-  }, []);
+    applyMotionPrefs({
+      glassOn: appearance.glassOn,
+      animOn: appearance.animOn,
+      animSpeed: appearance.animSpeed,
+      laserOn: appearance.laserOn,
+      laserSpeed: appearance.laserSpeed,
+      transOn: appearance.transOn,
+      transSpeed: appearance.transSpeed
+    });
+  }, [
+    appearance.glassOn, appearance.animOn, appearance.animSpeed,
+    appearance.laserOn, appearance.laserSpeed,
+    appearance.transOn, appearance.transSpeed
+  ]);
 
   useEffect(() => {
-    const glassOn = readMotionPrefs().glassOn !== false;
+    const glassOn = appearance.glassOn !== false;
     const alpha = (glassOn ? opacity / 100 : 1).toFixed(2);
     document.documentElement.style.setProperty('--glass-opacity', alpha);
-  }, [opacity, motionTick]);
+  }, [opacity, appearance.glassOn]);
 
   // Vigilante optimizado de sirena
   const alarmasNotificadasRef = useRef(new Set());
@@ -746,6 +758,8 @@ function ScadaAppContent() {
                   onUnlockKiosk={() => toggleKioskMode(null)}
                   onOpenDiagnostics={isAdmin ? () => setCloudDiagType('hivemq') : null}
                   appearanceSyncStatus={appearanceSyncStatus}
+                  motionPrefs={appearance}
+                  onMotionChange={setMotion}
                 />
               </div>
             )}
