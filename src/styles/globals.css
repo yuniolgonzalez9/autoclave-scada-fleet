@@ -1600,6 +1600,68 @@ button:active::after, .btn:active::after {
   box-shadow: 0 0 12px var(--accent-color), 0 2px 14px var(--accent-color);
 }
 
+/* Splash de carga — identidad Aurum (navy profundo + oro) */
+.aurum-splash {
+  background: radial-gradient(ellipse at 50% 35%, #141d33 0%, #0a1120 55%, #060a14 100%);
+}
+
+.aurum-splash-orbit {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.aurum-splash-orbit::before {
+  content: '';
+  position: absolute;
+  width: 74px;
+  height: 74px;
+  border-radius: 50%;
+  border: 1.5px solid transparent;
+  border-top-color: var(--accent-color, #f5c24a);
+  border-right-color: color-mix(in srgb, var(--accent-color, #f5c24a) 45%, transparent);
+  animation: spin 1.4s linear infinite;
+}
+
+.aurum-splash-orbit::after {
+  content: '';
+  position: absolute;
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--accent-color, #f5c24a) 18%, transparent);
+  box-shadow: 0 0 26px color-mix(in srgb, var(--accent-color, #f5c24a) 22%, transparent);
+}
+
+.aurum-splash-logo {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  animation: bf-splash-pulse 2s ease-in-out infinite;
+}
+
+@keyframes bf-splash-pulse {
+  0%, 100% { filter: drop-shadow(0 0 4px rgba(245, 194, 74, .5)); transform: scale(1); }
+  50% { filter: drop-shadow(0 0 14px rgba(245, 194, 74, .9)); transform: scale(1.05); }
+}
+
+.aurum-splash-title {
+  color: var(--accent-color, #f5c24a);
+  font-weight: 700;
+  text-shadow: 0 0 14px color-mix(in srgb, var(--accent-color, #f5c24a) 60%, transparent);
+}
+
+.aurum-splash-text {
+  color: color-mix(in srgb, var(--accent-color, #f5c24a) 70%, #94a3b8);
+  animation: bf-splash-fade 1.6s ease-in-out infinite;
+}
+
+@keyframes bf-splash-fade {
+  0%, 100% { opacity: .55; }
+  50% { opacity: 1; }
+}
+
 .bell-alert {
   color: var(--accent-color);
   filter: drop-shadow(0 0 6px var(--accent-color));

@@ -556,9 +556,12 @@ function ScadaAppContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#070913] flex flex-col items-center justify-center font-mono">
-        <Activity className="w-8 h-8 text-cyan-400 animate-spin mb-3" />
-        <p className="text-xs text-cyan-400 tracking-wider">SINCRONIZANDO SESIÓN BIOMÉDICA CENTRAL...</p>
+      <div className="min-h-screen flex flex-col items-center justify-center font-mono aurum-splash">
+        <div className="aurum-splash-orbit mb-4">
+          <img src="/icon-192.png" alt="BIOFLEET" className="aurum-splash-logo" />
+        </div>
+        <p className="aurum-splash-title text-xs tracking-[0.3em]">BIOFLEET OS</p>
+        <p className="aurum-splash-text text-[10px] tracking-wider mt-1">SINCRONIZANDO SESIÓN BIOMÉDICA CENTRAL...</p>
       </div>
     );
   }
