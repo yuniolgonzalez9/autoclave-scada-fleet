@@ -52,15 +52,33 @@ if (import.meta.env.PROD) {
       window.location.reload();
       return;
     }
+    if (!document.getElementById('biofleet-update-style')) {
+      const st = document.createElement('style');
+      st.id = 'biofleet-update-style';
+      st.textContent = '@keyframes bf-gold-pulse{0%,100%{box-shadow:0 0 0 0 rgba(245,194,74,.45)}50%{box-shadow:0 0 18px 4px rgba(245,194,74,.35)}}'
+        + '@keyframes bf-logo-halo{0%,100%{filter:drop-shadow(0 0 3px rgba(245,194,74,.8));transform:scale(1)}50%{filter:drop-shadow(0 0 10px rgba(245,194,74,1));transform:scale(1.08)}}'
+        + '@keyframes bf-rise{from{opacity:0;transform:translateX(-50%) translateY(14px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}';
+      document.head.appendChild(st);
+    }
     const note = document.createElement('div');
     note.setAttribute('role', 'status');
-    note.style.cssText = 'position:fixed;bottom:84px;left:50%;transform:translateX(-50%);z-index:99999;display:flex;align-items:center;gap:10px;background:#151a26;color:#e5e7eb;border:1px solid rgba(245,194,74,.5);padding:9px 12px;border-radius:10px;font:600 12px system-ui,sans-serif;box-shadow:0 4px 14px rgba(0,0,0,.5)';
+    note.style.cssText = 'position:fixed;bottom:84px;left:50%;transform:translateX(-50%);z-index:99999;display:flex;align-items:center;gap:10px;'
+      + 'background:linear-gradient(135deg,#0d1424 0%,#182038 55%,#0d1424 100%);color:#e8c96a;border:1px solid rgba(245,194,74,.55);'
+      + 'padding:10px 14px;border-radius:14px;font:600 12px system-ui,sans-serif;box-shadow:0 6px 22px rgba(0,0,0,.6),inset 0 0 24px rgba(245,194,74,.06);'
+      + 'animation:bf-rise .35s ease-out,bf-gold-pulse 2.4s ease-in-out infinite';
+    const logo = document.createElement('img');
+    logo.src = '/icon-192.png';
+    logo.alt = 'BIOFLEET';
+    logo.style.cssText = 'width:26px;height:26px;border-radius:8px;animation:bf-logo-halo 1.8s ease-in-out infinite';
     const label = document.createElement('span');
     label.textContent = 'Nueva versión disponible';
+    label.style.cssText = 'letter-spacing:.04em;text-shadow:0 0 10px rgba(245,194,74,.35)';
     const btn = document.createElement('button');
     btn.textContent = 'Actualizar ahora';
-    btn.style.cssText = 'background:#f5c24a;color:#1a1405;border:none;border-radius:7px;padding:6px 10px;font:700 11px system-ui,sans-serif;cursor:pointer';
+    btn.style.cssText = 'background:linear-gradient(135deg,#f5c24a,#d9a62e);color:#1a1405;border:none;border-radius:8px;padding:6px 11px;'
+      + 'font:700 11px system-ui,sans-serif;cursor:pointer;box-shadow:0 0 12px rgba(245,194,74,.35)';
     btn.onclick = () => window.location.reload();
+    note.appendChild(logo);
     note.appendChild(label);
     note.appendChild(btn);
     document.body.appendChild(note);
