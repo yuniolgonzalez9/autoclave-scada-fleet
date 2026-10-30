@@ -80,7 +80,7 @@ export default function HeaderLaserOrbit() {
   // Línea reducida: ~22% del perímetro — más compacta y sólida
   const dash = perimeter * 0.22;
   const dasharray = `${dash} ${perimeter - dash}`;
-  const speedMult = Math.min(3, Math.max(0.15, (motion.laserSpeed || 100) / 100));
+  const speedMult = Math.min(6, Math.max(0.15, (motion.laserSpeed || 100) / 100));
   const laserAnim = (
     <animate
       attributeName="stroke-dashoffset"

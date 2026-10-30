@@ -1683,6 +1683,11 @@ html[data-anim="off"] *::after {
   transition: none !important;
 }
 
+/* La campana de alertas es funcional, no decorativa: siempre vibra */
+html[data-anim="off"] .bell-anim {
+  animation: ring 1.8s ease-in-out infinite !important;
+}
+
 /* Apagar láseres en movimiento */
 html[data-laser="off"] .header-laser-orbit,
 html[data-laser="off"] .mobile-nav-indicator {

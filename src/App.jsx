@@ -721,12 +721,12 @@ function ScadaAppContent() {
                 <Bell className={`w-4 h-4 sm:w-5 sm:h-5 transition-colors ${
                   bellCount > 0
                     ? bellCritical
-                      ? 'text-rose-300 animate-[ring_1.6s_ease-in-out_infinite]'
-                      : 'bell-alert animate-[ring_2.2s_ease-in-out_infinite]'
+                      ? 'text-rose-300 bell-anim animate-[ring_1.6s_ease-in-out_infinite]'
+                      : 'bell-alert bell-anim animate-[ring_2.2s_ease-in-out_infinite]'
                     : ''
                 }`} />
                 {bellCritical && (
-                  <div className="absolute inset-0 rounded-xl bg-rose-500/10 animate-pulse"></div>
+                  <div className="bell-anim absolute inset-0 rounded-xl bg-rose-500/10 animate-pulse"></div>
                 )}
               </button>
             )}

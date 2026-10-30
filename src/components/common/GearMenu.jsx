@@ -251,13 +251,13 @@ export default function GearMenu({
                 },
                 {
                   key: 'laserOn', speedKey: 'laserSpeed', icon: Orbit, label: 'Láseres en Movimiento',
-                  hint: 'Aurora del header y del nav', suffix: '%'
+                  hint: 'Aurora del header y del nav', suffix: '%', max: 600
                 },
                 {
                   key: 'transOn', speedKey: 'transSpeed', icon: MoveRight, label: 'Transiciones de Sección',
                   hint: 'Cambio animado entre apartados', suffix: '%'
                 }
-              ].map(({ key, speedKey, icon: Icon, label, hint, suffix }) => {
+              ].map(({ key, speedKey, icon: Icon, label, hint, suffix, max = 300 }) => {
                 const on = motion[key] !== false;
                 const speed = speedKey ? (motion[speedKey] || 100) : opacity;
                 return (
@@ -285,15 +285,15 @@ export default function GearMenu({
                       <input
                         type="range"
                         min="10"
-                        max="300"
+                        max={max}
                         step="5"
-                        value={speed}
+                        value={Math.min(speed, max)}
                         disabled={!on}
                         onChange={(e) => updateMotion({ [speedKey]: Number(e.target.value) })}
                         className="gear-slider w-full h-1.5 rounded-lg appearance-none cursor-pointer disabled:cursor-not-allowed"
                         aria-label={`Velocidad de ${label}`}
                         aria-valuemin="10"
-                        aria-valuemax="300"
+                        aria-valuemax={max}
                         aria-valuenow={speed}
                       />
                     ) : (
