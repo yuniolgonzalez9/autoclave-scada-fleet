@@ -390,15 +390,16 @@ button:active, .btn-touch:active {
 
 .header-laser-orbit-tail {
   stroke: var(--accent-color);
-  stroke-width: 3.5;
-  opacity: 0.45;
-  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--accent-color) 80%, transparent));
+  stroke-width: 4;
+  opacity: 0.6;
+  filter: drop-shadow(0 0 7px color-mix(in srgb, var(--accent-color) 85%, transparent));
 }
 
 .header-laser-orbit-comet {
-  stroke: #d9faff;
-  stroke-width: 1.4;
-  opacity: 0.95;
+  stroke: var(--accent-color);
+  stroke-width: 2.2;
+  opacity: 1;
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--accent-color) 90%, #ffffff 15%));
 }
 
 .laser-orbit-animating {

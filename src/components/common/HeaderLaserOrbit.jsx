@@ -56,8 +56,8 @@ export default function HeaderLaserOrbit() {
   const d = ready ? roundedRectPath(w, h, inset, r) : '';
   const prefersReducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
-  // Línea larga: ~32% del perímetro
-  const dash = perimeter * 0.32;
+  // Línea reducida: ~22% del perímetro — más compacta y sólida
+  const dash = perimeter * 0.22;
   const dasharray = `${dash} ${perimeter - dash}`;
   const laserAnim = (
     <animate
