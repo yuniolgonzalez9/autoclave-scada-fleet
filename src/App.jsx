@@ -853,6 +853,32 @@ function ScadaAppContent() {
                         </div>
                       </div>
 
+                      <div className="relative z-10 flex items-center lg:flex-1 lg:justify-center">
+                        <label className={`fleet-search-control fleet-search-collapsible flex items-center gap-2 px-3 py-2 rounded-lg w-full sm:w-72 ${fleetSearch ? 'fleet-search-collapsible--filled' : ''}`}>
+                          <Search className="w-4 h-4 shrink-0 text-slate-400" />
+                          <input
+                            type="search"
+                            value={fleetSearch}
+                            onChange={(event) => setFleetSearch(event.target.value)}
+                            placeholder="Buscar alias, MAC o centro"
+                            aria-label="Buscar dispositivos por alias, MAC, centro o estado"
+                            className="min-w-0 flex-1 bg-transparent text-xs text-white outline-none placeholder:text-slate-500"
+                          />
+                          {fleetSearch && (
+                            <button type="button" onClick={() => setFleetSearch('')} aria-label="Limpiar búsqueda" className="text-slate-400 hover:text-white shrink-0">
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          <span className="fleet-search-divider" aria-hidden="true" />
+                          <ArrowDownAZ className="w-4 h-4 shrink-0 text-slate-400" />
+                          <select value={fleetSort} onChange={(event) => setFleetSort(event.target.value)} aria-label="Ordenar dispositivos" className="min-w-0 w-24 bg-transparent text-xs text-white outline-none shrink-0">
+                            <option value="STATUS">Estado</option>
+                            <option value="NAME">A-Z</option>
+                            <option value="RECENT">Reciente</option>
+                          </select>
+                        </label>
+                      </div>
+
                       <div className="relative z-10 grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 lg:min-w-[480px]">
                         <button
                           type="button"
@@ -900,43 +926,6 @@ function ScadaAppContent() {
                         </button>
                       </div>
                     </section>
-
-                    <div className="fleet-controls flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono">
-                        <span>{filteredDevices.length} de {allowedDevices.length} equipos</span>
-                        {healthFilter !== 'ALL' && (
-                          <button type="button" onClick={() => setHealthFilter('ALL')} className="fleet-clear-filter">
-                            Mostrar todos
-                          </button>
-                        )}
-                      </div>
-
-                      <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                        <label className={`fleet-search-control fleet-search-collapsible flex items-center gap-2 px-3 py-2 rounded-lg w-full sm:w-72 ${fleetSearch ? 'fleet-search-collapsible--filled' : ''}`}>
-                          <Search className="w-4 h-4 shrink-0 text-slate-400" />
-                          <input
-                            type="search"
-                            value={fleetSearch}
-                            onChange={(event) => setFleetSearch(event.target.value)}
-                            placeholder="Buscar alias, MAC o centro"
-                            aria-label="Buscar dispositivos por alias, MAC, centro o estado"
-                            className="min-w-0 flex-1 bg-transparent text-xs text-white outline-none placeholder:text-slate-500"
-                          />
-                          {fleetSearch && (
-                            <button type="button" onClick={() => setFleetSearch('')} aria-label="Limpiar búsqueda" className="text-slate-400 hover:text-white shrink-0">
-                              <X className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                          <span className="fleet-search-divider" aria-hidden="true" />
-                          <ArrowDownAZ className="w-4 h-4 shrink-0 text-slate-400" />
-                          <select value={fleetSort} onChange={(event) => setFleetSort(event.target.value)} aria-label="Ordenar dispositivos" className="min-w-0 w-24 bg-transparent text-xs text-white outline-none shrink-0">
-                            <option value="STATUS">Estado</option>
-                            <option value="NAME">A-Z</option>
-                            <option value="RECENT">Reciente</option>
-                          </select>
-                        </label>
-                      </div>
-                    </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       {filteredDevices.length === 0 ? (

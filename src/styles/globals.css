@@ -635,8 +635,8 @@ button:active, .btn-touch:active {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-color) 14%, transparent);
 }
 
-/* Controles plegables: en escritorio colapsan a solo el icono y se
-   expanden al pasar el mouse o al enfocar — ahorran espacio de la barra */
+/* Controles plegables: colapsan a solo el icono y se despliegan con
+   una transición suave de lujo (curva ease-out + halo del acento) */
 @media (min-width: 640px) {
   .fleet-search-collapsible {
     width: 2.75rem !important;
@@ -644,13 +644,19 @@ button:active, .btn-touch:active {
     overflow: hidden;
     cursor: text;
     white-space: nowrap;
-    transition: width 0.28s ease, min-width 0.28s ease, border-color 0.2s ease;
+    transition: width 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+                min-width 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+                border-color 0.35s ease,
+                box-shadow 0.5s ease;
   }
   .fleet-search-collapsible:hover,
   .fleet-search-collapsible:focus-within,
   .fleet-search-collapsible--filled {
-    width: 18rem !important;
-    min-width: 18rem !important;
+    width: 19rem !important;
+    min-width: 19rem !important;
+    border-color: color-mix(in srgb, var(--accent-color) 65%, transparent);
+    box-shadow: 0 0 22px color-mix(in srgb, var(--accent-color) 26%, transparent),
+                inset 0 0 18px color-mix(in srgb, var(--accent-color) 7%, transparent);
   }
   .fleet-sort-control.fleet-search-collapsible:hover,
   .fleet-sort-control.fleet-search-collapsible:focus-within,
@@ -667,7 +673,7 @@ button:active, .btn-touch:active {
   flex: 0 0 auto;
 }
 
-/* Mismo patrón plegable en móvil: colapsan a icono y abren al tocar */
+/* Mismo patrón plegable en móvil: colapsa a icono y abre al tocar */
 @media (max-width: 639px) {
   .fleet-search-collapsible {
     width: 2.9rem;
@@ -675,12 +681,17 @@ button:active, .btn-touch:active {
     overflow: hidden;
     cursor: text;
     white-space: nowrap;
-    transition: width 0.28s ease;
+    transition: width 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+                border-color 0.35s ease,
+                box-shadow 0.5s ease;
   }
   .fleet-search-collapsible:hover,
   .fleet-search-collapsible:focus-within,
   .fleet-search-collapsible--filled {
     width: 100%;
+    border-color: color-mix(in srgb, var(--accent-color) 65%, transparent);
+    box-shadow: 0 0 22px color-mix(in srgb, var(--accent-color) 26%, transparent),
+                inset 0 0 18px color-mix(in srgb, var(--accent-color) 7%, transparent);
   }
 }
 
