@@ -739,7 +739,7 @@ function ScadaAppContent() {
 
         {/* Barra de Navegación PC — mismo estilo icono+láser que el móvil */}
         {user && !kioskMac && !isOperator && (
-          <nav className="fleet-main-nav hidden lg:flex relative items-center justify-around px-6 h-16 border-b border-cyan-500/30 backdrop-blur-xl">
+          <nav className="fleet-main-nav hidden lg:flex relative items-center justify-around h-16 border-b border-cyan-500/30 backdrop-blur-xl">
             <span
               className="mobile-nav-indicator"
               style={{
