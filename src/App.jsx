@@ -695,16 +695,13 @@ function ScadaAppContent() {
                 className="relative p-1.5 sm:p-2 rounded-xl bg-slate-900/90 border border-cyan-500/40 text-cyan-300 shrink-0 ultra-glass hover:bg-cyan-500/20 transition-all group"
                 title="Notificaciones"
               >
-                <Bell className={`w-4 h-4 sm:w-5 sm:h-5 ${bellCritical ? 'text-rose-300 animate-[ring_2s_ease-in-out_infinite]' : ''}`} />
-                {bellCount > 0 && (
-                  <span className={`absolute -top-1 -right-1 min-w-[16px] px-1 rounded-full text-[9px] font-bold leading-4 text-center status-indicator ${
-                    bellCritical
-                      ? 'bg-rose-500 text-white shadow-[0_0_12px_rgba(244,63,94,0.7)]'
-                      : 'bg-amber-400 text-slate-950 shadow-[0_0_10px_rgba(251,191,36,0.6)]'
-                  }`}>
-                    {bellCount > 99 ? '99+' : bellCount}
-                  </span>
-                )}
+                <Bell className={`w-4 h-4 sm:w-5 sm:h-5 transition-colors ${
+                  bellCount > 0
+                    ? bellCritical
+                      ? 'text-rose-300 animate-[ring_1.6s_ease-in-out_infinite]'
+                      : 'bell-alert animate-[ring_2.2s_ease-in-out_infinite]'
+                    : ''
+                }`} />
                 {bellCritical && (
                   <div className="absolute inset-0 rounded-xl bg-rose-500/10 animate-pulse"></div>
                 )}

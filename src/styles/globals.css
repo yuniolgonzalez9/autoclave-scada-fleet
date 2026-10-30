@@ -1600,6 +1600,11 @@ button:active::after, .btn:active::after {
   box-shadow: 0 0 12px var(--accent-color), 0 2px 14px var(--accent-color);
 }
 
+.bell-alert {
+  color: var(--accent-color);
+  filter: drop-shadow(0 0 6px var(--accent-color));
+}
+
 /* Tabs del header escritorio: obedecen al acento del tema como en móvil */
 header nav .text-cyan-300 {
   color: var(--accent-color) !important;
