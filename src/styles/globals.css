@@ -660,6 +660,23 @@ button:active, .btn-touch:active {
   }
 }
 
+/* Mismo patrón plegable en móvil: colapsan a icono y abren al tocar */
+@media (max-width: 639px) {
+  .fleet-search-collapsible {
+    width: 2.9rem;
+    flex: 0 0 auto;
+    overflow: hidden;
+    cursor: text;
+    white-space: nowrap;
+    transition: width 0.28s ease;
+  }
+  .fleet-search-collapsible:hover,
+  .fleet-search-collapsible:focus-within,
+  .fleet-search-collapsible--filled {
+    width: 100%;
+  }
+}
+
 .fleet-search-control input::-webkit-search-cancel-button {
   display: none;
 }
@@ -1557,23 +1574,28 @@ button:active::after, .btn:active::after {
   border-top: 1px solid var(--card-border);
 }
 
-.mobile-nav-indicator {
+.mobile-nav-dots {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 20%;
-  height: 4px;
+  top: 3px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 5px;
   pointer-events: none;
-  transition: transform 0.35s cubic-bezier(0.2, 0.85, 0.25, 1), opacity 0.2s ease;
 }
 
-.mobile-nav-indicator::after {
-  content: '';
-  position: absolute;
-  inset: 0 22%;
+.mobile-nav-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.38);
+  transition: width 0.3s ease, background 0.3s ease, box-shadow 0.3s ease;
+}
+
+.mobile-nav-dot--active {
+  width: 14px;
   background: var(--accent-color);
-  border-radius: 0 0 4px 4px;
-  box-shadow: 0 0 10px var(--accent-color);
+  box-shadow: 0 0 7px var(--accent-color);
 }
 
 @keyframes swipeEnterNext {
