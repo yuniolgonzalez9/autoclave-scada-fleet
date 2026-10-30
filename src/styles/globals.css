@@ -1685,6 +1685,21 @@ html[data-anim="off"] *:not(.header-shell):not(.header-shell *)::after {
   transition: none !important;
 }
 
+/* Modo BORDERLESS (PWA instalada en PC): el navegador no dibuja
+   NADA — ni barra de título ni botones. La app es la ventana entera.
+   El header arrastra la ventana; clic derecho en él abre el menú
+   de ventana del sistema (minimizar/maximizar/cerrar). */
+@media (display-mode: borderless) {
+  .header-shell {
+    -webkit-app-region: drag;
+    app-region: drag;
+  }
+  .header-shell * {
+    -webkit-app-region: no-drag;
+    app-region: no-drag;
+  }
+}
+
 /* Ventana tipo app nativa (WCO): los controles del navegador
    (min/max/cerrar) quedan como overlay flotante sobre el header —
    casi invisibles, aparecen al acercar el mouse. El header arrastra

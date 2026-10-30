@@ -8,7 +8,7 @@
   "lang": "es",
   "dir": "ltr",
   "display": "standalone",
-  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "display_override": ["borderless", "window-controls-overlay", "standalone", "minimal-ui"],
   "background_color": "#0d1424",
   "theme_color": "#0d1424",
   "orientation": "any",
