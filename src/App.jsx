@@ -50,11 +50,14 @@ import {
   Search,
   ArrowDownAZ,
   X,
-  ChevronLeft
+  ChevronLeft,
+  Wrench,
+  ClipboardList
 } from 'lucide-react';
 
 const APP_SECTIONS = new Set(['flota', 'gestion', 'servicio', 'studio', 'usuarios', 'fota', 'auditoria', 'detalle']);
 const MOBILE_SECTIONS = ['flota', 'gestion', 'studio', 'usuarios', 'fota'];
+const DESKTOP_SECTIONS = ['flota', 'gestion', 'servicio', 'studio', 'usuarios', 'fota', 'auditoria'];
 
 function getInitialActiveSection() {
   const urlParams = new URLSearchParams(window.location.search);
@@ -320,6 +323,11 @@ function ScadaAppContent() {
     () => MOBILE_SECTIONS.filter((s) => s !== 'studio' || canEditHardware),
     [canEditHardware]
   );
+  const desktopSections = useMemo(
+    () => DESKTOP_SECTIONS.filter((s) => s !== 'studio' || canEditHardware),
+    [canEditHardware]
+  );
+  const desktopNavIndex = desktopSections.indexOf(activeSection === 'detalle' ? 'flota' : activeSection);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', currentTheme);
@@ -729,75 +737,41 @@ function ScadaAppContent() {
           </div>
         </header>
 
-        {/* Barra de Navegación PC */}
+        {/* Barra de Navegación PC — mismo estilo icono+láser que el móvil */}
         {user && !kioskMac && !isOperator && (
-          <div className="fleet-main-nav hidden lg:flex items-center gap-2 px-6 py-2 border-b">
-            <button
-              onClick={() => setActiveSection('flota')}
-              className={`fleet-nav-pill px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
-                activeSection === 'flota' ? 'fleet-nav-pill--active text-slate-950' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              ⚡ Flota en Vivo ({allowedDevices.length})
-            </button>
-
-            <button
-              onClick={() => setActiveSection('gestion')}
-              className={`fleet-nav-pill px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
-                activeSection === 'gestion' ? 'fleet-nav-pill--active text-slate-950' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              🏢 Gestión Flota
-            </button>
-
-            <button
-              onClick={() => setActiveSection('servicio')}
-              className={`fleet-nav-pill px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
-                activeSection === 'servicio' ? 'fleet-nav-pill--active text-slate-950' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              🛠️ Reportes técnicos
-            </button>
-
-            <button
-              onClick={() => setActiveSection('studio')}
-              className={`fleet-nav-pill px-3.5 py-1.5 rounded-lg text-xs font-mono font-bold flex items-center gap-1.5 transition-all ${
-                activeSection === 'studio' 
-                  ? 'fleet-nav-pill--active text-slate-950' 
-                  : 'text-amber-400 hover:text-white bg-slate-900/60 border border-amber-500/30'
-              }`}
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>✨ AI Studio</span>
-            </button>
-
-            <button
-              onClick={() => setActiveSection('usuarios')}
-              className={`fleet-nav-pill px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
-                activeSection === 'usuarios' ? 'fleet-nav-pill--active text-slate-950' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              🛡️ Personal
-            </button>
-
-            <button
-              onClick={() => setActiveSection('fota')}
-              className={`fleet-nav-pill px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
-                activeSection === 'fota' ? 'fleet-nav-pill--active text-slate-950' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              🚀 FOTA Hub
-            </button>
-
-            <button
-              onClick={() => setActiveSection('auditoria')}
-              className={`fleet-nav-pill px-3 py-1.5 rounded-lg text-xs font-mono font-bold transition-all ${
-                activeSection === 'auditoria' ? 'fleet-nav-pill--active text-slate-950' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              📋 Auditoría
-            </button>
-          </div>
+          <nav className="fleet-main-nav hidden lg:flex relative items-center justify-around px-6 h-16 border-b border-cyan-500/30 backdrop-blur-xl">
+            <span
+              className="mobile-nav-indicator"
+              style={{
+                width: `${100 / desktopSections.length}%`,
+                transform: `translateX(${Math.max(desktopNavIndex, 0) * 100}%)`,
+                opacity: desktopNavIndex === -1 ? 0 : 1
+              }}
+            />
+            {[
+              { id: 'flota', label: 'Flota', Icon: Activity },
+              { id: 'gestion', label: 'Gestión', Icon: Building2 },
+              { id: 'servicio', label: 'Servicio', Icon: Wrench },
+              ...(canEditHardware ? [{ id: 'studio', label: 'Studio', Icon: Sparkles }] : []),
+              { id: 'usuarios', label: 'Personal', Icon: Shield },
+              { id: 'fota', label: 'FOTA', Icon: Rocket },
+              { id: 'auditoria', label: 'Auditoría', Icon: ClipboardList }
+            ].map(({ id, label, Icon }) => {
+              const active = activeSection === id || (id === 'flota' && activeSection === 'detalle');
+              return (
+                <button
+                  key={id}
+                  onClick={() => goToSection(id)}
+                  className={`flex-1 flex flex-col items-center gap-1 py-1 px-1 rounded-lg text-[10px] font-mono transition-all ${
+                    active ? 'text-cyan-400 font-bold scale-110' : 'text-slate-400 hover:text-cyan-300'
+                  }`}
+                >
+                  <Icon className={`w-5 h-5 ${active ? 'icon-glow' : ''}`} />
+                  <span>{label}</span>
+                </button>
+              );
+            })}
+          </nav>
         )}
 
         {/* Contenido Principal */}
