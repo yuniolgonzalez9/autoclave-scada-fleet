@@ -2022,6 +2022,9 @@ button, a, label, input, select, textarea, [role="button"] { touch-action: manip
 .mobile-nav-shell .text-cyan-400,
 .mobile-nav-shell .text-cyan-300,
 .mobile-nav-shell .hover\:text-cyan-300:hover,
+.fleet-main-nav .text-cyan-400,
+.fleet-main-nav .text-cyan-300,
+.fleet-main-nav .hover\:text-cyan-300:hover,
 .gear-panel .text-cyan-400,
 .gear-panel .text-cyan-300,
 .fleet-device-cta {
@@ -2029,7 +2032,8 @@ button, a, label, input, select, textarea, [role="button"] { touch-action: manip
 }
 
 .header-shell,
-.mobile-nav-shell {
+.mobile-nav-shell,
+.fleet-main-nav {
   border-color: color-mix(in srgb, var(--accent-color) 28%, transparent) !important;
 }
 
