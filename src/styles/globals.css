@@ -660,6 +660,13 @@ button:active, .btn-touch:active {
   }
 }
 
+.fleet-search-divider {
+  width: 1px;
+  height: 16px;
+  background: color-mix(in srgb, var(--accent-color) 25%, transparent);
+  flex: 0 0 auto;
+}
+
 /* Mismo patrón plegable en móvil: colapsan a icono y abren al tocar */
 @media (max-width: 639px) {
   .fleet-search-collapsible {
