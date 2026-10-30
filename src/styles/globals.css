@@ -1595,7 +1595,7 @@ button:active::after, .btn:active::after {
   content: '';
   position: absolute;
   inset: 0 22%;
-  background: linear-gradient(90deg, transparent, var(--accent-color), transparent);
+  background: var(--accent-color);
   border-radius: 0 0 4px 4px;
   box-shadow: 0 0 12px var(--accent-color), 0 2px 14px var(--accent-color);
 }
