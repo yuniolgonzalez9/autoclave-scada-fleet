@@ -137,7 +137,7 @@ function ScadaAppContent() {
   const [activeSection, setActiveSection] = useState(getInitialActiveSection);
   const [visitedSections, setVisitedSections] = useState(() => new Set([activeSection]));
 
-  const [healthFilter, setHealthFilter] = useState(() => sessionStorage.getItem('scada_tab_health_filter') || 'ALL');
+  const [healthFilter, setHealthFilter] = useState(() => sessionStorage.getItem('scada_tab_health_filter') || 'ONLINE');
   const [fleetSearch, setFleetSearch] = useState(() => sessionStorage.getItem('scada_fleet_search') || '');
   const [fleetSort, setFleetSort] = useState(() => sessionStorage.getItem('scada_fleet_sort') || 'STATUS');
 
