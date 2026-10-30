@@ -1675,6 +1675,69 @@ button:active::after, .btn:active::after {
   50% { opacity: 1; }
 }
 
+/* Apagar TODAS las animaciones/transiciones (efectos off) */
+html[data-anim="off"] *,
+html[data-anim="off"] *::before,
+html[data-anim="off"] *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
+/* Apagar láseres en movimiento */
+html[data-laser="off"] .header-laser-orbit,
+html[data-laser="off"] .mobile-nav-indicator {
+  display: none !important;
+}
+
+/* Switch toggle de controles de movimiento en GearMenu */
+.gear-switch {
+  position: relative;
+  width: 34px;
+  height: 18px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent-color) 30%, transparent);
+  background: rgba(15, 23, 42, 0.9);
+  cursor: pointer;
+  transition: background 0.25s ease, border-color 0.25s ease;
+  flex: 0 0 auto;
+  padding: 0;
+}
+
+.gear-switch span {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #64748b;
+  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1), background 0.25s ease, box-shadow 0.25s ease;
+}
+
+.gear-switch--on {
+  background: color-mix(in srgb, var(--accent-color) 30%, rgba(15, 23, 42, 0.9));
+  border-color: var(--accent-color);
+}
+
+.gear-switch--on span {
+  transform: translateX(16px);
+  background: var(--accent-color);
+  box-shadow: 0 0 8px var(--accent-color);
+}
+
+/* Apagar transiciones de sección (cambio entre apartados) */
+html[data-trans="off"] *,
+html[data-trans="off"] *::before,
+html[data-trans="off"] *::after {
+  transition: none !important;
+}
+html[data-trans="off"] .app-view-panel,
+html[data-trans="off"] .swipe-enter-next,
+html[data-trans="off"] .swipe-enter-prev,
+html[data-trans="off"] .android-view-transition {
+  animation: none !important;
+}
+
 .bell-alert {
   color: var(--accent-color);
   filter: drop-shadow(0 0 6px var(--accent-color));

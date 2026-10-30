@@ -14,6 +14,7 @@ import { startIndustrialSiren, stopIndustrialSiren, initAudioUnlock } from './se
 import { sendCriticalAlarmWithButtons } from './services/telegram';
 import { supabase } from './services/supabase';
 import HeaderLaserOrbit from './components/common/HeaderLaserOrbit';
+import { readMotionPrefs } from './services/motionPrefs';
 
 // Vistas pesadas: carga diferida para acelerar el arranque en móviles
 const DeviceDetailView = lazy(() => import('./components/dashboard/DeviceDetailView'));
@@ -336,10 +337,18 @@ function ScadaAppContent() {
     document.documentElement.setAttribute('data-theme', currentTheme);
   }, [currentTheme]);
 
+  const [motionTick, setMotionTick] = useState(0);
   useEffect(() => {
-    const alpha = (opacity / 100).toFixed(2);
+    const onMotion = () => setMotionTick((t) => t + 1);
+    window.addEventListener('bf:motion', onMotion);
+    return () => window.removeEventListener('bf:motion', onMotion);
+  }, []);
+
+  useEffect(() => {
+    const glassOn = readMotionPrefs().glassOn !== false;
+    const alpha = (glassOn ? opacity / 100 : 1).toFixed(2);
     document.documentElement.style.setProperty('--glass-opacity', alpha);
-  }, [opacity]);
+  }, [opacity, motionTick]);
 
   // Vigilante optimizado de sirena
   const alarmasNotificadasRef = useRef(new Set());

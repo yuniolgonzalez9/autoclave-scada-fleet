@@ -13,8 +13,12 @@ import {
   X,
   Unlock,
   CheckCircle2,
-  HardDrive
+  HardDrive,
+  Zap,
+  Orbit,
+  MoveRight
 } from 'lucide-react';
+import { readMotionPrefs, saveMotionPrefs } from '../../services/motionPrefs';
 
 export const WALLPAPERS_LIST = [
   { id: 'solid', name: 'Gris industrial sólido (recomendado)', url: '' },
@@ -42,6 +46,8 @@ export default function GearMenu({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [motion, setMotion] = useState(readMotionPrefs);
+  const updateMotion = (patch) => setMotion((m) => saveMotionPrefs({ ...m, ...patch }));
 
   // Escuchar cambios de fullscreen nativo
   useEffect(() => {
@@ -230,6 +236,72 @@ export default function GearMenu({
                 aria-valuemax="100"
                 aria-valuenow={opacity}
               />
+            </div>
+
+            {/* 3.5 Controles de Movimiento — toggle + velocidad/porcentaje */}
+            <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800 space-y-3">
+              {[
+                {
+                  key: 'glassOn', speedKey: null, icon: Waves, label: 'Transparencia',
+                  hint: 'Cristal glass en paneles', suffix: null
+                },
+                {
+                  key: 'animOn', speedKey: 'animSpeed', icon: Zap, label: 'Efectos & Animaciones',
+                  hint: 'Glows, pulsos y efectos visuales', suffix: '%'
+                },
+                {
+                  key: 'laserOn', speedKey: 'laserSpeed', icon: Orbit, label: 'Láseres en Movimiento',
+                  hint: 'Aurora del header y del nav', suffix: '%'
+                },
+                {
+                  key: 'transOn', speedKey: 'transSpeed', icon: MoveRight, label: 'Transiciones de Sección',
+                  hint: 'Cambio animado entre apartados', suffix: '%'
+                }
+              ].map(({ key, speedKey, icon: Icon, label, hint, suffix }) => {
+                const on = motion[key] !== false;
+                const speed = speedKey ? (motion[speedKey] || 100) : opacity;
+                return (
+                  <div key={key} className={`space-y-1.5 transition-opacity ${on ? '' : 'opacity-50'}`}>
+                    <div className="flex justify-between items-center text-xs gear-accent-text">
+                      <span className="flex items-center gap-1.5">
+                        <Icon className="w-3.5 h-3.5" />
+                        <span>{label}</span>
+                      </span>
+                      <span className="flex items-center gap-2">
+                        {speedKey && <span className="font-bold font-mono text-[10px]">{speed}{suffix}</span>}
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={on}
+                          aria-label={`${on ? 'Desactivar' : 'Activar'} ${label}`}
+                          onClick={() => updateMotion({ [key]: !on })}
+                          className={`gear-switch ${on ? 'gear-switch--on' : ''}`}
+                        >
+                          <span />
+                        </button>
+                      </span>
+                    </div>
+                    {speedKey ? (
+                      <input
+                        type="range"
+                        min="10"
+                        max="300"
+                        step="5"
+                        value={speed}
+                        disabled={!on}
+                        onChange={(e) => updateMotion({ [speedKey]: Number(e.target.value) })}
+                        className="gear-slider w-full h-1.5 rounded-lg appearance-none cursor-pointer disabled:cursor-not-allowed"
+                        aria-label={`Velocidad de ${label}`}
+                        aria-valuemin="10"
+                        aria-valuemax="300"
+                        aria-valuenow={speed}
+                      />
+                    ) : (
+                      <p className="text-[9px] text-slate-500 leading-none">{hint}</p>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
             {/* Estado de sincronización en la nube */}

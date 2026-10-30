@@ -22,6 +22,24 @@ function roundedRectPath(w, h, inset, r) {
 export default function HeaderLaserOrbit() {
   const svgRef = useRef(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
+  const [motion, setMotion] = useState(() => {
+    try {
+      const raw = localStorage.getItem('biofleet_motion_prefs');
+      const p = raw ? JSON.parse(raw) : {};
+      return { laserOn: p.laserOn !== false, laserSpeed: p.laserSpeed || 100 };
+    } catch (_) {
+      return { laserOn: true, laserSpeed: 100 };
+    }
+  });
+
+  useEffect(() => {
+    const onMotion = (e) => {
+      const d = e.detail || {};
+      setMotion({ laserOn: d.laserOn !== false, laserSpeed: d.laserSpeed || 100 });
+    };
+    window.addEventListener('bf:motion', onMotion);
+    return () => window.removeEventListener('bf:motion', onMotion);
+  }, []);
 
   // Detección reactiva de dimensiones del contenedor padre
   useEffect(() => {
@@ -62,15 +80,18 @@ export default function HeaderLaserOrbit() {
   // Línea reducida: ~22% del perímetro — más compacta y sólida
   const dash = perimeter * 0.22;
   const dasharray = `${dash} ${perimeter - dash}`;
+  const speedMult = Math.min(3, Math.max(0.15, (motion.laserSpeed || 100) / 100));
   const laserAnim = (
     <animate
       attributeName="stroke-dashoffset"
       from="0"
       to={-perimeter}
-      dur={`${Math.max(4000, Math.round(perimeter * MS_PER_PX))}ms`}
+      dur={`${Math.max(1500, Math.round((perimeter * MS_PER_PX) / speedMult))}ms`}
       repeatCount="indefinite"
     />
   );
+
+  if (!motion.laserOn) return null;
 
   return (
     <svg
