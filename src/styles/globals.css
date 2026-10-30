@@ -1706,9 +1706,9 @@ html[data-anim="off"] *:not(.header-shell):not(.header-shell *)::after {
    la ventana; los botones internos no. */
 @media (display-mode: window-controls-overlay) {
   .header-shell {
-    /* Reserva el espacio que ocupa el overlay de botones del navegador
-       (arriba a la derecha) para que el menú/campana sigan clickeables */
-    padding-right: env(titlebar-area-width, 120px);
+    /* env(titlebar-area-width) es el ÁREA LIBRE, no los botones.
+       El ancho real de los controles = viewport - área libre - x */
+    padding-right: calc(100vw - env(titlebar-area-width, 100vw) - env(titlebar-area-x, 0px));
     padding-top: env(titlebar-area-height, 8px);
     -webkit-app-region: drag;
     app-region: drag;
