@@ -65,6 +65,9 @@ function getInitialActiveSection() {
     return 'detalle';
   }
 
+  const forced = urlParams.get('s');
+  if (forced && APP_SECTIONS.has(forced)) return forced;
+
   const savedSection = localStorage.getItem('scada_active_section') || sessionStorage.getItem('scada_tab_active_section');
   return APP_SECTIONS.has(savedSection) ? savedSection : 'flota';
 }

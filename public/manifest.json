@@ -3,11 +3,16 @@
   "short_name": "BioFleet OS",
   "description": "Sistema Centralizado de Telemetría Biomédica & Trazabilidad Quirúrgica",
   "start_url": "/",
+  "scope": "/",
   "id": "/biofleet-os",
+  "lang": "es",
+  "dir": "ltr",
   "display": "standalone",
-  "background_color": "#030712",
-  "theme_color": "#030712",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "background_color": "#0d1424",
+  "theme_color": "#0d1424",
   "orientation": "any",
+  "prefer_related_applications": false,
   "categories": [
     "medical",
     "business",
@@ -37,6 +42,29 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Flota en Vivo",
+      "short_name": "Flota",
+      "description": "Equipos conectados en tiempo real",
+      "url": "/?s=flota",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Gestión de Flota",
+      "short_name": "Gestión",
+      "description": "Administrar y asignar equipos",
+      "url": "/?s=gestion",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Personal",
+      "short_name": "Personal",
+      "description": "Usuarios y permisos de la plataforma",
+      "url": "/?s=usuarios",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     }
   ]
 }
