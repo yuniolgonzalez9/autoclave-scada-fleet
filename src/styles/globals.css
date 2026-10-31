@@ -211,9 +211,34 @@ body {
   --surface-glow: 130 62 70;
   --accent-color: #ff5f6e;
   --accent-text: #ffd0d5;
-  --card-border: rgba(245, 194, 74, 0.3);
-  --laser-gradient: linear-gradient(90deg, transparent, #fcd34d, #ff5f6e, #fde68a, transparent);
-  --laser-glow: 0 0 16px rgba(245, 194, 74, 0.42), 0 0 9px rgba(255, 95, 110, 0.22);
+  --card-border: rgba(245, 194, 74, 0.55);
+  --laser-gradient: linear-gradient(90deg, transparent, #fde68a, #f5c24a, #d97706, #fcd34d, transparent);
+  --laser-glow: 0 0 20px rgba(245, 194, 74, 0.6), 0 0 12px rgba(217, 119, 6, 0.32);
+}
+
+/* El oro domina los bordes y líneas del tema Carmesí — gana al remap de acento */
+[data-theme="gold"] .header-shell,
+[data-theme="gold"] .mobile-nav-shell,
+[data-theme="gold"] .fleet-main-nav,
+[data-theme="gold"] .header-shell .border-cyan-500\/30,
+[data-theme="gold"] .header-shell .border-cyan-500\/40,
+[data-theme="gold"] .header-shell .border-cyan-500\/20,
+[data-theme="gold"] .mobile-nav-shell .border-cyan-500\/30,
+[data-theme="gold"] .fleet-main-nav .border-cyan-500\/30,
+[data-theme="gold"] .gear-panel .border-cyan-500\/30,
+[data-theme="gold"] .gear-panel .border-cyan-500\/40,
+[data-theme="gold"] .gear-panel .border-cyan-500\/20,
+[data-theme="gold"] .gear-panel .border-cyan-500\/50,
+[data-theme="gold"] .login-card,
+[data-theme="gold"] .login-card .border-cyan-500\/30,
+[data-theme="gold"] .login-card .border-cyan-500\/40,
+[data-theme="gold"] .ultra-glass,
+[data-theme="gold"] .glass-cell,
+[data-theme="gold"] .user-chip,
+[data-theme="gold"] .header-clock,
+[data-theme="gold"] .fleet-search-control,
+[data-theme="gold"] .fleet-overview-stat {
+  border-color: rgba(245, 194, 74, 0.55) !important;
 }
 
 .ultra-glass {
