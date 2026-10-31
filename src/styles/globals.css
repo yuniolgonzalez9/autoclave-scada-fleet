@@ -205,18 +205,18 @@ body {
   border-top-color: rgba(245, 194, 74, 0.35) !important;
 }
 
-/* ===== CARMESÍ REAL — carbón cálido + rojo intenso y marco oro fino ===== */
+/* ===== EMBER — forja: carbón cálido + ámbar bronce dominante ===== */
 [data-theme="gold"] {
-  --glass-bg: 16 11 13;
-  --surface-glow: 130 62 70;
-  --accent-color: #ff5f6e;
-  --accent-text: #ffd0d5;
-  --card-border: rgba(245, 194, 74, 0.55);
-  --laser-gradient: linear-gradient(90deg, transparent, #fde68a, #f5c24a, #d97706, #fcd34d, transparent);
-  --laser-glow: 0 0 20px rgba(245, 194, 74, 0.6), 0 0 12px rgba(217, 119, 6, 0.32);
+  --glass-bg: 17 12 9;
+  --surface-glow: 150 78 35;
+  --accent-color: #f59e0b;
+  --accent-text: #ffe4b0;
+  --card-border: rgba(245, 158, 11, 0.5);
+  --laser-gradient: linear-gradient(90deg, transparent, #fcd34d, #f59e0b, #d97706, #fcd34d, transparent);
+  --laser-glow: 0 0 20px rgba(245, 158, 11, 0.55), 0 0 12px rgba(217, 119, 6, 0.3);
 }
 
-/* El oro domina los bordes y líneas del tema Carmesí — gana al remap de acento */
+/* El ámbar domina los bordes y líneas del tema Ember — gana al remap de acento */
 [data-theme="gold"] .header-shell,
 [data-theme="gold"] .mobile-nav-shell,
 [data-theme="gold"] .fleet-main-nav,
@@ -238,7 +238,7 @@ body {
 [data-theme="gold"] .header-clock,
 [data-theme="gold"] .fleet-search-control,
 [data-theme="gold"] .fleet-overview-stat {
-  border-color: rgba(245, 194, 74, 0.55) !important;
+  border-color: rgba(245, 158, 11, 0.5) !important;
 }
 
 .ultra-glass {
