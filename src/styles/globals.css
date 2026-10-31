@@ -151,26 +151,26 @@ body {
   --laser-glow: 0 0 14px rgba(103, 232, 249, 0.4), 0 0 8px rgba(56, 189, 248, 0.2);
 }
 
-/* ===== NEON — violeta profundo + magenta suave en acentos ===== */
+/* ===== NEON — misma base navy limpia + acento violeta discreto ===== */
 [data-theme="cyber"] {
-  --glass-bg: 15 11 21;
-  --surface-glow: 120 80 170;
-  --accent-color: #c99af5;
-  --accent-text: #efdcff;
-  --card-border: rgba(201, 154, 245, 0.26);
-  --laser-gradient: linear-gradient(90deg, transparent, #e8b4ff, #c084fc, #f0abfc, #e8b4ff, transparent);
-  --laser-glow: 0 0 14px rgba(201, 154, 245, 0.4), 0 0 8px rgba(192, 132, 252, 0.2);
+  --glass-bg: 11 13 22;
+  --surface-glow: 80 75 140;
+  --accent-color: #b79bf0;
+  --accent-text: #e6dbfb;
+  --card-border: rgba(183, 155, 240, 0.24);
+  --laser-gradient: linear-gradient(90deg, transparent, #c4b5fd, #a78bfa, #ddd6fe, #c4b5fd, transparent);
+  --laser-glow: 0 0 14px rgba(167, 139, 250, 0.38), 0 0 8px rgba(196, 181, 253, 0.2);
 }
 
-/* ===== BIO-MINT — bosque oscuro + menta suave en acentos ===== */
+/* ===== BIO-MINT — misma base navy limpia + acento menta suave ===== */
 [data-theme="hybrid"] {
-  --glass-bg: 9 19 15;
-  --surface-glow: 60 140 110;
+  --glass-bg: 9 15 15;
+  --surface-glow: 55 115 105;
   --accent-color: #6fe3b8;
   --accent-text: #d9f7ea;
-  --card-border: rgba(111, 227, 184, 0.26);
+  --card-border: rgba(111, 227, 184, 0.24);
   --laser-gradient: linear-gradient(90deg, transparent, #a7f3d0, #5eead4, #a7f3d0, transparent);
-  --laser-glow: 0 0 14px rgba(111, 227, 184, 0.4), 0 0 8px rgba(94, 234, 212, 0.2);
+  --laser-glow: 0 0 14px rgba(111, 227, 184, 0.38), 0 0 8px rgba(94, 234, 212, 0.2);
 }
 
 /* ===== AURUM — híbrido Azul Marino Industrial + Oro ===== */
@@ -205,16 +205,15 @@ body {
   border-top-color: rgba(245, 194, 74, 0.35) !important;
 }
 
-/* ===== CARMESÍ REAL — acento rojo sobrio sobre marco dorado fino ===== */
-/* Base carbón con tinte vino, acento rojo suave, láser de oro tenue */
+/* ===== CARMESÍ REAL — base neutra limpia + acento rojo y marco oro ===== */
 [data-theme="gold"] {
-  --glass-bg: 20 11 13;
-  --surface-glow: 150 70 85;
+  --glass-bg: 13 13 18;
+  --surface-glow: 120 85 95;
   --accent-color: #ff7a85;
   --accent-text: #ffd9dc;
-  --card-border: rgba(245, 194, 74, 0.3);
+  --card-border: rgba(245, 194, 74, 0.28);
   --laser-gradient: linear-gradient(90deg, transparent, #fde68a, #f5c24a, #fcd34d, transparent);
-  --laser-glow: 0 0 14px rgba(245, 194, 74, 0.4), 0 0 8px rgba(255, 122, 133, 0.2);
+  --laser-glow: 0 0 14px rgba(245, 194, 74, 0.38), 0 0 8px rgba(255, 122, 133, 0.18);
 }
 
 .ultra-glass {
