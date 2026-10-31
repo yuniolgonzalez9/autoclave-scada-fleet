@@ -354,15 +354,36 @@ export function useNotificationCenter({
     });
   }, [enabled, loaded, detected, rows, evaluableByMac, isAdmin, requestsLoadedAt, refresh]);
 
+  const [resumeAt, setResumeAt] = useState(() => Date.now());
+
+  // Al desbloquear/volver a la pestaña: gracia para que MQTT reconecte.
+  // Mientras la pestaña está oculta el socket muere por suspensión del SO —
+  // eso NO es una falla real y no debe alertar.
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === 'visible') {
+        setResumeAt(Date.now());
+        setMqttDownSince(null);
+      }
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, []);
+
   useEffect(() => {
     const t = setTimeout(() => {
-      setMqttDownSince((prev) => (mqttConnected ? null : prev || Date.now()));
+      setMqttDownSince((prev) => {
+        if (mqttConnected) return null;
+        if (document.hidden) return null;
+        if (Date.now() - resumeAt < 45000) return null;
+        return prev || Date.now();
+      });
     }, 0);
     return () => clearTimeout(t);
-  }, [mqttConnected]);
+  }, [mqttConnected, resumeAt]);
 
   const systemItems = useMemo(() => {
-    if (mqttConnected || !mqttDownSince) return [];
+    if (mqttConnected || !mqttDownSince || Date.now() - resumeAt < 45000) return [];
     return [{
       id: 'local:MQTT',
       clave: 'SISTEMA:MQTT',
