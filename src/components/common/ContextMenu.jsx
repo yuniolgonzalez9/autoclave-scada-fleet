@@ -56,7 +56,9 @@ export default function ContextMenu({
   }, [isOpen, onClose, handleKeyDown]);
 
   useEffect(() => {
-    if (isOpen) setCopied(false);
+    if (!isOpen) return undefined;
+    const t = setTimeout(() => setCopied(false), 0);
+    return () => clearTimeout(t);
   }, [isOpen]);
 
   if (!isOpen || !device || typeof document === 'undefined') return null;
@@ -69,7 +71,7 @@ export default function ContextMenu({
 
   // Abrir en Nueva Pestaña independiente con parámetro MAC
   const handleOpenNewTab = () => {
-    const cleanMac = (device.mac || '').toUpperCase().replace(/[:\-]/g, '');
+    const cleanMac = (device.mac || '').toUpperCase().replace(/[:-]/g, '');
     const url = `${window.location.origin}${window.location.pathname}?mac=${cleanMac}`;
     window.open(url, '_blank', 'noopener,noreferrer');
     onClose();
@@ -96,7 +98,7 @@ export default function ContextMenu({
 
   // Copiado al Portapapeles con fallback para redes HTTP locales
   const handleCopyMac = () => {
-    const macToCopy = (device.mac || '').toUpperCase().replace(/[:\-]/g, '');
+    const macToCopy = (device.mac || '').toUpperCase().replace(/[:-]/g, '');
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(macToCopy)
         .then(() => {

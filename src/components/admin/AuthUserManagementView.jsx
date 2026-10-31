@@ -41,7 +41,8 @@ export default function AuthUserManagementView({ profile }) {
   }, []);
 
   useEffect(() => {
-    loadProfiles();
+    const t = setTimeout(loadProfiles, 0);
+    return () => clearTimeout(t);
   }, [loadProfiles]);
 
   const handleInvite = async (event) => {

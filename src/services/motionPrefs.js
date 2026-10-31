@@ -29,26 +29,37 @@ let controllerInstalled = false;
 const isSectionEnterAnim = (a) =>
   Boolean(a.animationName && /swipeEnter|appSectionReveal|androidViewEnter/i.test(a.animationName));
 
-function applyRateToAll() {
-  try {
-    document.getAnimations({ subtree: true }).forEach((a) => {
-      try {
-        const isTransition = a.transitionProperty !== undefined;
-        a.playbackRate = (isTransition || isSectionEnterAnim(a)) ? transRate : animRate;
-      } catch (_) {}
-    });
-  } catch (_) {}
+function applyRate(animations) {
+  animations.forEach((a) => {
+    try {
+      const isTransition = a.transitionProperty !== undefined;
+      const rate = (isTransition || isSectionEnterAnim(a)) ? transRate : animRate;
+      if (a.playbackRate !== rate) a.playbackRate = rate;
+    } catch (_) {}
+  });
 }
 
+function applyRateToAll() {
+  try { applyRate(document.getAnimations()); } catch (_) {}
+}
+
+// Solo se ajustan las animaciones del elemento que acaba de arrancar una
+// (antes se recorrían TODAS las del documento en cada transición).
 function installSpeedController() {
   if (controllerInstalled || typeof document === 'undefined') return;
   controllerInstalled = true;
   let rafId = 0;
-  const schedule = () => {
+  const pending = new Set();
+  const schedule = (event) => {
+    if (animRate === 1 && transRate === 1) return;
+    if (event?.target instanceof Element) pending.add(event.target);
     if (rafId) return;
     rafId = requestAnimationFrame(() => {
       rafId = 0;
-      applyRateToAll();
+      pending.forEach((el) => {
+        try { applyRate(el.getAnimations({ subtree: true })); } catch (_) {}
+      });
+      pending.clear();
     });
   };
   document.addEventListener('animationstart', schedule, true);

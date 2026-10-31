@@ -362,8 +362,11 @@ export default function NotificationsPanel({
   });
 
   useEffect(() => {
-    setConfirmClear(false);
-    setClearError('');
+    const t = setTimeout(() => {
+      setConfirmClear(false);
+      setClearError('');
+    }, 0);
+    return () => clearTimeout(t);
   }, [tab, showResolved, isOpen]);
 
   const resolvedCount = notifications.filter((n) =>

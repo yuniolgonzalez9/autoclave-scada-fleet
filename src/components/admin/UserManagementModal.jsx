@@ -60,10 +60,12 @@ export default function UserManagementModal({ isOpen, onClose }) {
   }, []);
 
   useEffect(() => {
-    if (isOpen) {
+    if (!isOpen) return undefined;
+    const t = setTimeout(() => {
       fetchAllUsers();
       fetchAuditLogs();
-    }
+    }, 0);
+    return () => clearTimeout(t);
   }, [isOpen, fetchAllUsers, fetchAuditLogs]);
 
   // HOOKS REUBICADOS ARRIBA: Se ejecutan siempre de forma incondicional
@@ -369,7 +371,7 @@ export default function UserManagementModal({ isOpen, onClose }) {
                     ) : (
                       auditLogs.map((log, i) => (
                         <tr key={i} className="hover:bg-slate-800/30">
-                          <td className="p-2.5 text-slate-400">{new Date(log.fecha_hora || log.created_at || Date.now()).toLocaleString()}</td>
+                          <td className="p-2.5 text-slate-400">{(log.fecha_hora || log.created_at) ? new Date(log.fecha_hora || log.created_at).toLocaleString() : '—'}</td>
                           <td className="p-2.5 font-bold text-white">{log.usuario_email || log.usuario}</td>
                           <td className="p-2.5">
                             <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${

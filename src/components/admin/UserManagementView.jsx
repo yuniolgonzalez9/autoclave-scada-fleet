@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { supabase } from '../../services/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { useSwipe, stepThrough } from '../../hooks/useSwipe';
+import { useNow } from '../../hooks/useNow';
 import SwipeDots from '../common/SwipeDots';
 import { 
   Users, 
@@ -228,8 +229,11 @@ export default function UserManagementView({ fleet = {}, onFleetUpdated }) {
   }, []);
 
   useEffect(() => {
-    fetchUsers();
-    fetchLogs();
+    const t = setTimeout(() => {
+      fetchUsers();
+      fetchLogs();
+    }, 0);
+    return () => clearTimeout(t);
   }, [fetchUsers, fetchLogs]);
 
   // Creación formal de cuenta con mapeo atómico
@@ -496,8 +500,9 @@ export default function UserManagementView({ fleet = {}, onFleetUpdated }) {
       .sort((a, b) => (a.estado === b.estado ? 0 : a.estado === 'ACTIVO' ? -1 : 1));
   }, [activeList, roleFilter, userSearch]);
 
+  const nowTs = useNow(60000);
   const logStats = useMemo(() => {
-    const now = Date.now();
+    const now = nowTs;
     const stats = { logins24: 0, failed7: 0, timeouts7: 0, security: 0, alarms7: 0 };
     auditLogs.forEach((l) => {
       const age = now - new Date(l.created_at).getTime();
@@ -529,7 +534,10 @@ export default function UserManagementView({ fleet = {}, onFleetUpdated }) {
     return groups;
   }, [filteredLogs, logsVisible]);
 
-  useEffect(() => { setLogsVisible(LOGS_PAGE); }, [logFilter, logSearch]);
+  useEffect(() => {
+    const t = setTimeout(() => setLogsVisible(LOGS_PAGE), 0);
+    return () => clearTimeout(t);
+  }, [logFilter, logSearch]);
 
   return (
     <div ref={rootRef} className="user-management-view space-y-4 font-mono text-xs select-none">

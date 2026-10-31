@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { connectMqttFleet } from '../services/mqttClient';
 import { accumulateF0 } from '../utils/f0Formulas';
 import { supabase } from '../services/supabase';
 import { mergeDeviceConfig } from '../services/deviceService';
@@ -21,7 +20,10 @@ export function useMqttFleet(enabled = true) {
   const [mqttConnected, setMqttConnected] = useState(true);
   const sendCommandRef = useRef(null);
   const fleetRef = useRef(fleet);
-  fleetRef.current = fleet;
+
+  useEffect(() => {
+    fleetRef.current = fleet;
+  }, [fleet]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -52,7 +54,7 @@ export function useMqttFleet(enabled = true) {
 
             data.forEach((item) => {
               const rawMac = item.mac || item.Mac || '';
-              const cleanMac = rawMac.toUpperCase().replace(/[:\-]/g, '');
+              const cleanMac = rawMac.toUpperCase().replace(/[:-]/g, '');
               if (!cleanMac) return;
 
               const configDeseada = item.config_deseada || {};
@@ -132,18 +134,22 @@ export function useMqttFleet(enabled = true) {
 
   useEffect(() => {
     // Buffer de mensajes: agrupa telemetría y aplica una sola
-    // actualización de estado cada ~600ms (evita re-render por paquete)
+    // actualización de estado cada ~600ms (evita re-render por paquete).
+    // El cliente MQTT (345 kB) se importa en diferido solo tras el login.
     if (!enabled) return undefined;
     let pendingPackets = [];
+    let client = null;
+    let cancelled = false;
 
-    const { client, sendCommand } = connectMqttFleet(
-      (packetData) => {
-        pendingPackets.push(packetData);
-      },
-      (status) => setMqttConnected(status)
-    );
-
-    sendCommandRef.current = sendCommand;
+    import('../services/mqttClient').then(({ connectMqttFleet }) => {
+      if (cancelled) return;
+      const conn = connectMqttFleet(
+        (packetData) => pendingPackets.push(packetData),
+        (status) => setMqttConnected(status)
+      );
+      client = conn.client;
+      sendCommandRef.current = conn.sendCommand;
+    }).catch(() => {});
 
     const flushTimer = setInterval(() => {
       if (pendingPackets.length === 0) return;
@@ -163,7 +169,7 @@ export function useMqttFleet(enabled = true) {
         let nextFleet = prevFleet;
 
         batch.forEach(({ mac, channel, payload, isRetained }) => {
-          const cleanMac = (mac || '').toUpperCase().replace(/[:\-]/g, '');
+          const cleanMac = (mac || '').toUpperCase().replace(/[:-]/g, '');
           if (!cleanMac) return;
 
           const currentDev = nextFleet[cleanMac] || {
@@ -264,13 +270,15 @@ export function useMqttFleet(enabled = true) {
     }, 600);
 
     return () => {
+      cancelled = true;
+      sendCommandRef.current = null;
       clearInterval(flushTimer);
       if (client) client.end();
     };
   }, [persistSessionReport, enabled]);
 
   const sendDeviceCommand = useCallback((mac, cmd) => {
-    const cleanMac = (mac || '').toUpperCase().replace(/[:\-]/g, '');
+    const cleanMac = (mac || '').toUpperCase().replace(/[:-]/g, '');
     if (!cleanMac) return;
 
     if (!cleanMac) return Promise.resolve({ ok: false, error: 'Equipo no indicado.' });
@@ -339,7 +347,7 @@ export function useMqttFleet(enabled = true) {
   }, []);
 
   const patchDeviceMeta = useCallback((mac, patch) => {
-    const cleanMac = (mac || '').toUpperCase().replace(/[:\-]/g, '');
+    const cleanMac = (mac || '').toUpperCase().replace(/[:-]/g, '');
     setFleet((prev) => {
       const dev = prev[cleanMac];
       if (!dev) return prev;

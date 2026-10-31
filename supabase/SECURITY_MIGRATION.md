@@ -43,3 +43,11 @@ La invitacion y recuperacion por Auth requieren que la entrega de correo de prod
 ## Preferencias
 
 El perfil mantiene separados `auth_email` (unico, para iniciar sesion y recuperacion) y `contact_email` (puede repetirse, para el buzon de contacto del administrador). Solo el propietario o un administrador activo puede leer el perfil. El usuario guarda tema, fondo y transparencia en sus preferencias; el administrador puede definir overrides parciales. La precedencia es: override administrativo, preferencia personal y, por ultimo, valor predeterminado.
+
+## Estado posterior (actualización)
+
+- Las claves de IA (`config_ai_keys`) ya NO se leen desde el navegador. El
+  asistente y el corrector de textos llaman a `/api/ai`, que usa el service
+  role en el servidor y devuelve solo la respuesta generada. El system
+  prompt del Studio también vive solo en el servidor (`api/_lib/`).
+- El System Prompt del Studio se eliminó del bundle del cliente.

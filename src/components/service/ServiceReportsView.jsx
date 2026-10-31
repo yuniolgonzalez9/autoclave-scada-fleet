@@ -484,7 +484,8 @@ export default function ServiceReportsView({ fleet = {}, operatorName = '', isAd
   }, [fixedMac]);
 
   useEffect(() => {
-    load();
+    const t = setTimeout(load, 0);
+    return () => clearTimeout(t);
   }, [load]);
 
   const visible = useMemo(() => {

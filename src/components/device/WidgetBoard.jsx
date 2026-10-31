@@ -127,7 +127,11 @@ function WidgetBody({ w, device, sendCommand, onConfirm, enCicloActivo, odometer
   const c = WIDGET_COLORS[w.color];
   const value = readValue(device, w.key);
   const [slider, setSlider] = useState(Number(value ?? w.min));
-  useEffect(() => { if (value !== undefined) setSlider(Number(value)); }, [value]);
+  useEffect(() => {
+    if (value === undefined) return undefined;
+    const t = setTimeout(() => setSlider(Number(value)), 0);
+    return () => clearTimeout(t);
+  }, [value]);
   const sendSlider = () => sendCommand?.(device.mac, { cmd: 'SET_CONFIG', cfg: { [String(w.key).replace(/^cfg\./, '')]: slider } });
 
   switch (w.widget_type) {
@@ -345,10 +349,12 @@ function WidgetEditor({ widget, onChange, onApplySize, onClose }) {
 export default function WidgetBoard({ device, canEdit, sendCommand, onConfirm, enCicloActivo, odometer, onSaved }) {
   const config = device?.meta?.config_deseada || {};
   const tipo = device?.meta?.tipo || config.tipo;
+  const relesCount = Object.keys(device?.datos?.reles || {}).length;
+  const entradasCount = Object.keys(device?.datos?.entradas || {}).length;
   const stored = useMemo(() => {
     const list = config.custom_dashboard?.widgets;
     return Array.isArray(list) && list.length ? list.map(normalizeWidget) : autoWidgetsFor(device);
-  }, [config.custom_dashboard, device?.esquema, device?.meta, Object.keys(device?.datos?.reles || {}).length, Object.keys(device?.datos?.entradas || {}).length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [config.custom_dashboard, device?.esquema, device?.meta, relesCount, entradasCount]); // eslint-disable-line react-hooks/exhaustive-deps
   const caps = useMemo(() => deriveCapabilities(device), [device?.esquema, device?.meta, device?.datos]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const [editing, setEditing] = useState(false);
@@ -364,7 +370,11 @@ export default function WidgetBoard({ device, canEdit, sendCommand, onConfirm, e
 
   useEffect(() => { draftRef.current = draft; }, [draft]);
 
-  useEffect(() => { if (!editing) setDraft(autoLayout(stored)); }, [stored, editing]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (editing) return undefined;
+    const t = setTimeout(() => setDraft(autoLayout(stored)), 0);
+    return () => clearTimeout(t);
+  }, [stored, editing]);
 
   const widgets = autoLayout(editing ? draft : stored);
   const canvasH = Math.max(140, ...widgets.map((w) => (w.fy || 0) + (w.fh || 110))) + 12;

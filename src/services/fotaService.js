@@ -3,7 +3,7 @@ import { supabase } from './supabase';
 export async function desplegarPerfilJsonFota({ mac, perfilNombre, tipo, jsonObject, sendCommand }) {
   try {
     if (!mac) throw new Error('Se requiere la dirección MAC del equipo.');
-    const cleanMac = mac.toUpperCase().replace(/[:\-]/g, '');
+    const cleanMac = mac.toUpperCase().replace(/[:-]/g, '');
     const fileName = `profiles/${cleanMac}_${Date.now()}.json`;
 
     const blob = new Blob([JSON.stringify(jsonObject, null, 2)], { type: 'application/json' });

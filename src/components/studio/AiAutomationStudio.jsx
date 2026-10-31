@@ -97,12 +97,12 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
   // Selección de Placa Física
   const macList = Object.keys(fleet || {});
   const [selectedMac, setSelectedMac] = useState(() => {
-    if (initialDeviceMac) return initialDeviceMac.toUpperCase().replace(/[:\-]/g, '');
+    if (initialDeviceMac) return initialDeviceMac.toUpperCase().replace(/[:-]/g, '');
     const onlineMac = macList.find((m) => (Date.now() - (fleet[m]?.lastSeen || 0)) < 15000);
     return onlineMac || macList[0] || '';
   });
 
-  const cleanMac = (selectedMac || '').toUpperCase().replace(/[:\-]/g, '');
+  const cleanMac = (selectedMac || '').toUpperCase().replace(/[:-]/g, '');
   const activeDevice = fleet[cleanMac] || null;
   const dDev = activeDevice?.datos || {};
   const relesFisicos = dDev.reles || {};
@@ -359,7 +359,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
   // Ejecución de Acciones Confirmadas
   const handleEjecutarAccionConfirmada = (accion) => {
     if (!accion) return;
-    const targetMac = (accion.payload?.mac || cleanMac || '').toUpperCase().replace(/[:\-]/g, '');
+    const targetMac = (accion.payload?.mac || cleanMac || '').toUpperCase().replace(/[:-]/g, '');
 
     if (accion.tipo === 'DESPLEGAR_HARDWARE') {
       handleDesplegarADispositivo();

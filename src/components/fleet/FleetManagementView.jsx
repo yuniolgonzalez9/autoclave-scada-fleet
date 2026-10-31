@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { useSwipe, stepThrough } from '../../hooks/useSwipe';
+import { useNow } from '../../hooks/useNow';
 import SwipeDots from '../common/SwipeDots';
 import { supabase } from '../../services/supabase';
 import { 
@@ -34,6 +35,7 @@ const PERFILES_HARDWARE = [
 ];
 
 export default function FleetManagementView({ fleet = {}, sendCommand, onSelectDevice, onOpenReports, onOpenAssignModal }) {
+  const nowTs = useNow(2000);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState('ALL');
 
@@ -468,7 +470,7 @@ export default function FleetManagementView({ fleet = {}, sendCommand, onSelectD
                   filteredDevices.map((dev) => {
                     const mac = dev.mac;
                     const dDev = dev.datos || {};
-                    const isOnline = (Date.now() - (dev.lastSeen || 0)) < 15000;
+                    const isOnline = (nowTs - (dev.lastSeen || 0)) < 15000;
                     const dTipo = (dev.meta?.tipo || dDev.tipo || 'AUTOCLAVE').toUpperCase();
 
                     return (

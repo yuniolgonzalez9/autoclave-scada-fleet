@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNow } from '../../hooks/useNow';
 import { 
   CalendarClock, 
   CheckCircle2, 
@@ -124,7 +125,7 @@ export default function MaintenancePanel({
   const [busy, setBusy] = useState(false);
 
   const cleanMac = useMemo(() => {
-    return (device?.mac || '').toUpperCase().replace(/[:\-]/g, '');
+    return (device?.mac || '').toUpperCase().replace(/[:-]/g, '');
   }, [device?.mac]);
 
   const plans = useMemo(() => {
@@ -148,13 +149,15 @@ export default function MaintenancePanel({
     }
   }, [cleanMac]);
 
-  useEffect(() => { 
-    load(); 
+  useEffect(() => {
+    const t = setTimeout(load, 0);
+    return () => clearTimeout(t);
   }, [load]);
 
+  const nowTs = useNow(60000);
   const insights = useMemo(() => {
     const safeStats = Array.isArray(stats) ? stats : [];
-    const since = Date.now() - 30 * DAY;
+    const since = nowTs - 30 * DAY;
     
     const recent = safeStats.filter((r) => {
       const t = new Date(r.created_at).getTime();
@@ -172,11 +175,11 @@ export default function MaintenancePanel({
     return {
       perDay,
       remaining,
-      eta: perDay > 0 ? new Date(Date.now() + (remaining / perDay) * DAY) : null,
+      eta: perDay > 0 ? new Date(nowTs + (remaining / perDay) * DAY) : null,
       hours: minutes / 60,
       lastService: log[0]?.created_at || meta.ultimo_mantenimiento || null
     };
-  }, [stats, limite, ciclos, log, meta.ultimo_mantenimiento]);
+  }, [stats, limite, ciclos, log, meta.ultimo_mantenimiento, nowTs]);
 
   const pct = Math.min(100, Math.round((ciclos / Math.max(1, limite)) * 100));
   const tone = pct >= 100 ? 'rose' : pct >= alertaPct ? 'amber' : 'emerald';

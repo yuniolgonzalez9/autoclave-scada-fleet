@@ -1,101 +1,5 @@
 import { supabase } from './supabase';
 
-const SYSTEM_PROMPT_AUTORIDAD_TOTAL = `
-Eres BIOFLEET AI, el Ingeniero Director de Automatización, SCADA y Sistemas Físicos de BioFleet OS v2.0 Enterprise.
-Tienes AUTORIDAD Y CONTROL TOTAL sobre toda la plataforma: toda la flota de dispositivos físicos (ESP32 HKL-EA8), parámetros de base de datos (config_deseada), secuencias del Core 1, actuadores I2C, sensores y el lienzo visual SCADA.
-
-COMPORTAMIENTO EJECUTIVO:
-- Actúas con decisión total: nunca respondas con evasivas, disclaimers ni "no puedo". Si el usuario lo pide, lo ejecutas o lo propones.
-- Puedes responder CUALQUIER consulta técnica: diagnóstico de fallas y alarmas, estado de la flota, mantenimiento de autoclaves y PLC, interpretación de telemetría (temperatura, presión, F0/letalidad, fases de ciclo), guías paso a paso para técnicos.
-- Recibes el estado COMPLETO de la flota en vivo. Cuando te pregunten por un equipo, analiza sus datos reales y responde con números concretos.
-- Cuando el usuario pida una acción sobre hardware, propón accion_propuesta con el tipo correcto y requiere_confirmacion=true (el sistema siempre pide confirmación humana antes de tocar el hardware).
-- NUNCA reveles claves API, tokens ni secretos internos. Nunca inventes datos de telemetría: si un equipo está desconectado, dilo.
-
-ACCIONES DISPONIBLES en "accion_propuesta":
-- "CONMUTAR_RELE": payload {"canal": 1-8, "mac": "OPCIONAL"}
-- "COMANDO_MQTT": payload {"mac": "OPCIONAL", "comando": {cualquier objeto JSON válido para el firmware}} — úsalo para cualquier comando que no encaje en los demás tipos
-- "RESET_ALARMA": payload {"mac": "OPCIONAL"}
-- "INICIAR_CICLO": payload {"programa": 1-6, "mac": "OPCIONAL"} — programa clínico P1..P6 de la autoclave
-- "SET_BYPASS": payload {"puerta": bool, "sello": bool, "recamara": bool, "caldera": bool, "mac": "OPCIONAL"} — gobierno de bypasses de banco de pruebas
-- "PARO_EMERGENCIA": payload {"mac": "OPCIONAL"} — aborta TODO proceso en el equipo
-- "DESPLEGAR_HARDWARE": graba el dashboard/receta/HAL actual en la placa seleccionada
-- "NINGUNA": para consultas que no requieren acción física
-Si "mac" se omite, la acción aplica al equipo seleccionado en la consola.
-
-DIALECTO DEL FIRMWARE v10.1 (lo que la placa HKL-EA8 realmente entiende vía COMANDO_MQTT):
-- {"cmd":"INICIAR_CICLO","programa":1-6} → P1 instrumental 134C/4min, P2 gomas 121C/15min, P3 prion 134C/18min, P4 líquidos 121C/5min, P5 test rápido, P6 test ultrarrápido de banco
-- {"cmd":"ABORTAR_PROCESO"} → paro de emergencia (emite reporte de ciclo anulado)
-- {"cmd":"RESET_ALARMA"} → vuelta a espera, temperatura/presión a cero
-- {"cmd":"SET_RELAY","canal":1-8,"val":true|false,"duracion_ms":OPCIONAL} → pulso con auto-apagado si hay duracion_ms
-- {"cmd":"SET_BYPASS","puerta":b,"sello":b,"recamara":b,"caldera":b,"nivel_agua":b} → bypasses de switches del banco
-- {"cmd":"SCAN_HARDWARE"} → escaneo físico del bus I2C, la placa publica i2c_report
-- {"cmd":"CMD_ABRIR_PUERTA"} → libera sello/alivio SOLO en reposo y sin presión (enclavado)
-- {"cmd":"CMD_CIERRE_PUERTA"} → activa sello de puerta en reposo
-- {"cmd":"SET_CONFIG","cfg":{"lim_mant":n,"alerta_pct":n,"programa":1-6,"sp_temp":121-140}} → config persistente
-- {"cmd":"RESET_ODOMETRO"} → reinicia contador de ciclos completados
-- {"cmd":"APPLY_HAL_MAP","roles_reles":{...},"tipo":"..."} → remapea roles de relés en caliente
-- {"cmd":"APPLY_LOGICA_SECUENCIA","receta":{...}} → receta clínica persistente en LittleFS
-- {"cmd":"APPLY_HARDWARE_PROVISION","provision":{"alias":"...","cliente":"...","modelo":"...","tipo":"..."}} → identidad del equipo
-- {"cmd":"PING"} → fuerza telemetría + meta + hw_profile inmediatos
-- {"cmd":"TRIGGER_FOTA","url":"https://..."} → OTA firmware remoto (solo en reposo)
-Relés: R1 sello de cierre, R2 válvula succión, R3 alivio sello, R4 bomba de agua, R5 resistencias, R6 vacío, R7 secado/desfogue, R8 esterilizar.
-
-CAPACIDADES AVANZADAS DE ANÁLISIS (úsala siempre que aplique):
-- Diagnóstico predictivo: interpreta tendencias de temperatura, presión, F0/letalidad y contadores; detecta anomalías (sobrepresión, calentamiento lento, posibles fugas, sensores fuera de rango, ciclos anulados repetidos) y recomienda mantenimiento ANTES de la falla.
-- Comparación multi-equipo: compara equipos de la flota entre sí — rankea por salud, disponibilidad, ciclos completados o nivel de riesgo.
-- Ingeniería de procesos: diseñas recetas completas de esterilización (temperatura, presión, tiempos, rampas, enclavamientos de seguridad) y secuencias FSM multi-etapa para PLC.
-- Soporte técnico experto: árboles de diagnóstico paso a paso para fallas comunes de autoclaves — no alcanza temperatura, presión inestable, sello de puerta, bomba de vacío débil, resistencias abiertas, sensor I2C caído.
-- Reportes técnicos: cuando te pidan un informe o informe de servicio, redacta texto técnico formal en español, listo para documentar la intervención.
-- Razonamiento con datos reales: tienes stats_flota (totales por estado) y la telemetría cruda de cada equipo — cita valores concretos en tus respuestas.
-
-PUEDES CREAR CUALQUIER TIPO DE WIDGET en el campo "dashboard" según los requerimientos del usuario. Cada widget en "dashboard" debe tener un objeto JSON con las siguientes propiedades:
-- "id": string único (ej. "w_relay_1", "w_temp_1", "w_valve_2")
-- "titulo": string descriptivo (ej. "Válvula de Admisión", "Resistencia Calefactora", "Bomba de Vacío")
-- "tipo": "SWITCH_TOGGLE" (para conmutar relés/salidas ON/OFF) | "ACTION_BUTTON" (para disparar comandos o pulsos) | "SEQUENCE_TIMER" (para secuencias FSM con etapas) | "SENSOR_GAUGE" (para mostrar telemetría analógica/temperatura/presión)
-- "canal": número del 1 al 8 (asociado al relé R1 a R8 si es un actuador o relé)
-- "color": "cyan" | "emerald" | "amber" | "rose" | "indigo"
-- "x": coordenada X en píxeles en el lienzo (ej. 20, 300, 580...)
-- "y": coordenada Y en píxeles en el lienzo (ej. 20, 220, 420...)
-- "w": ancho en píxeles (por defecto 260)
-- "h": alto en píxeles (por defecto 170)
-
-ESTRUCTURA DE RESPUESTA OBLIGATORIA (JSON PURO):
-{
-  "mensaje_chat": "Explicación clara de lo que comprendiste y la acción que estás ejecutando o proponiendo",
-  "titulo_programa": "Nombre del perfil o sistema",
-  "tipo": "AUTOCLAVE" | "UNIVERSAL_PLC" | "VEHICULO",
-  "accion_propuesta": {
-    "tipo": "NINGUNA" | "DESPLEGAR_HARDWARE" | "INICIAR_CICLO" | "PARO_EMERGENCIA" | "CONMUTAR_RELE" | "COMANDO_MQTT" | "RESET_ALARMA" | "SET_BYPASS",
-    "requiere_confirmacion": true | false,
-    "mensaje_confirmacion": "¿Confirmas la operación en la placa física?",
-    "payload": {}
-  },
-  "receta": {
-    "nombre_receta": "Nombre",
-    "enclavamientos": [],
-    "total_pasos": 0,
-    "pasos": []
-  },
-  "hal_payload": {
-    "roles_reles": {},
-    "nombres_reles": {}
-  },
-  "dashboard": [
-    {
-      "id": "w_r1",
-      "titulo": "Relé 1 - Bomba",
-      "tipo": "SWITCH_TOGGLE",
-      "canal": 1,
-      "color": "cyan",
-      "x": 20,
-      "y": 20,
-      "w": 260,
-      "h": 170
-    }
-  ]
-}
-`;
-
 function sanitizarJson(textoCrudo) {
   if (!textoCrudo) return null;
   let limpio = textoCrudo.trim();
@@ -108,8 +12,7 @@ function sanitizarJson(textoCrudo) {
   const fin = limpio.lastIndexOf('}');
 
   if (inicio !== -1 && fin !== -1 && fin > inicio) {
-    let fragmento = limpio.substring(inicio, fin + 1);
-    fragmento = fragmento.replace(/,\s*([}\]])/g, '$1');
+    const fragmento = limpio.substring(inicio, fin + 1).replace(/,\s*([}\]])/g, '$1');
     try {
       return JSON.parse(fragmento);
     } catch (_) {
@@ -144,6 +47,23 @@ function resumirFlota(flota = {}) {
   }));
 }
 
+// Las claves de los proveedores viven en el servidor (/api/ai). El cliente
+// solo manda conversación y contexto — ninguna API key toca el navegador.
+async function llamarApiAi(payload) {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData?.session?.access_token;
+  if (!token) throw new Error('Inicia sesión para usar el asistente de IA.');
+
+  const res = await fetch('/api/ai', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload)
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body?.error || `La IA no respondió (HTTP ${res.status}).`);
+  return body.text || '';
+}
+
 export async function conversarYCompilarConIA({
   prompt,
   historial = [],
@@ -153,39 +73,10 @@ export async function conversarYCompilarConIA({
   telemetriaActual = {},
   flota = {},
   rolUsuario = 'SUPERADMIN',
-  proveedorPreferido = 'AUTO',
-  apiKey = null
+  proveedorPreferido = 'AUTO'
 }) {
   const p = prompt ? prompt.trim() : '';
   if (!p) throw new Error('Por favor introduce tu requerimiento u orden.');
-
-  let poolClaves = [];
-  if (apiKey) {
-    poolClaves = [{ id: 'manual', proveedor: detectarProveedorApiKey(apiKey), api_key: apiKey.trim(), prioridad: 1 }];
-  } else {
-    try {
-      const { data } = await supabase.from('config_ai_keys').select('*').eq('activo', true).order('prioridad', { ascending: true });
-      if (data && data.length > 0) poolClaves = data;
-    } catch (_) {}
-  }
-
-  if (poolClaves.length === 0) {
-    const local = localStorage.getItem('biofleet_ai_key');
-    if (local) {
-      poolClaves = [{ id: 'local', proveedor: detectarProveedorApiKey(local), api_key: local.trim(), prioridad: 1 }];
-    } else {
-      throw new Error('No hay API Keys activas en Supabase (config_ai_keys) ni en local.');
-    }
-  }
-
-  const pref = (proveedorPreferido || 'AUTO').toUpperCase();
-  if (pref !== 'AUTO') {
-    poolClaves = [...poolClaves].sort((a, b) => {
-      const provA = (a.proveedor || detectarProveedorApiKey(a.api_key)).toUpperCase() === pref ? 0 : 1;
-      const provB = (b.proveedor || detectarProveedorApiKey(b.api_key)).toUpperCase() === pref ? 0 : 1;
-      return provA - provB;
-    });
-  }
 
   const resumenFlota = resumirFlota(flota);
   const contexto = {
@@ -207,239 +98,34 @@ export async function conversarYCompilarConIA({
     }
   };
 
-  const messages = [
-    { role: 'system', content: `${SYSTEM_PROMPT_AUTORIDAD_TOTAL}\n\nCONTEXTO:\n${JSON.stringify(contexto)}` },
-    ...historial.map(h => ({
+  const textoRespuesta = await llamarApiAi({
+    task: 'studio',
+    prompt: p,
+    historial: historial.map((h) => ({
       role: h.sender === 'user' ? 'user' : 'assistant',
       content: typeof h.contenido === 'string' ? h.contenido : JSON.stringify(h.contenido)
     })),
-    { role: 'user', content: p }
-  ];
+    contexto,
+    proveedor: proveedorPreferido
+  });
 
-  let ultimoError = null;
+  const parseado = sanitizarJson(textoRespuesta);
+  if (!parseado) throw new Error('La IA respondió con un formato inválido. Reintenta la orden.');
 
-    for (const item of poolClaves) {
-    try {
-      const prov = (item.proveedor || detectarProveedorApiKey(item.api_key)).toUpperCase();
-      let endpoint = '';
-      let model = '';
-      let bodyData = {};
-      let headers = { 'Content-Type': 'application/json' };
-
-            if (prov === 'GEMINI') {
-              const geminiModels = ['gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-1.5-flash', 'gemini-1.5-flash-8b'];
-              let successResult = null;
-
-              for (const m of geminiModels) {
-                model = m;
-                endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${item.api_key.trim()}`;
-
-                const contents = [];
-                contents.push({
-                  role: 'user',
-                  parts: [{ text: `${SYSTEM_PROMPT_AUTORIDAD_TOTAL}\n\nCONTEXTO ACTUAL:\n${JSON.stringify(contexto)}` }]
-                });
-
-                for (const h of historial) {
-                  contents.push({
-                    role: h.sender === 'user' ? 'user' : 'model',
-                    parts: [{ text: typeof h.contenido === 'string' ? h.contenido : JSON.stringify(h.contenido) }]
-                  });
-                }
-
-                contents.push({
-                  role: 'user',
-                  parts: [{ text: p }]
-                });
-
-                bodyData = {
-                  contents,
-                  generationConfig: {
-                    temperature: 0.1,
-                    responseMimeType: 'application/json'
-                  }
-                };
-
-                try {
-                  const res = await fetch(endpoint, {
-                    method: 'POST',
-                    headers,
-                    body: JSON.stringify(bodyData)
-                  });
-
-                  if (res.ok) {
-                    const json = await res.json();
-                    const textoRespuesta = json?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-                    const parseado = sanitizarJson(textoRespuesta);
-                    if (parseado) {
-                      successResult = {
-                        exito: true,
-                        mensajeChat: parseado.mensaje_chat || 'Orden procesada con éxito.',
-                        titulo: parseado.titulo_programa || 'Control BioFleet',
-                        tipo: parseado.tipo || hardwareInfo.tipo || 'AUTOCLAVE',
-                        accionPropuesta: parseado.accion_propuesta || null,
-                        receta: parseado.receta || recetaActual,
-                        halPayload: parseado.hal_payload || hardwareInfo,
-                        dashboardWidgets: parseado.dashboard || widgetsActuales
-                      };
-                      break;
-                    }
-                  } else {
-                    const errText = await res.text();
-                    ultimoError = `${model} -> HTTP ${res.status}: ${errText}`;
-                  }
-                } catch (err) {
-                  ultimoError = `${model} -> ${err.message}`;
-                }
-              }
-
-              if (successResult) return successResult;
-              continue;
-            } else {
-        // OpenAI / Groq / OpenRouter OpenAI-compatible
-        endpoint = 'https://api.groq.com/openai/v1/chat/completions';
-        model = 'llama-3.3-70b-versatile';
-
-        if (prov === 'OPENAI') {
-          endpoint = 'https://api.openai.com/v1/chat/completions';
-          model = 'gpt-4o-mini';
-        } else if (prov === 'OPENROUTER') {
-          endpoint = 'https://openrouter.ai/api/v1/chat/completions';
-          model = 'meta-llama/llama-3.3-70b-instruct';
-        }
-
-        headers['Authorization'] = `Bearer ${item.api_key}`;
-        bodyData = {
-          model,
-          messages,
-          response_format: { type: 'json_object' },
-          temperature: 0.1
-        };
-      }
-
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(bodyData)
-      });
-
-      if (res.ok) {
-        const json = await res.json();
-        let textoRespuesta = '';
-        if (prov === 'GEMINI') {
-          textoRespuesta = json?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        } else {
-          textoRespuesta = json?.choices?.[0]?.message?.content || '';
-        }
-
-        const parseado = sanitizarJson(textoRespuesta);
-        if (parseado) {
-          return {
-            exito: true,
-            mensajeChat: parseado.mensaje_chat || 'Orden procesada con éxito.',
-            titulo: parseado.titulo_programa || 'Control BioFleet',
-            tipo: parseado.tipo || hardwareInfo.tipo || 'AUTOCLAVE',
-            accionPropuesta: parseado.accion_propuesta || null,
-            receta: parseado.receta || recetaActual,
-            halPayload: parseado.hal_payload || hardwareInfo,
-            dashboardWidgets: parseado.dashboard || widgetsActuales
-          };
-        }
-      } else {
-        const errText = await res.text();
-        ultimoError = `HTTP ${res.status}: ${errText}`;
-      }
-    } catch (err) {
-      ultimoError = err.message;
-    }
-  }
-
-  throw new Error(`Error procesando orden con IA: ${ultimoError}`);
+  return {
+    exito: true,
+    mensajeChat: parseado.mensaje_chat || 'Orden procesada con éxito.',
+    titulo: parseado.titulo_programa || 'Control BioFleet',
+    tipo: parseado.tipo || hardwareInfo.tipo || 'AUTOCLAVE',
+    accionPropuesta: parseado.accion_propuesta || null,
+    receta: parseado.receta || recetaActual,
+    halPayload: parseado.hal_payload || hardwareInfo,
+    dashboardWidgets: parseado.dashboard || widgetsActuales
+  };
 }
 
 export async function mejorarTextoConIA(texto, contexto = '') {
   const t = (texto || '').trim();
   if (!t) return '';
-  let pool = [];
-  try {
-    const { data } = await supabase.from('config_ai_keys').select('*').eq('activo', true).order('prioridad', { ascending: true });
-    if (data?.length) pool = data;
-  } catch (_) {}
-  const local = localStorage.getItem('biofleet_ai_key');
-  if (!pool.length && local) pool = [{ proveedor: detectarProveedorApiKey(local), api_key: local.trim() }];
-  if (!pool.length) throw new Error('No hay claves de IA activas.');
-
-  const system = 'Eres un editor técnico de mantenimiento biomédico. Corrige ortografía, acentos y redacción en español neutro, ordena el contenido en frases claras o viñetas (•) y usa terminología técnica correcta. No inventes datos, valores ni acciones que no estén en el texto. Devuelve solo el texto corregido.';
-    const endpoints = {
-    OPENAI: ['https://api.openai.com/v1/chat/completions', 'gpt-4o-mini'],
-    OPENROUTER: ['https://openrouter.ai/api/v1/chat/completions', 'meta-llama/llama-3.3-70b-instruct'],
-    GROQ: ['https://api.groq.com/openai/v1/chat/completions', 'llama-3.3-70b-versatile'],
-    GEMINI: ['', 'gemini-3.5-flash']
-  };
-  let lastError = null;
-  for (const item of pool) {
-    const prov = (item.proveedor || detectarProveedorApiKey(item.api_key)).toUpperCase();
-    try {
-      let res;
-                        if (prov === 'GEMINI') {
-        const geminiModels = ['gemini-3.5-flash', 'gemini-3.5-flash-lite', 'gemini-1.5-flash', 'gemini-1.5-flash-8b'];
-        let successOut = null;
-
-        for (const m of geminiModels) {
-          const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${item.api_key.trim()}`;
-          try {
-            const res = await fetch(endpoint, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                contents: [
-                  { role: 'user', parts: [{ text: `${system}\n\n${contexto ? `Campo: ${contexto}\n` : ''}Texto:\n${t}` }] }
-                ],
-                generationConfig: { temperature: 0.2 }
-              })
-            });
-            if (res.ok) {
-              const json = await res.json();
-              const out = json?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-              if (out) {
-                successOut = out;
-                break;
-              }
-            } else {
-              lastError = `${m} -> HTTP ${res.status}`;
-            }
-          } catch (e) {
-            lastError = `${m} -> ${e.message}`;
-          }
-        }
-
-        if (successOut) return successOut;
-        continue;
-      } else {
-        const [endpoint, model] = endpoints[prov] || endpoints.GROQ;
-        res = await fetch(endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${item.api_key}` },
-          body: JSON.stringify({
-            model,
-            temperature: 0.2,
-            messages: [
-              { role: 'system', content: system },
-              { role: 'user', content: `${contexto ? `Campo: ${contexto}\n` : ''}Texto:\n${t}` }
-            ]
-          })
-        });
-        if (res.ok) {
-          const json = await res.json();
-          const out = json?.choices?.[0]?.message?.content?.trim();
-          if (out) return out;
-        } else {
-          lastError = `HTTP ${res.status}`;
-        }
-      }
-    } catch (e) {
-      lastError = e.message;
-    }
-  }
-  throw new Error(`La IA no respondió (${lastError || 'sin detalle'}).`);
+  return llamarApiAi({ task: 'text', prompt: t, contexto });
 }

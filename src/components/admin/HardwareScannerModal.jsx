@@ -55,7 +55,7 @@ export default function HardwareScannerModal({
     for (let i = 1; i <= 8; i++) {
       defaultRoles[`R${i}`] = savedRoles[`R${i}`] || 'LIBRE';
     }
-    setSelectedRole(defaultRoles);
+    queueMicrotask(() => setSelectedRole(defaultRoles));
   }, [device]);
 
   // Manejo de cierre con Escape
@@ -82,7 +82,7 @@ export default function HardwareScannerModal({
       for (let i = 1; i <= 8; i++) {
         liveMap[i] = Boolean(Number(device.datos.reles[`R${i}`]));
       }
-      setRelayStates(liveMap);
+      queueMicrotask(() => setRelayStates(liveMap));
     }
   }, [device?.datos?.reles]);
 
@@ -92,27 +92,30 @@ export default function HardwareScannerModal({
       if (scanTimeoutRef.current) {
         clearTimeout(scanTimeoutRef.current);
       }
-      setDetectedChips(device.i2cReport.chips);
-      setScanning(false);
+      queueMicrotask(() => {
+        setDetectedChips(device.i2cReport.chips);
+        setScanning(false);
 
-      if (device.i2cReport.chips.length === 0) {
-        setStatusMessage({
-          text: 'Bus I2C escaneado: No se detectó ningún circuito integrado respondiendo en direcciones 0x08 a 0x77.',
-          type: 'warning'
-        });
-      } else {
-        setStatusMessage({
-          text: `Bus I2C activo: Confirmada presencia física de ${device.i2cReport.chips.length} dispositivo(s).`,
-          type: 'success'
-        });
-      }
+        if (device.i2cReport.chips.length === 0) {
+          setStatusMessage({
+            text: 'Bus I2C escaneado: No se detectó ningún circuito integrado respondiendo en direcciones 0x08 a 0x77.',
+            type: 'warning'
+          });
+        } else {
+          setStatusMessage({
+            text: `Bus I2C activo: Confirmada presencia física de ${device.i2cReport.chips.length} dispositivo(s).`,
+            type: 'success'
+          });
+        }
+      });
     }
   }, [device?.i2cReport]);
 
   // Despachador de órdenes sin intermediarios
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const dispatchCommand = useCallback((cmdPayload) => {
     if (!device?.mac) return;
-    const cleanMac = device.mac.toUpperCase().replace(/[:\-]/g, '');
+    const cleanMac = device.mac.toUpperCase().replace(/[:-]/g, '');
 
     if (typeof sendCommand === 'function') {
       sendCommand(cleanMac, cmdPayload);
@@ -162,7 +165,7 @@ export default function HardwareScannerModal({
   // Grabación del mapa de hardware en LittleFS y respaldo en Supabase
   const handleApplyHalMap = async () => {
     if (!device?.mac) return;
-    const cleanMac = device.mac.toUpperCase().replace(/[:\-]/g, '');
+    const cleanMac = device.mac.toUpperCase().replace(/[:-]/g, '');
 
     const halPayload = {
       cmd: 'APPLY_HAL_MAP',

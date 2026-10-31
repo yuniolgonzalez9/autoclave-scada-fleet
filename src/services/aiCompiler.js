@@ -23,8 +23,8 @@ export async function conversarYCompilarConIA({
   // Generación heurística / fallback local si no hay API Key activa
   const promptLower = prompt.toLowerCase();
   let accionDetectada = 'PARAMETRO_CUSTOM';
-  let explicacion = `Regla compilada automáticamente para el equipo [${contextoEquipo?.alias || contextoEquipo?.mac || 'SCADA'}].`;
-  let codigoGenerado = {};
+  let explicacion;
+  let codigoGenerado;
 
   if (promptLower.includes('temperatura') || promptLower.includes('temp')) {
     const num = prompt.match(/\d+(\.\d+)?/);

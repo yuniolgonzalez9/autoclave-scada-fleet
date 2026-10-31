@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { useNow } from '../../hooks/useNow';
 import ClinicalTooltip from '../common/ClinicalTooltip';
 import { CLINICAL_HELP } from '../../utils/clinicalDictionary';
 import { desplegarPerfilJsonFota } from '../../services/fotaJsonService';
@@ -17,6 +18,7 @@ import {
 } from 'lucide-react';
 
 export default function FotaHubView({ fleet = {}, sendCommand }) {
+  const nowTs = useNow(2000);
   const [fotaMode, setFotaMode] = useState('JSON'); // 'JSON' | 'BIN'
   
   // Parámetros Binario C++
@@ -54,14 +56,14 @@ export default function FotaHubView({ fleet = {}, sendCommand }) {
   const macList = useMemo(() => Object.keys(fleet || {}), [fleet]);
 
   const filteredMacs = useMemo(() => {
-    const now = Date.now();
+    const now = nowTs;
     return macList.filter((mac) => {
       const isOnline = (now - (fleet[mac]?.lastSeen || 0)) < 15000;
       if (filterOnline === 'ONLINE') return isOnline;
       if (filterOnline === 'OFFLINE') return !isOnline;
       return true;
     });
-  }, [macList, fleet, filterOnline]);
+  }, [macList, fleet, filterOnline, nowTs]);
 
   const toggleSelectAll = () => {
     const allSelected = filteredMacs.length > 0 && filteredMacs.every((mac) => selectedTargets[mac]);
@@ -455,7 +457,7 @@ export default function FotaHubView({ fleet = {}, sendCommand }) {
               ) : (
                 filteredMacs.map((mac) => {
                   const dev = fleet[mac];
-                  const isOnline = (Date.now() - (dev?.lastSeen || 0)) < 15000;
+                  const isOnline = (nowTs - (dev?.lastSeen || 0)) < 15000;
                   const isBusy = isDeviceInActiveCycle(mac);
                   const checked = Boolean(selectedTargets[mac]);
                   const devTipo = (dev?.meta?.tipo || dev?.datos?.tipo || 'UNIVERSAL_PLC').toUpperCase();

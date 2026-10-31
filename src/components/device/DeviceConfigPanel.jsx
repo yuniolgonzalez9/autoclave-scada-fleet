@@ -28,7 +28,10 @@ export default function DeviceConfigPanel({ device, canEdit, sendCommand, onDevi
   const [msg, setMsg] = useState('');
   const [error, setError] = useState('');
 
-  useEffect(() => { setForm(initialState(device?.meta || {})); }, [device?.mac]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const t = setTimeout(() => setForm(initialState(device?.meta || {})), 0);
+    return () => clearTimeout(t);
+  }, [device?.mac]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     fetchCatalog().then(setCatalog).catch(() => {});
     fetchUsersLite().then(setUsers).catch(() => {});

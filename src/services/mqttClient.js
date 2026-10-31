@@ -237,7 +237,7 @@ export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
   }
 
   const sendCommand = (mac, cmdObject, forceRetain = null) => {
-    const cleanMac = (mac || '').toUpperCase().replace(/[:\-]/g, '');
+    const cleanMac = (mac || '').toUpperCase().replace(/[:-]/g, '');
     if (!cleanMac) return Promise.resolve();
     return sendDeviceCommandSecure(cleanMac, cmdObject, forceRetain).catch((e) => {
       console.warn('[COMANDO]', e.message);

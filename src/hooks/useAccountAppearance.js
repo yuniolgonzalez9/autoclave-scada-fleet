@@ -15,8 +15,9 @@ export function useAccountAppearance(profile, authMode) {
 
   useEffect(() => {
     let cancelled = false;
-    setLoadedUserId(null);
-    setSyncStatus('idle');
+    const init = setTimeout(() => {
+      setLoadedUserId(null);
+      setSyncStatus('idle');
 
     if (!userId) {
       setAppearance({ ...DEFAULT_APPEARANCE });
@@ -47,14 +48,15 @@ export function useAccountAppearance(profile, authMode) {
         setLoadedUserId(userId);
       }
     });
+    }, 0);
 
-    return () => { cancelled = true; };
+    return () => { cancelled = true; clearTimeout(init); };
   }, [userId, authMode]);
 
   useEffect(() => {
     if (!userId || loadedUserId !== userId) return undefined;
-    setSyncStatus(authMode ? 'saving' : 'local');
     const timer = window.setTimeout(async () => {
+      setSyncStatus(authMode ? 'saving' : 'local');
       if (!authMode) {
         saveLocalAppearance(userId, appearance);
         setSyncStatus('local');

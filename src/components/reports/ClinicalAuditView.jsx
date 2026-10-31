@@ -62,7 +62,8 @@ export default function ClinicalAuditView() {
   }, [filterDevice, filterLimit, filterDesde, filterHasta]);
 
   useEffect(() => {
-    fetchReports();
+    const t = setTimeout(fetchReports, 0);
+    return () => clearTimeout(t);
   }, [fetchReports]);
 
   // Selección múltiple
@@ -435,7 +436,7 @@ export default function ClinicalAuditView() {
                       />
                     </td>
                     <td className="p-3">
-                      <div className="font-bold text-white">{new Date(r.created_at || r.fecha || Date.now()).toLocaleDateString()}</div>
+                      <div className="font-bold text-white">{(r.created_at || r.fecha) ? new Date(r.created_at || r.fecha).toLocaleDateString() : '—'}</div>
                       <div className="text-[10px] text-cyan-400">{r.session_id}</div>
                     </td>
                     <td className="p-3 font-sans">

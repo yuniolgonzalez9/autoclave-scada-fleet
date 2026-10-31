@@ -70,10 +70,13 @@ export default function SessionDetailModal({ isOpen, onClose, session }) {
   }, [isOpen, handleKeyDown]);
 
   useEffect(() => {
-    setOffset({ x: 0, y: 0 });
-    setEventCategory('ALL');
-    setEventSearch('');
-    setIsAscending(true);
+    const t = setTimeout(() => {
+      setOffset({ x: 0, y: 0 });
+      setEventCategory('ALL');
+      setEventSearch('');
+      setIsAscending(true);
+    }, 0);
+    return () => clearTimeout(t);
   }, [session?.session_id]);
 
   // Manejadores de arrastre con mouse y touch (con clamping en pantalla)
@@ -115,7 +118,7 @@ export default function SessionDetailModal({ isOpen, onClose, session }) {
   const tMax = parseFloat(session?.temp_max || 0);
   const pMax = parseFloat(session?.pres_max || 0);
   const f0Alcanzado = parseFloat(session?.f0_alcanzado || session?.f0_score || 0);
-  const fechaStr = new Date(session?.created_at || session?.fecha || Date.now()).toLocaleDateString();
+  const fechaStr = (session?.created_at || session?.fecha) ? new Date(session.created_at || session.fecha).toLocaleDateString() : '—';
   const duracionTotalSeg = Number(session?.duracion_total_seg) || 0;
   const horaInicio = session?.hora_encendido || session?.inicio_ciclo || '--:--:--';
   const horaFin = session?.hora_apagado || '--:--:--';

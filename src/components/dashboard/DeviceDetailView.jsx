@@ -14,6 +14,7 @@ import DeviceConfigPanel from '../device/DeviceConfigPanel';
 import ServiceReportsView from '../service/ServiceReportsView';
 import { ActionTile, DoorOpen, ProgramPicker, ToggleTile, iconFor } from '../device/controls';
 import { fetchCycleStats } from '../../services/deviceService';
+import { useNow } from '../../hooks/useNow';
 import { 
   Activity, 
   Flame, 
@@ -162,8 +163,9 @@ export default function DeviceDetailView({
     ciclos
   );
   const alertaPct = Number(meta.alerta_porcentaje || d.cfg?.alerta_pct || 80);
+  const healthNow = useNow(2000);
   const odometer = { ciclos, limite, historicos, alertaPct };
-  const isOnline = Date.now() - (device?.lastSeen || 0) < 15000;
+  const isOnline = healthNow - (device?.lastSeen || 0) < 15000;
   const pctMant = Math.min(100, Math.round((ciclos / limite) * 100));
   const isBloqueado100 = Boolean(d.cfg?.fuera_servicio || pctMant >= 100);
 
@@ -173,15 +175,18 @@ export default function DeviceDetailView({
       if (scanI2CTimeoutRef.current) {
         clearTimeout(scanI2CTimeoutRef.current);
       }
-      setChipsDetectados(device.i2cReport.chips);
-      setScanningI2C(false);
+      queueMicrotask(() => {
+        setChipsDetectados(device.i2cReport.chips);
+        setScanningI2C(false);
+      });
     }
   }, [device?.i2cReport]);
 
   // Sincronizar bypasses desde telemetría
   useEffect(() => {
     if (d.bypasses) {
-      setBypasses(d.bypasses);
+      const nextBypasses = d.bypasses;
+      queueMicrotask(() => setBypasses(nextBypasses));
     }
   }, [d.bypasses]);
 
@@ -232,7 +237,7 @@ export default function DeviceDetailView({
   const handleDeviceUpdated = (row) => onDeviceUpdated?.(row);
 
   const cleanMac = useMemo(() => {
-    return (device?.mac || '').toUpperCase().replace(/[:\-]/g, '');
+    return (device?.mac || '').toUpperCase().replace(/[:-]/g, '');
   }, [device?.mac]);
 
   // =========================================================================

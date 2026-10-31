@@ -25,7 +25,7 @@ export const sendTelegramEvent = async (kind, data = {}) => {
 
 export const sendCriticalAlarmWithButtons = async ({ mac, alias, temp, pres, fase, errorMsg }) => {
   if (!mac) return;
-  const cleanMac = mac.toUpperCase().replace(/[:\-]/g, '');
+  const cleanMac = mac.toUpperCase().replace(/[:-]/g, '');
   const ahora = Date.now();
   if (ahora - (ultimasAlarmasPorMac.get(cleanMac) || 0) < COOLDOWN_ALARMA_MS) return;
   ultimasAlarmasPorMac.set(cleanMac, ahora);

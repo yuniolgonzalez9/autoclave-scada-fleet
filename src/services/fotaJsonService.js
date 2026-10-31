@@ -65,7 +65,7 @@ export const PERFILES_PREDETERMINADOS = [
  */
 export async function desplegarPerfilJsonFota(targetMac, perfilData, sendCommand) {
   try {
-    const cleanMac = (targetMac || '').toUpperCase().replace(/[:\-]/g, '');
+    const cleanMac = (targetMac || '').toUpperCase().replace(/[:-]/g, '');
 
     const payloadFota = {
       cmd: 'FOTA_DEPLOY',

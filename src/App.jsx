@@ -780,7 +780,7 @@ function ScadaAppContent() {
                   role="button"
                   aria-label={`Usuario: ${displayName}, rol ${displayRole}`}
                 >
-                  <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-600/20 border border-cyan-400/40 text-cyan-300 flex items-center justify-center font-bold text-xs uppercase shrink-0 group-hover:scale-105 transition-transform">
+                  <div className="w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center text-cyan-300 font-bold text-base sm:text-lg uppercase shrink-0 group-hover:scale-110 transition-transform">
                     {displayName[0]}
                   </div>
                   <div className="text-left min-w-0">

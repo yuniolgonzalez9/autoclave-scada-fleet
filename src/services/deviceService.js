@@ -31,7 +31,7 @@ export const DEFAULT_PLANES = {
   ]
 };
 
-export const cleanMac = (mac) => (mac || '').toUpperCase().replace(/[:\-]/g, '').trim();
+export const cleanMac = (mac) => (mac || '').toUpperCase().replace(/[:-]/g, '').trim();
 
 export async function mergeDeviceConfig(mac, patch) {
   const id = cleanMac(mac);

@@ -18,7 +18,9 @@ function insideHorizontalScroller(node, root) {
 // to move to, so an outer swipe area can take the gesture instead.
 export function useSwipe(ref, { onSwipeLeft, onSwipeRight, enabled = true }) {
   const handlers = useRef({ onSwipeLeft, onSwipeRight });
-  handlers.current = { onSwipeLeft, onSwipeRight };
+  useEffect(() => {
+    handlers.current = { onSwipeLeft, onSwipeRight };
+  }, [onSwipeLeft, onSwipeRight]);
 
   useEffect(() => {
     const el = ref.current;

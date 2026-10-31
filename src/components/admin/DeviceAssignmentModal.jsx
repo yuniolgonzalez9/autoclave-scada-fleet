@@ -77,7 +77,8 @@ export default function DeviceAssignmentModal({
       const devModel = metaObj.modelo && models.includes(metaObj.modelo) ? metaObj.modelo : models[0] || 'Universal';
       const devLimit = datosObj.cfg?.lim_mant || metaObj.limite_mantenimiento || metaObj.limiteMantenimiento || 200;
 
-      setTipo(devType);
+      queueMicrotask(() => {
+        setTipo(devType);
       setAlias(metaObj.alias || `EQUIPO [${device.mac?.slice(-4) || 'SCADA'}]`);
       setCliente(metaObj.cliente || 'Central Hospitalaria');
       setUsuarioAsignado(metaObj.usuario_asignado || '');
@@ -86,6 +87,7 @@ export default function DeviceAssignmentModal({
       setLimiteMant(String(devLimit));
       setErrorMsg('');
       setMensajeExito(false);
+      });
     }
   }, [device]);
 
@@ -139,7 +141,7 @@ export default function DeviceAssignmentModal({
     setGuardando(true);
     setMensajeExito(false);
 
-    const cleanMac = (device.mac || '').toUpperCase().replace(/[:\-]/g, '');
+    const cleanMac = (device.mac || '').toUpperCase().replace(/[:-]/g, '');
 
     const updatedData = {
       mac: cleanMac,

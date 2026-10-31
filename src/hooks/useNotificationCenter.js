@@ -16,6 +16,8 @@ const OVERTEMP_MARGIN_C = 3;
 const RECOVERY_WINDOW_DAYS = 30;
 const PLATEAU_PHASES = new Set(['ESTERILIZANDO', 'MESETA']);
 
+const SESSION_BOOT = Date.now();
+
 const CONDITION_TYPES = new Set(['ALARMA', 'SOBRETEMP', 'OFFLINE', 'MANT_PROXIMO', 'MANT_LIMITE', 'ACCESO']);
 const AUTO_RESOLVE_TYPES = new Set(['OFFLINE', 'MANT_PROXIMO', 'MANT_LIMITE', 'ACCESO']);
 
@@ -219,13 +221,12 @@ export function useNotificationCenter({
   const [rows, setRows] = useState([]);
   const [storeMode, setStoreMode] = useState('unknown');
   const [loaded, setLoaded] = useState(false);
-  const [now, setNow] = useState(() => Date.now());
-  const sessionStartRef = useRef(Date.now());
+  const [now, setNow] = useState(SESSION_BOOT);
   const inflightRef = useRef(new Set());
   const clearedRef = useRef(new Set());
   const deletedRef = useRef(new Set());
   const failedAtRef = useRef(new Map());
-  const mqttDownSinceRef = useRef(null);
+  const [mqttDownSince, setMqttDownSince] = useState(null);
 
   const actor = (profile?.nombre || profile?.user || profile?.usuario || profile?.email || 'usuario').toString();
 
@@ -243,7 +244,7 @@ export function useNotificationCenter({
 
   useEffect(() => {
     if (!enabled) return undefined;
-    refresh();
+    const init = setTimeout(refresh, 0);
     const unsubscribe = subscribeNotifications((event) => {
       setRows((prev) => (event.type === 'DELETE' ? prev.filter((r) => r.id !== event.row?.id) : upsertRow(prev, event.row)));
     });
@@ -253,19 +254,20 @@ export function useNotificationCenter({
       if (isAdmin && loadPendingRequests) loadPendingRequests();
     }, REFRESH_MS);
     return () => {
+      clearTimeout(init);
       unsubscribe();
       clearInterval(tick);
       clearInterval(poll);
     };
   }, [enabled, refresh, isAdmin, loadPendingRequests]);
 
-  const fleetNow = useMemo(() => Date.now(), [fleet, now]); // eslint-disable-line react-hooks/exhaustive-deps
+  const fleetNow = now;
 
   const { detected, evaluableByMac } = useMemo(() => {
     const list = [];
     const evaluable = new Map();
     allowedDevices.forEach((dev) => {
-      const res = detectDeviceConditions(dev, fleetNow, sessionStartRef.current);
+      const res = detectDeviceConditions(dev, fleetNow, SESSION_BOOT);
       list.push(...res.out);
       evaluable.set(dev.mac, res.evaluable);
     });
@@ -352,11 +354,15 @@ export function useNotificationCenter({
     });
   }, [enabled, loaded, detected, rows, evaluableByMac, isAdmin, requestsLoadedAt, refresh]);
 
-  if (mqttConnected) mqttDownSinceRef.current = null;
-  else if (!mqttDownSinceRef.current) mqttDownSinceRef.current = Date.now();
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setMqttDownSince((prev) => (mqttConnected ? null : prev || Date.now()));
+    }, 0);
+    return () => clearTimeout(t);
+  }, [mqttConnected]);
 
   const systemItems = useMemo(() => {
-    if (mqttConnected || !mqttDownSinceRef.current) return [];
+    if (mqttConnected || !mqttDownSince) return [];
     return [{
       id: 'local:MQTT',
       clave: 'SISTEMA:MQTT',
@@ -367,7 +373,7 @@ export function useNotificationCenter({
       mensaje: 'Este navegador no recibe telemetría en vivo. Verifica tu conexión a internet.',
       estado: 'NUEVA',
       activa: true,
-      creada_en: new Date(mqttDownSinceRef.current).toISOString(),
+      creada_en: new Date(mqttDownSince).toISOString(),
       local: true
     }];
   }, [mqttConnected, now]); // eslint-disable-line react-hooks/exhaustive-deps

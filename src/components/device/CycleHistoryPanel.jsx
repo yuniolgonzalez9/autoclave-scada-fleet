@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNow } from '../../hooks/useNow';
 import { 
   AlertTriangle, 
   CheckCircle2, 
@@ -36,11 +37,12 @@ export default function CycleHistoryPanel({ mac, stats = [], onInspect }) {
     return cleanMac(mac || '');
   }, [mac]);
 
+  const nowTs = useNow(60000);
   const desde = useMemo(() => {
     if (period === 'ALL') return null;
     const days = Number(period) || 30;
-    return new Date(Date.now() - days * 86400000).toISOString();
-  }, [period]);
+    return new Date(nowTs - days * 86400000).toISOString();
+  }, [period, nowTs]);
 
   const load = useCallback(async (offset = 0) => {
     if (!normalizedMac) return;
@@ -62,8 +64,9 @@ export default function CycleHistoryPanel({ mac, stats = [], onInspect }) {
     }
   }, [normalizedMac, desde]);
 
-  useEffect(() => { 
-    load(0); 
+  useEffect(() => {
+    const t = setTimeout(() => load(0), 0);
+    return () => clearTimeout(t);
   }, [load]);
 
   // Métricas estadísticas del periodo seleccionado
@@ -91,7 +94,7 @@ export default function CycleHistoryPanel({ mac, stats = [], onInspect }) {
     const map = new Map();
 
     rows.forEach((r) => {
-      const dateVal = new Date(r.created_at || r.fecha || Date.now());
+      const dateVal = new Date(r.created_at || r.fecha || '');
       const dayLabel = isNaN(dateVal.getTime()) 
         ? 'Fecha no especificada' 
         : dateVal.toLocaleDateString('es-ES', { 
