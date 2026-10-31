@@ -2,6 +2,10 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { accumulateF0 } from '../utils/f0Formulas';
 import { supabase } from '../services/supabase';
 import { mergeDeviceConfig } from '../services/deviceService';
+import {
+  joinFleetPresence, leaveFleetPresence, isFleetLeader,
+  queueDeviceState, subscribeDeviceState, getRemoteDeviceState
+} from '../services/deviceStateSync';
 
 const CACHE_KEY = 'biofleet_fleet_cache_v2';
 const PERSIST_INTERVAL_MS = 4000;
@@ -141,6 +145,34 @@ export function useMqttFleet(enabled = true) {
     let client = null;
     let cancelled = false;
 
+    joinFleetPresence();
+    subscribeDeviceState();
+    // También sin paquetes nuevos: si el flujo local envejece, adopta la
+    // fila remota compartida (líder otro dispositivo) — misma vista global.
+    const remoteMergeTimer = setInterval(() => {
+      setFleet((prevFleet) => {
+        let changed = false;
+        const nextFleet = { ...prevFleet };
+        Object.values(nextFleet).forEach((dev) => {
+          if (!dev?.mac) return;
+          const stale = !dev.lastTelemetryAt || (Date.now() - dev.lastTelemetryAt >= 15000);
+          if (!stale) return;
+          const remote = getRemoteDeviceState(dev.mac);
+          if (remote && remote.last_telemetry_at > (dev.lastTelemetryAt || 0)) {
+            changed = true;
+            nextFleet[dev.mac] = {
+              ...dev,
+              datos: { ...(dev.datos || {}), ...(remote.datos || {}) },
+              f0Score: remote.f0_score || 0,
+              lastTelemetryAt: remote.last_telemetry_at,
+              lastSeen: remote.last_seen || remote.last_telemetry_at
+            };
+          }
+        });
+        return changed ? nextFleet : prevFleet;
+      });
+    }, 4000);
+
     import('../services/mqttClient').then(({ connectMqttFleet }) => {
       if (cancelled) return;
       const conn = connectMqttFleet(
@@ -167,6 +199,32 @@ export function useMqttFleet(enabled = true) {
 
       setFleet((prevFleet) => {
         let nextFleet = prevFleet;
+
+        // ── UNA SOLA VERDAD: el líder publica su telemetría consolidada;
+        // todos adoptan la fila remota cuando su flujo local envejece. ──
+        const STALE_MS = 15000;
+        const publishAndMerge = (dev) => {
+          if (!dev?.mac) return;
+          const teleFresh = dev.lastTelemetryAt && (Date.now() - dev.lastTelemetryAt < STALE_MS);
+          if (isFleetLeader() && teleFresh) {
+            queueDeviceState(dev.mac, dev.datos, dev.f0Score, dev.lastTelemetryAt, dev.lastSeen);
+          }
+          if (!teleFresh) {
+            const remote = getRemoteDeviceState(dev.mac);
+            if (remote && remote.last_telemetry_at > (dev.lastTelemetryAt || 0)) {
+              nextFleet = {
+                ...nextFleet,
+                [dev.mac]: {
+                  ...dev,
+                  datos: { ...(dev.datos || {}), ...(remote.datos || {}) },
+                  f0Score: remote.f0_score || 0,
+                  lastTelemetryAt: remote.last_telemetry_at,
+                  lastSeen: remote.last_seen || remote.last_telemetry_at
+                }
+              };
+            }
+          }
+        };
 
         batch.forEach(({ mac, channel, payload, isRetained }) => {
           const cleanMac = (mac || '').toUpperCase().replace(/[:-]/g, '');
@@ -265,6 +323,7 @@ export function useMqttFleet(enabled = true) {
           nextFleet = { ...nextFleet, [cleanMac]: updated };
         });
 
+        Object.values(nextFleet).forEach(publishAndMerge);
         return nextFleet;
       });
     }, 600);
@@ -273,6 +332,8 @@ export function useMqttFleet(enabled = true) {
       cancelled = true;
       sendCommandRef.current = null;
       clearInterval(flushTimer);
+      clearInterval(remoteMergeTimer);
+      leaveFleetPresence();
       if (client) client.end();
     };
   }, [persistSessionReport, enabled]);
