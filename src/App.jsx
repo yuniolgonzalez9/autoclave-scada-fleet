@@ -502,7 +502,7 @@ function ScadaAppContent() {
     const diffSegundos = Math.max(0, Math.floor((Date.now() - dev.lastSeen) / 1000));
 
     if (diffSegundos <= 5) {
-      return { status: 'ONLINE', text: '100% ONLINE', timeAgo: diffSegundos === 0 ? 'En vivo' : `Hace ${diffSegundos}s`, colorClass: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' };
+      return { status: 'ONLINE', text: 'EN LÍNEA', timeAgo: diffSegundos === 0 ? '' : `Hace ${diffSegundos}s`, colorClass: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' };
     } else if (diffSegundos <= 10) {
       return { status: 'LATENCY', text: 'LATENCIA', timeAgo: `Hace ${diffSegundos}s`, colorClass: 'bg-amber-500/15 text-amber-300 border-amber-500/30' };
     } else {
