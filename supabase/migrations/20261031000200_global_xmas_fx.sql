@@ -38,9 +38,9 @@ begin
     raise exception 'Authentication required.' using errcode = '42501';
   end if;
 
-  select upper(coalesce(rol, '')) into v_role
-  from public.profiles
-  where id = auth.uid();
+  select upper(coalesce(role, '')) into v_role
+  from public.user_profiles
+  where user_id = auth.uid();
 
   if v_role not in ('SUPERADMIN', 'ADMIN') then
     raise exception 'Solo el superadministrador puede cambiar los efectos globales.' using errcode = '42501';
