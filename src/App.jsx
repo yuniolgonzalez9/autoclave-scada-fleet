@@ -733,11 +733,16 @@ function ScadaAppContent() {
                 shortcut="SESIÓN ACTIVA"
                 position="bottom"
               >
-                <div className="user-chip ultra-glass flex items-center gap-2 px-2 sm:px-2.5 h-9 sm:h-10 rounded-xl border border-cyan-500/30 shadow-sm hover:border-cyan-400/60 transition-all cursor-help group">
+                <div
+                  className="user-chip user-chip-collapsible ultra-glass flex items-center gap-2 px-1 h-9 sm:h-10 rounded-xl border border-cyan-500/30 shadow-sm hover:border-cyan-400/60 cursor-pointer group"
+                  tabIndex={0}
+                  role="button"
+                  aria-label={`Usuario: ${displayName}, rol ${displayRole}`}
+                >
                   <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-600/20 border border-cyan-400/40 text-cyan-300 flex items-center justify-center font-bold text-xs uppercase shrink-0 group-hover:scale-105 transition-transform">
                     {displayName[0]}
                   </div>
-                  <div className="text-left hidden sm:block">
+                  <div className="text-left min-w-0">
                     <p className="text-xs font-bold text-white leading-tight truncate max-w-[110px]">
                       {displayName}
                     </p>

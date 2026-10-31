@@ -1699,6 +1699,37 @@ html[data-laser="off"] .mobile-nav-indicator {
   display: none !important;
 }
 
+/* Chip de usuario plegable — igual que la lupa: colapsa a la inicial
+   y se despliega con transición suave al hover o al tocar (focus) */
+.user-chip-collapsible {
+  max-width: 2.25rem;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: max-width 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+              border-color 0.3s ease,
+              box-shadow 0.5s ease;
+}
+
+.user-chip-collapsible:hover,
+.user-chip-collapsible:focus,
+.user-chip-collapsible:focus-within {
+  max-width: 14rem;
+  border-color: color-mix(in srgb, var(--accent-color) 65%, transparent);
+  box-shadow: 0 0 20px color-mix(in srgb, var(--accent-color) 26%, transparent),
+              inset 0 0 16px color-mix(in srgb, var(--accent-color) 7%, transparent);
+}
+
+@media (min-width: 640px) {
+  .user-chip-collapsible {
+    max-width: 2.5rem;
+  }
+  .user-chip-collapsible:hover,
+  .user-chip-collapsible:focus,
+  .user-chip-collapsible:focus-within {
+    max-width: 15rem;
+  }
+}
+
 /* Switch toggle de controles de movimiento en GearMenu */
 .gear-switch {
   position: relative;
