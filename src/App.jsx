@@ -640,14 +640,12 @@ function ScadaAppContent() {
         id="scada-background"
         className="fixed inset-0 z-0 pointer-events-none bg-cover bg-center bg-no-repeat transition-[background-image] duration-500"
         style={{
-          backgroundImage: currentBg === 'solid'
-            ? 'none'
-            : currentBg === 'oled'
-            ? 'radial-gradient(circle at 50% -5%, rgba(139, 92, 246, 0.25) 0%, transparent 55%), radial-gradient(circle at 100% 100%, rgba(0, 243, 255, 0.18) 0%, transparent 50%)'
+          backgroundImage: bgObj?.gradient
+            ? bgObj.gradient
             : bgObj?.url
             ? `linear-gradient(to bottom, rgba(4, 7, 18, 0.30), rgba(4, 7, 18, 0.60)), url('${bgObj.url}')`
             : 'none',
-          backgroundColor: currentBg === 'solid' ? '#1b1e23' : '#030712'
+          backgroundColor: bgObj?.color || '#030712'
         }}
       />
 

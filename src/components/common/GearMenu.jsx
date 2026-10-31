@@ -21,14 +21,30 @@ import {
 import { readMotionPrefs, saveMotionPrefs } from '../../services/motionPrefs';
 
 export const WALLPAPERS_LIST = [
-  { id: 'solid', name: 'Gris industrial sólido (recomendado)', url: '' },
-  { id: 'circuit-pcb', name: '⚡ Microchip & Pistas PCB Neón (Favorito)', url: 'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=2000&q=80' },
-  { id: 'planet-nodes', name: '🌐 Red Global de Nodos & Planeta', url: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=2000&q=80' },
-  { id: 'cyber-matrix', name: '🏙️ Matriz Cyberpunk de Servidores', url: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=2000&q=80' },
-  { id: 'motherboard-gold', name: '🔌 Placa Base & Hardware Eléctrico', url: 'https://images.unsplash.com/photo-1555680202-c86f0e12f086?auto=format&fit=crop&w=2000&q=80' },
-  { id: 'quantum-connections', name: '💠 Conexiones Cuánticas & Fibra', url: 'https://images.unsplash.com/photo-1504639725590-34d0984388bd?auto=format&fit=crop&w=2000&q=80' },
-  { id: 'server-datacenter', name: '🏢 Datacenter Hospitalario', url: 'https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=2068&q=80' },
-  { id: 'oled', name: '⚫ Negro OLED Cósmico (Bajo Consumo)', url: '' }
+  // ── Sólidos minimalistas ──
+  { id: 'solid', name: '⬜ Gris Industrial Sólido — con Industrial', color: '#1b1e23' },
+  { id: 'navy-solid', name: '🔷 Navy Profundo Sólido — con Aurum', color: '#081020' },
+  { id: 'carbon-solid', name: '⚫ Carbón Puro Sólido — con Platino', color: '#07080b' },
+  { id: 'forest-solid', name: '🌿 Bosque Profundo Sólido — con Bio-Teal', color: '#08110e' },
+  { id: 'wine-solid', name: '🍷 Vino Oscuro Sólido — con Carmesí', color: '#120a0c' },
+  // ── Auroras minimalistas (gradiente, sin foto) ──
+  { id: 'aurum-gradient', name: '✨ Aurora Dorada — con Aurum', gradient: 'radial-gradient(ellipse at 50% -10%, rgba(245,194,74,0.18) 0%, transparent 55%), linear-gradient(180deg, #081020 0%, #04070f 100%)' },
+  { id: 'ice-gradient', name: '❄️ Aurora Ártica — con Stealth', gradient: 'radial-gradient(ellipse at 50% -10%, rgba(103,232,249,0.14) 0%, transparent 55%), linear-gradient(180deg, #0a1220 0%, #04070f 100%)' },
+  { id: 'violet-gradient', name: '🌌 Aurora Violeta — con Neon', gradient: 'radial-gradient(ellipse at 50% -10%, rgba(167,139,250,0.16) 0%, transparent 55%), linear-gradient(180deg, #0a0c1a 0%, #04060f 100%)' },
+  { id: 'mint-gradient', name: '🍃 Aurora Menta — con Bio-Teal', gradient: 'radial-gradient(ellipse at 50% -10%, rgba(45,212,191,0.14) 0%, transparent 55%), linear-gradient(180deg, #08100f 0%, #040706 100%)' },
+  { id: 'champagne-gradient', name: '🥂 Aurora Champán — con Platino-Oro', gradient: 'radial-gradient(ellipse at 50% -10%, rgba(203,213,225,0.10) 0%, transparent 40%), radial-gradient(ellipse at 50% 110%, rgba(245,194,74,0.14) 0%, transparent 50%), linear-gradient(180deg, #0c0e13 0%, #06070b 100%)' },
+  { id: 'oled', name: '⚫ Negro OLED Cósmico — bajo consumo', gradient: 'radial-gradient(circle at 50% -5%, rgba(139,92,246,0.25) 0%, transparent 55%), radial-gradient(circle at 100% 100%, rgba(0,243,255,0.18) 0%, transparent 50%)', color: '#030712' },
+  // ── Fotos industriales / hospitalarias / hardware ──
+  { id: 'server-datacenter', name: '🏢 Datacenter Biomédico — con Industrial', url: 'https://images.unsplash.com/photo-1558494949-ef010cbdcc31?auto=format&fit=crop&w=2068&q=80' },
+  { id: 'hospital-corridor', name: '🏥 Corredor Hospitalario — con Bio-Teal', url: 'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&w=2000&q=80' },
+  { id: 'medical-lab', name: '🧪 Laboratorio Clínico — con Platino', url: 'https://images.unsplash.com/photo-1582719471384-894fbb16e074?auto=format&fit=crop&w=2000&q=80' },
+  { id: 'circuit-pcb', name: '⚡ Microchip & Pistas PCB — con Neon', url: 'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=2000&q=80' },
+  { id: 'motherboard-gold', name: '🔌 Placa Base Dorada — con Platino-Oro', url: 'https://images.unsplash.com/photo-1555680202-c86f0e12f086?auto=format&fit=crop&w=2000&q=80' },
+  { id: 'chip-macro', name: '🔬 Chip Macro Acero — con Platino', url: 'https://images.unsplash.com/photo-1591799264318-7e6ef8ddb7ea?auto=format&fit=crop&w=2000&q=80' },
+  { id: 'server-racks', name: '🗄️ Racks de Servidor — con Stealth', url: 'https://images.unsplash.com/photo-1544197150-b99a580bb7a8?auto=format&fit=crop&w=2000&q=80' },
+  { id: 'planet-nodes', name: '🌐 Red Global de Nodos — con Aurum', url: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=2000&q=80' },
+  { id: 'cyber-matrix', name: '🏙️ Matriz Cyberpunk — con Neon', url: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=2000&q=80' },
+  { id: 'quantum-connections', name: '💠 Conexiones Cuánticas & Fibra — con Neon', url: 'https://images.unsplash.com/photo-1504639725590-34d0984388bd?auto=format&fit=crop&w=2000&q=80' }
 ];
 
 export default function GearMenu({ 
