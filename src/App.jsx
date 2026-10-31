@@ -489,6 +489,7 @@ function ScadaAppContent() {
 
   // Reloj en vivo — hora y fecha siempre visibles en el header
   const [clockNow, setClockNow] = useState(() => new Date());
+  const [clockOpen, setClockOpen] = useState(false);
   useEffect(() => {
     const id = setInterval(() => setClockNow(new Date()), 1000);
     return () => clearInterval(id);
@@ -704,17 +705,37 @@ function ScadaAppContent() {
           </div>
 
           <div className="header-actions flex items-center gap-1.5 sm:gap-2.5 shrink-0 ml-auto">
-            {/* Reloj — hora y fecha siempre a la vista junto a los controles */}
+            {/* Reloj — solo la hora grande; hover/click despliega la fecha completa */}
             {user && (
-              <div className="header-clock ultra-glass hidden md:flex flex-col items-center justify-center px-5 h-10 sm:h-11 rounded-xl border border-cyan-500/30 leading-none select-none shrink-0"
-                title={clockNow.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-              >
-                <span className="font-mono text-lg font-bold tracking-[0.14em] text-cyan-300">
-                  {clockNow.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                </span>
-                <span className="font-mono text-[9px] text-slate-400 tracking-[0.2em] uppercase mt-0.5">
-                  {clockNow.toLocaleDateString('es-ES', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}
-                </span>
+              <div className="relative group hidden md:block shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setClockOpen((o) => !o)}
+                  className="header-clock ultra-glass flex items-center justify-center px-5 h-10 sm:h-11 rounded-xl border border-cyan-500/30 leading-none select-none"
+                  aria-expanded={clockOpen}
+                  aria-label="Ver fecha completa"
+                >
+                  <span className="font-mono text-xl font-bold tracking-[0.14em] text-cyan-300">
+                    {clockNow.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                  </span>
+                </button>
+                <div
+                  className={`clock-dropdown absolute right-0 top-full mt-2 z-50 ultra-glass rounded-2xl border border-cyan-500/30 px-5 py-4 text-center transition-all duration-300 ${
+                    clockOpen ? 'opacity-100 visible translate-y-0' : 'opacity-0 invisible -translate-y-1'
+                  } group-hover:opacity-100 group-hover:visible group-hover:translate-y-0`}
+                >
+                  <p className="font-mono text-3xl font-bold text-cyan-300 tracking-[0.1em] leading-none">
+                    {clockNow.toLocaleDateString('es-ES', { day: '2-digit' })}
+                    <span className="text-slate-500 text-xl mx-1">/</span>
+                    {clockNow.toLocaleDateString('es-ES', { month: '2-digit' })}
+                  </p>
+                  <p className="font-mono text-[11px] text-white font-bold tracking-[0.28em] uppercase mt-2">
+                    {clockNow.toLocaleDateString('es-ES', { weekday: 'long' })}
+                  </p>
+                  <p className="font-mono text-[10px] text-slate-400 tracking-[0.2em] uppercase mt-1">
+                    {clockNow.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}
+                  </p>
+                </div>
               </div>
             )}
             {kioskMac && (
