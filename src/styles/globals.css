@@ -151,26 +151,26 @@ body {
   --laser-glow: 0 0 14px rgba(103, 232, 249, 0.4), 0 0 8px rgba(56, 189, 248, 0.2);
 }
 
-/* ===== NEON — misma base navy limpia + acento violeta discreto ===== */
+/* ===== NEON — índigo profundo + violeta eléctrico (coherente con navy) ===== */
 [data-theme="cyber"] {
-  --glass-bg: 11 13 22;
-  --surface-glow: 80 75 140;
-  --accent-color: #b79bf0;
-  --accent-text: #e6dbfb;
-  --card-border: rgba(183, 155, 240, 0.24);
-  --laser-gradient: linear-gradient(90deg, transparent, #c4b5fd, #a78bfa, #ddd6fe, #c4b5fd, transparent);
-  --laser-glow: 0 0 14px rgba(167, 139, 250, 0.38), 0 0 8px rgba(196, 181, 253, 0.2);
+  --glass-bg: 10 12 24;
+  --surface-glow: 88 76 175;
+  --accent-color: #a78bfa;
+  --accent-text: #e2d7fb;
+  --card-border: rgba(167, 139, 250, 0.3);
+  --laser-gradient: linear-gradient(90deg, transparent, #c4b5fd, #8b5cf6, #ddd6fe, #c4b5fd, transparent);
+  --laser-glow: 0 0 16px rgba(139, 92, 246, 0.45), 0 0 9px rgba(196, 181, 253, 0.22);
 }
 
-/* ===== BIO-MINT — misma base navy limpia + acento menta suave ===== */
+/* ===== BIO-TEAL — navy profundo + teal (armoniza con la familia azul) ===== */
 [data-theme="hybrid"] {
-  --glass-bg: 9 15 15;
-  --surface-glow: 55 115 105;
-  --accent-color: #6fe3b8;
-  --accent-text: #d9f7ea;
-  --card-border: rgba(111, 227, 184, 0.24);
-  --laser-gradient: linear-gradient(90deg, transparent, #a7f3d0, #5eead4, #a7f3d0, transparent);
-  --laser-glow: 0 0 14px rgba(111, 227, 184, 0.38), 0 0 8px rgba(94, 234, 212, 0.2);
+  --glass-bg: 8 16 18;
+  --surface-glow: 48 118 122;
+  --accent-color: #2dd4bf;
+  --accent-text: #c8f2eb;
+  --card-border: rgba(45, 212, 191, 0.28);
+  --laser-gradient: linear-gradient(90deg, transparent, #5eead4, #14b8a6, #99f6e4, #5eead4, transparent);
+  --laser-glow: 0 0 16px rgba(45, 212, 191, 0.45), 0 0 9px rgba(94, 234, 212, 0.22);
 }
 
 /* ===== AURUM — híbrido Azul Marino Industrial + Oro ===== */
@@ -205,15 +205,15 @@ body {
   border-top-color: rgba(245, 194, 74, 0.35) !important;
 }
 
-/* ===== CARMESÍ REAL — base neutra limpia + acento rojo y marco oro ===== */
+/* ===== CARMESÍ REAL — carbón cálido + rojo intenso y marco oro fino ===== */
 [data-theme="gold"] {
-  --glass-bg: 13 13 18;
-  --surface-glow: 120 85 95;
-  --accent-color: #ff7a85;
-  --accent-text: #ffd9dc;
-  --card-border: rgba(245, 194, 74, 0.28);
-  --laser-gradient: linear-gradient(90deg, transparent, #fde68a, #f5c24a, #fcd34d, transparent);
-  --laser-glow: 0 0 14px rgba(245, 194, 74, 0.38), 0 0 8px rgba(255, 122, 133, 0.18);
+  --glass-bg: 16 11 13;
+  --surface-glow: 130 62 70;
+  --accent-color: #ff5f6e;
+  --accent-text: #ffd0d5;
+  --card-border: rgba(245, 194, 74, 0.3);
+  --laser-gradient: linear-gradient(90deg, transparent, #fcd34d, #ff5f6e, #fde68a, transparent);
+  --laser-glow: 0 0 16px rgba(245, 194, 74, 0.42), 0 0 9px rgba(255, 95, 110, 0.22);
 }
 
 .ultra-glass {
