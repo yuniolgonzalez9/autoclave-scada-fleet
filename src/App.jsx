@@ -615,10 +615,9 @@ function ScadaAppContent() {
 
   usePremiumHover();
 
-  // Efectos navideños globales: el superadmin controla para toda la web;
-  // llega en vivo por realtime y respeta el opt-out local de cada usuario.
+  // Efectos navideños GLOBALES: el superadmin controla para toda la web,
+  // visible hasta en el login/splash — sin sesión requerida para leer el flag.
   useEffect(() => {
-    if (!user || !authMode) return undefined;
     let alive = true;
     supabase.from('global_fx_settings').select('xmas').eq('id', 1).maybeSingle()
       .then(({ data }) => { if (alive && data?.xmas) applyGlobalXmas(data.xmas); })
@@ -629,7 +628,7 @@ function ScadaAppContent() {
         (payload) => { if (payload.new?.xmas) applyGlobalXmas(payload.new.xmas); })
       .subscribe();
     return () => { alive = false; supabase.removeChannel(ch); };
-  }, [user, authMode]);
+  }, []);
 
   const bgObj = useMemo(() => WALLPAPERS_LIST.find((b) => b.id === currentBg) || WALLPAPERS_LIST[0], [currentBg]);
 
@@ -641,6 +640,7 @@ function ScadaAppContent() {
         </div>
         <p className="aurum-splash-title text-xs tracking-[0.3em]">BIOFLEET OS</p>
         <p className="aurum-splash-text text-[10px] tracking-wider mt-1">SINCRONIZANDO SESIÓN BIOMÉDICA CENTRAL...</p>
+        <SnowfallLayer />
       </div>
     );
   }
