@@ -176,10 +176,10 @@ export default function GearMenu({
                 {[
                   { id: 'industrial', label: '🏭 Industrial', desc: 'Azul Acero' },
                   { id: 'aurum', label: '👑 Aurum', desc: 'Marino + Oro' },
-                  { id: 'gold', label: '🥇 Gold', desc: 'Oro Puro' },
-                  { id: 'tactical', label: '🛡️ Pizarra', desc: 'Cian' },
-                  { id: 'cyber', label: '🌙 Cyber', desc: 'Azul' },
-                  { id: 'hybrid', label: '⚡ Híbrido', desc: 'Esmeralda' }
+                  { id: 'gold', label: '� Carmesí', desc: 'Rojo + Oro' },
+                  { id: 'tactical', label: '🛡️ Stealth', desc: 'Cian Ártico' },
+                  { id: 'cyber', label: '� Neon', desc: 'Violeta Neón' },
+                  { id: 'hybrid', label: '🍃 Bio-Mint', desc: 'Menta Neón' }
                 ].map((t) => (
                   <button
                     key={t.id}
