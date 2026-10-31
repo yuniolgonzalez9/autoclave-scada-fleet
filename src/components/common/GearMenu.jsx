@@ -179,6 +179,7 @@ export default function GearMenu({
                   { id: 'gold', label: '⚪ Platino', desc: 'Plata & Acero' },
                   { id: 'tactical', label: '🛡️ Stealth', desc: 'Cian Ártico' },
                   { id: 'cyber', label: '� Neon', desc: 'Violeta Neón' },
+                  { id: 'platinum', label: '⚜️ Platino-Oro', desc: 'Plata + Dorado' },
                   { id: 'hybrid', label: '🍃 Bio-Mint', desc: 'Menta Neón' }
                 ].map((t) => (
                   <button

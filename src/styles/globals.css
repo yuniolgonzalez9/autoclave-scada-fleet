@@ -162,6 +162,30 @@ body {
   --laser-glow: 0 0 16px rgba(139, 92, 246, 0.45), 0 0 9px rgba(196, 181, 253, 0.22);
 }
 
+/* ===== PLATINO-ORO — acento plata sobre líneas y láseres dorados ===== */
+[data-theme="platinum"] {
+  --glass-bg: 12 14 19;
+  --surface-glow: 110 105 130;
+  --accent-color: #cbd5e1;
+  --accent-text: #eef2f8;
+  --card-border: rgba(245, 194, 74, 0.5);
+  --laser-gradient: linear-gradient(90deg, transparent, #fde68a, #f5c24a, #d97706, #fcd34d, transparent);
+  --laser-glow: 0 0 18px rgba(245, 194, 74, 0.55), 0 0 10px rgba(217, 119, 6, 0.3);
+}
+
+/* Marco dorado en bordes del tema Platino-Oro */
+[data-theme="platinum"] .header-shell,
+[data-theme="platinum"] .mobile-nav-shell,
+[data-theme="platinum"] .fleet-main-nav,
+[data-theme="platinum"] .ultra-glass,
+[data-theme="platinum"] .glass-cell,
+[data-theme="platinum"] .user-chip,
+[data-theme="platinum"] .header-clock,
+[data-theme="platinum"] .fleet-search-control,
+[data-theme="platinum"] .fleet-overview-stat {
+  border-color: rgba(245, 194, 74, 0.5) !important;
+}
+
 /* ===== BIO-TEAL — navy profundo + teal (armoniza con la familia azul) ===== */
 [data-theme="hybrid"] {
   --glass-bg: 8 16 18;
