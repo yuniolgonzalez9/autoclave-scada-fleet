@@ -162,28 +162,15 @@ body {
   --laser-glow: 0 0 16px rgba(139, 92, 246, 0.45), 0 0 9px rgba(196, 181, 253, 0.22);
 }
 
-/* ===== ÓNIX — negro puro + oro dominante ===== */
+/* ===== ÓNIX — negro puro + toques de oro finos (no saturado) ===== */
 [data-theme="onyx"] {
-  --glass-bg: 10 9 7;
-  --surface-glow: 150 110 40;
-  --accent-color: #f5c24a;
-  --accent-text: #ffe9b0;
-  --card-border: rgba(245, 194, 74, 0.5);
-  --laser-gradient: linear-gradient(90deg, transparent, #fde68a, #f5c24a, #d97706, #fcd34d, transparent);
-  --laser-glow: 0 0 20px rgba(245, 194, 74, 0.55), 0 0 12px rgba(217, 119, 6, 0.3);
-}
-
-/* Marco dorado en bordes del tema Ónix */
-[data-theme="onyx"] .header-shell,
-[data-theme="onyx"] .mobile-nav-shell,
-[data-theme="onyx"] .fleet-main-nav,
-[data-theme="onyx"] .ultra-glass,
-[data-theme="onyx"] .glass-cell,
-[data-theme="onyx"] .user-chip,
-[data-theme="onyx"] .header-clock,
-[data-theme="onyx"] .fleet-search-control,
-[data-theme="onyx"] .fleet-overview-stat {
-  border-color: rgba(245, 194, 74, 0.5) !important;
+  --glass-bg: 9 9 10;
+  --surface-glow: 90 80 50;
+  --accent-color: #e8c56a;
+  --accent-text: #f4e6c0;
+  --card-border: rgba(232, 197, 106, 0.22);
+  --laser-gradient: linear-gradient(90deg, transparent, #f5d98a, #e8c56a, #c9a34e, #f5d98a, transparent);
+  --laser-glow: 0 0 16px rgba(232, 197, 106, 0.4), 0 0 9px rgba(201, 163, 78, 0.2);
 }
 
 /* ===== OBSIDIANA — negro puro + plata pulida ===== */
