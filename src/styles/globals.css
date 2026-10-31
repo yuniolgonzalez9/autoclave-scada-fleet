@@ -1623,6 +1623,26 @@ button:active::after, .btn:active::after {
   filter: drop-shadow(0 0 10px var(--accent-color));
 }
 
+/* ===== MODO NAVIDAD — láser multicolor + tira de luces ===== */
+[data-xmas-lights="on"] {
+  --laser-gradient: linear-gradient(90deg, transparent, #ef4444, #f5c24a, #22c55e, #ef4444, #f5c24a, transparent);
+  --laser-glow: 0 0 18px rgba(239, 68, 68, 0.45), 0 0 10px rgba(245, 194, 74, 0.3);
+}
+
+[data-xmas-lights="on"] .header-shell {
+  border-bottom-width: 3px;
+  border-image: repeating-linear-gradient(90deg, #ef4444 0 18px, #f5c24a 18px 36px, #22c55e 36px 54px, #3b82f6 54px 72px) 3;
+}
+
+[data-xmas-lights="on"] .mobile-nav-shell {
+  border-top-width: 3px;
+  border-image: repeating-linear-gradient(90deg, #ef4444 0 18px, #f5c24a 18px 36px, #22c55e 36px 54px, #3b82f6 54px 72px) 3;
+}
+
+.snowfall-layer {
+  filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.8));
+}
+
 /* Resplandor de campana cuando hay notificaciones pendientes */
 .bell-glow {
   filter: drop-shadow(0 0 10px rgba(251, 191, 36, 0.55));

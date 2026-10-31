@@ -16,9 +16,11 @@ import {
   HardDrive,
   Zap,
   Orbit,
-  MoveRight
+  MoveRight,
+  Snowflake
 } from 'lucide-react';
 import { readMotionPrefs, saveMotionPrefs } from '../../services/motionPrefs';
+import { readXmasPrefs, saveXmasPrefs } from './SnowfallLayer';
 
 export const WALLPAPERS_LIST = [
   // ── Sólidos minimalistas ──
@@ -78,8 +80,10 @@ export default function GearMenu({
   const [isOpen, setIsOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [localMotion, setLocalMotion] = useState(readMotionPrefs);
+  const [xmas, setXmas] = useState(readXmasPrefs);
   const motion = motionPrefs || localMotion;
   const updateMotion = onMotionChange || ((patch) => setLocalMotion((m) => saveMotionPrefs({ ...m, ...patch })));
+  const updateXmas = (patch) => setXmas((p) => saveXmasPrefs({ ...p, ...patch }));
 
   // Escuchar cambios de fullscreen nativo
   useEffect(() => {
@@ -310,6 +314,66 @@ export default function GearMenu({
                   </div>
                 );
               })}
+            </div>
+
+            {/* 3b. Modo Navidad — nieve + luces festivas */}
+            <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800 space-y-3">
+              <div className="flex justify-between items-center text-xs gear-accent-text">
+                <span className="flex items-center gap-1.5">
+                  <Snowflake className="w-3.5 h-3.5" />
+                  <span>Modo Navidad</span>
+                </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={xmas.on}
+                  aria-label={xmas.on ? 'Desactivar Modo Navidad' : 'Activar Modo Navidad'}
+                  onClick={() => updateXmas({ on: !xmas.on })}
+                  className={`gear-switch ${xmas.on ? 'gear-switch--on' : ''}`}
+                >
+                  <span />
+                </button>
+              </div>
+              <div className={`space-y-1.5 transition-opacity ${xmas.on ? '' : 'opacity-50'}`}>
+                <div className="flex justify-between text-[10px] text-slate-400 font-mono">
+                  <span>Nieve cayendo</span>
+                  <span className="font-bold">{xmas.flakes} copos</span>
+                </div>
+                <input
+                  type="range" min={10} max={400} step={10}
+                  value={xmas.flakes}
+                  disabled={!xmas.on}
+                  onChange={(e) => updateXmas({ flakes: Number(e.target.value) })}
+                  className="gear-slider w-full h-1.5 rounded-lg appearance-none cursor-pointer disabled:cursor-not-allowed"
+                  aria-label="Cantidad de copos de nieve"
+                />
+                <div className="flex justify-between text-[10px] text-slate-400 font-mono">
+                  <span>Velocidad de caída</span>
+                  <span className="font-bold">{xmas.speed}%</span>
+                </div>
+                <input
+                  type="range" min={10} max={300} step={5}
+                  value={xmas.speed}
+                  disabled={!xmas.on}
+                  onChange={(e) => updateXmas({ speed: Number(e.target.value) })}
+                  className="gear-slider w-full h-1.5 rounded-lg appearance-none cursor-pointer disabled:cursor-not-allowed"
+                  aria-label="Velocidad de la nieve"
+                />
+                <div className="flex justify-between items-center text-xs gear-accent-text pt-1">
+                  <span>Luces y acentos festivos</span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={xmas.lights}
+                    disabled={!xmas.on}
+                    aria-label="Alternar luces navideñas"
+                    onClick={() => updateXmas({ lights: !xmas.lights })}
+                    className={`gear-switch ${xmas.lights ? 'gear-switch--on' : ''}`}
+                  >
+                    <span />
+                  </button>
+                </div>
+              </div>
             </div>
 
             {/* Estado de sincronización en la nube */}

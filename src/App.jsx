@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspens
 import { AuthProvider, useAuth } from './context/AuthContext';
 import LoginModal from './components/auth/LoginModal';
 import GearMenu, { WALLPAPERS_LIST } from './components/common/GearMenu';
+import SnowfallLayer from './components/common/SnowfallLayer';
 import ClinicalTooltip from './components/common/ClinicalTooltip';
 import ContextMenu from './components/common/ContextMenu';
 import NotificationsPanel from './components/common/NotificationsPanel';
@@ -634,6 +635,9 @@ function ScadaAppContent() {
 
       {/* Fondo de Partículas Animadas */}
       <div className="particle-background" />
+
+      {/* Nieve Navideña */}
+      <SnowfallLayer />
 
       {/* Fondo Fijo */}
       <div
