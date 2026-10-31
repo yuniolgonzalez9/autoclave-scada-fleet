@@ -50,7 +50,14 @@ export const WALLPAPERS_LIST = [
   { id: 'aerial-highways', name: '🛣️ Autopistas de Luz — con Ónix', url: 'https://images.unsplash.com/photo-1514924013411-cbf25faa35bb?auto=format&fit=crop&w=2000&q=80' },
   { id: 'city-lights-grid', name: '✨ Campo Estelar — con Obsidiana', url: 'https://images.unsplash.com/photo-1419242902214-272b3f66ee7a?auto=format&fit=crop&w=2000&q=80' },
   { id: 'neon-skyline', name: '🏙️ Skyline Nocturno — con Neon', url: 'https://images.unsplash.com/photo-1519501025264-65ba15a82390?auto=format&fit=crop&w=2000&q=80' },
-  { id: 'night-aerial', name: '🌌 Metrópolis Nocturna — con Obsidiana', url: 'https://images.unsplash.com/photo-1519608487953-e999c86e7455?auto=format&fit=crop&w=2000&q=80' }
+  { id: 'night-aerial', name: '🌌 Metrópolis Nocturna — con Obsidiana', url: 'https://images.unsplash.com/photo-1519608487953-e999c86e7455?auto=format&fit=crop&w=2000&q=80' },
+  // ── Esterilización & Vehicular ──
+  { id: 'sterilization-zone', name: '🧼 Zona de Esterilización — con Bio-Teal', url: 'https://images.unsplash.com/photo-1584036561566-baf8f5f1b144?auto=format&fit=crop&w=2000&q=80' },
+  { id: 'lab-sterile', name: '🔬 Laboratorio Estéril — con Platino', url: 'https://images.unsplash.com/photo-1530026405186-ed1f139313f8?auto=format&fit=crop&w=2000&q=80' },
+  { id: 'surgical-tools', name: '⚕️ Instrumental Médico — con Industrial', url: 'https://images.unsplash.com/photo-1551601651-2a8555f1a136?auto=format&fit=crop&w=2000&q=80' },
+  { id: 'night-drive', name: '🚗 Vehículo Nocturno — con Ónix', url: 'https://images.unsplash.com/photo-1486572788966-cfd3df1f5b42?auto=format&fit=crop&w=2000&q=80' },
+  { id: 'garage-engine', name: '🔧 Motor & Taller — con Industrial', url: 'https://images.unsplash.com/photo-1494905998402-395d579af36f?auto=format&fit=crop&w=2000&q=80' },
+  { id: 'highway-car', name: '🏎️ Deportivo en Vía — con Neon', url: 'https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=2000&q=80' }
 ];
 
 export default function GearMenu({ 

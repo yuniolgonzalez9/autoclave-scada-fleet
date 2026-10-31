@@ -26,7 +26,8 @@ function normalizeAppearance(value = {}) {
       'server-datacenter', 'hospital-corridor', 'medical-lab',
       'circuit-pcb', 'motherboard-gold', 'chip-macro', 'server-racks',
       'planet-nodes', 'cyber-matrix', 'quantum-connections',
-      'circuit-city', 'aerial-highways', 'city-lights-grid', 'neon-skyline', 'night-aerial'
+      'circuit-city', 'aerial-highways', 'city-lights-grid', 'neon-skyline', 'night-aerial',
+      'sterilization-zone', 'lab-sterile', 'surgical-tools', 'night-drive', 'garage-engine', 'highway-car'
     ].includes(value.background) ? value.background : DEFAULT_APPEARANCE.background,
     opacity: Number.isFinite(Number(value.opacity))
       ? Math.min(100, Math.max(0, Math.round(Number(value.opacity))))

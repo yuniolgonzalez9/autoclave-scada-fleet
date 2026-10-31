@@ -49,7 +49,8 @@ begin
       'server-datacenter', 'hospital-corridor', 'medical-lab',
       'circuit-pcb', 'motherboard-gold', 'chip-macro', 'server-racks',
       'planet-nodes', 'cyber-matrix', 'quantum-connections',
-      'circuit-city', 'aerial-highways', 'city-lights-grid', 'neon-skyline', 'night-aerial'
+      'circuit-city', 'aerial-highways', 'city-lights-grid', 'neon-skyline', 'night-aerial',
+      'sterilization-zone', 'lab-sterile', 'surgical-tools', 'night-drive', 'garage-engine', 'highway-car'
     )
   ) then
     raise exception 'Unsupported background.';
