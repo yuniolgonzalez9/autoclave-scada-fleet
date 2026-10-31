@@ -104,11 +104,11 @@ export default function GearMenu({
   };
 
   return (
-    <div>
+    <div onMouseEnter={() => setIsOpen(true)}>
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="p-1.5 sm:p-2 rounded-xl bg-slate-900/90 hover:bg-slate-800 border gear-accent-border gear-accent-text transition-all flex items-center justify-center shadow-lg active:scale-95 shrink-0 icon-glow glow-border"
+        className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-900/90 hover:bg-slate-800 border gear-accent-border gear-accent-text transition-all flex items-center justify-center shadow-lg active:scale-95 shrink-0 icon-glow glow-border"
         title="Panel Técnico y Preferencias"
         aria-label="Abrir panel técnico y ajustes"
       >

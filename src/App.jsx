@@ -733,8 +733,8 @@ function ScadaAppContent() {
                 shortcut="SESIÓN ACTIVA"
                 position="bottom"
               >
-                <div className="user-chip ultra-glass flex items-center gap-2 px-2 sm:px-3 py-1.5 rounded-xl border border-cyan-500/30 shadow-sm hover:border-cyan-400/60 transition-all cursor-help group">
-                  <div className="w-7 h-7 rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-600/20 border border-cyan-400/40 text-cyan-300 flex items-center justify-center font-bold text-xs uppercase shrink-0 group-hover:scale-105 transition-transform">
+                <div className="user-chip ultra-glass flex items-center gap-2 px-2 sm:px-2.5 h-9 sm:h-10 rounded-xl border border-cyan-500/30 shadow-sm hover:border-cyan-400/60 transition-all cursor-help group">
+                  <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-600/20 border border-cyan-400/40 text-cyan-300 flex items-center justify-center font-bold text-xs uppercase shrink-0 group-hover:scale-105 transition-transform">
                     {displayName[0]}
                   </div>
                   <div className="text-left hidden sm:block">
@@ -753,7 +753,7 @@ function ScadaAppContent() {
             {user && (
               <button
                 onClick={() => setShowNotifications(!showNotifications)}
-                className="relative p-1.5 sm:p-2 rounded-xl bg-slate-900/90 border border-cyan-500/40 text-cyan-300 shrink-0 ultra-glass hover:bg-cyan-500/20 transition-all group"
+                className="relative w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-900/90 border border-cyan-500/40 text-cyan-300 shrink-0 ultra-glass hover:bg-cyan-500/20 transition-all group flex items-center justify-center"
                 title="Notificaciones"
               >
                 <Bell className={`w-4 h-4 sm:w-5 sm:h-5 transition-colors ${
