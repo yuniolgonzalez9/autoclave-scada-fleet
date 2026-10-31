@@ -32,6 +32,48 @@ if ('serviceWorker' in navigator) {
   });
 }
 
+// Modo KIOSKO (cualquier dispositivo): ?kiosk=1 activa de forma
+// persistente, ?kiosk=0 desactiva. En modo kiosko:
+//  - Pantalla completa real al primer toque/clic y se re-fuerza
+//  - Wake Lock: la pantalla no se apaga sola (panel de control 24/7)
+//  - Sin gestos de salida: el modo queda anclado al dispositivo
+(() => {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('kiosk') === '0') localStorage.removeItem('bf_kiosk_mode');
+    if (params.get('kiosk') === '1') localStorage.setItem('bf_kiosk_mode', '1');
+    if (localStorage.getItem('bf_kiosk_mode') !== '1') return;
+
+    const wantFs = () => {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen?.({ navigationUI: 'hide' }).catch(() => {});
+      }
+    };
+    const onGesture = () => wantFs();
+    window.addEventListener('click', onGesture, true);
+    window.addEventListener('touchstart', onGesture, true);
+    document.addEventListener('fullscreenchange', () => {
+      if (!document.fullscreenElement) setTimeout(onGesture, 50);
+    });
+
+    // Wake Lock — la pantalla no se duerme (se re-adquiere al volver)
+    let wakeLock = null;
+    const lock = async () => {
+      try {
+        if (document.visibilityState === 'visible') {
+          wakeLock = await navigator.wakeLock?.request('screen');
+        }
+      } catch (_) {}
+    };
+    if ('wakeLock' in navigator) {
+      lock();
+      document.addEventListener('visibilitychange', () => {
+        if (wakeLock?.released) lock();
+      });
+    }
+  } catch (_) {}
+})();
+
 // Instalación PWA tipo APK: captura el prompt nativo del navegador y
 // muestra un botón propio estilo Aurum — instalar en 1 toque sin buscar
 // la opción escondida en el menú del navegador.
