@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { supabase } from '../services/supabase';
 import {
   DEFAULT_APPEARANCE,
   loadAccountAppearance,
@@ -12,6 +13,7 @@ export function useAccountAppearance(profile, authMode) {
   const [appearance, setAppearance] = useState({ ...DEFAULT_APPEARANCE });
   const [loadedUserId, setLoadedUserId] = useState(null);
   const [syncStatus, setSyncStatus] = useState('idle');
+  const lastLocalSaveRef = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -64,11 +66,31 @@ export function useAccountAppearance(profile, authMode) {
       }
 
       const result = await saveAccountAppearance(userId, appearance);
+      lastLocalSaveRef.current = Date.now();
       setSyncStatus(result.synchronized ? 'synced' : 'local');
     }, authMode ? 500 : 0);
 
     return () => window.clearTimeout(timer);
   }, [userId, loadedUserId, authMode, appearance]);
+
+  // Sync en vivo: si OTRO dispositivo guarda apariencia de esta misma cuenta,
+  // se aplica aquí sin recargar (ignorando el eco del propio guardado).
+  useEffect(() => {
+    if (!userId || !authMode) return undefined;
+    const channel = supabase
+      .channel(`appearance-${userId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'user_appearance_preferences', filter: `user_id=eq.${userId}` },
+        async () => {
+          if (Date.now() - lastLocalSaveRef.current < 1500) return;
+          const result = await loadAccountAppearance(userId);
+          setAppearance(result.preferences);
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [userId, authMode]);
 
   return { appearance, setAppearance, syncStatus };
 }

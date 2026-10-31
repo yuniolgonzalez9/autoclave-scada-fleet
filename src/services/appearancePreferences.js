@@ -18,16 +18,15 @@ const MOTION_SPEED_LIMITS = { animSpeed: 300, laserSpeed: 600, transSpeed: 300 }
 
 function normalizeAppearance(value = {}) {
   const base = {
-    theme: ['industrial', 'aurum', 'gold', 'tactical', 'cyber', 'hybrid'].includes(value.theme) ? value.theme : DEFAULT_APPEARANCE.theme,
+    theme: ['industrial', 'aurum', 'gold', 'tactical', 'cyber', 'hybrid', 'platinum', 'onyx', 'obsidian'].includes(value.theme) ? value.theme : DEFAULT_APPEARANCE.theme,
     background: [
-      'solid',
-      'circuit-pcb',
-      'planet-nodes',
-      'cyber-matrix',
-      'motherboard-gold',
-      'quantum-connections',
-      'server-datacenter',
-      'oled'
+      'solid', 'navy-solid', 'carbon-solid', 'forest-solid', 'wine-solid',
+      'aurum-gradient', 'ice-gradient', 'violet-gradient', 'mint-gradient', 'champagne-gradient',
+      'oled',
+      'server-datacenter', 'hospital-corridor', 'medical-lab',
+      'circuit-pcb', 'motherboard-gold', 'chip-macro', 'server-racks',
+      'planet-nodes', 'cyber-matrix', 'quantum-connections',
+      'circuit-city', 'aerial-highways', 'city-lights-grid', 'neon-skyline', 'night-aerial'
     ].includes(value.background) ? value.background : DEFAULT_APPEARANCE.background,
     opacity: Number.isFinite(Number(value.opacity))
       ? Math.min(100, Math.max(0, Math.round(Number(value.opacity))))
