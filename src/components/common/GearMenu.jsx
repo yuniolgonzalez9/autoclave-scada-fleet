@@ -44,7 +44,13 @@ export const WALLPAPERS_LIST = [
   { id: 'server-racks', name: '🗄️ Racks de Servidor — con Stealth', url: 'https://images.unsplash.com/photo-1544197150-b99a580bb7a8?auto=format&fit=crop&w=2000&q=80' },
   { id: 'planet-nodes', name: '🌐 Red Global de Nodos — con Aurum', url: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=2000&q=80' },
   { id: 'cyber-matrix', name: '🏙️ Matriz Cyberpunk — con Neon', url: 'https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=2000&q=80' },
-  { id: 'quantum-connections', name: '💠 Conexiones Cuánticas & Fibra — con Neon', url: 'https://images.unsplash.com/photo-1504639725590-34d0984388bd?auto=format&fit=crop&w=2000&q=80' }
+  { id: 'quantum-connections', name: '💠 Conexiones Cuánticas & Fibra — con Neon', url: 'https://images.unsplash.com/photo-1504639725590-34d0984388bd?auto=format&fit=crop&w=2000&q=80' },
+  // ── Ciudad-circuito: aéreas nocturnas tipo PCB ──
+  { id: 'circuit-city', name: '🌃 Ciudad-Circuito Aérea — con Industrial', url: 'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&fit=crop&w=2000&q=80' },
+  { id: 'aerial-highways', name: '🛣️ Autopistas de Luz — con Ónix', url: 'https://images.unsplash.com/photo-1514924013411-cbf25faa35bb?auto=format&fit=crop&w=2000&q=80' },
+  { id: 'city-lights-grid', name: '💡 Retícula de Luces — con Platino', url: 'https://images.unsplash.com/photo-1502920917128-1aa500764cbd?auto=format&fit=crop&w=2000&q=80' },
+  { id: 'neon-skyline', name: '🏙️ Skyline Nocturno — con Neon', url: 'https://images.unsplash.com/photo-1519501025264-65ba15a82390?auto=format&fit=crop&w=2000&q=80' },
+  { id: 'night-aerial', name: '🌌 Metrópolis Nocturna — con Obsidiana', url: 'https://images.unsplash.com/photo-1519608487953-e999c86e7455?auto=format&fit=crop&w=2000&q=80' }
 ];
 
 export default function GearMenu({ 
