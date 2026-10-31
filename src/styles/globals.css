@@ -1423,8 +1423,30 @@ button:active::after, .btn:active::after {
   content: none;
 }
 
+/* Spotlight premium que sigue el cursor + micro-tilt */
+.fleet-device-card {
+  transform: perspective(800px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
+  transition: transform 0.18s ease-out, border-color 0.2s ease, box-shadow 0.2s ease;
+  will-change: transform;
+}
+
+.fleet-device-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(340px circle at var(--mx, -999px) var(--my, -999px), rgba(255, 255, 255, 0.09), transparent 45%);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+}
+
+.fleet-device-card:hover::after {
+  opacity: 1;
+}
+
 .fleet-device-card:hover {
-  transform: translateY(-4px) scale(1.01);
+  transform: translateY(-4px) scale(1.01) perspective(800px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg));
   box-shadow:
     0 20px 40px rgba(0, 0, 0, 0.4),
     0 0 20px rgba(var(--surface-glow) / 0.2),

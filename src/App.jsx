@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import LoginModal from './components/auth/LoginModal';
 import GearMenu, { WALLPAPERS_LIST } from './components/common/GearMenu';
 import SnowfallLayer from './components/common/SnowfallLayer';
+import { usePremiumHover } from './hooks/usePremiumHover';
 import ClinicalTooltip from './components/common/ClinicalTooltip';
 import ContextMenu from './components/common/ContextMenu';
 import NotificationsPanel from './components/common/NotificationsPanel';
@@ -611,6 +612,7 @@ function ScadaAppContent() {
     onSwipeRight: () => (activeSection === 'detalle' ? false : stepThrough(mobileSections, activeSection, -1, goToSection))
   });
 
+  usePremiumHover();
   const bgObj = useMemo(() => WALLPAPERS_LIST.find((b) => b.id === currentBg) || WALLPAPERS_LIST[0], [currentBg]);
 
   if (loading) {
