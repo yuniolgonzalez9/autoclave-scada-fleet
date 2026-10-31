@@ -116,6 +116,30 @@ button:active, .btn-touch:active {
   transform: scale(0.96);
 }
 
+/* ===== LEGIBILIDAD — textos mínimos legibles y nítidos en todos los temas =====
+   Sube el piso de los tamaños tiny y activa renderizado de alta calidad */
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Los textos de 9-10px eran ilegibles; piso mínimo real 10-11px */
+.text-\[9px\] {
+  font-size: 10px !important;
+  letter-spacing: 0.06em;
+}
+
+.text-\[10px\] {
+  font-size: 11px !important;
+  letter-spacing: 0.05em;
+}
+
+/* Valores numéricos y métricas siempre con peso de lectura */
+.font-mono {
+  font-variant-numeric: tabular-nums;
+}
+
 /* ===== STEALTH — grafito frío + cian discreto en acentos ===== */
 [data-theme="tactical"] {
   --glass-bg: 10 14 20;
