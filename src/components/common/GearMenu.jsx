@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { readMotionPrefs, saveMotionPrefs } from '../../services/motionPrefs';
 import { readXmasPrefs, saveXmasPrefs } from './SnowfallLayer';
+import { supabase } from '../../services/supabase';
 
 export const WALLPAPERS_LIST = [
   // ── Sólidos minimalistas ──
@@ -75,7 +76,8 @@ export default function GearMenu({
   onOpenDiagnostics,
   appearanceSyncStatus,
   motionPrefs,
-  onMotionChange
+  onMotionChange,
+  canEditGlobal
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -83,7 +85,19 @@ export default function GearMenu({
   const [xmas, setXmas] = useState(readXmasPrefs);
   const motion = motionPrefs || localMotion;
   const updateMotion = onMotionChange || ((patch) => setLocalMotion((m) => saveMotionPrefs({ ...m, ...patch })));
-  const updateXmas = (patch) => setXmas((p) => saveXmasPrefs({ ...p, ...patch }));
+  // Superadmin: guarda el switch GLOBAL (toda la web). Usuario normal:
+  // su toggle es un opt-out local solamente.
+  const updateXmas = (patch) => {
+    setXmas((p) => {
+      const next = saveXmasPrefs({ ...p, ...patch }, { localOnly: !canEditGlobal });
+      if (canEditGlobal) {
+        supabase.rpc('save_global_xmas', { p_xmas: next }).then(({ error }) => {
+          if (error) console.warn('[XMAS] No se pudo guardar el switch global:', error.message);
+        });
+      }
+      return next;
+    });
+  };
 
   // Escuchar cambios de fullscreen nativo
   useEffect(() => {
@@ -321,7 +335,7 @@ export default function GearMenu({
               <div className="flex justify-between items-center text-xs gear-accent-text">
                 <span className="flex items-center gap-1.5">
                   <Snowflake className="w-3.5 h-3.5" />
-                  <span>Modo Navidad</span>
+                  <span>Modo Navidad{canEditGlobal ? ' (Global)' : ''}</span>
                 </span>
                 <button
                   type="button"

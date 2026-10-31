@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 
 const KEY = 'biofleet_xmas';
+const LOCAL_OFF_KEY = 'biofleet_xmas_localoff';
 export const XMAS_DEFAULTS = { on: false, flakes: 120, speed: 100, lights: true };
 
 export function readXmasPrefs() {
@@ -12,6 +13,30 @@ export function readXmasPrefs() {
   }
 }
 
+// El usuario normal puede optar por NO ver los efectos navideños aunque el
+// superadmin los tenga activados globalmente (opt-out por dispositivo).
+export function markLocalXmasOff(off) {
+  try {
+    if (off) localStorage.setItem(LOCAL_OFF_KEY, '1');
+    else localStorage.removeItem(LOCAL_OFF_KEY);
+  } catch (_) {}
+}
+
+export function isLocalXmasOff() {
+  try { return localStorage.getItem(LOCAL_OFF_KEY) === '1'; } catch (_) { return false; }
+}
+
+// Llamado por App cuando llega el switch global desde la nube:
+// si el usuario no hizo opt-out local, el valor global manda.
+export function applyGlobalXmas(globalPrefs) {
+  const g = { ...XMAS_DEFAULTS, ...(globalPrefs || {}) };
+  const effective = isLocalXmasOff() ? { ...g, on: false } : g;
+  try { localStorage.setItem(KEY, JSON.stringify(effective)); } catch (_) {}
+  document.documentElement.dataset.xmas = effective.on ? 'on' : 'off';
+  document.documentElement.dataset.xmasLights = effective.on && effective.lights ? 'on' : 'off';
+  window.dispatchEvent(new CustomEvent('bf:xmas', { detail: effective }));
+}
+
 export function applyXmasPrefs(prefs) {
   const p = { ...XMAS_DEFAULTS, ...prefs };
   try { localStorage.setItem(KEY, JSON.stringify(p)); } catch (_) {}
@@ -21,7 +46,11 @@ export function applyXmasPrefs(prefs) {
   return p;
 }
 
-export function saveXmasPrefs(prefs) {
+export function saveXmasPrefs(prefs, { localOnly = false } = {}) {
+  // Opt-out local: si un usuario normal apaga la nieve mientras el switch
+  // global está ON, recordamos su decisión para no reactivarla.
+  if (localOnly && prefs.on === false) markLocalXmasOff(true);
+  if (localOnly && prefs.on === true) markLocalXmasOff(false);
   return applyXmasPrefs(prefs);
 }
 

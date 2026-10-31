@@ -4,6 +4,7 @@ import LoginModal from './components/auth/LoginModal';
 import GearMenu, { WALLPAPERS_LIST } from './components/common/GearMenu';
 import SnowfallLayer from './components/common/SnowfallLayer';
 import { usePremiumHover } from './hooks/usePremiumHover';
+import { applyGlobalXmas } from './components/common/SnowfallLayer';
 import ClinicalTooltip from './components/common/ClinicalTooltip';
 import ContextMenu from './components/common/ContextMenu';
 import NotificationsPanel from './components/common/NotificationsPanel';
@@ -613,6 +614,23 @@ function ScadaAppContent() {
   });
 
   usePremiumHover();
+
+  // Efectos navideños globales: el superadmin controla para toda la web;
+  // llega en vivo por realtime y respeta el opt-out local de cada usuario.
+  useEffect(() => {
+    if (!user || !authMode) return undefined;
+    let alive = true;
+    supabase.from('global_fx_settings').select('xmas').eq('id', 1).maybeSingle()
+      .then(({ data }) => { if (alive && data?.xmas) applyGlobalXmas(data.xmas); })
+      .catch(() => {});
+    const ch = supabase
+      .channel('global-fx')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'global_fx_settings', filter: 'id=eq.1' },
+        (payload) => { if (payload.new?.xmas) applyGlobalXmas(payload.new.xmas); })
+      .subscribe();
+    return () => { alive = false; supabase.removeChannel(ch); };
+  }, [user, authMode]);
+
   const bgObj = useMemo(() => WALLPAPERS_LIST.find((b) => b.id === currentBg) || WALLPAPERS_LIST[0], [currentBg]);
 
   if (loading) {
@@ -836,6 +854,7 @@ function ScadaAppContent() {
                   appearanceSyncStatus={appearanceSyncStatus}
                   motionPrefs={appearance}
                   onMotionChange={setMotion}
+                  canEditGlobal={isAdmin}
                 />
               </div>
             )}
