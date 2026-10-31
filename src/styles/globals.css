@@ -162,6 +162,54 @@ body {
   --laser-glow: 0 0 16px rgba(139, 92, 246, 0.45), 0 0 9px rgba(196, 181, 253, 0.22);
 }
 
+/* ===== ÓNIX — negro puro + oro dominante ===== */
+[data-theme="onyx"] {
+  --glass-bg: 10 9 7;
+  --surface-glow: 150 110 40;
+  --accent-color: #f5c24a;
+  --accent-text: #ffe9b0;
+  --card-border: rgba(245, 194, 74, 0.5);
+  --laser-gradient: linear-gradient(90deg, transparent, #fde68a, #f5c24a, #d97706, #fcd34d, transparent);
+  --laser-glow: 0 0 20px rgba(245, 194, 74, 0.55), 0 0 12px rgba(217, 119, 6, 0.3);
+}
+
+/* Marco dorado en bordes del tema Ónix */
+[data-theme="onyx"] .header-shell,
+[data-theme="onyx"] .mobile-nav-shell,
+[data-theme="onyx"] .fleet-main-nav,
+[data-theme="onyx"] .ultra-glass,
+[data-theme="onyx"] .glass-cell,
+[data-theme="onyx"] .user-chip,
+[data-theme="onyx"] .header-clock,
+[data-theme="onyx"] .fleet-search-control,
+[data-theme="onyx"] .fleet-overview-stat {
+  border-color: rgba(245, 194, 74, 0.5) !important;
+}
+
+/* ===== OBSIDIANA — negro puro + plata pulida ===== */
+[data-theme="obsidian"] {
+  --glass-bg: 8 9 11;
+  --surface-glow: 90 100 120;
+  --accent-color: #cbd5e1;
+  --accent-text: #eef2f8;
+  --card-border: rgba(203, 213, 225, 0.45);
+  --laser-gradient: linear-gradient(90deg, transparent, #f8fafc, #cbd5e1, #e2e8f0, transparent);
+  --laser-glow: 0 0 18px rgba(203, 213, 225, 0.5), 0 0 10px rgba(226, 232, 240, 0.28);
+}
+
+/* Marco plateado en bordes del tema Obsidiana */
+[data-theme="obsidian"] .header-shell,
+[data-theme="obsidian"] .mobile-nav-shell,
+[data-theme="obsidian"] .fleet-main-nav,
+[data-theme="obsidian"] .ultra-glass,
+[data-theme="obsidian"] .glass-cell,
+[data-theme="obsidian"] .user-chip,
+[data-theme="obsidian"] .header-clock,
+[data-theme="obsidian"] .fleet-search-control,
+[data-theme="obsidian"] .fleet-overview-stat {
+  border-color: rgba(203, 213, 225, 0.45) !important;
+}
+
 /* ===== PLATINO-ORO — acento plata sobre líneas y láseres dorados ===== */
 [data-theme="platinum"] {
   --glass-bg: 12 14 19;
