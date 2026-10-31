@@ -25,3 +25,4 @@ e2e-shots/
 # Firmware — credenciales locales de la placa (copiar desde secrets.example.h)
 **/secrets.h
 firmware/**/build/
+.env.ingest
