@@ -116,34 +116,34 @@ button:active, .btn-touch:active {
   transform: scale(0.96);
 }
 
-/* ===== STEALTH — táctica moderna: grafito frío + cian ártico eléctrico ===== */
+/* ===== STEALTH — grafito frío + cian discreto en acentos ===== */
 [data-theme="tactical"] {
-  --glass-bg: 9 13 20;
-  --surface-glow: 34 211 238;
-  --accent-color: #22d3ee;
-  --card-border: rgba(34, 211, 238, 0.42);
-  --laser-gradient: linear-gradient(90deg, transparent, #67e8f9, #22d3ee, #a5f3fc, #67e8f9, transparent);
-  --laser-glow: 0 0 22px rgba(34, 211, 238, 0.55), 0 0 12px rgba(103, 232, 249, 0.3);
+  --glass-bg: 10 14 20;
+  --surface-glow: 56 100 150;
+  --accent-color: #6fd4ee;
+  --card-border: rgba(111, 212, 238, 0.26);
+  --laser-gradient: linear-gradient(90deg, transparent, #67e8f9, #38bdf8, #a5f3fc, #67e8f9, transparent);
+  --laser-glow: 0 0 14px rgba(103, 232, 249, 0.4), 0 0 8px rgba(56, 189, 248, 0.2);
 }
 
-/* ===== NEON — cyber moderno: violeta profundo + magenta neón ===== */
+/* ===== NEON — violeta profundo + magenta suave en acentos ===== */
 [data-theme="cyber"] {
-  --glass-bg: 16 10 24;
-  --surface-glow: 192 90 255;
-  --accent-color: #d86bff;
-  --card-border: rgba(216, 107, 255, 0.4);
-  --laser-gradient: linear-gradient(90deg, transparent, #e879f9, #c084fc, #f0abfc, #e879f9, transparent);
-  --laser-glow: 0 0 22px rgba(216, 107, 255, 0.55), 0 0 12px rgba(192, 132, 252, 0.3);
+  --glass-bg: 15 11 21;
+  --surface-glow: 120 80 170;
+  --accent-color: #c99af5;
+  --card-border: rgba(201, 154, 245, 0.26);
+  --laser-gradient: linear-gradient(90deg, transparent, #e8b4ff, #c084fc, #f0abfc, #e8b4ff, transparent);
+  --laser-glow: 0 0 14px rgba(201, 154, 245, 0.4), 0 0 8px rgba(192, 132, 252, 0.2);
 }
 
-/* ===== BIO-MINT — híbrido moderno: bosque profundo + menta neón ===== */
+/* ===== BIO-MINT — bosque oscuro + menta suave en acentos ===== */
 [data-theme="hybrid"] {
-  --glass-bg: 8 20 15;
-  --surface-glow: 52 211 153;
-  --accent-color: #34d399;
-  --card-border: rgba(52, 211, 153, 0.4);
-  --laser-gradient: linear-gradient(90deg, transparent, #6ee7b7, #34d399, #a7f3d0, #6ee7b7, transparent);
-  --laser-glow: 0 0 22px rgba(52, 211, 153, 0.55), 0 0 12px rgba(110, 231, 183, 0.3);
+  --glass-bg: 9 19 15;
+  --surface-glow: 60 140 110;
+  --accent-color: #6fe3b8;
+  --card-border: rgba(111, 227, 184, 0.26);
+  --laser-gradient: linear-gradient(90deg, transparent, #a7f3d0, #5eead4, #a7f3d0, transparent);
+  --laser-glow: 0 0 14px rgba(111, 227, 184, 0.4), 0 0 8px rgba(94, 234, 212, 0.2);
 }
 
 /* ===== AURUM — híbrido Azul Marino Industrial + Oro ===== */
@@ -177,15 +177,15 @@ button:active, .btn-touch:active {
   border-top-color: rgba(245, 194, 74, 0.35) !important;
 }
 
-/* ===== CARMESÍ REAL — acento rojo sobre bordes y láseres dorados ===== */
-/* Base vino casi negra, acento rojo vivo, marco y láser de oro puro */
+/* ===== CARMESÍ REAL — acento rojo sobrio sobre marco dorado fino ===== */
+/* Base carbón con tinte vino, acento rojo suave, láser de oro tenue */
 [data-theme="gold"] {
-  --glass-bg: 26 8 12;
-  --surface-glow: 235 70 90;
-  --accent-color: #ff4d5e;
-  --card-border: rgba(245, 194, 74, 0.45);
-  --laser-gradient: linear-gradient(90deg, transparent, #fde68a, #f5c24a, #d97706, #fcd34d, transparent);
-  --laser-glow: 0 0 20px rgba(245, 194, 74, 0.6), 0 0 12px rgba(255, 77, 94, 0.3);
+  --glass-bg: 20 11 13;
+  --surface-glow: 150 70 85;
+  --accent-color: #ff7a85;
+  --card-border: rgba(245, 194, 74, 0.3);
+  --laser-gradient: linear-gradient(90deg, transparent, #fde68a, #f5c24a, #fcd34d, transparent);
+  --laser-glow: 0 0 14px rgba(245, 194, 74, 0.4), 0 0 8px rgba(255, 122, 133, 0.2);
 }
 
 .ultra-glass {
