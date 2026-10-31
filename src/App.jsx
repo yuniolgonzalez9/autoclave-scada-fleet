@@ -487,6 +487,13 @@ function ScadaAppContent() {
     return () => window.removeEventListener('popstate', onPop);
   }, [user, activeSection, kioskMac]);
 
+  // Reloj en vivo — hora y fecha siempre visibles en el header
+  const [clockNow, setClockNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setClockNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
   const getDeviceHealthData = useCallback((dev) => {
     if (!dev || !dev.lastSeen || dev.lastSeen === 0) {
       return { status: 'OFFLINE', text: 'DESCONECTADO', timeAgo: 'Sin señal', colorClass: 'bg-rose-500/15 text-rose-400 border-rose-500/30' };
@@ -696,7 +703,21 @@ function ScadaAppContent() {
             </div>
           </div>
 
-          <div className="header-actions flex items-center gap-1.5 sm:gap-2.5 shrink-0 ml-2">
+          {/* Reloj central — hora y fecha siempre a la vista */}
+          {user && (
+            <div className="header-clock ultra-glass hidden md:flex flex-col items-center justify-center px-4 h-10 rounded-xl border border-cyan-500/30 leading-none select-none shrink-0"
+              title={clockNow.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+            >
+              <span className="font-mono text-sm font-bold tracking-[0.16em] text-cyan-300">
+                {clockNow.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              </span>
+              <span className="font-mono text-[8px] text-slate-400 tracking-[0.22em] uppercase mt-1">
+                {clockNow.toLocaleDateString('es-ES', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}
+              </span>
+            </div>
+          )}
+
+          <div className="header-actions flex items-center gap-1.5 sm:gap-2.5 shrink-0 ml-auto">
             {kioskMac && (
               <button
                 onClick={() => toggleKioskMode(null)}
