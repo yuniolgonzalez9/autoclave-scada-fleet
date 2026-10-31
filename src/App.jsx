@@ -797,7 +797,7 @@ function ScadaAppContent() {
             {user && (
               <button
                 onClick={() => setShowNotifications(!showNotifications)}
-                className="relative w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-900/90 border border-cyan-500/40 text-cyan-300 shrink-0 ultra-glass hover:bg-cyan-500/20 transition-all group flex items-center justify-center"
+                className={`relative w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-900/90 border border-cyan-500/40 text-cyan-300 shrink-0 ultra-glass hover:bg-cyan-500/20 transition-all group flex items-center justify-center ${bellCount > 0 ? (bellCritical ? 'bell-glow-critical' : 'bell-glow') : ''}`}
                 title="Notificaciones"
               >
                 <Bell className={`w-4 h-4 sm:w-5 sm:h-5 transition-colors ${
