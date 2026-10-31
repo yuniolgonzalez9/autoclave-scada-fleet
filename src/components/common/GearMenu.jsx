@@ -104,7 +104,7 @@ export default function GearMenu({
   };
 
   return (
-    <div onMouseEnter={() => setIsOpen(true)}>
+    <div>
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
