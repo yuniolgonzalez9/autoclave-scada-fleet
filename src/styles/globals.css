@@ -121,6 +121,7 @@ button:active, .btn-touch:active {
   --glass-bg: 10 14 20;
   --surface-glow: 56 100 150;
   --accent-color: #6fd4ee;
+  --accent-text: #d8f2fc;
   --card-border: rgba(111, 212, 238, 0.26);
   --laser-gradient: linear-gradient(90deg, transparent, #67e8f9, #38bdf8, #a5f3fc, #67e8f9, transparent);
   --laser-glow: 0 0 14px rgba(103, 232, 249, 0.4), 0 0 8px rgba(56, 189, 248, 0.2);
@@ -131,6 +132,7 @@ button:active, .btn-touch:active {
   --glass-bg: 15 11 21;
   --surface-glow: 120 80 170;
   --accent-color: #c99af5;
+  --accent-text: #efdcff;
   --card-border: rgba(201, 154, 245, 0.26);
   --laser-gradient: linear-gradient(90deg, transparent, #e8b4ff, #c084fc, #f0abfc, #e8b4ff, transparent);
   --laser-glow: 0 0 14px rgba(201, 154, 245, 0.4), 0 0 8px rgba(192, 132, 252, 0.2);
@@ -141,6 +143,7 @@ button:active, .btn-touch:active {
   --glass-bg: 9 19 15;
   --surface-glow: 60 140 110;
   --accent-color: #6fe3b8;
+  --accent-text: #d9f7ea;
   --card-border: rgba(111, 227, 184, 0.26);
   --laser-gradient: linear-gradient(90deg, transparent, #a7f3d0, #5eead4, #a7f3d0, transparent);
   --laser-glow: 0 0 14px rgba(111, 227, 184, 0.4), 0 0 8px rgba(94, 234, 212, 0.2);
@@ -152,6 +155,7 @@ button:active, .btn-touch:active {
   --glass-bg: 7 14 30;
   --surface-glow: 58 118 195;
   --accent-color: #f5c24a;
+  --accent-text: #ffe9b8;
   --card-border: rgba(245, 194, 74, 0.38);
   --laser-gradient: linear-gradient(90deg, transparent, #f5c24a, #60a5fa, #fcd34d, #f5c24a, transparent);
   --laser-glow: 0 0 18px rgba(245, 194, 74, 0.5), 0 0 11px rgba(96, 165, 250, 0.28);
@@ -183,6 +187,7 @@ button:active, .btn-touch:active {
   --glass-bg: 20 11 13;
   --surface-glow: 150 70 85;
   --accent-color: #ff7a85;
+  --accent-text: #ffd9dc;
   --card-border: rgba(245, 194, 74, 0.3);
   --laser-gradient: linear-gradient(90deg, transparent, #fde68a, #f5c24a, #fcd34d, transparent);
   --laser-glow: 0 0 14px rgba(245, 194, 74, 0.4), 0 0 8px rgba(255, 122, 133, 0.2);
@@ -2154,6 +2159,7 @@ button, a, label, input, select, textarea, [role="button"] { touch-action: manip
   --glass-bg: 7 14 30;
   --surface-glow: 62 138 216;
   --accent-color: #5eb2ff;
+  --accent-text: #d5eaff;
   --card-border: rgba(96, 165, 250, 0.4);
   --laser-gradient: linear-gradient(90deg, transparent, #60a5fa, #bfdbfe, #3b82f6, #93c5fd, #60a5fa, transparent);
   --laser-glow: 0 0 18px rgba(96, 165, 250, 0.55), 0 0 11px rgba(59, 130, 246, 0.28);
@@ -2161,7 +2167,7 @@ button, a, label, input, select, textarea, [role="button"] { touch-action: manip
 
 /* ===== GearMenu — clases que obedecen al tema activo ===== */
 .gear-accent-text {
-  color: var(--accent-color) !important;
+  color: var(--accent-text, var(--accent-color)) !important;
 }
 
 .gear-accent-border {
@@ -2210,7 +2216,7 @@ button, a, label, input, select, textarea, [role="button"] { touch-action: manip
 .gear-panel .text-cyan-400,
 .gear-panel .text-cyan-300,
 .fleet-device-cta {
-  color: var(--accent-color) !important;
+  color: var(--accent-text, var(--accent-color)) !important;
 }
 
 .header-shell,
