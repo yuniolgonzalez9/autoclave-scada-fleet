@@ -205,15 +205,15 @@ body {
   border-top-color: rgba(245, 194, 74, 0.35) !important;
 }
 
-/* ===== EMBER — forja: carbón cálido + ámbar bronce dominante ===== */
+/* ===== PLATINO — pizarra fría + plata/acero pulido ===== */
 [data-theme="gold"] {
-  --glass-bg: 17 12 9;
-  --surface-glow: 150 78 35;
-  --accent-color: #f59e0b;
-  --accent-text: #ffe4b0;
-  --card-border: rgba(245, 158, 11, 0.5);
-  --laser-gradient: linear-gradient(90deg, transparent, #fcd34d, #f59e0b, #d97706, #fcd34d, transparent);
-  --laser-glow: 0 0 20px rgba(245, 158, 11, 0.55), 0 0 12px rgba(217, 119, 6, 0.3);
+  --glass-bg: 12 15 20;
+  --surface-glow: 95 110 135;
+  --accent-color: #cbd5e1;
+  --accent-text: #eef2f8;
+  --card-border: rgba(203, 213, 225, 0.42);
+  --laser-gradient: linear-gradient(90deg, transparent, #f1f5f9, #cbd5e1, #e2e8f0, transparent);
+  --laser-glow: 0 0 18px rgba(203, 213, 225, 0.5), 0 0 10px rgba(226, 232, 240, 0.28);
 }
 
 /* El ámbar domina los bordes y líneas del tema Ember — gana al remap de acento */
@@ -238,7 +238,7 @@ body {
 [data-theme="gold"] .header-clock,
 [data-theme="gold"] .fleet-search-control,
 [data-theme="gold"] .fleet-overview-stat {
-  border-color: rgba(245, 158, 11, 0.5) !important;
+  border-color: rgba(203, 213, 225, 0.42) !important;
 }
 
 .ultra-glass {

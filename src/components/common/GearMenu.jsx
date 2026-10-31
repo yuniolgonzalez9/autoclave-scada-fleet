@@ -176,7 +176,7 @@ export default function GearMenu({
                 {[
                   { id: 'industrial', label: '🏭 Industrial', desc: 'Azul Acero' },
                   { id: 'aurum', label: '👑 Aurum', desc: 'Marino + Oro' },
-                  { id: 'gold', label: '� Carmesí', desc: 'Rojo + Oro' },
+                  { id: 'gold', label: '⚪ Platino', desc: 'Plata & Acero' },
                   { id: 'tactical', label: '🛡️ Stealth', desc: 'Cian Ártico' },
                   { id: 'cyber', label: '� Neon', desc: 'Violeta Neón' },
                   { id: 'hybrid', label: '🍃 Bio-Mint', desc: 'Menta Neón' }
