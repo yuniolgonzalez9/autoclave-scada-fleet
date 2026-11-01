@@ -1752,30 +1752,7 @@ button:active::after, .btn:active::after {
 /* Copo junto al logo mientras el modo esté activo */
 [data-xmas="on"] .brand-wordmark::after { content: ' ❄️'; font-size: 0.75em; }
 
-/* Nieve posada GRUESA real: acumulado alto con montículos y carámbanos */
-[data-xmas-caps="on"] .fleet-device-card::before {
-  content: '';
-  position: absolute;
-  left: 3%; right: 3%; top: -4px;
-  height: 20px;
-  border-radius: 10px 10px 18px 18px;
-  background:
-    /* carámbanos colgando del borde inferior */
-    radial-gradient(ellipse 3px 7px at 18% 100%, rgba(240, 249, 255, 0.95) 0 100%, transparent 100%),
-    radial-gradient(ellipse 2px 5px at 52% 100%, rgba(240, 249, 255, 0.9) 0 100%, transparent 100%),
-    radial-gradient(ellipse 3px 6px at 84% 100%, rgba(240, 249, 255, 0.95) 0 100%, transparent 100%),
-    /* montículos gruesos */
-    radial-gradient(ellipse 26px 14px at 10% 100%, rgba(255, 255, 255, 0.98) 0 70%, transparent 72%),
-    radial-gradient(ellipse 34px 17px at 32% 100%, rgba(255, 255, 255, 0.97) 0 72%, transparent 74%),
-    radial-gradient(ellipse 24px 12px at 55% 100%, rgba(255, 255, 255, 0.98) 0 70%, transparent 72%),
-    radial-gradient(ellipse 32px 16px at 76% 100%, rgba(255, 255, 255, 0.97) 0 72%, transparent 74%),
-    radial-gradient(ellipse 22px 12px at 95% 100%, rgba(255, 255, 255, 0.96) 0 70%, transparent 72%),
-    /* base blanca con sombra inferior azulada */
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(226, 238, 248, 0.95) 60%, rgba(186, 215, 235, 0.6) 100%);
-  filter: drop-shadow(0 3px 4px rgba(148, 163, 184, 0.5));
-  pointer-events: none;
-  z-index: 2;
-}
+/* nieve posada retirada a petición del usuario */
 
 /* Resplandor de campana cuando hay notificaciones pendientes */
 .bell-glow {
