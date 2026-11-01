@@ -6,7 +6,7 @@ const STUDIO_ROLES = ['TECNICO', ...PRIVILEGED_ROLES];
 const MAX_PROMPT = 4000;
 const MAX_CONTEXT = 60000;
 const MAX_HISTORY = 20;
-const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash'];
+const GEMINI_MODELS = ['gemini-2.0-flash', 'gemini-2.0-flash-001', 'gemini-1.5-flash', 'gemini-1.5-flash-8b'];
 const OPENAI_COMPATIBLE = {
   GROQ: ['https://api.groq.com/openai/v1/chat/completions', 'llama-3.3-70b-versatile'],
   OPENAI: ['https://api.openai.com/v1/chat/completions', 'gpt-4o-mini'],
