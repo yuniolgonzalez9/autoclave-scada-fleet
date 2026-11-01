@@ -506,9 +506,9 @@ function ScadaAppContent() {
     }
     const diffSegundos = Math.max(0, Math.floor((Date.now() - dev.lastSeen) / 1000));
 
-    if (diffSegundos <= 5) {
-      return { status: 'ONLINE', text: 'EN LÍNEA', timeAgo: diffSegundos === 0 ? '' : `Hace ${diffSegundos}s`, colorClass: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' };
-    } else if (diffSegundos <= 10) {
+    if (diffSegundos <= 8) {
+      return { status: 'ONLINE', text: 'EN LÍNEA', timeAgo: '', colorClass: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' };
+    } else if (diffSegundos <= 15) {
       return { status: 'LATENCY', text: 'LATENCIA', timeAgo: `Hace ${diffSegundos}s`, colorClass: 'bg-amber-500/15 text-amber-300 border-amber-500/30' };
     } else {
       const mins = Math.floor(diffSegundos / 60);
