@@ -52,6 +52,7 @@ export default function FleetManagementView({ fleet = {}, sendCommand, onSelectD
 
   // Edición completa de dispositivo existente
   const [editDevice, setEditDevice] = useState(null); // {mac, alias, cliente, modelo, area, tipo, hardware_rev}
+  const [adminMac, setAdminMac] = useState(null); // vista administrativa dedicada del equipo
   const [savingEdit, setSavingEdit] = useState(false);
   const [sugeridos, setSugeridos] = useState({ clientes: [], aliases: [] });
 
@@ -305,7 +306,75 @@ export default function FleetManagementView({ fleet = {}, sendCommand, onSelectD
         </div>
       )}
 
+      {/* VISTA DE ADMINISTRACIÓN DEL EQUIPO (panel dedicado) */}
+      {adminMac && (() => {
+        const dev = fleet[adminMac] || {};
+        const meta = dev.meta || {};
+        const datos = dev.datos || {};
+        const online = dev.lastSeen && Date.now() - dev.lastSeen < 15000;
+        return (
+          <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 space-y-4">
+            <div className="flex items-center justify-between flex-wrap gap-2 border-b border-slate-800 pb-3">
+              <div>
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <Cpu className="w-4 h-4 text-cyan-400" />
+                  {meta.alias || adminMac}
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${online ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-rose-500/10 text-rose-400 border-rose-500/30'}`}>
+                    {online ? 'ONLINE' : 'OFFLINE'}
+                  </span>
+                </h3>
+                <p className="text-[11px] text-slate-400 font-mono mt-0.5">{adminMac} • {meta.hardware_rev || 'HKL-EA8'} • {meta.tipo || 'AUTOCLAVE'} • {meta.cliente || '—'}</p>
+              </div>
+              <button type="button" onClick={() => setAdminMac(null)} className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold flex items-center gap-1.5">
+                <X className="w-3.5 h-3.5" /> Volver a la lista
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
+              <div className="p-2.5 rounded-xl bg-slate-900/70 border border-slate-800">
+                <span className="block text-[9px] text-slate-400">TEMPERATURA</span>
+                <span className="text-lg font-bold text-cyan-300">{Number(datos.temp_camara ?? 0).toFixed(1)}°C</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-slate-900/70 border border-slate-800">
+                <span className="block text-[9px] text-slate-400">PRESIÓN</span>
+                <span className="text-lg font-bold text-pink-300">{Number(datos.presion ?? 0).toFixed(2)}b</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-slate-900/70 border border-slate-800">
+                <span className="block text-[9px] text-slate-400">FASE</span>
+                <span className="text-sm font-bold text-emerald-300 truncate">{datos.fase || '—'}</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-slate-900/70 border border-slate-800">
+                <span className="block text-[9px] text-slate-400">F0</span>
+                <span className="text-lg font-bold text-amber-300">{Number(datos.f0_score ?? 0).toFixed(1)}</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              <button type="button" onClick={() => onSelectDevice && onSelectDevice(adminMac)} className="px-3 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold flex items-center justify-center gap-1.5">
+                <ExternalLink className="w-3.5 h-3.5" /> Cabina de Control
+              </button>
+              <button type="button" onClick={() => openEditDevice(adminMac, dev)} className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-300 font-bold flex items-center justify-center gap-1.5">
+                <Pencil className="w-3.5 h-3.5" /> Editar Datos
+              </button>
+              <button type="button" onClick={() => onOpenAssignModal && onOpenAssignModal(dev)} className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-300 font-bold flex items-center justify-center gap-1.5">
+                <Plus className="w-3.5 h-3.5" /> Asignar Usuarios
+              </button>
+              <button type="button" onClick={() => { if (sendCommand) sendCommand(adminMac, { cmd: 'SCAN_HARDWARE' }); setMsg('Sondeo I2C enviado al equipo.'); }} className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold flex items-center justify-center gap-1.5">
+                <Cpu className="w-3.5 h-3.5" /> Sondear I2C
+              </button>
+              <button type="button" onClick={() => { if (sendCommand) sendCommand(adminMac, { cmd: 'PING' }); setMsg('PING enviado — telemetría forzada.'); }} className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-indigo-300 font-bold flex items-center justify-center gap-1.5">
+                <Send className="w-3.5 h-3.5" /> Forzar Telemetría
+              </button>
+              <button type="button" onClick={() => { handleDeleteDevice(adminMac, meta.alias); setAdminMac(null); }} className="px-3 py-2 rounded-xl bg-rose-900/40 hover:bg-rose-900/70 text-rose-300 font-bold flex items-center justify-center gap-1.5 border border-rose-500/30">
+                <Trash2 className="w-3.5 h-3.5" /> Eliminar
+              </button>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Selector de subvista */}
+      {!adminMac && (
       <div className="sticky top-14 sm:top-16 z-20 py-1">
         <div className="grid grid-cols-2 gap-1 p-1 rounded-2xl bg-slate-950/80 backdrop-blur-md border border-slate-800">
           {[
@@ -328,9 +397,10 @@ export default function FleetManagementView({ fleet = {}, sendCommand, onSelectD
         </div>
         <SwipeDots count={2} index={VIEWS.indexOf(view)} className="mt-1.5 lg:hidden" />
       </div>
+      )}
 
       {/* FORMULARIO DE ALTA Y PROVISIÓN */}
-      {view === 'alta' && (
+      {view === 'alta' && !adminMac && (
         <form onSubmit={handleProvisionDevice} className="ultra-glass p-5 rounded-2xl border border-amber-500/30 space-y-4">
           <h3 className="text-sm font-bold text-amber-300 flex items-center gap-2 border-b border-amber-500/20 pb-2">
             <Plus className="w-4 h-4 text-amber-400" />
@@ -413,7 +483,7 @@ export default function FleetManagementView({ fleet = {}, sendCommand, onSelectD
       )}
 
       {/* FILTROS Y BÚSQUEDA */}
-      {view === 'gestion' && (
+      {view === 'gestion' && !adminMac && (
         <>
           <div className="ultra-glass p-3 rounded-xl border border-slate-800 flex flex-col sm:flex-row justify-between items-center gap-2">
             <div className="relative w-full sm:w-80">
@@ -474,7 +544,7 @@ export default function FleetManagementView({ fleet = {}, sendCommand, onSelectD
                     const dTipo = (dev.meta?.tipo || dDev.tipo || 'AUTOCLAVE').toUpperCase();
 
                     return (
-                      <tr key={mac} onClick={() => onSelectDevice && onSelectDevice(mac)} className="hover:bg-slate-800/40 transition-colors cursor-pointer" title="Click para entrar al equipo">
+                      <tr key={mac} onClick={() => setAdminMac(mac)} className="hover:bg-slate-800/40 transition-colors cursor-pointer" title="Click para administrar el equipo">
                         <td className="p-3">
                           <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold border ${
                             isOnline ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
