@@ -1715,7 +1715,7 @@ button:active::after, .btn:active::after {
 [data-xmas-garland="on"] .header-shell::after {
   content: '';
   position: absolute;
-  left: 0; right: 0; bottom: -7px;
+  left: 0; right: 0; bottom: 0;
   height: 7px;
   background-image: radial-gradient(circle at 50% 50%, #ef4444 0 2.5px, transparent 3px),
     radial-gradient(circle at 50% 50%, #f5c24a 0 2.5px, transparent 3px),
@@ -1731,7 +1731,7 @@ button:active::after, .btn:active::after {
 [data-xmas-garland="on"] .mobile-nav-shell::after {
   content: '';
   position: absolute;
-  left: 0; right: 0; top: -7px;
+  left: 0; right: 0; top: 0;
   height: 7px;
   background-image: radial-gradient(circle at 50% 50%, #ef4444 0 2.5px, transparent 3px),
     radial-gradient(circle at 50% 50%, #f5c24a 0 2.5px, transparent 3px),
@@ -1783,8 +1783,8 @@ button:active::after, .btn:active::after {
 [data-xmas-caps="on"] .fleet-device-card::before {
   content: '';
   position: absolute;
-  left: 5%; right: 5%; top: -3px;
-  height: 12px;
+  left: 5%; right: 5%; top: 0;
+  height: 11px;
   border-radius: 0 0 16px 16px;
   background:
     radial-gradient(circle at 12% 20%, rgba(255, 255, 255, 0.98) 0 7px, transparent 8px),

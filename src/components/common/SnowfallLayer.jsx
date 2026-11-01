@@ -55,8 +55,9 @@ export function applyXmasPrefs(prefs) {
 export function saveXmasPrefs(prefs, { localOnly = false } = {}) {
   // Opt-out local: si un usuario normal apaga la nieve mientras el switch
   // global está ON, recordamos su decisión para no reactivarla.
-  if (localOnly && prefs.on === false) markLocalXmasOff(true);
-  if (localOnly && prefs.on === true) markLocalXmasOff(false);
+  // Encenderla explícitamente SIEMPRE limpia el opt-out (usuario o admin).
+  if (prefs.on === true) markLocalXmasOff(false);
+  else if (localOnly && prefs.on === false) markLocalXmasOff(true);
   return applyXmasPrefs(prefs);
 }
 
