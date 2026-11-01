@@ -1,0 +1,47 @@
+{
+  "name": "biofleet-hub",
+  "version": "1.0.0",
+  "description": "Biofleet Hub — app de escritorio: web empaquetada + hub local de dispositivos + puente de periféricos",
+  "main": "main.js",
+  "author": "Biofleet",
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder --win nsis"
+  },
+  "dependencies": {
+    "aedes": "^0.51.0",
+    "better-sqlite3": "^11.3.0",
+    "serialport": "^12.0.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.biofleet.hub",
+    "productName": "Biofleet Hub",
+    "directories": { "output": "release" },
+    "files": [
+      "main.js",
+      "preload.js",
+      "hub.js",
+      "updater.js",
+      "peripherals.js",
+      "web/**",
+      "node_modules/**"
+    ],
+    "win": {
+      "target": ["nsis"]
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
+}

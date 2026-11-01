@@ -269,6 +269,21 @@ export default function FleetManagementView({ fleet = {}, sendCommand, onSelectD
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          {typeof window !== 'undefined' && window.biofleetHub?.isHub && (
+            <button
+              type="button"
+              onClick={async () => {
+                setMsg('Escaneando LAN en busca de equipos Biofleet…');
+                const res = await window.biofleetHub.scanLan();
+                const found = res?.known?.length || 0;
+                setMsg(`Escaneo enviado — ${found} equipo(s) ya respondieron. Los nuevos aparecen solos abajo.`);
+              }}
+              className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold flex items-center gap-1.5 transition-all shadow"
+            >
+              <Wifi className="w-3.5 h-3.5" />
+              <span>Escanear Red</span>
+            </button>
+          )}
           {onOpenReports && (
             <button
               type="button"
