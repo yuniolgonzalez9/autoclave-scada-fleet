@@ -35,7 +35,6 @@ export function applyGlobalXmas(globalPrefs) {
   document.documentElement.dataset.xmas = effective.on ? 'on' : 'off';
   document.documentElement.dataset.xmasLights = effective.on && effective.lights ? 'on' : 'off';
   document.documentElement.dataset.xmasGarland = effective.on && effective.garland ? 'on' : 'off';
-  document.documentElement.dataset.xmasFrost = effective.on && effective.frost ? 'on' : 'off';
   document.documentElement.dataset.xmasCaps = effective.on && effective.caps ? 'on' : 'off';
   window.dispatchEvent(new CustomEvent('bf:xmas', { detail: effective }));
 }
@@ -46,7 +45,6 @@ export function applyXmasPrefs(prefs) {
   document.documentElement.dataset.xmas = p.on ? 'on' : 'off';
   document.documentElement.dataset.xmasLights = p.on && p.lights ? 'on' : 'off';
   document.documentElement.dataset.xmasGarland = p.on && p.garland ? 'on' : 'off';
-  document.documentElement.dataset.xmasFrost = p.on && p.frost ? 'on' : 'off';
   document.documentElement.dataset.xmasCaps = p.on && p.caps ? 'on' : 'off';
   window.dispatchEvent(new CustomEvent('bf:xmas', { detail: p }));
   return p;
@@ -70,7 +68,6 @@ export default function SnowfallLayer() {
     document.documentElement.dataset.xmas = prefs.on ? 'on' : 'off';
     document.documentElement.dataset.xmasLights = prefs.on && prefs.lights ? 'on' : 'off';
     document.documentElement.dataset.xmasGarland = prefs.on && prefs.garland ? 'on' : 'off';
-    document.documentElement.dataset.xmasFrost = prefs.on && prefs.frost ? 'on' : 'off';
     document.documentElement.dataset.xmasCaps = prefs.on && prefs.caps ? 'on' : 'off';
 
     const canvas = canvasRef.current;
@@ -166,7 +163,6 @@ export default function SnowfallLayer() {
       document.documentElement.dataset.xmas = prefs.on ? 'on' : 'off';
       document.documentElement.dataset.xmasLights = prefs.on && prefs.lights ? 'on' : 'off';
       document.documentElement.dataset.xmasGarland = prefs.on && prefs.garland ? 'on' : 'off';
-      document.documentElement.dataset.xmasFrost = prefs.on && prefs.frost ? 'on' : 'off';
       document.documentElement.dataset.xmasCaps = prefs.on && prefs.caps ? 'on' : 'off';
       stop();
       start();

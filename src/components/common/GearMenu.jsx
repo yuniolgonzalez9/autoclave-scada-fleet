@@ -391,7 +391,6 @@ export default function GearMenu({
                 </div>
                 {[
                   { key: 'garland', label: 'Guirnalda de bombillas' },
-                  { key: 'frost', label: 'Escarcha en esquinas' },
                   { key: 'caps', label: 'Nieve posada en tarjetas' }
                 ].map(({ key, label }) => (
                   <div key={key} className="flex justify-between items-center text-xs gear-accent-text">
