@@ -1182,7 +1182,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
 
       {/* MODAL GESTOR DE CLAVES CLOUD */}
       {showKeyModal && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[999999] bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+        <div className="ultra-glass rounded-2xl border border-slate-800 p-4 font-mono text-xs select-none">
           <div className="ultra-glass border-2 border-amber-500/60 p-6 rounded-2xl max-w-2xl w-full space-y-4 shadow-2xl font-mono text-xs">
             <div className="flex justify-between items-center border-b border-slate-800 pb-2">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">

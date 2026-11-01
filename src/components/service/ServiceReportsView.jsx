@@ -209,7 +209,7 @@ function ReportEditor({ report, devices, fixedMac, operatorName, onClose, onSave
   });
 
   return createPortal(
-    <div className="fixed inset-0 z-[99999] bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 font-mono select-none" onClick={onClose}>
+    <div className="ultra-glass rounded-2xl border border-slate-800 p-4 font-mono text-xs select-none" onClick={onClose}>
       <div className="ultra-glass w-full sm:max-w-3xl h-[92dvh] sm:h-auto sm:max-h-[90dvh] rounded-t-2xl sm:rounded-2xl border border-cyan-500/30 flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-slate-800 shrink-0">
           <div className="min-w-0">

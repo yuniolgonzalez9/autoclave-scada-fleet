@@ -249,7 +249,7 @@ function WidgetEditor({ widget, onChange, onApplySize, onClose }) {
   const usesRange = ['GAUGE', 'VALUE', 'SLIDER'].includes(widget.widget_type);
   const field = 'w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-2 text-white text-xs focus:outline-none focus:border-cyan-400';
   return createPortal(
-    <div className="fixed inset-0 z-[9999] bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={onClose}>
+    <div className="ultra-glass rounded-2xl border border-slate-800 p-4 font-mono text-xs select-none" onClick={onClose}>
       <div className="ultra-glass w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl border border-cyan-500/30 p-4 space-y-3 max-h-[85dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between">
           <h4 className="text-sm font-bold text-white">{lib.label}</h4>
@@ -550,7 +550,7 @@ export default function WidgetBoard({ device, canEdit, sendCommand, onConfirm, e
       )}
 
       {showLibrary && createPortal(
-        <div className="fixed inset-0 z-[9999] bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center" onClick={() => setShowLibrary(false)}>
+        <div className="ultra-glass rounded-2xl border border-slate-800 p-4 font-mono text-xs select-none" onClick={() => setShowLibrary(false)}>
           <div className="ultra-glass w-full sm:max-w-2xl rounded-t-2xl sm:rounded-2xl border border-cyan-500/30 p-4 max-h-[85dvh] overflow-y-auto space-y-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <h4 className="text-sm font-bold text-white">Biblioteca de widgets</h4>

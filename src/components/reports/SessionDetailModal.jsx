@@ -412,7 +412,7 @@ export default function SessionDetailModal({ isOpen, onClose, session }) {
   if (!isOpen || !session || typeof document === 'undefined') return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[99998] bg-black/50 backdrop-blur-[2px] flex items-start justify-center p-2 sm:p-5 pt-4 sm:pt-8 overflow-hidden font-mono text-xs select-none">
+    <div className="ultra-glass rounded-2xl border border-slate-800 p-4 font-mono text-xs select-none">
       
       {/* Contenedor Flotante Arrastrable */}
       <div 

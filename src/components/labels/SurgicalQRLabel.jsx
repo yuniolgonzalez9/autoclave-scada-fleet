@@ -192,7 +192,7 @@ export default function SurgicalQRLabel({ isOpen, onClose, deviceData, operatorN
 
   return createPortal(
     <div 
-      className="fixed inset-0 z-[99999] bg-black/80 backdrop-blur-md flex items-center justify-center p-4 select-none font-mono text-xs"
+      className="ultra-glass rounded-2xl border border-slate-800 p-4 font-mono text-xs select-none"
       onClick={onClose}
     >
       <div 
