@@ -6,11 +6,11 @@ const STUDIO_ROLES = ['TECNICO', ...PRIVILEGED_ROLES];
 const MAX_PROMPT = 4000;
 const MAX_CONTEXT = 60000;
 const MAX_HISTORY = 20;
-const GEMINI_MODELS = ['gemini-2.0-flash', 'gemini-2.0-flash-001', 'gemini-1.5-flash', 'gemini-1.5-flash-8b'];
+const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-flash-latest'];
 const OPENAI_COMPATIBLE = {
-  GROQ: ['https://api.groq.com/openai/v1/chat/completions', 'llama-3.3-70b-versatile'],
-  OPENAI: ['https://api.openai.com/v1/chat/completions', 'gpt-4o-mini'],
-  OPENROUTER: ['https://openrouter.ai/api/v1/chat/completions', 'meta-llama/llama-3.3-70b-instruct']
+  GROQ: ['https://api.groq.com/openai/v1/chat/completions', ['openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'qwen/qwen3.8-27b']],
+  OPENAI: ['https://api.openai.com/v1/chat/completions', ['gpt-4o-mini']],
+  OPENROUTER: ['https://openrouter.ai/api/v1/chat/completions', ['meta-llama/llama-3.3-70b-instruct']]
 };
 
 const TEXT_SYSTEM = 'Eres un editor técnico de mantenimiento biomédico. Corrige ortografía, acentos y redacción en español neutro, ordena el contenido en frases claras o viñetas (•) y usa terminología técnica correcta. No inventes datos, valores ni acciones que no estén en el texto. Devuelve solo el texto corregido.';
@@ -75,22 +75,28 @@ async function callGemini(key, { system, messages, json }) {
 }
 
 async function callOpenAICompatible(provider, key, { system, messages, json }) {
-  const [endpoint, model] = OPENAI_COMPATIBLE[provider] || OPENAI_COMPATIBLE.GROQ;
-  const res = await fetch(endpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key.trim()}` },
-    body: JSON.stringify({
-      model,
-      temperature: json ? 0.1 : 0.2,
-      messages: [{ role: 'system', content: system }, ...messages],
-      ...(json ? { response_format: { type: 'json_object' } } : {})
-    })
-  });
-  if (!res.ok) throw new Error(`${provider} HTTP ${res.status}`);
-  const body = await res.json();
-  const text = body?.choices?.[0]?.message?.content?.trim();
-  if (!text) throw new Error(`${provider} sin respuesta`);
-  return text;
+  const [endpoint, models] = OPENAI_COMPATIBLE[provider] || OPENAI_COMPATIBLE.GROQ;
+  const list = Array.isArray(models) ? models : [models];
+  let lastError = null;
+  for (const model of list) {
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key.trim()}` },
+      body: JSON.stringify({
+        model,
+        temperature: json ? 0.1 : 0.2,
+        messages: [{ role: 'system', content: system }, ...messages],
+        ...(json ? { response_format: { type: 'json_object' } } : {})
+      })
+    });
+    if (res.ok) {
+      const body = await res.json();
+      const text = body?.choices?.[0]?.message?.content?.trim();
+      if (text) return text;
+    }
+    lastError = `${provider}/${model} HTTP ${res.status}`;
+  }
+  throw new Error(lastError || `${provider} sin respuesta`);
 }
 
 async function complete(pool, request) {
