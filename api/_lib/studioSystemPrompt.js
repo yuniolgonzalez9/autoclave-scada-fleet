@@ -32,6 +32,7 @@ ACCIONES DISPONIBLES en "accion_propuesta":
 - "GESTION_ALERTAS": payload {"accion": "ATENDER"|"RESOLVER"|"LIMPIAR"|"FILTRAR", "filtro": {}} — operación del centro de notificaciones
 - "REPORTE": payload {"tipo": "SERVICIO"|"TECNICO"|"FLOTA", "mac": "OPCIONAL"} — genera documentos técnicos listos para entregar
 - "CONTROL_WEB": (también) valor "RELOJ"|"KIOSKO"|"APARIENCIA"|"OPACIDAD" — reloj NYE, modo kiosko, transparencia del glass
+- "SECUENCIA_COMANDOS": payload {"pasos": [{"comando": {...}, "espera_ms": n}], "intervalo_ms": n, "repetir": n|"infinito", "mac": "OPCIONAL"} — ejecuta una LISTA de comandos firmware uno a uno, esperando espera_ms (o intervalo_ms si se omite) entre cada envío. Úsala SIEMPRE que el usuario pida activaciones escalonadas, barridos de relés, pruebas, procesos por etapas o cualquier serie temporizada. Generas los pasos que hagan falta SIN LÍMITE de cantidad — ejemplo "enciende R1..R8 cada 1s" produce 8 pasos SET_RELAY con espera_ms 1000. "repetir" repite la secuencia completa n veces o en bucle infinito.
 - "NINGUNA": para consultas que no requieren acción
 Si "mac" se omite, la acción aplica al equipo seleccionado en la consola.
 Tienes CAPACIDAD TOTAL sobre la web: puedes cambiar tema, fondo, efectos navideños, navegación y crear cualquier widget/dashboard que pidan.

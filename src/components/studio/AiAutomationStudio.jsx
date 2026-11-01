@@ -402,6 +402,37 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
         sendCommand(targetMac, { ...comando, mac: comando.mac || targetMac });
         setMsg(`Comando MQTT transmitido a [${targetMac.slice(-4)}]: ${JSON.stringify(comando).slice(0, 80)}`);
       }
+    } else if (accion.tipo === 'SECUENCIA_COMANDOS') {
+      // Ejecutor de secuencias temporizadas generadas por la AI:
+      // pasos [{comando:{...}, espera_ms:n}] ejecutados uno a uno, con
+      // soporte de repetición (repetir: n | 'infinito') e intervalo global.
+      const pasos = Array.isArray(accion.payload?.pasos) ? accion.payload.pasos : [];
+      const intervalo = Math.max(50, Number(accion.payload?.intervalo_ms) || 1000);
+      const repeticiones = accion.payload?.repetir === 'infinito' ? Infinity : Math.max(1, Number(accion.payload?.repetir) || 1);
+      if (!targetMac || !sendCommand || !pasos.length) {
+        setMsg('Secuencia inválida: falta equipo o pasos.');
+      } else {
+        abortSequenceRef.current = false;
+        let paso = 0, ciclo = 0;
+        const total = pasos.length * repeticiones;
+        const timers = [];
+        const lanzar = () => {
+          if (abortSequenceRef.current || paso >= pasos.length * repeticiones) {
+            if (!abortSequenceRef.current) setMsg(`Secuencia completada: ${paso}/${total} comandos enviados a [${targetMac.slice(-4)}]`);
+            return;
+          }
+          const p = pasos[paso % pasos.length];
+          const cmd = p.comando || p.cmd || p;
+          sendCommand(targetMac, { ...cmd, mac: cmd.mac || targetMac });
+          ciclo = Math.floor(paso / pasos.length) + 1;
+          setMsg(`Secuencia paso ${paso + 1}/${total}${repeticiones === Infinity ? ` (ciclo ${ciclo})` : ''}: ${JSON.stringify(cmd).slice(0, 60)}`);
+          paso++;
+          const espera = Math.max(50, Number(p.espera_ms ?? intervalo));
+          timers.push(setTimeout(lanzar, espera));
+        };
+        lanzar();
+        setTimerEjecutando({ mac: targetMac, pasos: pasos.length });
+      }
     }
 
     setAccionPendiente(null);
