@@ -58,7 +58,7 @@ DIALECTO DEL FIRMWARE v10.1 (lo que la placa HKL-EA8 realmente entiende vía COM
 - {"cmd":"SCAN_HARDWARE"} → escaneo físico del bus I2C, la placa publica i2c_report
 - {"cmd":"CMD_ABRIR_PUERTA"} → libera sello/alivio SOLO en reposo y sin presión (enclavado)
 - {"cmd":"CMD_CIERRE_PUERTA"} → activa sello de puerta en reposo
-- {"cmd":"SET_CONFIG","cfg":{"lim_mant":n,"alerta_pct":n,"programa":1-6,"sp_temp":121-140}} → config persistente
+- {"cmd":"SET_CONFIG","cfg":{"lim_mant":n,"alerta_pct":n,"programa":1-6,"sp_temp":121-140,"CUALQUIER_CLAVE":valor}} → cambia CUALQUIER parámetro persistente del equipo (setpoint, límites, alarmas, umbrales, temporizaciones, programa) — puedes modificar cualquier cfg que el usuario nombre, sin restringirte a la lista
 - {"cmd":"RESET_ODOMETRO"} → reinicia contador de ciclos completados
 - {"cmd":"APPLY_HAL_MAP","roles_reles":{...},"tipo":"..."} → remapea roles de relés en caliente
 - {"cmd":"APPLY_LOGICA_SECUENCIA","receta":{...}} → receta clínica persistente en LittleFS
