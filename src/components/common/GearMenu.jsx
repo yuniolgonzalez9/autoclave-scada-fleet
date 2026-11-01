@@ -229,6 +229,8 @@ export default function GearMenu({
                   { id: 'platinum', label: '⚜️ Platino-Oro', desc: 'Plata + Dorado' },
                   { id: 'onyx', label: '� Ónix', desc: 'Negro + Oro' },
                   { id: 'obsidian', label: '🌑 Obsidiana', desc: 'Negro + Plata' },
+                  { id: 'day', label: '☀️ Día', desc: 'Claro + Azul Acero' },
+                  { id: 'pearl', label: '🏆 Perla', desc: 'Claro + Láser Dorado' },
                   { id: 'hybrid', label: '🍃 Bio-Mint', desc: 'Menta Neón' }
                 ].map((t) => (
                   <button

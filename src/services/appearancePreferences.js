@@ -18,7 +18,7 @@ const MOTION_SPEED_LIMITS = { animSpeed: 300, laserSpeed: 600, transSpeed: 300 }
 
 function normalizeAppearance(value = {}) {
   const base = {
-    theme: ['industrial', 'aurum', 'gold', 'tactical', 'cyber', 'hybrid', 'platinum', 'onyx', 'obsidian'].includes(value.theme) ? value.theme : DEFAULT_APPEARANCE.theme,
+    theme: ['industrial', 'aurum', 'gold', 'tactical', 'cyber', 'hybrid', 'platinum', 'onyx', 'obsidian', 'day', 'pearl'].includes(value.theme) ? value.theme : DEFAULT_APPEARANCE.theme,
     background: [
       'solid', 'navy-solid', 'carbon-solid', 'forest-solid', 'wine-solid',
       'aurum-gradient', 'ice-gradient', 'violet-gradient', 'mint-gradient', 'champagne-gradient',
