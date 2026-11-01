@@ -752,7 +752,7 @@ function ScadaAppContent() {
                   </span>
                 </button>
                 <div
-                  className={`clock-dropdown absolute right-0 top-full mt-2 z-50 ultra-glass rounded-2xl border border-cyan-500/30 px-5 py-4 text-center transition-all duration-300 ${
+                  className={`clock-dropdown absolute right-0 top-full mt-2 z-[9999] ultra-glass rounded-2xl border border-cyan-500/30 px-5 py-4 text-center transition-all duration-300 ${
                     clockOpen ? 'opacity-100 visible translate-y-0' : 'opacity-0 invisible -translate-y-1'
                   } group-hover:opacity-100 group-hover:visible group-hover:translate-y-0`}
                 >
