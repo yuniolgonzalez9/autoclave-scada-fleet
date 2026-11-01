@@ -1759,6 +1759,63 @@ button:active::after, .btn:active::after {
 
 /* nieve posada retirada a petición del usuario */
 
+/* ===== ACABADO PREMIUM: profundidad, transiciones y detalle fino ===== */
+
+/* 1. Curva de transición premium unificada en interactivos */
+button, a, [role="button"], input, select, .gear-switch {
+  transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* 2. Profundidad real: sombras de 3 capas en paneles y cards */
+.ultra-glass, .fleet-device-card, .glass-cell, .gear-panel, .clock-dropdown {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.12),
+    0 1px 2px rgba(0, 0, 0, 0.18),
+    0 12px 32px -8px rgba(0, 0, 0, 0.38);
+}
+
+/* 3. Bordes con luz superior fina — cristal real */
+.ultra-glass, .fleet-device-card, .glass-cell {
+  border-image: none;
+  outline: 1px solid rgba(255, 255, 255, 0.04);
+  outline-offset: -1px;
+}
+
+/* 4. Feedback táctil: hundido al presionar cualquier botón */
+button:active:not(:disabled) { transform: scale(0.97); }
+
+/* 5. Hover suave en controles interactivos */
+button:not(:disabled):hover, [role="button"]:hover {
+  filter: brightness(1.06);
+}
+
+/* 6. Refinamiento tipográfico global */
+body { font-feature-settings: 'ss01', 'cv11'; }
+
+/* 7. Backdrop más nítido en glass */
+.ultra-glass, .header-shell, .mobile-nav-shell, .gear-panel {
+  backdrop-filter: blur(14px) saturate(1.15);
+  -webkit-backdrop-filter: blur(14px) saturate(1.15);
+}
+
+/* 8. Badges y chips: halo sutil del acento */
+.status-indicator, [class*="badge"] {
+  box-shadow: 0 0 12px color-mix(in srgb, var(--accent-color) 12%, transparent);
+}
+
+/* 9. Inputs y selects: foco premium con anillo del acento */
+input:focus-visible, select:focus-visible {
+  outline: none;
+  border-color: color-mix(in srgb, var(--accent-color) 55%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-color) 18%, transparent);
+}
+
+/* 10. Separadores más finos */
+hr, [class*="border-t"], [class*="border-b"] {
+  border-color: color-mix(in srgb, var(--accent-color) 12%, rgba(255,255,255,0.08));
+}
+
 /* ===== PULIDO PREMIUM: accesibilidad, foco y pulcritud ===== */
 html { scroll-behavior: smooth; }
 body { overscroll-behavior: none; -webkit-tap-highlight-color: transparent; }
