@@ -92,7 +92,12 @@ export default function SnowfallLayer() {
         r: 0.8 + Math.random() * 2.4,
         vy: 0.4 + Math.random() * 1.1,
         vx: -0.3 + Math.random() * 0.6,
-        wobble: Math.random() * Math.PI * 2
+        wobble: Math.random() * Math.PI * 2,
+        // ~30% son copos tipo dendrita (❄ con puntas), el resto puntos
+        dendrite: Math.random() < 0.3,
+        arms: 6,
+        spin: Math.random() * Math.PI * 2,
+        spinV: (Math.random() - 0.5) * 0.03
       }));
     };
 
@@ -101,12 +106,37 @@ export default function SnowfallLayer() {
       const v = Math.min(4, Math.max(0.1, prefs.speed / 100));
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+      ctx.lineWidth = 1;
+      ctx.lineCap = 'round';
       ctx.beginPath();
       flakes.forEach((f) => {
+        if (f.dendrite) return;
         ctx.moveTo(f.x, f.y);
         ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
       });
       ctx.fill();
+      // Copos tipo dendrita: 6 brazos con ramitas — la forma clásica ❄
+      flakes.forEach((f) => {
+        if (!f.dendrite) return;
+        const R = f.r * 2.6;
+        ctx.beginPath();
+        for (let a = 0; a < f.arms; a++) {
+          const ang = f.spin + (a * Math.PI * 2) / f.arms;
+          const cos = Math.cos(ang), sin = Math.sin(ang);
+          ctx.moveTo(f.x, f.y);
+          ctx.lineTo(f.x + cos * R, f.y + sin * R);
+          // ramitas laterales a medio brazo
+          const mx = f.x + cos * R * 0.55, my = f.y + sin * R * 0.55;
+          const b1 = ang + 0.55, b2 = ang - 0.55, bs = R * 0.28;
+          ctx.moveTo(mx, my);
+          ctx.lineTo(mx + Math.cos(b1) * bs, my + Math.sin(b1) * bs);
+          ctx.moveTo(mx, my);
+          ctx.lineTo(mx + Math.cos(b2) * bs, my + Math.sin(b2) * bs);
+        }
+        ctx.stroke();
+        f.spin += f.spinV;
+      });
       flakes.forEach((f) => {
         f.wobble += 0.02;
         f.y += f.vy * v;
