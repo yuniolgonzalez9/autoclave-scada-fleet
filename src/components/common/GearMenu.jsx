@@ -376,7 +376,7 @@ export default function GearMenu({
                   aria-label="Velocidad de la nieve"
                 />
                 <div className="flex justify-between items-center text-xs gear-accent-text pt-1">
-                  <span>Luces y acentos festivos</span>
+                  <span>Luces y láser candy-cane</span>
                   <button
                     type="button"
                     role="switch"
@@ -389,6 +389,26 @@ export default function GearMenu({
                     <span />
                   </button>
                 </div>
+                {[
+                  { key: 'garland', label: 'Guirnalda de bombillas' },
+                  { key: 'frost', label: 'Escarcha en esquinas' },
+                  { key: 'caps', label: 'Nieve posada en tarjetas' }
+                ].map(({ key, label }) => (
+                  <div key={key} className="flex justify-between items-center text-xs gear-accent-text">
+                    <span>{label}</span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={xmas[key]}
+                      disabled={!xmas.on}
+                      aria-label={`Alternar ${label}`}
+                      onClick={() => updateXmas({ [key]: !xmas[key] })}
+                      className={`gear-switch ${xmas[key] ? 'gear-switch--on' : ''}`}
+                    >
+                      <span />
+                    </button>
+                  </div>
+                ))}
               </div>
             </div>
 

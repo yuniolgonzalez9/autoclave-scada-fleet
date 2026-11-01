@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 
 const KEY = 'biofleet_xmas';
 const LOCAL_OFF_KEY = 'biofleet_xmas_localoff';
-export const XMAS_DEFAULTS = { on: false, flakes: 120, speed: 100, lights: true };
+export const XMAS_DEFAULTS = { on: false, flakes: 120, speed: 100, lights: true, garland: true, frost: true, caps: true };
 
 export function readXmasPrefs() {
   try {
@@ -34,6 +34,9 @@ export function applyGlobalXmas(globalPrefs) {
   try { localStorage.setItem(KEY, JSON.stringify(effective)); } catch (_) {}
   document.documentElement.dataset.xmas = effective.on ? 'on' : 'off';
   document.documentElement.dataset.xmasLights = effective.on && effective.lights ? 'on' : 'off';
+  document.documentElement.dataset.xmasGarland = effective.on && effective.garland ? 'on' : 'off';
+  document.documentElement.dataset.xmasFrost = effective.on && effective.frost ? 'on' : 'off';
+  document.documentElement.dataset.xmasCaps = effective.on && effective.caps ? 'on' : 'off';
   window.dispatchEvent(new CustomEvent('bf:xmas', { detail: effective }));
 }
 
@@ -42,6 +45,9 @@ export function applyXmasPrefs(prefs) {
   try { localStorage.setItem(KEY, JSON.stringify(p)); } catch (_) {}
   document.documentElement.dataset.xmas = p.on ? 'on' : 'off';
   document.documentElement.dataset.xmasLights = p.on && p.lights ? 'on' : 'off';
+  document.documentElement.dataset.xmasGarland = p.on && p.garland ? 'on' : 'off';
+  document.documentElement.dataset.xmasFrost = p.on && p.frost ? 'on' : 'off';
+  document.documentElement.dataset.xmasCaps = p.on && p.caps ? 'on' : 'off';
   window.dispatchEvent(new CustomEvent('bf:xmas', { detail: p }));
   return p;
 }
@@ -62,6 +68,9 @@ export default function SnowfallLayer() {
     let prefs = readXmasPrefs();
     document.documentElement.dataset.xmas = prefs.on ? 'on' : 'off';
     document.documentElement.dataset.xmasLights = prefs.on && prefs.lights ? 'on' : 'off';
+    document.documentElement.dataset.xmasGarland = prefs.on && prefs.garland ? 'on' : 'off';
+    document.documentElement.dataset.xmasFrost = prefs.on && prefs.frost ? 'on' : 'off';
+    document.documentElement.dataset.xmasCaps = prefs.on && prefs.caps ? 'on' : 'off';
 
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
@@ -125,6 +134,9 @@ export default function SnowfallLayer() {
       prefs = { ...XMAS_DEFAULTS, ...(e.detail || readXmasPrefs()) };
       document.documentElement.dataset.xmas = prefs.on ? 'on' : 'off';
       document.documentElement.dataset.xmasLights = prefs.on && prefs.lights ? 'on' : 'off';
+      document.documentElement.dataset.xmasGarland = prefs.on && prefs.garland ? 'on' : 'off';
+      document.documentElement.dataset.xmasFrost = prefs.on && prefs.frost ? 'on' : 'off';
+      document.documentElement.dataset.xmasCaps = prefs.on && prefs.caps ? 'on' : 'off';
       stop();
       start();
     };

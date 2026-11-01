@@ -55,7 +55,10 @@ begin
         'on', coalesce((p_xmas ->> 'on')::boolean, false),
         'flakes', least(400, greatest(10, coalesce((p_xmas ->> 'flakes')::int, 120))),
         'speed', least(300, greatest(10, coalesce((p_xmas ->> 'speed')::int, 100))),
-        'lights', coalesce((p_xmas ->> 'lights')::boolean, true)
+        'lights', coalesce((p_xmas ->> 'lights')::boolean, true),
+        'garland', coalesce((p_xmas ->> 'garland')::boolean, true),
+        'frost', coalesce((p_xmas ->> 'frost')::boolean, true),
+        'caps', coalesce((p_xmas ->> 'caps')::boolean, true)
       ),
       updated_by = auth.uid(),
       updated_at = now()

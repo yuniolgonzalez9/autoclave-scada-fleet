@@ -1691,9 +1691,9 @@ button:active::after, .btn:active::after {
   filter: drop-shadow(0 0 10px var(--accent-color));
 }
 
-/* ===== MODO NAVIDAD — láser multicolor + tira de luces ===== */
+/* ===== MODO NAVIDAD — láser candy-cane + tira de luces ===== */
 [data-xmas-lights="on"] {
-  --laser-gradient: linear-gradient(90deg, transparent, #ef4444, #f5c24a, #22c55e, #ef4444, #f5c24a, transparent);
+  --laser-gradient: linear-gradient(90deg, transparent, #ef4444, #f8fafc, #ef4444, #f5c24a, #22c55e, transparent);
   --laser-glow: 0 0 18px rgba(239, 68, 68, 0.45), 0 0 10px rgba(245, 194, 74, 0.3);
 }
 
@@ -1709,6 +1709,75 @@ button:active::after, .btn:active::after {
 
 .snowfall-layer {
   filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.8));
+}
+
+/* Guirnalda de bombillas bajo el header y sobre el nav móvil */
+[data-xmas-garland="on"] .header-shell::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; bottom: -7px;
+  height: 7px;
+  background-image: radial-gradient(circle at 50% 50%, #ef4444 0 2.5px, transparent 3px),
+    radial-gradient(circle at 50% 50%, #f5c24a 0 2.5px, transparent 3px),
+    radial-gradient(circle at 50% 50%, #22c55e 0 2.5px, transparent 3px),
+    radial-gradient(circle at 50% 50%, #3b82f6 0 2.5px, transparent 3px);
+  background-size: 28px 7px, 28px 7px, 28px 7px, 28px 7px;
+  background-position: 0 0, 7px 0, 14px 0, 21px 0;
+  background-repeat: repeat-x;
+  animation: garlandBlink 2.4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+[data-xmas-garland="on"] .mobile-nav-shell::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0; top: -7px;
+  height: 7px;
+  background-image: radial-gradient(circle at 50% 50%, #ef4444 0 2.5px, transparent 3px),
+    radial-gradient(circle at 50% 50%, #f5c24a 0 2.5px, transparent 3px),
+    radial-gradient(circle at 50% 50%, #22c55e 0 2.5px, transparent 3px),
+    radial-gradient(circle at 50% 50%, #3b82f6 0 2.5px, transparent 3px);
+  background-size: 28px 7px;
+  background-position: 0 0, 7px 0, 14px 0, 21px 0;
+  background-repeat: repeat-x;
+  animation: garlandBlink 2.4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes garlandBlink {
+  0%, 100% { opacity: 1; filter: drop-shadow(0 0 3px rgba(245, 194, 74, 0.8)); }
+  50% { opacity: 0.55; filter: drop-shadow(0 0 1px rgba(239, 68, 68, 0.5)); }
+}
+
+/* Copo junto al logo mientras el modo esté activo */
+[data-xmas="on"] .brand-wordmark::after { content: ' ❄️'; font-size: 0.75em; }
+
+/* Escarcha en las 4 esquinas de la pantalla — estática, coste cero */
+[data-xmas-frost="on"] .app-shell::before,
+[data-xmas-frost="on"] .aurum-splash::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 59;
+  pointer-events: none;
+  background:
+    radial-gradient(180px 140px at 0% 0%, rgba(224, 242, 254, 0.22), transparent 70%),
+    radial-gradient(180px 140px at 100% 0%, rgba(224, 242, 254, 0.22), transparent 70%),
+    radial-gradient(200px 150px at 0% 100%, rgba(224, 242, 254, 0.2), transparent 70%),
+    radial-gradient(200px 150px at 100% 100%, rgba(224, 242, 254, 0.2), transparent 70%);
+}
+
+/* Nieve posada en el borde superior de las cards de dispositivos */
+[data-xmas-caps="on"] .fleet-device-card::before {
+  content: '';
+  position: absolute;
+  left: 6%; right: 6%; top: -2px;
+  height: 7px;
+  border-radius: 0 0 14px 14px;
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.95), rgba(226, 232, 240, 0.55));
+  filter: drop-shadow(0 1px 2px rgba(255, 255, 255, 0.4));
+  pointer-events: none;
+  z-index: 2;
 }
 
 /* Resplandor de campana cuando hay notificaciones pendientes */
