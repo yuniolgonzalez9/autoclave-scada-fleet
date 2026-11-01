@@ -1754,6 +1754,27 @@ button:active::after, .btn:active::after {
 
 /* nieve posada retirada a petición del usuario */
 
+/* ===== PULIDO PREMIUM: accesibilidad, foco y pulcritud ===== */
+html { scroll-behavior: smooth; }
+body { overscroll-behavior: none; -webkit-tap-highlight-color: transparent; }
+
+::selection {
+  background: color-mix(in srgb, var(--accent-color) 35%, transparent);
+  color: #ffffff;
+}
+
+:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent-color) 70%, transparent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+img, svg { user-select: none; }
+
+input[type="range"].gear-slider::-webkit-slider-thumb {
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent-color) 60%, transparent);
+}
+
 /* Resplandor de campana cuando hay notificaciones pendientes */
 .bell-glow {
   filter: drop-shadow(0 0 10px rgba(251, 191, 36, 0.55));
