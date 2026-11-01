@@ -138,9 +138,9 @@ export default function FleetManagementView({ fleet = {}, sendCommand, onSelectD
     }
   };
 
-  const [view, setView] = useState('equipos'); // 'equipos' | 'alta'
+  const [view, setView] = useState('gestion'); // 'gestion' | 'alta'
   const rootRef = useRef(null);
-  const VIEWS = ['equipos', 'alta'];
+  const VIEWS = ['gestion', 'alta'];
 
   useSwipe(rootRef, {
     onSwipeLeft: () => stepThrough(VIEWS, view, 1, setView),
@@ -222,7 +222,7 @@ export default function FleetManagementView({ fleet = {}, sendCommand, onSelectD
       }
 
       setMsg(`¡Equipo [${cleanMac}] aprovisionado y registrado con éxito en la red!`);
-      setView('equipos');
+      setView('gestion');
       setNewMac('');
       setNewAlias('');
       setNewCliente('');
@@ -309,7 +309,7 @@ export default function FleetManagementView({ fleet = {}, sendCommand, onSelectD
       <div className="sticky top-14 sm:top-16 z-20 py-1">
         <div className="grid grid-cols-2 gap-1 p-1 rounded-2xl bg-slate-950/80 backdrop-blur-md border border-slate-800">
           {[
-            ['equipos', `Equipos Registrados (${macList.length})`],
+            ['gestion', `Gestión de Equipos (${macList.length})`],
             ['alta', 'Aprovisionar Nuevo Hardware']
           ].map(([id, label]) => (
             <button 
@@ -413,7 +413,7 @@ export default function FleetManagementView({ fleet = {}, sendCommand, onSelectD
       )}
 
       {/* FILTROS Y BÚSQUEDA */}
-      {view === 'equipos' && (
+      {view === 'gestion' && (
         <>
           <div className="ultra-glass p-3 rounded-xl border border-slate-800 flex flex-col sm:flex-row justify-between items-center gap-2">
             <div className="relative w-full sm:w-80">
