@@ -307,7 +307,7 @@ export default function FleetManagementView({ fleet = {}, sendCommand, onSelectD
       )}
 
       {/* VISTA DE ADMINISTRACIÓN DEL EQUIPO (panel dedicado) */}
-      {adminMac && (() => {
+      {adminMac && !editDevice && (() => {
         const dev = fleet[adminMac] || {};
         const meta = dev.meta || {};
         const datos = dev.datos || {};
@@ -641,13 +641,12 @@ export default function FleetManagementView({ fleet = {}, sendCommand, onSelectD
         </>
       )}
 
-      {/* Modal: edición completa del dispositivo */}
+      {/* Apartado: edición completa del dispositivo (vista dedicada, no modal) */}
       {editDevice && (
-        <div className="fixed inset-0 z-[9999] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setEditDevice(null)}>
+        <div className="ultra-glass rounded-2xl border border-amber-500/30 p-4">
           <form
             onSubmit={handleSaveEdit}
-            onClick={(e) => e.stopPropagation()}
-            className="ultra-glass w-full max-w-md rounded-2xl p-5 space-y-3 font-mono text-xs shadow-2xl"
+            className="w-full space-y-3 font-mono text-xs"
           >
             <div className="flex items-center justify-between border-b gear-divider pb-2.5">
               <span className="font-bold text-white flex items-center gap-2">
