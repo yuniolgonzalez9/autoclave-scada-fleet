@@ -1598,8 +1598,14 @@ button:active::after, .btn:active::after {
 
 /* El header permite que el dropdown del reloj salga del marco:
    el shine queda contenido por clip-path en vez de overflow:hidden */
-.header-shell.glass-shine { overflow: visible; }
+.header-shell.glass-shine { overflow: visible !important; }
 .header-shell.glass-shine::after { clip-path: inset(0 round 16px); }
+/* El panel de fecha del reloj nunca queda recortado ni tapado */
+.clock-dropdown {
+  z-index: 9999 !important;
+  position: absolute !important;
+  min-width: 240px;
+}
 
 .glass-shine::after {
   content: '';
