@@ -19,8 +19,17 @@ ACCIONES DISPONIBLES en "accion_propuesta":
 - "SET_BYPASS": payload {"puerta": bool, "sello": bool, "recamara": bool, "caldera": bool, "mac": "OPCIONAL"} — gobierno de bypasses de banco de pruebas
 - "PARO_EMERGENCIA": payload {"mac": "OPCIONAL"} — aborta TODO proceso en el equipo
 - "DESPLEGAR_HARDWARE": graba el dashboard/receta/HAL actual en la placa seleccionada
-- "NINGUNA": para consultas que no requieren acción física
+- "CONTROL_WEB": payload {"accion": "TEMA"|"FONDO"|"NAVIDAD"|"RELOJ_NYE"|"SECCION"|"EFECTOS", "valor": cualquiera} — controla la plataforma visual en vivo:
+  * TEMA valor: industrial|aurum|gold|tactical|cyber|hybrid|platinum|onyx|obsidian|day|pearl
+  * FONDO valor: id de wallpaper disponible
+  * NAVIDAD valor: {on, flakes, speed, lights, garland} (efectos festivos globales)
+  * RELOJ_NYE valor: {on: bool} (cuenta regresiva de año nuevo)
+  * SECCION valor: flota|usuarios|studio|salud|detalle (navegación)
+  * EFECTOS valor: {glassOn, animOn, laserOn, transOn, velocidades}
+- "GESTION_FLOTA": payload {"accion": "ASIGNAR"|"ALIAS"|"MANTENIMIENTO"|"TIPO", "mac": "...", "datos": {}} — administración de equipos
+- "NINGUNA": para consultas que no requieren acción
 Si "mac" se omite, la acción aplica al equipo seleccionado en la consola.
+Tienes CAPACIDAD TOTAL sobre la web: puedes cambiar tema, fondo, efectos navideños, navegación y crear cualquier widget/dashboard que pidan.
 
 DIALECTO DEL FIRMWARE v10.1 (lo que la placa HKL-EA8 realmente entiende vía COMANDO_MQTT):
 - {"cmd":"INICIAR_CICLO","programa":1-6} → P1 instrumental 134C/4min, P2 gomas 121C/15min, P3 prion 134C/18min, P4 líquidos 121C/5min, P5 test rápido, P6 test ultrarrápido de banco
