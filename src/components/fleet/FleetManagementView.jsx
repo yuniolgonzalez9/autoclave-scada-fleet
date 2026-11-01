@@ -474,7 +474,7 @@ export default function FleetManagementView({ fleet = {}, sendCommand, onSelectD
                     const dTipo = (dev.meta?.tipo || dDev.tipo || 'AUTOCLAVE').toUpperCase();
 
                     return (
-                      <tr key={mac} onClick={() => openEditDevice(mac, dev)} className="hover:bg-slate-800/40 transition-colors cursor-pointer" title="Click para editar equipo">
+                      <tr key={mac} onClick={() => onSelectDevice && onSelectDevice(mac)} className="hover:bg-slate-800/40 transition-colors cursor-pointer" title="Click para entrar al equipo">
                         <td className="p-3">
                           <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold border ${
                             isOnline ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
