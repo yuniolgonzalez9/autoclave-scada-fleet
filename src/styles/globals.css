@@ -1596,6 +1596,11 @@ button:active::after, .btn:active::after {
   overflow: hidden;
 }
 
+/* El header permite que el dropdown del reloj salga del marco:
+   el shine queda contenido por clip-path en vez de overflow:hidden */
+.header-shell.glass-shine { overflow: visible; }
+.header-shell.glass-shine::after { clip-path: inset(0 round 16px); }
+
 .glass-shine::after {
   content: '';
   position: absolute;

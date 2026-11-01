@@ -99,6 +99,27 @@ export default function GearMenu({
     });
   };
 
+  // Reloj Año Nuevo — superadmin lo enciende para TODA la web; usuario
+  // normal hace opt-out local. El estado se refleja vía evento global.
+  const [nyeOn, setNyeOnState] = useState(false);
+  useEffect(() => {
+    const sync = () => setNyeOnState(document.documentElement.dataset.nyeOn === '1');
+    sync();
+    const onEvt = () => sync();
+    window.addEventListener('bf:nye', onEvt);
+    return () => window.removeEventListener('bf:nye', onEvt);
+  }, []);
+  const updateNye = (on) => {
+    setNyeOnState(on);
+    document.documentElement.dataset.nyeOn = on ? '1' : '0';
+    window.dispatchEvent(new CustomEvent('bf:nye'));
+    if (canEditGlobal) {
+      supabase.rpc('save_global_countdown', { p: { on } }).then(({ error }) => {
+        if (error) console.warn('[NYE] No se pudo guardar el switch global:', error.message);
+      });
+    }
+  };
+
   // Escuchar cambios de fullscreen nativo
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -407,6 +428,26 @@ export default function GearMenu({
                     </button>
                   </div>
                 ))}
+              </div>
+            </div>
+
+            {/* 3c. Reloj cuenta regresiva de fin de año — global */}
+            <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+              <div className="flex justify-between items-center text-xs gear-accent-text">
+                <span className="flex items-center gap-1.5">
+                  <Snowflake className="w-3.5 h-3.5" />
+                  <span>Reloj Año Nuevo{canEditGlobal ? ' (Global)' : ''}</span>
+                </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={nyeOn}
+                  aria-label={nyeOn ? 'Desactivar reloj de año nuevo' : 'Activar reloj de año nuevo'}
+                  onClick={() => updateNye(!nyeOn)}
+                  className={`gear-switch ${nyeOn ? 'gear-switch--on' : ''}`}
+                >
+                  <span />
+                </button>
               </div>
             </div>
 

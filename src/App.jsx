@@ -5,6 +5,7 @@ import GearMenu, { WALLPAPERS_LIST } from './components/common/GearMenu';
 import SnowfallLayer from './components/common/SnowfallLayer';
 import { usePremiumHover } from './hooks/usePremiumHover';
 import { applyGlobalXmas } from './components/common/SnowfallLayer';
+import NyeCountdown from './components/common/NyeCountdown';
 import ClinicalTooltip from './components/common/ClinicalTooltip';
 import ContextMenu from './components/common/ContextMenu';
 import NotificationsPanel from './components/common/NotificationsPanel';
@@ -493,6 +494,7 @@ function ScadaAppContent() {
   // Reloj en vivo — hora y fecha siempre visibles en el header
   const [clockNow, setClockNow] = useState(() => new Date());
   const [clockOpen, setClockOpen] = useState(false);
+  const [nyeOn, setNyeOn] = useState(false);
   useEffect(() => {
     const id = setInterval(() => setClockNow(new Date()), 1000);
     return () => clearInterval(id);
@@ -619,13 +621,20 @@ function ScadaAppContent() {
   // visible hasta en el login/splash — sin sesión requerida para leer el flag.
   useEffect(() => {
     let alive = true;
-    supabase.from('global_fx_settings').select('xmas').eq('id', 1).maybeSingle()
-      .then(({ data }) => { if (alive && data?.xmas) applyGlobalXmas(data.xmas); })
+    supabase.from('global_fx_settings').select('xmas,countdown').eq('id', 1).maybeSingle()
+      .then(({ data }) => {
+        if (!alive) return;
+        if (data?.xmas) applyGlobalXmas(data.xmas);
+        if (data?.countdown) setNyeOn(Boolean(data.countdown.on));
+      })
       .catch(() => {});
     const ch = supabase
       .channel('global-fx')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'global_fx_settings', filter: 'id=eq.1' },
-        (payload) => { if (payload.new?.xmas) applyGlobalXmas(payload.new.xmas); })
+        (payload) => {
+          if (payload.new?.xmas) applyGlobalXmas(payload.new.xmas);
+          if (payload.new?.countdown) setNyeOn(Boolean(payload.new.countdown.on));
+        })
       .subscribe();
     return () => { alive = false; supabase.removeChannel(ch); };
   }, []);
@@ -728,16 +737,17 @@ function ScadaAppContent() {
 
           <div className="header-actions flex items-center gap-1.5 sm:gap-2.5 shrink-0 ml-auto">
             {/* Reloj — solo la hora grande; hover/click despliega la fecha completa */}
+            {user && <NyeCountdown globalOn={nyeOn} />}
             {user && (
               <div className="relative group hidden md:block shrink-0">
                 <button
                   type="button"
                   onClick={() => setClockOpen((o) => !o)}
-                  className="header-clock ultra-glass flex items-center justify-center px-5 h-10 sm:h-11 rounded-xl border border-cyan-500/30 leading-none select-none"
+                  className="header-clock ultra-glass flex items-center justify-center px-6 h-11 sm:h-12 rounded-xl border border-cyan-500/30 leading-none select-none"
                   aria-expanded={clockOpen}
                   aria-label="Ver fecha completa"
                 >
-                  <span className="font-mono text-xl font-bold tracking-[0.14em] text-cyan-300">
+                  <span className="font-mono text-2xl font-bold tracking-[0.14em] text-cyan-300">
                     {clockNow.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                   </span>
                 </button>
