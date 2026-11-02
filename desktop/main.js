@@ -9,6 +9,8 @@ app.commandLine.appendSwitch('enable-gpu-rasterization');
 app.commandLine.appendSwitch('disable-renderer-backgrounding');
 app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
 app.commandLine.appendSwitch('disable-background-timer-throttling');
+app.commandLine.appendSwitch('js-flags', '--max-old-space-size=4096');
+app.commandLine.appendSwitch('enable-zero-copy');
 const { startHub } = require('./hub');
 const { listSerialPorts, listPrinters, printLabel } = require('./peripherals');
 
@@ -40,6 +42,8 @@ const createWindow = () => {
     title: 'Biofleet Hub — SCADA',
     icon: path.join(__dirname, '..', 'public', 'icon-512.png'),
     show: false,
+    // Sin marco: los botones de ventana los dibuja la web con el estilo del tema.
+    frame: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -59,6 +63,9 @@ const createWindow = () => {
   mainWindow.webContents.on('did-fail-load', (e, code, desc, url, isMainFrame) => {
     if (isMainFrame && code !== -3 && url.startsWith('http')) mainWindow.loadFile(LOCAL_INDEX);
   });
+  const sendWinState = () => mainWindow.webContents.send('hub:winState', mainWindow.isMaximized());
+  mainWindow.on('maximize', sendWinState);
+  mainWindow.on('unmaximize', sendWinState);
   mainWindow.loadURL(WEB_URL);
 };
 
@@ -68,6 +75,25 @@ ipcMain.handle('hub:serialPorts', () => listSerialPorts());
 ipcMain.handle('hub:printers', () => listPrinters());
 ipcMain.handle('hub:printLabel', (e, job) => printLabel(job));
 ipcMain.handle('hub:status', () => global.hub?.status() || { online: false });
+const HEX = /^#[0-9a-f]{6}$/i;
+ipcMain.on('hub:theme', (e, t) => {
+  if (!mainWindow || e.sender !== mainWindow.webContents || !t) return;
+  if (!HEX.test(t.bg)) return;
+  mainWindow.setBackgroundColor(t.bg);
+});
+ipcMain.on('hub:win', (e, action) => {
+  if (!mainWindow || e.sender !== mainWindow.webContents) return;
+  if (action === 'min') mainWindow.minimize();
+  else if (action === 'max') mainWindow.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize();
+  else if (action === 'close') mainWindow.close();
+});
+ipcMain.on('hub:kiosk', (e, on) => {
+  if (!mainWindow || e.sender !== mainWindow.webContents) return;
+  mainWindow.setKiosk(Boolean(on));
+  mainWindow.setAlwaysOnTop(Boolean(on), 'screen-saver');
+  if (on) mainWindow.focus();
+});
+ipcMain.handle('hub:isMax', (e) => (mainWindow && e.sender === mainWindow.webContents ? mainWindow.isMaximized() : false));
 ipcMain.handle('hub:command', (e, { mac, cmd }) => global.hub?.sendCommand(mac, cmd) ?? false);
 
 app.whenReady().then(() => {
