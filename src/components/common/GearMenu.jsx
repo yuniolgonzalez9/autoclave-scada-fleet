@@ -81,6 +81,20 @@ export default function GearMenu({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [kioskOn, setKioskOn] = useState(() => localStorage.getItem('biofleet_kiosk') === '1');
+  const toggleKiosk = () => {
+    const next = !kioskOn;
+    setKioskOn(next);
+    if (next) localStorage.setItem('biofleet_kiosk', '1');
+    else localStorage.removeItem('biofleet_kiosk');
+    if (window.biofleetHub?.isHub) {
+      window.dispatchEvent(new Event('biofleet-kiosk'));
+    } else if (next && !document.fullscreenElement) {
+      document.documentElement.requestFullscreen?.().catch(() => {});
+    } else if (!next && document.fullscreenElement) {
+      document.exitFullscreen?.().catch(() => {});
+    }
+  };
   const [localMotion, setLocalMotion] = useState(readMotionPrefs);
   const [xmas, setXmas] = useState(readXmasPrefs);
   const motion = motionPrefs || localMotion;
@@ -445,6 +459,26 @@ export default function GearMenu({
                   aria-label={nyeOn ? 'Desactivar reloj de año nuevo' : 'Activar reloj de año nuevo'}
                   onClick={() => updateNye(!nyeOn)}
                   className={`gear-switch ${nyeOn ? 'gear-switch--on' : ''}`}
+                >
+                  <span />
+                </button>
+              </div>
+            </div>
+
+            {/* 3d. Modo kiosko — pantalla completa, oculta la barra de tareas */}
+            <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+              <div className="flex justify-between items-center text-xs gear-accent-text">
+                <span className="flex items-center gap-1.5">
+                  <Maximize className="w-3.5 h-3.5" />
+                  <span>Modo Kiosko (pantalla completa)</span>
+                </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={kioskOn}
+                  aria-label={kioskOn ? 'Desactivar modo kiosko' : 'Activar modo kiosko'}
+                  onClick={toggleKiosk}
+                  className={`gear-switch ${kioskOn ? 'gear-switch--on' : ''}`}
                 >
                   <span />
                 </button>
