@@ -185,7 +185,7 @@ export default function CycleHistoryPanel({ mac, stats = [], onInspect }) {
       <div className="space-y-4">
         {groups.map(([day, list]) => (
           <div key={day} className="space-y-1.5">
-            <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-slate-400 font-bold sticky top-0 bg-[#030712]/90 py-1 backdrop-blur-md z-10">
+            <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest text-slate-400 font-bold sticky top-0 bg-[rgba(var(--glass-bg),0.9)] py-1 backdrop-blur-md z-10">
               <Calendar className="w-3.5 h-3.5 text-cyan-400" />
               <span>{day} ({list.length} ciclos)</span>
             </div>
