@@ -539,6 +539,83 @@ export default function UserManagementView({ fleet = {}, onFleetUpdated }) {
     return () => clearTimeout(t);
   }, [logFilter, logSearch]);
 
+  // Apartado dedicado de equipos: scroll al inicio + cierre con Esc
+  useEffect(() => {
+    if (!editAssignUser) return;
+    window.scrollTo({ top: 0 });
+    const onKey = (e) => { if (e.key === 'Escape') setEditAssignUser(null); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [editAssignUser]);
+
+  // APARTADO: Equipos Autorizados del operador — reemplaza toda la vista
+  if (editAssignUser) {
+    return (
+      <div className="user-management-view font-mono text-xs select-none">
+        <div className="w-full max-w-5xl mx-auto flex flex-col ultra-glass rounded-2xl border-2 border-purple-500/40 shadow-2xl overflow-hidden">
+          <div className="px-4 sm:px-6 py-3.5 border-b border-purple-500/30 flex items-center gap-3">
+            <button type="button" onClick={() => setEditAssignUser(null)} className="apartado-volver" aria-label="Volver">← VOLVER</button>
+            <div className="min-w-0">
+              <h3 className="font-bold text-white text-sm sm:text-base truncate">
+                Equipos Autorizados · {editAssignUser.user || editAssignUser.usuario}
+              </h3>
+              <p className="text-[10px] text-slate-400 uppercase tracking-widest">Gestión de acceso por operador</p>
+            </div>
+            <span className="apartado-esc"><kbd>ESC</kbd> PARA VOLVER</span>
+          </div>
+          <div className="p-5 sm:p-6 space-y-4">
+            <p className="text-[11px] text-slate-300 font-sans">
+              Seleccione los equipos que este operador podrá visualizar y comandar en la red:
+            </p>
+            <div className="space-y-2 max-h-[55vh] overflow-y-auto pr-1">
+              {macList.map((mac) => {
+                const dev = fleet[mac];
+                const checked = Boolean(editUserDevices[mac]);
+                return (
+                  <label
+                    key={mac}
+                    className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
+                      checked ? 'bg-purple-950/40 border-purple-400' : 'bg-slate-900/60 border-slate-800'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(e) => setEditUserDevices({ ...editUserDevices, [mac]: e.target.checked })}
+                        className="w-4 h-4 accent-purple-400"
+                      />
+                      <div>
+                        <p className="font-bold text-white text-xs">{dev?.meta?.alias || `EQUIPO [${mac.slice(-4)}]`}</p>
+                        <p className="text-[10px] text-slate-400 font-mono">{mac} · {dev?.meta?.cliente || 'Hospital Central'}</p>
+                      </div>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+            <div className="flex gap-2 pt-3 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setEditAssignUser(null)}
+                className="flex-1 py-2.5 bg-slate-800 text-slate-300 rounded-xl font-bold hover:text-white"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveAssignedDevices}
+                className="flex-1 py-2.5 bg-gradient-to-r from-purple-500 to-indigo-600 text-white font-bold rounded-xl shadow"
+              >
+                Guardar Asignaciones
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div ref={rootRef} className="user-management-view space-y-4 font-mono text-xs select-none">
       
@@ -1210,81 +1287,6 @@ export default function UserManagementView({ fleet = {}, onFleetUpdated }) {
         document.body
       )}
 
-      {/* MODAL: EDITAR EQUIPOS ASIGNADOS */}
-      {editAssignUser && typeof document !== 'undefined' && createPortal(
-        <div className="apartado-overlay">
-          <div className="apartado-bar">
-            <button type="button" onClick={() => setEditAssignUser(null)} className="apartado-volver" aria-label="Volver">← VOLVER</button>
-            <span className="apartado-title">Biofleet OS · Equipos autorizados</span>
-        <span className="apartado-esc"><kbd>ESC</kbd> PARA VOLVER</span>
-          </div>
-          <div className="h-4 w-full shrink-0" />
-          <div 
-            className="ultra-glass border-2 border-purple-500/60 p-6 rounded-2xl max-w-lg w-full space-y-4 max-h-[85vh] overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex justify-between items-center border-b border-purple-500/30 pb-2">
-              <h4 className="font-bold text-white text-sm">
-                Nodos Autorizados: [{editAssignUser.user || editAssignUser.usuario}]
-              </h4>
-              <button type="button" onClick={() => setEditAssignUser(null)} className="text-slate-400 hover:text-white">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <p className="text-[11px] text-slate-300 font-sans">
-              Seleccione los equipos que este operador podrá visualizar y comandar en la red:
-            </p>
-
-            <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-              {macList.map((mac) => {
-                const dev = fleet[mac];
-                const checked = Boolean(editUserDevices[mac]);
-
-                return (
-                  <label
-                    key={mac}
-                    className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
-                      checked ? 'bg-purple-950/40 border-purple-400' : 'bg-slate-900/60 border-slate-800'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={(e) => setEditUserDevices({ ...editUserDevices, [mac]: e.target.checked })}
-                        className="w-4 h-4 accent-purple-400"
-                      />
-                      <div>
-                        <p className="font-bold text-white text-xs">{dev?.meta?.alias || `EQUIPO [${mac.slice(-4)}]`}</p>
-                        <p className="text-[10px] text-slate-400 font-mono">{mac} · {dev?.meta?.cliente || 'Hospital Central'}</p>
-                      </div>
-                    </div>
-                  </label>
-                );
-              })}
-            </div>
-
-            <div className="flex gap-2 pt-2 border-t border-slate-800">
-              <button
-                type="button"
-                onClick={() => setEditAssignUser(null)}
-                className="flex-1 py-2.5 bg-slate-800 text-slate-300 rounded-xl font-bold hover:text-white"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                onClick={handleSaveAssignedDevices}
-                className="flex-1 py-2.5 bg-gradient-to-r from-purple-500 to-indigo-600 text-white font-bold rounded-xl shadow"
-              >
-                Guardar Asignaciones
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
     </div>
   );
 }
