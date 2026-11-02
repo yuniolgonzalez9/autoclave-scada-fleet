@@ -12,6 +12,22 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   </React.StrictMode>
 );
 
+// Splash único de arranque: cuando React monta y las fuentes/assets
+// están listos, disparamos 'bf:app-ready' para que el splash complete
+// su barra y salga con fade (index.html lo escucha). Failsafe incluido.
+(function () {
+  const rootEl = document.getElementById('root');
+  const fire = () => window.dispatchEvent(new Event('bf:app-ready'));
+  const check = setInterval(() => {
+    if (rootEl && rootEl.childElementCount > 0) {
+      clearInterval(check);
+      if (document.fonts?.ready) document.fonts.ready.then(fire).catch(fire);
+      else setTimeout(fire, 300);
+    }
+  }, 100);
+  setTimeout(() => { clearInterval(check); fire(); }, 12000);
+})();
+
 // Service worker: purga cachés viejas y sirve siempre la versión de red.
 // sw.js se genera por build con el BUILD_ID inyectado → cada deploy cambia
 // el script → el navegador actualiza el SW → activate purga + recarga.

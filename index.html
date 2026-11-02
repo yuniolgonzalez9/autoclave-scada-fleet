@@ -16,9 +16,125 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+      /* Splash único de arranque — navy + oro de marca (idéntico al Hub).
+         Se pinta antes de React; la app carga detrás y entra al estar estable. */
+      #boot-splash {
+        position: fixed; inset: 0; z-index: 999999;
+        background: radial-gradient(1200px 700px at 50% 30%, #101a33 0%, #0a0f1e 55%, #060a14 100%);
+        display: flex; align-items: center; justify-content: center;
+        font-family: 'JetBrains Mono', ui-monospace, monospace;
+        transition: opacity .65s ease, visibility .65s;
+      }
+      #boot-splash.bs-out { opacity: 0; visibility: hidden; pointer-events: none; }
+      .bs-grid {
+        position: absolute; inset: 0; opacity: .5; pointer-events: none;
+        background-image: linear-gradient(rgba(232,197,106,.05) 1px, transparent 1px),
+                          linear-gradient(90deg, rgba(232,197,106,.05) 1px, transparent 1px);
+        background-size: 44px 44px;
+        mask-image: radial-gradient(600px 400px at 50% 45%, #000 30%, transparent 75%);
+      }
+      .bs-center { position: relative; display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 24px; }
+      .bs-emblem { position: relative; width: 118px; height: 118px; display: flex; align-items: center; justify-content: center; }
+      .bs-ring {
+        position: absolute; inset: 0; border-radius: 50%;
+        border: 1px solid rgba(232,197,106,.25);
+        border-top-color: #e8c56a; border-right-color: rgba(232,197,106,.7);
+        animation: bsSpin 2.4s linear infinite;
+      }
+      .bs-dots {
+        position: absolute; inset: -9px; border-radius: 50%;
+        border: 1.5px dashed rgba(232,197,106,.3);
+        animation: bsSpin 14s linear infinite reverse;
+      }
+      .bs-badge {
+        width: 76px; height: 76px; border-radius: 20px; overflow: hidden;
+        background: linear-gradient(145deg, #1a2440, #0d1424);
+        border: 1px solid rgba(232,197,106,.4);
+        box-shadow: 0 0 34px rgba(232,197,106,.25), inset 0 0 18px rgba(232,197,106,.08);
+        display: flex; align-items: center; justify-content: center;
+      }
+      .bs-badge img { width: 100%; height: 100%; object-fit: cover; }
+      .bs-badge.bs-fb::before { content: 'B'; color: #e8c56a; font-size: 38px; font-weight: 700; }
+      .bs-brand { color: #f4e6c0; font-size: 22px; font-weight: 700; letter-spacing: .22em; }
+      .bs-brand sup { font-size: 10px; color: #c9a34e; letter-spacing: 0; }
+      .bs-sub { color: #8a90a8; font-size: 10px; letter-spacing: .3em; text-transform: uppercase; margin-top: -8px; }
+      .bs-track { width: 240px; height: 3px; border-radius: 3px; background: rgba(232,197,106,.14); overflow: hidden; margin-top: 10px; position: relative; }
+      .bs-bar { height: 100%; width: 0%; border-radius: 3px; background: linear-gradient(90deg, #c9a34e, #f5d98a, #e8c56a); box-shadow: 0 0 12px rgba(232,197,106,.55); transition: width .3s ease; position: relative; }
+      .bs-bar::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,.55), transparent); animation: bsShimmer 1.4s ease-in-out infinite; }
+      .bs-foot { width: 240px; display: flex; justify-content: space-between; font-size: 9px; letter-spacing: .22em; color: #c9a34e; text-transform: uppercase; }
+      #bs-msg { color: #8a90a8; }
+      @keyframes bsSpin { to { transform: rotate(360deg); } }
+      @keyframes bsShimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+      @media (prefers-reduced-motion: reduce) { .bs-ring, .bs-dots, .bs-bar::after { animation: none; } }
+    </style>
   </head>
   <body class="bg-[#030712] text-white">
     <div id="root"></div>
+    <div id="boot-splash" aria-hidden="true">
+      <div class="bs-grid"></div>
+      <div class="bs-center">
+        <div class="bs-emblem">
+          <div class="bs-dots"></div>
+          <div class="bs-ring"></div>
+          <div class="bs-badge"><img src="/icon-192.png" alt="" onerror="this.remove(); this.parentElement.classList.add('bs-fb')"></div>
+        </div>
+        <div class="bs-brand">BIOFLEET OS<sup>™</sup></div>
+        <div class="bs-sub">Supervisión de Flota · SCADA</div>
+        <div class="bs-track"><div class="bs-bar" id="bs-bar"></div></div>
+        <div class="bs-foot"><span id="bs-msg">Iniciando sistema</span><span id="bs-pct">0%</span></div>
+      </div>
+    </div>
+    <script>
+      // Splash único: progreso simulado hacia ~92%; la app dispara
+      // 'bf:app-ready' al montar estable → completa a 100% y sale con fade.
+      // Mínimo 2.8s de marca; failsafe 15s para no quedar atrapado jamás.
+      (function () {
+        var sp = document.getElementById('boot-splash');
+        if (!sp) return;
+        var bar = document.getElementById('bs-bar');
+        var pctEl = document.getElementById('bs-pct');
+        var msgEl = document.getElementById('bs-msg');
+        var msgs = ['INICIANDO SISTEMA', 'CONECTANDO SERVICIOS', 'SINCRONIZANDO FLOTA', 'CARGANDO INTERFAZ', 'LISTO'];
+        var pct = 0, mi = 0, ready = false, t0 = Date.now(), closed = false;
+        var MIN_MS = 2800, MAX_MS = 15000;
+
+        var iv = setInterval(function () {
+          if (!ready) pct += (92 - pct) * 0.07;
+          else pct += (100 - pct) * 0.35;
+          pct = Math.min(pct, ready ? 100 : 92);
+          bar.style.width = pct + '%';
+          pctEl.textContent = Math.round(pct) + '%';
+        }, 120);
+
+        var mv = setInterval(function () {
+          mi = Math.min(mi + 1, msgs.length - 1);
+          msgEl.textContent = msgs[mi];
+        }, 1100);
+
+        function finish() {
+          if (closed) return;
+          closed = true;
+          ready = true;
+          setTimeout(function () {
+            pct = 100; bar.style.width = '100%'; pctEl.textContent = '100%';
+            msgEl.textContent = 'LISTO';
+            setTimeout(function () {
+              sp.classList.add('bs-out');
+              setTimeout(function () { sp.remove(); }, 800);
+            }, 350);
+          }, 250);
+        }
+
+        function onReady() {
+          ready = true;
+          var wait = Math.max(0, MIN_MS - (Date.now() - t0));
+          setTimeout(finish, wait);
+        }
+        window.addEventListener('bf:app-ready', onReady, { once: true });
+        setTimeout(finish, MAX_MS); // failsafe
+      })();
+    </script>
     <script>
       // Detección temprana de despliegue: corre ANTES de cargar la app.
       // Compara el build servido con el último visto; si cambió, recarga
