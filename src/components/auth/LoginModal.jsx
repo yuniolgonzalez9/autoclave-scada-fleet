@@ -227,7 +227,7 @@ export default function LoginModal() {
                     autoComplete="username"
                     value={identifier}
                     onChange={(e) => setIdentifier(e.target.value)}
-                    placeholder="usuario o correo corporativo"
+                    placeholder="usuario o correo"
                     className="scada-input w-full pl-9 pr-3 py-2 rounded-lg text-sm text-white placeholder-slate-400 transition-all disabled:opacity-50"
                   />
                 </div>
