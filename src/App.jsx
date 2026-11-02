@@ -18,6 +18,7 @@ import { startIndustrialSiren, stopIndustrialSiren, initAudioUnlock, playBellChi
 import { sendCriticalAlarmWithButtons } from './services/telegram';
 import { supabase } from './services/supabase';
 import HeaderLaserOrbit from './components/common/HeaderLaserOrbit';
+import ErrorBoundary from './components/common/ErrorBoundary';
 import { applyMotionPrefs } from './services/motionPrefs';
 
 // Vistas pesadas: carga diferida para acelerar el arranque en móviles
@@ -914,6 +915,7 @@ function ScadaAppContent() {
             <LoginModal />
           </main>
         ) : (
+          <ErrorBoundary>
           <main ref={mainRef} data-nav-dir={navDir} className="flex-1 p-3 md:p-6 max-w-7xl mx-auto w-full flex flex-col gap-4 android-view-transition">
             
             <>
@@ -1293,6 +1295,7 @@ function ScadaAppContent() {
             </>
 
           </main>
+          </ErrorBoundary>
         )}
 
         {/* Barra Inferior Celular */}

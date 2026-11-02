@@ -164,13 +164,22 @@ export default function SnowfallLayer() {
       start();
     };
 
+    // Pausar el bucle GPU cuando la pestaña no es visible — ahorra
+    // CPU/batería sin perder estado; reanuda al volver.
+    const onVisibility = () => {
+      if (document.hidden) stop();
+      else start();
+    };
+
     start();
     window.addEventListener('resize', resize);
     window.addEventListener('bf:xmas', onPrefs);
+    document.addEventListener('visibilitychange', onVisibility);
     return () => {
       stop();
       window.removeEventListener('resize', resize);
       window.removeEventListener('bf:xmas', onPrefs);
+      document.removeEventListener('visibilitychange', onVisibility);
     };
   }, []);
 

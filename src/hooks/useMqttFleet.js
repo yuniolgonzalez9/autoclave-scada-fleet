@@ -138,7 +138,7 @@ export function useMqttFleet(enabled = true) {
 
   useEffect(() => {
     // Buffer de mensajes: agrupa telemetría y aplica una sola
-    // actualización de estado cada ~600ms (evita re-render por paquete).
+    // actualización de estado cada ~250ms (evita re-render por paquete).
     // El cliente MQTT (345 kB) se importa en diferido solo tras el login.
     if (!enabled) return undefined;
     let pendingPackets = [];
@@ -171,7 +171,7 @@ export function useMqttFleet(enabled = true) {
         });
         return changed ? nextFleet : prevFleet;
       });
-    }, 4000);
+    }, 2000);
 
     import('../services/mqttClient').then(({ connectMqttFleet }) => {
       if (cancelled) return;
@@ -326,7 +326,7 @@ export function useMqttFleet(enabled = true) {
         Object.values(nextFleet).forEach(publishAndMerge);
         return nextFleet;
       });
-    }, 600);
+    }, 250);
 
     return () => {
       cancelled = true;
