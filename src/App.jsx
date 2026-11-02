@@ -133,14 +133,14 @@ function ScadaAppContent() {
   const [kioskMac, setKioskMac] = useState(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const directKiosk = urlParams.get('kiosk');
-    if (directKiosk) return directKiosk.toUpperCase().replace(/[:\-]/g, '');
+    if (directKiosk) return directKiosk.toUpperCase().replace(/[:-]/g, '');
     return sessionStorage.getItem('scada_tab_kiosk_mac') || null;
   });
 
   const [selectedMac, setSelectedMac] = useState(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const directMac = urlParams.get('mac') || urlParams.get('kiosk');
-    if (directMac) return directMac.toUpperCase().replace(/[:\-]/g, '');
+    if (directMac) return directMac.toUpperCase().replace(/[:-]/g, '');
     if (sessionStorage.getItem('scada_tab_kiosk_mac')) return sessionStorage.getItem('scada_tab_kiosk_mac');
     return localStorage.getItem('scada_selected_mac') || sessionStorage.getItem('scada_tab_selected_mac') || null;
   });
@@ -159,11 +159,13 @@ function ScadaAppContent() {
     }
   }, [activeSection, kioskMac]);
 
-  useEffect(() => {
+  const [prevVisitedSection, setPrevVisitedSection] = useState(activeSection);
+  if (prevVisitedSection !== activeSection) {
+    setPrevVisitedSection(activeSection);
     if (APP_SECTIONS.has(activeSection)) {
       setVisitedSections((current) => current.has(activeSection) ? current : new Set([...current, activeSection]));
     }
-  }, [activeSection]);
+  }
 
   useEffect(() => {
     if (kioskMac) return;
@@ -224,7 +226,7 @@ function ScadaAppContent() {
       setActiveSection('flota');
       setSelectedMac(null);
     } else {
-      const target = (macToKiosk || selectedMac || '').toUpperCase().replace(/[:\-]/g, '');
+      const target = (macToKiosk || selectedMac || '').toUpperCase().replace(/[:-]/g, '');
       if (target) {
         sessionStorage.setItem('scada_tab_kiosk_mac', target);
         setKioskMac(target);
@@ -273,7 +275,7 @@ function ScadaAppContent() {
   const [countdown, setCountdown] = useState(60);
   const idleTimerRef = useRef(null);
   const countdownIntervalRef = useRef(null);
-  const lastActivityTimestamp = useRef(Date.now());
+  const lastActivityTimestamp = useRef(0);
 
   const resetIdleTimer = useCallback(() => {
     if (!user) return;
@@ -591,14 +593,12 @@ function ScadaAppContent() {
     window.scrollTo({ top: 0, behavior: 'auto' });
   }, [navIndex, mobileSections]);
 
-  useEffect(() => {
-    // Solo expulsar cuando el rol ya resolvió: mientras el perfil carga
-    // canEditHardware es false provisional y expulsaría falsamente al
-    // usuario tras un F5 (bug que sacaba de Studio al recargar).
-    if (user && profile && activeSection === 'studio' && !canEditHardware) {
-      setActiveSection('flota');
-    }
-  }, [activeSection, canEditHardware, user, profile]);
+  // Solo expulsar cuando el rol ya resolvió: mientras el perfil carga
+  // canEditHardware es false provisional y expulsaría falsamente al
+  // usuario tras un F5 (bug que sacaba de Studio al recargar).
+  if (user && profile && activeSection === 'studio' && !canEditHardware) {
+    setActiveSection('flota');
+  }
 
   const detailIndex = filteredDevices.findIndex((d) => d.mac === selectedMac);
   const goToDevice = useCallback((delta) => {
@@ -1423,9 +1423,10 @@ function ScadaAppContent() {
             sendCommand={sendDeviceCommand}
             onAssignmentUpdated={(updatedMeta) => {
               if (fleet[updatedMeta.mac]) {
-                fleet[updatedMeta.mac].meta = Object.assign(fleet[updatedMeta.mac].meta || {}, updatedMeta);
-                if (!fleet[updatedMeta.mac].datos) fleet[updatedMeta.mac].datos = {};
-                fleet[updatedMeta.mac].datos.tipo = updatedMeta.config_deseada?.tipo || updatedMeta.tipo;
+                patchDeviceMeta(updatedMeta.mac, {
+                  ...updatedMeta,
+                  tipo: updatedMeta.config_deseada?.tipo || updatedMeta.tipo
+                });
               }
             }}
           />

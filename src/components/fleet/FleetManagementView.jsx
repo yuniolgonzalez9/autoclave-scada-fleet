@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { useSwipe, stepThrough } from '../../hooks/useSwipe';
 import { useNow } from '../../hooks/useNow';
+import { getDeviceHealth } from '../../utils/deviceHealth';
 import SwipeDots from '../common/SwipeDots';
 import { supabase } from '../../services/supabase';
 import { 
@@ -326,7 +327,7 @@ export default function FleetManagementView({ fleet = {}, sendCommand, onSelectD
         const dev = fleet[adminMac] || {};
         const meta = dev.meta || {};
         const datos = dev.datos || {};
-        const online = dev.lastSeen && Date.now() - dev.lastSeen < 15000;
+        const online = getDeviceHealth(dev, nowTs).status !== 'OFFLINE';
         return (
           <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 space-y-4">
             <div className="flex items-center justify-between flex-wrap gap-2 border-b border-slate-800 pb-3">

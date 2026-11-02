@@ -383,7 +383,7 @@ export function useNotificationCenter({
   }, [mqttConnected, resumeAt]);
 
   const systemItems = useMemo(() => {
-    if (mqttConnected || !mqttDownSince || Date.now() - resumeAt < 45000) return [];
+    if (mqttConnected || !mqttDownSince || now - resumeAt < 45000) return [];
     return [{
       id: 'local:MQTT',
       clave: 'SISTEMA:MQTT',

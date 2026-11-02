@@ -1,23 +1,29 @@
-import { useState, useEffect } from 'react';
+import { useState, useSyncExternalStore } from 'react';
+import { useNow } from '../../hooks/useNow';
 
 // Cuenta regresiva a fin de año — global por global_fx_settings.countdown
 const NYE_KEY = 'biofleet_nye_localoff';
+const NYE_EVT = 'biofleet:nye';
 const isNyeOff = () => { try { return localStorage.getItem(NYE_KEY) === '1'; } catch (_) { return false; } };
-export const markNyeLocalOff = (off) => { try { off ? localStorage.setItem(NYE_KEY, '1') : localStorage.removeItem(NYE_KEY); } catch (_) {} };
+export const markNyeLocalOff = (off) => {
+  try { off ? localStorage.setItem(NYE_KEY, '1') : localStorage.removeItem(NYE_KEY); } catch (_) {}
+  window.dispatchEvent(new Event(NYE_EVT));
+};
+const subscribeNye = (cb) => {
+  window.addEventListener('storage', cb);
+  window.addEventListener(NYE_EVT, cb);
+  return () => {
+    window.removeEventListener('storage', cb);
+    window.removeEventListener(NYE_EVT, cb);
+  };
+};
 
 export default function NyeCountdown({ globalOn }) {
-  const [now, setNow] = useState(Date.now());
-  const [on, setOn] = useState(false);
+  const now = useNow(1000);
+  const localOff = useSyncExternalStore(subscribeNye, isNyeOff);
   const [open, setOpen] = useState(false);
 
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, []);
-
-  useEffect(() => { setOn(globalOn && !isNyeOff()); }, [globalOn]);
-
-  if (!on) return null;
+  if (!globalOn || localOff) return null;
 
   const end = new Date(new Date().getFullYear() + 1, 0, 1).getTime();
   const diff = Math.max(0, end - now);
