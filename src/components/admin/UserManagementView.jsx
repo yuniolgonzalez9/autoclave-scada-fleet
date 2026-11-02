@@ -1160,10 +1160,12 @@ export default function UserManagementView({ fleet = {}, onFleetUpdated }) {
 
       {/* MODAL: CAMBIAR CONTRASEÑA */}
       {resetUser && typeof document !== 'undefined' && createPortal(
-        <div 
-          className="ultra-glass rounded-2xl border border-slate-800 p-4 font-mono text-xs select-none"
-          onClick={() => setResetUser(null)}
-        >
+        <div className="fixed inset-0 z-[99990] overflow-y-auto bg-[#030712] font-mono text-xs select-none flex flex-col items-center">
+          <div className="sticky top-0 z-20 w-full flex items-center gap-3 px-4 sm:px-6 py-3 bg-slate-950/95 border-b border-cyan-500/30 backdrop-blur-xl">
+            <button type="button" onClick={() => setResetUser(null)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/25 text-[10px] font-bold transition-all shrink-0" aria-label="Volver">← VOLVER</button>
+            <span className="text-[10px] text-slate-500 tracking-[0.2em] uppercase">Biofleet OS · Equipos del usuario</span>
+          </div>
+          <div className="h-4 w-full shrink-0" />
           <div 
             className="ultra-glass border-2 border-cyan-500 p-5 rounded-2xl max-w-sm w-full space-y-3"
             onClick={(e) => e.stopPropagation()}
