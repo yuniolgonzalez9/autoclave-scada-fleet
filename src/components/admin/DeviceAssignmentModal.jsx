@@ -217,12 +217,13 @@ export default function DeviceAssignmentModal({
   if (!isOpen || !device || typeof document === 'undefined') return null;
 
   return createPortal(
-    <div 
-      className="ultra-glass rounded-2xl border border-slate-800 p-4 font-mono text-xs select-none"
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 z-[99990] overflow-y-auto bg-[#030712] font-mono text-xs select-none">
+      <div className="sticky top-0 z-20 flex items-center gap-3 px-4 sm:px-6 py-3 bg-slate-950/95 border-b border-cyan-500/30 backdrop-blur-xl">
+        <button type="button" onClick={onClose} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/25 text-[10px] font-bold transition-all" aria-label="Volver">← VOLVER</button>
+        <span className="text-[10px] text-slate-500 tracking-[0.2em] uppercase">Biofleet OS · Asignación de equipo</span>
+      </div>
       <div 
-        className="ultra-glass border border-cyan-500/40 rounded-2xl max-w-lg w-full p-5 sm:p-6 text-white shadow-2xl relative"
+        className="ultra-glass border border-cyan-500/40 rounded-2xl max-w-lg w-full mx-auto my-6 p-5 sm:p-6 text-white shadow-2xl relative"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Cabecera */}

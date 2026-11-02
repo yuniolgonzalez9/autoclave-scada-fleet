@@ -156,12 +156,13 @@ export default function CloudDiagnosticsModal({
   if (!isOpen || typeof document === 'undefined') return null;
 
   return createPortal(
-    <div 
-      className="ultra-glass rounded-2xl border border-slate-800 p-4 font-mono text-xs select-none"
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 z-[99990] overflow-y-auto bg-[#030712] font-mono text-xs select-none">
+      <div className="sticky top-0 z-20 flex items-center gap-3 px-4 sm:px-6 py-3 bg-slate-950/95 border-b border-cyan-500/30 backdrop-blur-xl">
+        <button type="button" onClick={onClose} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/25 text-[10px] font-bold transition-all" aria-label="Volver">← VOLVER</button>
+        <span className="text-[10px] text-slate-500 tracking-[0.2em] uppercase">Biofleet OS · Diagnósticos</span>
+      </div>
       <div 
-        className="w-full max-w-2xl ultra-glass border-2 border-cyan-400/60 rounded-2xl shadow-[0_20px_70px_rgba(0,0,0,0.9)] p-5 sm:p-6 space-y-4 max-h-[90vh] overflow-y-auto"
+        className="w-full max-w-2xl mx-auto my-6 ultra-glass border-2 border-cyan-400/60 rounded-2xl shadow-[0_20px_70px_rgba(0,0,0,0.9)] p-5 sm:p-6 space-y-4"
         onClick={(e) => e.stopPropagation()}
       >
         
