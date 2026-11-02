@@ -244,7 +244,7 @@ export default function FotaHubView({ fleet = {}, sendCommand }) {
         <div>
           <h2 className="text-lg font-bold text-white flex items-center gap-2">
             <Rocket className="w-5 h-5 text-cyan-400" />
-            Centro de Despliegue FOTA Industrial
+            Centro de Actualizaciones de Firmware
           </h2>
           <p className="text-xs text-slate-300 mt-0.5 font-sans">
             Actualización remota de firmware compilado (.BIN) y manifiestos de hardware (.JSON a Flash LittleFS)

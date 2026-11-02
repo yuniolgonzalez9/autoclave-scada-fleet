@@ -886,7 +886,7 @@ export default function UserManagementView({ fleet = {}, onFleetUpdated }) {
               >
                 <option value="OPERADOR">OPERADOR (Control de ciclos asignados y reportes)</option>
                 <option value="CLIENTE">CLIENTE / ENFERMERÍA (Solo lectura y telemetría)</option>
-                <option value="TECNICO">TÉCNICO BIOMÉDICO (FOTA, NVS y Calibración)</option>
+                <option value="TECNICO">TÉCNICO BIOMÉDICO (Actualizaciones, NVS y Calibración)</option>
                 <option value="AUDITOR_CALIDAD">AUDITOR DE CALIDAD (Descarga de certificados ISO)</option>
                 <option value="DIRECTOR">DIRECTOR BIOMÉDICO (Supervisión global)</option>
                 <option value="SUPERADMIN">SUPERADMINISTRADOR (Acceso total)</option>

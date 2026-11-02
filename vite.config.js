@@ -109,6 +109,11 @@ export default defineConfig({
   },
   server: {
     port: 3000,
-    open: true
+    open: true,
+    watch: {
+      // El build de electron-builder genera/bloquea .tmp dentro de
+      // desktop/release y hacía caer el dev server (EBUSY en watcher).
+      ignored: ['**/desktop/**', '**/dist/**', '**/temp_backup/**', '**/e2e-shots/**', '**/node_modules/**']
+    }
   }
 });

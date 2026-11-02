@@ -886,9 +886,9 @@ function ScadaAppContent() {
               { id: 'flota', label: 'Flota', Icon: Activity },
               { id: 'gestion', label: 'Gestión', Icon: Building2 },
               { id: 'servicio', label: 'Servicio', Icon: Wrench },
-              ...(canEditHardware ? [{ id: 'studio', label: 'Studio', Icon: Sparkles }] : []),
+              ...(canEditHardware ? [{ id: 'studio', label: 'IA Studio', Icon: Sparkles }] : []),
               { id: 'usuarios', label: 'Personal', Icon: Shield },
-              { id: 'fota', label: 'FOTA', Icon: Rocket },
+              { id: 'fota', label: 'Actualizaciones', Icon: Rocket },
               { id: 'auditoria', label: 'Auditoría', Icon: ClipboardList }
             ].map(({ id, label, Icon }) => {
               const active = activeSection === id || (id === 'flota' && activeSection === 'detalle');
@@ -1334,7 +1334,7 @@ function ScadaAppContent() {
                 }`}
               >
                 <Sparkles className={`w-5 h-5 ${activeSection === 'studio' ? 'icon-glow' : ''}`} />
-                <span>Studio</span>
+                <span>IA Studio</span>
               </button>
             )}
 
@@ -1355,7 +1355,7 @@ function ScadaAppContent() {
               }`}
             >
               <Rocket className={`w-5 h-5 ${activeSection === 'fota' ? 'icon-glow' : ''}`} />
-              <span>FOTA</span>
+              <span>Actualizar</span>
             </button>
           </nav>
         )}

@@ -3,8 +3,7 @@ import { createPortal } from 'react-dom';
 import { 
   Activity,
   Settings, 
-  Maximize, 
-  Minimize,
+  Maximize,
   RefreshCw, 
   LogOut, 
   Waves, 
@@ -29,7 +28,7 @@ export const WALLPAPERS_LIST = [
   { id: 'navy-solid', name: '🔷 Navy Profundo Sólido — con Aurum', color: '#081020' },
   { id: 'carbon-solid', name: '⚫ Carbón Puro Sólido — con Platino', color: '#07080b' },
   { id: 'forest-solid', name: '❄️ Aurora Boreal — con Stealth', url: 'https://images.unsplash.com/photo-1531366936337-7c912a4589a7?auto=format&fit=crop&w=2000&q=80' },
-  { id: 'wine-solid', name: '� Nebulosa Cósmica — con Obsidiana', url: 'https://images.unsplash.com/photo-1462331940025-496dfbfc7564?auto=format&fit=crop&w=2000&q=80' },
+  { id: 'wine-solid', name: '🌌 Nebulosa Cósmica — con Obsidiana', url: 'https://images.unsplash.com/photo-1462331940025-496dfbfc7564?auto=format&fit=crop&w=2000&q=80' },
   // ── Auroras minimalistas (gradiente, sin foto) ──
   { id: 'aurum-gradient', name: '✨ Aurora Dorada — con Aurum', gradient: 'radial-gradient(ellipse at 50% -10%, rgba(245,194,74,0.18) 0%, transparent 55%), linear-gradient(180deg, #081020 0%, #04070f 100%)' },
   { id: 'ice-gradient', name: '❄️ Aurora Ártica — con Stealth', gradient: 'radial-gradient(ellipse at 50% -10%, rgba(103,232,249,0.14) 0%, transparent 55%), linear-gradient(180deg, #0a1220 0%, #04070f 100%)' },
@@ -38,7 +37,7 @@ export const WALLPAPERS_LIST = [
   { id: 'champagne-gradient', name: '🔮 Render 3D Abstracto — con Platino-Oro', url: 'https://images.unsplash.com/photo-1620641788421-7a1c342ea42e?auto=format&fit=crop&w=2000&q=80' },
   { id: 'oled', name: '⚫ Negro OLED Cósmico — bajo consumo', gradient: 'radial-gradient(circle at 50% -5%, rgba(139,92,246,0.25) 0%, transparent 55%), radial-gradient(circle at 100% 100%, rgba(0,243,255,0.18) 0%, transparent 50%)', color: '#030712' },
   // ── Fotos industriales / hospitalarias / hardware ──
-  { id: 'server-datacenter', name: '� Quirófano Moderno — con Industrial', url: 'https://images.unsplash.com/photo-1538108149393-fbbd81895907?auto=format&fit=crop&w=2000&q=80' },
+  { id: 'server-datacenter', name: '🏥 Quirófano Moderno — con Industrial', url: 'https://images.unsplash.com/photo-1538108149393-fbbd81895907?auto=format&fit=crop&w=2000&q=80' },
   { id: 'hospital-corridor', name: '🏥 Corredor Hospitalario — con Bio-Teal', url: 'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&w=2000&q=80' },
   { id: 'medical-lab', name: '🧪 Laboratorio Clínico — con Platino', url: 'https://images.unsplash.com/photo-1582719471384-894fbb16e074?auto=format&fit=crop&w=2000&q=80' },
   { id: 'circuit-pcb', name: '⚡ Microchip & Pistas PCB — con Neon', url: 'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=2000&q=80' },
@@ -80,7 +79,6 @@ export default function GearMenu({
   canEditGlobal
 }) {
   const [isOpen, setIsOpen] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
   const [kioskOn, setKioskOn] = useState(() => localStorage.getItem('biofleet_kiosk') === '1');
   const toggleKiosk = () => {
     const next = !kioskOn;
@@ -134,15 +132,6 @@ export default function GearMenu({
     }
   };
 
-  // Escuchar cambios de fullscreen nativo
-  useEffect(() => {
-    const handleFullscreenChange = () => {
-      setIsFullscreen(Boolean(document.fullscreenElement));
-    };
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
-  }, []);
-
   // Cierre con tecla Escape
   const handleKeyDown = useCallback((e) => {
     if (e.key === 'Escape') {
@@ -163,23 +152,6 @@ export default function GearMenu({
       document.body.style.overflow = originalOverflow;
     };
   }, [isOpen, handleKeyDown]);
-
-  const toggleFullScreen = () => {
-    if (!document.fullscreenElement) {
-      const docEl = document.documentElement;
-      if (docEl.requestFullscreen) {
-        docEl.requestFullscreen().catch(() => {});
-      } else if (docEl.webkitRequestFullscreen) {
-        docEl.webkitRequestFullscreen();
-      } else if (docEl.msRequestFullscreen) {
-        docEl.msRequestFullscreen();
-      }
-    } else {
-      if (document.exitFullscreen) {
-        document.exitFullscreen().catch(() => {});
-      }
-    }
-  };
 
   const handleForceSync = () => {
     window.location.reload();
@@ -228,12 +200,12 @@ export default function GearMenu({
               </button>
             </div>
 
-            {/* Alerta de Desanclaje Kiosk */}
+            {/* Alerta de terminal fijada a un equipo */}
             {kioskMac && (
               <div className="p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/40 space-y-1.5">
                 <p className="text-[11px] font-bold text-amber-300 flex items-center gap-1.5">
                   <Unlock className="w-3.5 h-3.5" />
-                  <span>Terminal Anclada a [{kioskMac.slice(-4)}]</span>
+                  <span>Terminal fijada al equipo [{kioskMac.slice(-4)}]</span>
                 </p>
                 <button
                   type="button"
@@ -243,16 +215,36 @@ export default function GearMenu({
                   }}
                   className="w-full py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 rounded-lg text-xs font-bold transition-all shadow active:scale-95 text-center"
                 >
-                  Desanclar y Ver Flota Completa
+                  Quitar fijación — ver toda la flota
                 </button>
               </div>
             )}
 
-            {/* 1. Selector de Tema de Color */}
+            {/* 1. Pantalla completa — persistente; en Biofleet Hub oculta la barra de tareas */}
+            <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+              <div className="flex justify-between items-center text-xs gear-accent-text">
+                <span className="flex items-center gap-1.5">
+                  <Maximize className="w-3.5 h-3.5" />
+                  <span>Pantalla Completa</span>
+                </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={kioskOn}
+                  aria-label={kioskOn ? 'Desactivar pantalla completa' : 'Activar pantalla completa'}
+                  onClick={toggleKiosk}
+                  className={`gear-switch ${kioskOn ? 'gear-switch--on' : ''}`}
+                >
+                  <span />
+                </button>
+              </div>
+            </div>
+
+            {/* 2. Selector de Tema de Color */}
             <div>
               <label className="text-[11px] gear-accent-text font-bold block mb-1.5 flex items-center gap-1.5">
                 <Palette className="w-3.5 h-3.5" />
-                <span>PALETA DE COLORES CLÍNICA:</span>
+                <span>PALETA DE COLORES:</span>
               </label>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
                 {[
@@ -260,9 +252,9 @@ export default function GearMenu({
                   { id: 'aurum', label: '👑 Aurum', desc: 'Marino + Oro' },
                   { id: 'gold', label: '⚪ Platino', desc: 'Plata & Acero' },
                   { id: 'tactical', label: '🛡️ Stealth', desc: 'Cian Ártico' },
-                  { id: 'cyber', label: '� Neon', desc: 'Violeta Neón' },
+                  { id: 'cyber', label: '💜 Neon', desc: 'Violeta Neón' },
                   { id: 'platinum', label: '⚜️ Platino-Oro', desc: 'Plata + Dorado' },
-                  { id: 'onyx', label: '� Ónix', desc: 'Negro + Oro' },
+                  { id: 'onyx', label: '⚫ Ónix', desc: 'Negro + Oro' },
                   { id: 'obsidian', label: '🌑 Obsidiana', desc: 'Negro + Plata' },
                   { id: 'day', label: '☀️ Día', desc: 'Claro + Azul Acero' },
                   { id: 'pearl', label: '🏆 Perla', desc: 'Claro + Láser Dorado' },
@@ -289,7 +281,7 @@ export default function GearMenu({
             <div>
               <label className="text-[11px] gear-accent-text font-bold block mb-1 flex items-center gap-1.5">
                 <ImageIcon className="w-3.5 h-3.5" />
-                <span>FONDO DE PANTALLA INDUSTRIAL:</span>
+                <span>FONDO DE PANTALLA:</span>
               </label>
               <select
                 value={currentBg}
@@ -316,8 +308,8 @@ export default function GearMenu({
                   hint: 'Glows, pulsos y efectos visuales', suffix: '%'
                 },
                 {
-                  key: 'laserOn', speedKey: 'laserSpeed', icon: Orbit, label: 'Láseres en Movimiento',
-                  hint: 'Aurora del header y del nav', suffix: '%', max: 600
+                  key: 'laserOn', speedKey: 'laserSpeed', icon: Orbit, label: 'Iluminación Animada',
+                  hint: 'Efectos del encabezado y la navegación', suffix: '%', max: 600
                 },
                 {
                   key: 'transOn', speedKey: 'transSpeed', icon: MoveRight, label: 'Transiciones de Sección',
@@ -372,13 +364,13 @@ export default function GearMenu({
               <div className="flex justify-between items-center text-xs gear-accent-text">
                 <span className="flex items-center gap-1.5">
                   <Snowflake className="w-3.5 h-3.5" />
-                  <span>Modo Navidad{canEditGlobal ? ' (Global)' : ''}</span>
+                  <span>Efectos Navideños{canEditGlobal ? ' (Global)' : ''}</span>
                 </span>
                 <button
                   type="button"
                   role="switch"
                   aria-checked={xmas.on}
-                  aria-label={xmas.on ? 'Desactivar Modo Navidad' : 'Activar Modo Navidad'}
+                  aria-label={xmas.on ? 'Desactivar efectos navideños' : 'Activar efectos navideños'}
                   onClick={() => updateXmas({ on: !xmas.on })}
                   className={`gear-switch ${xmas.on ? 'gear-switch--on' : ''}`}
                 >
@@ -387,7 +379,7 @@ export default function GearMenu({
               </div>
               <div className={`space-y-1.5 transition-opacity ${xmas.on ? '' : 'opacity-50'}`}>
                 <div className="flex justify-between text-[10px] text-slate-400 font-mono">
-                  <span>Nieve cayendo</span>
+                  <span>Cantidad de nieve</span>
                   <span className="font-bold">{xmas.flakes} copos</span>
                 </div>
                 <input
@@ -399,7 +391,7 @@ export default function GearMenu({
                   aria-label="Cantidad de copos de nieve"
                 />
                 <div className="flex justify-between text-[10px] text-slate-400 font-mono">
-                  <span>Velocidad de caída</span>
+                  <span>Velocidad de la nieve</span>
                   <span className="font-bold">{xmas.speed}%</span>
                 </div>
                 <input
@@ -411,7 +403,7 @@ export default function GearMenu({
                   aria-label="Velocidad de la nieve"
                 />
                 <div className="flex justify-between items-center text-xs gear-accent-text pt-1">
-                  <span>Luces y láser candy-cane</span>
+                  <span>Luces y efectos láser</span>
                   <button
                     type="button"
                     role="switch"
@@ -425,7 +417,7 @@ export default function GearMenu({
                   </button>
                 </div>
                 {[
-                  { key: 'garland', label: 'Guirnalda de bombillas' }
+                  { key: 'garland', label: 'Guirnalda de luces' }
                 ].map(({ key, label }) => (
                   <div key={key} className="flex justify-between items-center text-xs gear-accent-text">
                     <span>{label}</span>
@@ -450,35 +442,15 @@ export default function GearMenu({
               <div className="flex justify-between items-center text-xs gear-accent-text">
                 <span className="flex items-center gap-1.5">
                   <Snowflake className="w-3.5 h-3.5" />
-                  <span>Reloj Año Nuevo{canEditGlobal ? ' (Global)' : ''}</span>
+                  <span>Cuenta Regresiva de Año Nuevo{canEditGlobal ? ' (Global)' : ''}</span>
                 </span>
                 <button
                   type="button"
                   role="switch"
                   aria-checked={nyeOn}
-                  aria-label={nyeOn ? 'Desactivar reloj de año nuevo' : 'Activar reloj de año nuevo'}
+                  aria-label={nyeOn ? 'Desactivar cuenta regresiva' : 'Activar cuenta regresiva'}
                   onClick={() => updateNye(!nyeOn)}
                   className={`gear-switch ${nyeOn ? 'gear-switch--on' : ''}`}
-                >
-                  <span />
-                </button>
-              </div>
-            </div>
-
-            {/* 3d. Modo kiosko — pantalla completa, oculta la barra de tareas */}
-            <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800">
-              <div className="flex justify-between items-center text-xs gear-accent-text">
-                <span className="flex items-center gap-1.5">
-                  <Maximize className="w-3.5 h-3.5" />
-                  <span>Modo Kiosko (pantalla completa)</span>
-                </span>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={kioskOn}
-                  aria-label={kioskOn ? 'Desactivar modo kiosko' : 'Activar modo kiosko'}
-                  onClick={toggleKiosk}
-                  className={`gear-switch ${kioskOn ? 'gear-switch--on' : ''}`}
                 >
                   <span />
                 </button>
@@ -514,7 +486,7 @@ export default function GearMenu({
                   className="gear-action w-full py-1.5 px-3 bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white rounded-lg text-xs flex items-center gap-2 border border-slate-800 transition-colors"
                 >
                   <Activity className="w-3.5 h-3.5 gear-accent-text" />
-                  <span>Diagnóstico de Red & Base de Datos</span>
+                  <span>Diagnósticos del Sistema</span>
                 </button>
               )}
 
@@ -524,16 +496,7 @@ export default function GearMenu({
                 className="gear-action w-full py-1.5 px-3 bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white rounded-lg text-xs flex items-center gap-2 border border-slate-800 transition-colors"
               >
                 <RefreshCw className="w-3.5 h-3.5 gear-accent-text" />
-                <span>Forzar Recarga & Sincronización</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={toggleFullScreen}
-                className="gear-action w-full py-1.5 px-3 bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white rounded-lg text-xs flex items-center gap-2 border border-slate-800 transition-colors"
-              >
-                {isFullscreen ? <Minimize className="w-3.5 h-3.5 gear-accent-text" /> : <Maximize className="w-3.5 h-3.5 gear-accent-text" />}
-                <span>{isFullscreen ? 'Salir de Pantalla Completa' : 'Modo Pantalla Completa'}</span>
+                <span>Recargar y Sincronizar</span>
               </button>
 
               <button
@@ -542,7 +505,7 @@ export default function GearMenu({
                 className="gear-danger w-full py-2 px-3 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 rounded-lg text-xs flex items-center gap-2 border border-rose-500/30 mt-1.5 transition-colors font-bold"
               >
                 <LogOut className="w-3.5 h-3.5" />
-                <span>Cerrar Sesión Activa</span>
+                <span>Cerrar Sesión</span>
               </button>
             </div>
 
