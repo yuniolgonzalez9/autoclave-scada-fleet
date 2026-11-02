@@ -21,17 +21,70 @@ let mainWindow = null;
 const WEB_URL = 'https://biofle.vercel.app/';
 const LOCAL_INDEX = path.join(__dirname, 'web', 'index.html');
 
+// Splash de marca: navy + oro (identidad Biofleet). La web carga en
+// segundo plano mientras la animación corre; al terminar (con un mínimo
+// de pantalla para que la marca se aprecie) el splash hace fade-out.
+const SPLASH_MIN_MS = 9200;
+const SPLASH_FAILSAFE_MS = 15000;
+
+const splashHtml = (iconData, version) => `<!doctype html><html><head><meta charset="utf-8"><style>
+*{margin:0;box-sizing:border-box}
+html,body{height:100%;background:transparent;overflow:hidden;font-family:'Segoe UI',system-ui,sans-serif;-webkit-user-select:none;user-select:none}
+.card{position:absolute;inset:0;border-radius:20px;background:radial-gradient(120% 140% at 50% 0%,#0d1734 0%,#070d1f 55%,#04070f 100%);border:1px solid rgba(234,179,8,.22);box-shadow:0 30px 80px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.04);display:flex;flex-direction:column;align-items:center;justify-content:center;transition:opacity .45s ease,transform .45s ease;overflow:hidden}
+body.done .card{opacity:0;transform:scale(.97)}
+.grid{position:absolute;inset:0;background-image:linear-gradient(rgba(234,179,8,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(234,179,8,.05) 1px,transparent 1px);background-size:34px 34px;-webkit-mask-image:radial-gradient(70% 70% at 50% 45%,#000 30%,transparent 100%);mask-image:radial-gradient(70% 70% at 50% 45%,#000 30%,transparent 100%);opacity:.5}
+.sweep{position:absolute;inset:-40%;background:conic-gradient(from 0deg,transparent 0deg,rgba(234,179,8,.06) 40deg,transparent 80deg);animation:spin 6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.emblem{position:relative;width:118px;height:118px;display:grid;place-items:center}
+.emblem img{width:88px;height:88px;border-radius:50%;box-shadow:0 0 44px rgba(234,179,8,.35);animation:breathe 2.6s ease-in-out infinite}
+.blogo{width:88px;height:88px;border-radius:50%;display:grid;place-items:center;font-size:44px;font-weight:800;color:#fbbf24;background:radial-gradient(circle at 50% 35%,#101d42,#070d1f);border:2px solid rgba(251,191,36,.8);box-shadow:0 0 44px rgba(234,179,8,.35);animation:breathe 2.6s ease-in-out infinite}
+@keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.045)}}
+.ring{position:absolute;inset:0;border-radius:50%;background:conic-gradient(from 0deg,transparent 0 300deg,rgba(250,204,21,.95) 340deg,transparent 360deg);-webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 3px),#000 calc(100% - 2px));mask:radial-gradient(farthest-side,transparent calc(100% - 3px),#000 calc(100% - 2px));animation:spin 1.6s cubic-bezier(.6,.15,.4,.85) infinite}
+.ring2{position:absolute;inset:-9px;border-radius:50%;border:1px dashed rgba(234,179,8,.25);animation:spin 14s linear infinite reverse}
+.brand{margin-top:26px;font-size:15px;font-weight:700;letter-spacing:.42em;color:#fbbf24;text-indent:.42em}
+.brand small{color:#93a4c3;font-weight:500;letter-spacing:.42em}
+.status{margin-top:10px;font-size:9px;letter-spacing:.3em;color:#5b6b8c;text-indent:.3em;min-height:12px;transition:opacity .3s}
+.bar{margin-top:22px;width:220px;height:3px;border-radius:99px;background:rgba(148,163,184,.14);overflow:hidden}
+.fill{height:100%;width:0%;border-radius:99px;background:linear-gradient(90deg,#b45309,#fbbf24,#fde68a);background-size:200% 100%;box-shadow:0 0 12px rgba(251,191,36,.55);transition:width .35s ease;animation:shimmer 1.4s linear infinite}
+@keyframes shimmer{to{background-position:-200% 0}}
+.pct{margin-top:9px;font-size:8.5px;letter-spacing:.25em;color:#475569;font-variant-numeric:tabular-nums}
+.ver{position:absolute;bottom:12px;font-size:8px;letter-spacing:.22em;color:#334155}
+</style></head><body>
+<div class="card">
+  <div class="grid"></div><div class="sweep"></div>
+  <div class="emblem"><div class="ring2"></div><div class="ring"></div>${iconData ? `<img src="data:image/png;base64,${iconData}">` : '<div class="blogo">B</div>'}</div>
+  <div class="brand">BIOFLEET <small>HUB</small></div>
+  <div class="status" id="st">INICIANDO SISTEMA</div>
+  <div class="bar"><div class="fill" id="f"></div></div>
+  <div class="pct" id="p">0%</div>
+  <div class="ver">SCADA LOCAL · v${version}</div>
+</div>
+<script>
+var p=0,f=document.getElementById('f'),e=document.getElementById('p'),st=document.getElementById('st');
+var msgs=['INICIANDO SISTEMA','LEVANTANDO BROKER MQTT','DESCUBRIENDO DISPOSITIVOS','SINCRONIZANDO FLOTA','CARGANDO INTERFAZ'],mi=0;
+setInterval(function(){if(p<92){p+=Math.random()*4+1;if(p>92)p=92;f.style.width=p+'%';e.textContent=Math.floor(p)+'%';}},280);
+setInterval(function(){if(mi<msgs.length-1){mi++;st.style.opacity=0;setTimeout(function(){st.textContent=msgs[mi];st.style.opacity=1;},300);}},1700);
+window.__biofleetFinish=function(){p=100;f.style.width='100%';e.textContent='100%';st.style.opacity=1;st.textContent='LISTO';setTimeout(function(){document.body.classList.add('done');},220);};
+</script></body></html>`;
+
 const createWindow = () => {
-  // Splash de marca mientras carga la web empaquetada.
+  const splashAt = Date.now();
   const splash = new BrowserWindow({
-    width: 420, height: 320, frame: false, transparent: true,
+    width: 460, height: 360, frame: false, transparent: true,
     alwaysOnTop: true, resizable: false, skipTaskbar: true,
     webPreferences: { contextIsolation: true }
   });
-  const iconData = (() => { try { return fs.readFileSync(path.join(__dirname, '..', 'public', 'icon-512.png')).toString('base64'); } catch (_) { return ''; } })();
-  splash.loadURL('data:text/html,' + encodeURIComponent(`<html><body style="margin:0;display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;background:rgba(3,7,18,.96);border-radius:18px;font-family:monospace"><img src="data:image/png;base64,${iconData}" style="width:120px;height:120px;filter:drop-shadow(0 0 24px rgba(34,211,238,.6))"/><div style="color:#22d3ee;font-size:11px;letter-spacing:.35em;margin-top:18px">BIOFLEET HUB</div><div style="color:#64748b;font-size:8px;letter-spacing:.2em;margin-top:6px">INICIANDO SISTEMA SCADA LOCAL...</div></body></html>`));
+  // En el instalador solo existe desktop/web/** — ../public queda fuera
+  // del paquete y la imagen salía rota. Fallback: letra "B" de marca.
+  const iconPng = [
+    path.join(__dirname, 'web', 'icon-512.png'),
+    path.join(__dirname, '..', 'public', 'icon-512.png')
+  ].find((p) => fs.existsSync(p));
+  const iconData = iconPng ? fs.readFileSync(iconPng).toString('base64') : '';
+  splash.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(splashHtml(iconData, app.getVersion())));
   splash.center();
 
+  const ico = path.join(__dirname, 'icon.ico');
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -40,7 +93,7 @@ const createWindow = () => {
     backgroundColor: '#030712',
     autoHideMenuBar: true,
     title: 'Biofleet Hub — SCADA',
-    icon: path.join(__dirname, '..', 'public', 'icon-512.png'),
+    icon: fs.existsSync(ico) ? ico : iconPng,
     show: false,
     // Sin marco: los botones de ventana los dibuja la web con el estilo del tema.
     frame: false,
@@ -56,9 +109,24 @@ const createWindow = () => {
   Menu.setApplicationMenu(null);
   mainWindow.setMenuBarVisibility(false);
 
-  mainWindow.once('ready-to-show', () => {
-    setTimeout(() => { splash.destroy(); mainWindow.show(); mainWindow.focus(); }, 600);
-  });
+  // Revelado: espera a que la web esté lista + mínimo de marca, completa
+  // la barra del splash, hace fade-out y recién ahí muestra la ventana.
+  let revealed = false;
+  const reveal = () => {
+    if (revealed) return;
+    revealed = true;
+    const wait = Math.max(0, SPLASH_MIN_MS - (Date.now() - splashAt));
+    setTimeout(() => {
+      if (!splash.isDestroyed()) splash.webContents.executeJavaScript('window.__biofleetFinish&&window.__biofleetFinish()').catch(() => {});
+      setTimeout(() => {
+        if (!splash.isDestroyed()) splash.destroy();
+        if (mainWindow && !mainWindow.isDestroyed()) { mainWindow.show(); mainWindow.focus(); }
+      }, 700);
+    }, wait);
+  };
+  mainWindow.once('ready-to-show', reveal);
+  mainWindow.webContents.on('did-finish-load', reveal);
+  setTimeout(reveal, SPLASH_FAILSAFE_MS);
 
   mainWindow.webContents.on('did-fail-load', (e, code, desc, url, isMainFrame) => {
     if (isMainFrame && code !== -3 && url.startsWith('http')) mainWindow.loadFile(LOCAL_INDEX);
