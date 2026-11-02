@@ -2698,7 +2698,9 @@ button, a, label, input, select, textarea, [role="button"] { touch-action: manip
 .apartado-overlay {
   position: fixed; inset: 0; z-index: 99990;
   overflow-y: auto;
-  background: rgb(var(--glass-bg));
+  /* Translúcido: deja ver el fondo/wallpaper del tema activo detrás,
+     con un velo del color del tema para mantener legibilidad */
+  background: linear-gradient(rgba(var(--glass-bg), 0.55), rgba(var(--glass-bg), 0.78));
   font-family: ui-monospace, SFMono-Regular, monospace;
   font-size: 0.75rem;
   user-select: none;
