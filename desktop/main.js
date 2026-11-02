@@ -14,6 +14,8 @@ app.commandLine.appendSwitch('enable-zero-copy');
 const { startHub } = require('./hub');
 const { listSerialPorts, listPrinters, printLabel } = require('./peripherals');
 const { syncWebCache, installHandler } = require('./webcache');
+const { startPeerServer, startPeerDiscovery } = require('./peerserver');
+const { startNodeRegistry } = require('./noderegistry');
 
 let mainWindow = null;
 
@@ -142,6 +144,9 @@ const createWindow = () => {
   // Cada arranque consulta el build remoto; si cambió lo descarga a disco.
   // Las peticiones al origen se sirven desde la caché (rápido + offline).
   try {
+    startPeerServer();
+    startPeerDiscovery();
+    startNodeRegistry();
     installHandler(new URL(WEB_URL).origin);
     syncWebCache(WEB_URL).then((r) => console.log('[WEBCACHE]', JSON.stringify(r)));
   } catch (e) {

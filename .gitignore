@@ -26,3 +26,5 @@ e2e-shots/
 **/secrets.h
 firmware/**/build/
 .env.ingest
+desktop/release/
+desktop/web/

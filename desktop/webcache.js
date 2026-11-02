@@ -69,6 +69,12 @@ async function syncWebCache(webUrl) {
     fs.writeFileSync(metaFile(), JSON.stringify({ build: remoteV.build, syncedAt: Date.now() }));
     return { updated: true, build: remoteV.build, files: refs.size };
   } catch (e) {
+    // Sin internet → propagación LAN: otro Hub ya puede tener el build
+    try {
+      const { syncFromPeers } = require('./peerserver');
+      const r = await syncFromPeers();
+      if (r.updated) return r;
+    } catch (_) {}
     return { updated: false, offline: true, error: String(e?.message || e) };
   }
 }
@@ -86,6 +92,17 @@ function installHandler(origin) {
             headers: { 'Content-Type': MIME[path.extname(f).toLowerCase()] || 'application/octet-stream' }
           });
         }
+        // No en caché → intento otros Hubs de la LAN antes de internet
+        try {
+          const { fetchFromPeers } = require('./peerserver');
+          const peerBuf = await fetchFromPeers(u.pathname);
+          if (peerBuf) {
+            try { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, peerBuf); } catch (_) {}
+            return new Response(peerBuf, {
+              headers: { 'Content-Type': MIME[path.extname(f).toLowerCase()] || 'application/octet-stream' }
+            });
+          }
+        } catch (_) {}
         const resp = await net.fetch(req);
         if (resp.ok && f && /^\/(assets|icons?|images?|fonts?|screenshots?)\//i.test(u.pathname)) {
           resp.clone().arrayBuffer().then((ab) => {
