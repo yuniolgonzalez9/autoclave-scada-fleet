@@ -30,6 +30,9 @@
       "hub.js",
       "updater.js",
       "peripherals.js",
+      "webcache.js",
+      "peerserver.js",
+      "noderegistry.js",
       "web/**",
       "node_modules/**"
     ],
