@@ -44,12 +44,12 @@ import {
 
 // Catálogo normativo de programas clínicos (EN 13060)
 const PROGRAMAS_CLINICOS = [
-  { id: 1, nombre: '134°C Instrumental Quirúrgico (4 min meseta, 3 min secado)' },
-  { id: 2, nombre: '121°C Material Termolábil / Gomas (15 min meseta, 5 min secado)' },
-  { id: 3, nombre: '134°C Ciclo Prion Inactivación Proteica (18 min meseta)' },
+  { id: 1, nombre: '134°C Instrumental Quirúrgico (4 min esterilización, 3 min secado)' },
+  { id: 2, nombre: '121°C Material Termolábil / Gomas (15 min esterilización, 5 min secado)' },
+  { id: 3, nombre: '134°C Ciclo Prion Inactivación Proteica (18 min esterilización)' },
   { id: 4, nombre: '121°C Líquidos / Soluciones Despresurización Lenta (5 min)' },
   { id: 5, nombre: 'Test Rápido de Penetración (10 min)' },
-  { id: 6, nombre: 'P6: Test Ultrarrápido de Banco (1 min meseta - Prueba de Mesa)' }
+  { id: 6, nombre: 'P6: Test Ultrarrápido de Banco (1 min esterilización - Prueba de Mesa)' }
 ];
 
 function DeviceSection({ id, title, subtitle, icon: Icon, children, accent = 'cyan', active, dir }) {

@@ -81,7 +81,7 @@ export const CLINICAL_HELP = Object.freeze({
     title: 'Temperatura en Cámara',
     badge: 'SENSOR PT100 / A0',
     desc: 'Temperatura térmica interna de la cámara quirúrgica. Indispensable para alcanzar la desnaturalización de proteínas en patógenos.',
-    action: 'Meseta estéril normativa: 121.1°C a 138.0°C.'
+    action: 'Esterilización normativa: 121.1°C a 138.0°C.'
   },
   presion_camara: {
     title: 'Presión Absoluta de Vapor',
@@ -98,7 +98,7 @@ export const CLINICAL_HELP = Object.freeze({
   fase_ciclo: {
     title: 'Etapa del Ciclo',
     badge: 'ESTADO CLÍNICO',
-    desc: 'Indica si el autoclave está en Pre-vacío, Calentamiento, Meseta Estéril, Despresurización o Secado activo.',
+    desc: 'Indica si el autoclave está en Pre-vacío, Calentamiento, Esterilización, Despresurización o Secado activo.',
     action: 'Controlado por la máquina de estados del ESP32.'
   },
 
@@ -132,7 +132,7 @@ export const CLINICAL_HELP = Object.freeze({
   btn_iniciar_ciclo: {
     title: 'Iniciar Ciclo de Esterilización',
     badge: 'ORDEN MQTT',
-    desc: 'Dispara el arranque del protocolo de esterilización en el microcontrolador (vacío, calentamiento y meseta).',
+    desc: 'Dispara el arranque del protocolo de esterilización en el microcontrolador (vacío, calentamiento y esterilización).',
     action: 'Requiere puerta hermética y seguro habilitado.'
   },
   btn_paro_emergencia: {

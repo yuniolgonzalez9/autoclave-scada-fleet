@@ -131,7 +131,7 @@ export default function SessionDetailModal({ isOpen, onClose, session }) {
           detalles: 'Inyección termodinámica de vapor saturado a presión.'
         },
         {
-          fase: 'Meseta de Esterilización (Exposición F0)',
+          fase: 'Esterilización (Exposición F0)',
           inicio: f3_ini,
           fin: f3_fin,
           duracion_seg: tMeseta,
@@ -175,7 +175,7 @@ export default function SessionDetailModal({ isOpen, onClose, session }) {
       INICIO: { msg: 'Inicio de ciclo de esterilización', cat: 'OPERACION' },
       PURGA: { msg: 'Purga y extracción de aire residual', cat: 'FASE' },
       CALENTANDO: { msg: 'Calentamiento y presurización de cámara', cat: 'FASE' },
-      ESTERILIZANDO: { msg: 'Meseta de esterilización (exposición F0)', cat: 'FASE' },
+      ESTERILIZANDO: { msg: 'Esterilización (exposición F0)', cat: 'FASE' },
       DESFOGUE: { msg: 'Desfogue y despresurización controlada', cat: 'FASE' },
       SECADO: { msg: 'Secado al vacío de la carga', cat: 'FASE' },
       FIN: { msg: 'Ciclo finalizado', cat: 'OPERACION' },
@@ -457,7 +457,7 @@ export default function SessionDetailModal({ isOpen, onClose, session }) {
               <span className="text-[10px] text-cyan-400 block mb-0.5">PICO TÉRMICO</span>
               <p className="text-lg sm:text-xl font-bold text-white">{tMax.toFixed(1)} °C</p>
               <span className="text-[10px] text-emerald-400">
-                {tMax >= 121.0 ? 'Meseta Térmica Conforme' : 'Sub-Temperatura'}
+                {tMax >= 121.0 ? 'Esterilización Conforme' : 'Sub-Temperatura'}
               </span>
             </div>
 
@@ -505,7 +505,7 @@ export default function SessionDetailModal({ isOpen, onClose, session }) {
               <div className="grid grid-cols-2 sm:grid-cols-5 gap-1 pt-1 text-[9px] text-slate-400">
                 <span className="truncate">🔵 Pre-Vacío</span>
                 <span className="truncate">🔷 Calentamiento</span>
-                <span className="truncate">🟢 Meseta F0</span>
+                <span className="truncate">🟢 Esterilización F0</span>
                 <span className="truncate">🟡 Despresurización</span>
                 <span className="truncate">🟣 Secado Activo</span>
               </div>

@@ -10,7 +10,7 @@ export const PERFILES_PREDETERMINADOS = [
     nombre: 'Ciclo Quirúrgico 134°C - Estándar',
     tipo: 'AUTOCLAVE',
     version: '2.1.0',
-    descripcion: 'Meseta de 134.5°C por 5 minutos, secado al vacío de 10 min.',
+    descripcion: 'Esterilización a 134.5°C por 5 minutos, secado al vacío de 10 min.',
     config: {
       sp_temp: 134.5,
       t_ciclo: 5,
@@ -24,7 +24,7 @@ export const PERFILES_PREDETERMINADOS = [
     nombre: 'Ciclo Instrumental Delicado 121°C',
     tipo: 'AUTOCLAVE',
     version: '2.1.0',
-    descripcion: 'Meseta de 121.0°C por 20 minutos para gomas y textiles.',
+    descripcion: 'Esterilización a 121.0°C por 20 minutos para gomas y textiles.',
     config: {
       sp_temp: 121.0,
       t_ciclo: 20,
