@@ -24,7 +24,7 @@ html, body {
   font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
   color: #ffffff;
   -webkit-tap-highlight-color: transparent;
-  touch-action: pan-y;
+  touch-action: manipulation;
 }
 
 * {
@@ -1824,7 +1824,7 @@ hr, [class*="border-t"], [class*="border-b"] {
 
 /* ===== PULIDO PREMIUM: accesibilidad, foco y pulcritud ===== */
 html { scroll-behavior: smooth; }
-body { overscroll-behavior: none; -webkit-tap-highlight-color: transparent; }
+body { -webkit-tap-highlight-color: transparent; }
 
 ::selection {
   background: color-mix(in srgb, var(--accent-color) 35%, transparent);
