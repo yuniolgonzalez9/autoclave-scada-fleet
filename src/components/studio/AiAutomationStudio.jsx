@@ -1214,9 +1214,10 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
       {/* MODAL GESTOR DE CLAVES CLOUD */}
       {showKeyModal && typeof document !== 'undefined' && createPortal(
         <div className="fixed inset-0 z-[99990] overflow-y-auto bg-[#030712] font-mono text-xs select-none flex flex-col items-center">
-          <div className="sticky top-0 z-20 w-full flex items-center gap-3 px-4 sm:px-6 py-3 bg-slate-950/95 border-b border-cyan-500/30 backdrop-blur-xl">
-            <button type="button" onClick={() => setShowKeyModal(false)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/25 text-[10px] font-bold transition-all shrink-0" aria-label="Volver">← VOLVER</button>
-            <span className="text-[10px] text-slate-500 tracking-[0.2em] uppercase">Biofleet OS · Credenciales IA</span>
+          <div className="sticky top-0 z-20 w-full flex items-center gap-4 px-5 sm:px-8 py-4 bg-slate-950/95 border-b-2 border-cyan-500/40 backdrop-blur-2xl shadow-[0_10px_40px_rgba(0,0,0,0.6)]">
+            <button type="button" onClick={() => setShowKeyModal(false)} className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-cyan-500/15 border border-cyan-400/50 text-cyan-200 hover:bg-cyan-500/30 hover:border-cyan-300 hover:shadow-[0_0_24px_rgba(34,211,238,0.4)] text-sm font-bold transition-all shrink-0 active:scale-95" aria-label="Volver">← VOLVER</button>
+            <span className="text-xs sm:text-sm font-bold text-slate-300 tracking-[0.15em] uppercase">Biofleet OS · Credenciales IA</span>
+        <span className="ml-auto hidden sm:flex items-center gap-2 text-[10px] text-slate-500 tracking-widest"><kbd className="px-2 py-1 rounded-md bg-slate-800 border border-slate-600 text-slate-300">ESC</kbd> PARA VOLVER</span>
           </div>
           <div className="h-4 w-full shrink-0" />
           <div className="ultra-glass border-2 border-amber-500/60 p-6 rounded-2xl max-w-2xl w-full space-y-4 shadow-2xl font-mono text-xs">
