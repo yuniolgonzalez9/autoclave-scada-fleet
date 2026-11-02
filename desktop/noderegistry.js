@@ -11,8 +11,8 @@ const crypto = require('crypto');
 const HEARTBEAT_MS = 5 * 60 * 1000; // 5 min
 
 function loadConfig() {
-  const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-  const key = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+  const url = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://gjtqyodpgwfvfvkhlhik.supabase.co';
+  const key = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || 'sb_publishable_r7Oz_wW66N2Vea2_g9c3MA_wT2v-iPQ';
   if (url && key) return { url, key };
   // Fallback: leer .env del repo (dev) o userData/.env (instalado)
   const candidates = [
