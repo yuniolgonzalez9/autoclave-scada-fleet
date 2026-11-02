@@ -27,12 +27,12 @@ function fileFor(urlPath) {
 }
 
 async function fetchText(url) {
-  const r = await net.fetch(url);
+  const r = await net.fetch(url, { bypassCustomProtocolHandlers: true });
   if (!r.ok) throw new Error('HTTP ' + r.status);
   return r.text();
 }
 async function fetchBuf(url) {
-  const r = await net.fetch(url);
+  const r = await net.fetch(url, { bypassCustomProtocolHandlers: true });
   if (!r.ok) throw new Error('HTTP ' + r.status);
   return Buffer.from(await r.arrayBuffer());
 }
@@ -103,7 +103,7 @@ function installHandler(origin) {
             });
           }
         } catch (_) {}
-        const resp = await net.fetch(req);
+        const resp = await net.fetch(req, { bypassCustomProtocolHandlers: true });
         if (resp.ok && f && /^\/(assets|icons?|images?|fonts?|screenshots?)\//i.test(u.pathname)) {
           resp.clone().arrayBuffer().then((ab) => {
             try {
@@ -115,7 +115,7 @@ function installHandler(origin) {
         return resp;
       }
     } catch (_) {}
-    return net.fetch(req);
+    return net.fetch(req, { bypassCustomProtocolHandlers: true });
   });
 }
 
