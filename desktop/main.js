@@ -13,12 +13,15 @@ app.commandLine.appendSwitch('js-flags', '--max-old-space-size=4096');
 app.commandLine.appendSwitch('enable-zero-copy');
 const { startHub } = require('./hub');
 const { listSerialPorts, listPrinters, printLabel } = require('./peripherals');
+const { syncWebCache, installHandler } = require('./webcache');
 
 let mainWindow = null;
 
 // La web en vivo (mismo origen que /api): MQTT, comandos y Telegram funcionan
 // y siempre está actualizada. Sin internet se usa la copia empaquetada.
-const WEB_URL = 'https://biofle.vercel.app/';
+// BIOFLEET_WEB_URL permite apuntar el Hub a un dev server local
+// (npm run dev) para probar cambios de la web sin desplegar.
+const WEB_URL = process.env.BIOFLEET_WEB_URL || 'https://biofle.vercel.app/';
 const LOCAL_INDEX = path.join(__dirname, 'web', 'index.html');
 
 // Splash de marca: navy + oro (identidad Biofleet). La web carga en
@@ -134,6 +137,16 @@ const createWindow = () => {
   const sendWinState = () => mainWindow.webContents.send('hub:winState', mainWindow.isMaximized());
   mainWindow.on('maximize', sendWinState);
   mainWindow.on('unmaximize', sendWinState);
+
+  // Hub híbrido: copia local viva de la web en cada PC.
+  // Cada arranque consulta el build remoto; si cambió lo descarga a disco.
+  // Las peticiones al origen se sirven desde la caché (rápido + offline).
+  try {
+    installHandler(new URL(WEB_URL).origin);
+    syncWebCache(WEB_URL).then((r) => console.log('[WEBCACHE]', JSON.stringify(r)));
+  } catch (e) {
+    console.log('[WEBCACHE] init error:', e?.message || e);
+  }
   mainWindow.loadURL(WEB_URL);
 };
 
