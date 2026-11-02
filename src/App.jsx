@@ -713,10 +713,19 @@ function ScadaAppContent() {
           <HeaderLaserOrbit />
           <div
             className="brand-lockup flex items-center gap-2 sm:gap-3 min-w-0 cursor-pointer select-none"
-            onClick={() => { setActiveSection('flota'); setSelectedMac(null); }}
-            title="Ir a Home — Dispositivos en Línea"
+            onClick={() => {
+              // Ya en Home → re-pulsar marca una recarga completa (mismo
+              // comportamiento que "Recargar y Sincronizar" del engranaje).
+              if (activeSection === 'flota' && !selectedMac) {
+                window.location.reload();
+                return;
+              }
+              setActiveSection('flota');
+              setSelectedMac(null);
+            }}
+            title="Ir a Home — Dispositivos en Línea · Si ya estás en Home, pulsa para recargar y sincronizar"
             role="button"
-            aria-label="Ir a Home, dispositivos en línea"
+            aria-label="Ir a Home, dispositivos en línea; si ya estás en Home, recarga la aplicación"
           >
             <div className="brand-emitter p-1.5 sm:p-2 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 shrink-0">
               <Activity className="w-5 h-5 sm:w-6 sm:h-6 animate-pulse" />
