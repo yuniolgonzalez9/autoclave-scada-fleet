@@ -1,11 +1,10 @@
-import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { createPortal } from 'react-dom';
-import { 
-  Printer, 
-  X, 
-  Clock, 
-  Move, 
-  ShieldCheck, 
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import {
+  Printer,
+  X,
+  Clock,
+  ArrowLeft,
+  ShieldCheck,
   Search, 
   ArrowUpDown, 
   Layers,
@@ -47,17 +46,12 @@ function sumarSegundos(horaBase, segs) {
 }
 
 export default function SessionDetailModal({ isOpen, onClose, session }) {
-  // Arrastre de ventana
-  const [offset, setOffset] = useState({ x: 0, y: 0 });
-  const [isDragging, setIsDragging] = useState(false);
-  const dragStartRef = useRef({ startX: 0, startY: 0, initialX: 0, initialY: 0 });
-
   // Filtros de la bitácora
   const [eventCategory, setEventCategory] = useState('ALL');
   const [eventSearch, setEventSearch] = useState('');
   const [isAscending, setIsAscending] = useState(true);
 
-  // Cierre con Escape
+  // Volver con Escape
   const handleKeyDown = useCallback((e) => {
     if (e.key === 'Escape') onClose();
   }, [onClose]);
@@ -71,48 +65,12 @@ export default function SessionDetailModal({ isOpen, onClose, session }) {
 
   useEffect(() => {
     const t = setTimeout(() => {
-      setOffset({ x: 0, y: 0 });
       setEventCategory('ALL');
       setEventSearch('');
       setIsAscending(true);
     }, 0);
     return () => clearTimeout(t);
   }, [session?.session_id]);
-
-  // Manejadores de arrastre con mouse y touch (con clamping en pantalla)
-  const handleMouseDown = (e) => {
-    if (window.innerWidth < 640) return; // Deshabilitar arrastre en móviles
-    if (e.target.closest('button') || e.target.closest('input') || e.target.closest('select')) return;
-    setIsDragging(true);
-    dragStartRef.current = { startX: e.clientX, startY: e.clientY, initialX: offset.x, initialY: offset.y };
-  };
-
-  const handleMouseMove = useCallback((e) => {
-    if (!isDragging) return;
-    const dx = e.clientX - dragStartRef.current.startX;
-    const dy = e.clientY - dragStartRef.current.startY;
-    
-    const maxOffsetX = Math.max(100, (window.innerWidth - 600) / 2);
-    const maxOffsetY = Math.max(100, (window.innerHeight - 400) / 2);
-    
-    const clampedX = Math.max(-maxOffsetX, Math.min(maxOffsetX, dragStartRef.current.initialX + dx));
-    const clampedY = Math.max(-maxOffsetY, Math.min(maxOffsetY, dragStartRef.current.initialY + dy));
-
-    setOffset({ x: clampedX, y: clampedY });
-  }, [isDragging]);
-
-  const handleMouseUp = useCallback(() => setIsDragging(false), []);
-
-  useEffect(() => {
-    if (isDragging) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
-      return () => {
-        window.removeEventListener('mousemove', handleMouseMove);
-        window.removeEventListener('mouseup', handleMouseUp);
-      };
-    }
-  }, [isDragging, handleMouseMove, handleMouseUp]);
 
   // Cálculos Termodinámicos y Forenses Reales
   const tMax = parseFloat(session?.temp_max || 0);
@@ -430,30 +388,27 @@ export default function SessionDetailModal({ isOpen, onClose, session }) {
     v.document.close();
   };
 
-  if (!isOpen || !session || typeof document === 'undefined') return null;
+  if (!isOpen || !session) return null;
 
-  return createPortal(
-    <div className="ultra-glass rounded-2xl border border-slate-800 p-4 font-mono text-xs select-none">
-      
-      {/* Contenedor Flotante Arrastrable */}
-      <div 
-        style={{
-          transform: `translate(${offset.x}px, ${offset.y}px)`,
-          transition: isDragging ? 'none' : 'transform 0.15s ease'
-        }}
-        className="w-full max-w-4xl max-h-[90vh] flex flex-col ultra-glass rounded-2xl border-2 border-cyan-400/60 shadow-[0_20px_60px_rgba(0,0,0,0.85)] overflow-hidden"
-      >
-        
-        {/* Cabecera Arrastrable */}
-        <div 
-          onMouseDown={handleMouseDown}
-          className="px-4 sm:px-6 py-3 border-b border-cyan-500/30 bg-slate-950/95 flex items-center justify-between shrink-0 sm:cursor-grab active:cursor-grabbing select-none"
-          title="Arrastre para mover la ventana (Escritorio)"
-        >
+  return (
+    <div className="font-mono text-xs select-none">
+
+      {/* Apartado dedicado — reemplaza la vista de lista hasta volver */}
+      <div className="w-full max-w-5xl mx-auto flex flex-col ultra-glass rounded-2xl border-2 border-cyan-400/60 shadow-[0_20px_60px_rgba(0,0,0,0.85)] overflow-hidden">
+
+        {/* Cabecera con regreso a la lista */}
+        <div className="px-4 sm:px-6 py-3 border-b border-cyan-500/30 bg-slate-950/95 flex items-center justify-between shrink-0 select-none">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="p-1.5 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 shrink-0">
-              <Move className="w-4 h-4" />
-            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/25 transition-all shrink-0 flex items-center gap-1"
+              title="Volver a la lista de sesiones"
+              aria-label="Volver a la lista de sesiones"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span className="hidden sm:inline text-[10px] font-bold">VOLVER</span>
+            </button>
             <div className="truncate">
               <h3 className="text-sm sm:text-base font-bold text-white tracking-wide truncate flex items-center gap-2">
                 <span>Auditoría Forense: {session.session_id}</span>
@@ -698,7 +653,6 @@ export default function SessionDetailModal({ isOpen, onClose, session }) {
 
         </div>
       </div>
-    </div>,
-    document.body
+    </div>
   );
 }

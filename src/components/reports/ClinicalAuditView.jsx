@@ -27,6 +27,19 @@ export default function ClinicalAuditView() {
 
   const [selectedIds, setSelectedIds] = useState([]);
   const fileInputRef = useRef(null);
+  const auditScrollRef = useRef(0);
+
+  // Entrar al detalle guarda la posición de la lista; volver la restaura
+  // exactamente donde estaba el usuario (scroll, filtros y selección intactos).
+  useEffect(() => {
+    if (selectedSession) {
+      auditScrollRef.current = window.scrollY;
+      window.scrollTo({ top: 0 });
+    } else if (auditScrollRef.current) {
+      window.scrollTo({ top: auditScrollRef.current });
+      auditScrollRef.current = 0;
+    }
+  }, [selectedSession]);
 
   // Consulta de paquetes clínicos
   const fetchReports = useCallback(async () => {
@@ -198,9 +211,23 @@ export default function ClinicalAuditView() {
   const totalCiclosConformes = useMemo(() => reports.filter((r) => (r.diagnostico_principal || '').includes('CONFORME')).length, [reports]);
   const totalAlarmas = useMemo(() => reports.filter((r) => (r.conteo_alarmas > 0) || (r.diagnostico_principal || '').includes('ABORTADO')).length, [reports]);
 
+  // Apartado dedicado: al abrir una sesión la lista cede toda la vista
+  // al detalle forense (como el panel de equipo en Gestión).
+  if (selectedSession) {
+    return (
+      <div className="clinical-audit-view font-mono text-xs select-none">
+        <SessionDetailModal
+          isOpen
+          onClose={() => setSelectedSession(null)}
+          session={selectedSession}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="clinical-audit-view space-y-4 font-mono text-xs select-none">
-      
+
       {/* Cabecera y Acciones */}
       <div className="ultra-glass p-5 rounded-2xl border border-cyan-500/30 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
         <div>
@@ -483,12 +510,6 @@ export default function ClinicalAuditView() {
           </tbody>
         </table>
       </div>
-
-      <SessionDetailModal
-        isOpen={selectedSession !== null}
-        onClose={() => setSelectedSession(null)}
-        session={selectedSession}
-      />
     </div>
   );
 }
