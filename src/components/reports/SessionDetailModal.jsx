@@ -208,20 +208,41 @@ export default function SessionDetailModal({ isOpen, onClose, session }) {
     return [];
   }, [session, duracionTotalSeg, horaInicio, horaFin, tMax, pMax, f0Alcanzado]);
 
-  // Bitácora de Eventos Reales
+  // Bitácora de Eventos Reales — el firmware publica {fase, seg}:
+  // seg es el offset en segundos desde el arranque del ciclo.
   const eventosEnriquecidos = useMemo(() => {
     if (!session) return [];
 
+    const FASE_LABELS = {
+      INICIO: { msg: 'Inicio de ciclo de esterilización', cat: 'OPERACION' },
+      PURGA: { msg: 'Purga y extracción de aire residual', cat: 'FASE' },
+      CALENTANDO: { msg: 'Calentamiento y presurización de cámara', cat: 'FASE' },
+      ESTERILIZANDO: { msg: 'Meseta de esterilización (exposición F0)', cat: 'FASE' },
+      DESFOGUE: { msg: 'Desfogue y despresurización controlada', cat: 'FASE' },
+      SECADO: { msg: 'Secado al vacío de la carga', cat: 'FASE' },
+      FIN: { msg: 'Ciclo finalizado', cat: 'OPERACION' },
+      PARO_EMERGENCIA: { msg: 'PARO DE EMERGENCIA activado por el operador', cat: 'SEGURIDAD' }
+    };
+
     const realEvents = session.eventos;
     if (Array.isArray(realEvents) && realEvents.length > 0) {
-      return realEvents.map((ev) => ({
-        hora: ev.hora || ev.timestamp || '--:--:--',
-        tipo: (ev.tipo || ev.categoria || 'OPERACION').toUpperCase(),
-        cat: ev.cat || 'OPERACION',
-        msg: ev.msg || ev.mensaje || ev.descripcion || 'Registro operativo',
-        temp: ev.temp !== undefined ? ev.temp : ev.temperatura,
-        presion: ev.presion !== undefined ? ev.presion : ev.pres
-      }));
+      return realEvents.map((ev) => {
+        const faseKey = String(ev.fase || '').toUpperCase();
+        const label = FASE_LABELS[faseKey];
+        const seg = ev.seg !== undefined ? Number(ev.seg) : null;
+        const horaBase = ev.hora || ev.timestamp || null;
+        const hora = horaBase || (seg !== null && horaInicio !== '--:--:--'
+          ? sumarSegundos(horaInicio, seg)
+          : seg !== null ? `T+${seg}s` : '--:--:--');
+        return {
+          hora,
+          tipo: (ev.tipo || ev.categoria || faseKey || 'OPERACION').toUpperCase(),
+          cat: ev.cat || label?.cat || 'OPERACION',
+          msg: ev.msg || ev.mensaje || ev.descripcion || label?.msg || `Evento de fase: ${faseKey || 'registro operativo'}`,
+          temp: ev.temp !== undefined ? ev.temp : ev.temperatura,
+          presion: ev.presion !== undefined ? ev.presion : ev.pres
+        };
+      });
     }
 
     // Extracción mínima a partir de eventos y alarmas declaradas
