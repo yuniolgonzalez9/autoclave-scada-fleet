@@ -1,10 +1,19 @@
 /*
  * =========================================================================================
  * PROYECTO: BIOFLEET OS™ v2.0 ENTERPRISE
- * CONTROLADOR MAESTRO HKL-EA8 - FIRMWARE v11.0 (basado en prueba_clientge_servidor v10.0)
+ * CONTROLADOR MAESTRO HKL-EA8 - FIRMWARE v12.0 HYBRID (basado en v11.0 TOTAL-WEB)
  *
- * CORE 0: ETHERNET LAN8720 + HIVEMQ TLS 8883 + TELEMETRÍA (800ms) + REPORTES MÉDICOS + FOTA
+ * CORE 0: ETHERNET LAN8720 + MQTT DUAL (HUB LAN :1883 + HIVEMQ TLS 8883)
+ *         + DESCUBRIMIENTO UDP :4210 + TELEMETRÍA (800ms) + REPORTES + FOTA
  * CORE 1: AUTÓMATA CLÍNICO (P1..P6) + BYPASSES + RELÉS I2C (0x24) + LCD + SCAN BUS I2C
+ *
+ * RUTA HÍBRIDA ESP32↔HUB↔WEB (nuevo en v12.0):
+ *  - La placa busca un Hub Biofleet en la LAN (UDP broadcast :4210).
+ *  - Si lo encuentra, conecta TAMBIÉN al broker MQTT local del Hub (:1883)
+ *    y publica cada mensaje por AMBAS rutas. Los comandos se reciben por
+ *    cualquiera de las dos (mismo topic autoclave_med_2026/<MAC>/config).
+ *  - Si cae internet, la ruta local sigue operando; si no hay Hub en la
+ *    red, todo funciona por la nube exactamente igual que en v11.0.
  *
  * IGUAL AL ORIGINAL: pines, inicialización Ethernet (WiFi.onEvent + ETH.begin),
  * autómata clínico, PCF8574, LCD, credenciales. El original NO fue modificado.
@@ -29,6 +38,7 @@
 
 #include <WiFi.h>
 #include <ETH.h>
+#include <WiFiUdp.h>
 #include <WiFiClientSecure.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
@@ -41,7 +51,7 @@
 #include "esp_task_wdt.h"
 #include "time.h"
 
-#define SYS_VERSION "v11.0-TOTAL-WEB"
+#define SYS_VERSION "v12.0-HYBRID-LAN"
 #define WDT_TIMEOUT_S 8
 
 // Pines HKL-EA8
@@ -191,9 +201,27 @@ SemaphoreHandle_t xMutexMqtt;   // serializa publish/connect/loop entre cores
 PLCSnapshot       globalSnap;
 
 WiFiClientSecure ethSecureClient;
-PubSubClient     mqtt(ethSecureClient);
+WiFiClient       ethPlainClient;
+PubSubClient     mqtt(ethSecureClient);       // Nube: HiveMQ TLS :8883
+PubSubClient     mqttLocal(ethPlainClient);   // Local: Hub Biofleet :1883
+WiFiUDP          udpDisc;
 Preferences      prefs;
 LiquidCrystal_I2C* lcdClinic = nullptr;
+
+// ── Ruta local ESP32↔Hub: descubrimiento UDP :4210 ──
+#define UDP_DISC_PORT 4210
+IPAddress hubIp(0, 0, 0, 0);
+uint16_t  hubMqttPort = 1883;
+bool      hubKnown = false;
+unsigned long lastHubMsg = 0;
+unsigned long lastDiscoverTx = 0;
+unsigned long lastAnnounceTx = 0;
+unsigned long nextLocalTry = 0;
+unsigned long nextCloudTry = 0;
+const unsigned long HUB_TTL_MS   = 45000;
+const unsigned long DISCOVER_MS  = 8000;
+const unsigned long ANNOUNCE_MS  = 12000;
+const unsigned long RETRY_MS     = 5000;
 
 static bool ethConnected = false;
 static bool ntpConfigured = false;
@@ -272,7 +300,7 @@ void inicializarLCD() {
   lcdClinic->backlight();
   lcdClinic->clear();
   lcdClinic->setCursor(0, 0);
-  lcdClinic->print("BIOFLEET CLOUD");
+  lcdClinic->print("BIOFLEET HYBRID");
   lcdClinic->setCursor(0, 1);
   lcdClinic->print("AUTOCLAVE LISTO");
 }
@@ -294,21 +322,27 @@ void registrarEvento(const char* fase) {
 }
 
 // =============================================================================
-// PUBLICACIONES MQTT (serializadas por xMutexMqtt — PubSubClient no es
-// thread-safe entre Core 0 y Core 1)
+// PUBLICACIONES MQTT DUAL (serializadas por xMutexMqtt — PubSubClient no es
+// thread-safe entre Core 0 y Core 1). Cada mensaje sale por la nube Y por
+// el Hub local; la ruta que esté caída simplemente no publica.
 // =============================================================================
+bool mqttLinkUp() {
+  return mqtt.connected() || mqttLocal.connected();
+}
+
 bool mqttPublishSafe(const char* topic, const char* payload, bool retained = false) {
-  if (!mqtt.connected() || xMutexMqtt == NULL) return false;
+  if (xMutexMqtt == NULL) return false;
   bool ok = false;
   if (xSemaphoreTake(xMutexMqtt, pdMS_TO_TICKS(150)) == pdTRUE) {
-    ok = mqtt.publish(topic, payload, retained);
+    if (mqtt.connected())      ok = mqtt.publish(topic, payload, retained) || ok;
+    if (mqttLocal.connected()) ok = mqttLocal.publish(topic, payload, retained) || ok;
     xSemaphoreGive(xMutexMqtt);
   }
   return ok;
 }
 
 void publicarAlertaCritica() {
-  if (!mqtt.connected()) return;
+  if (!mqttLinkUp()) return;
   StaticJsonDocument<384> doc;
   doc["mac"] = macId;
   doc["codigo"] = alarmaCodigo;
@@ -323,7 +357,7 @@ void publicarAlertaCritica() {
 }
 
 void publicarMeta() {
-  if (!mqtt.connected()) return;
+  if (!mqttLinkUp()) return;
   StaticJsonDocument<512> doc;
   doc["mac"] = macId;
   doc["alias"] = cfgAlias;
@@ -337,7 +371,7 @@ void publicarMeta() {
 }
 
 void publicarHwProfile() {
-  if (!mqtt.connected()) return;
+  if (!mqttLinkUp()) return;
   StaticJsonDocument<1024> doc;
   doc["mac"] = macId;
   doc["version"] = SYS_VERSION;
@@ -357,7 +391,7 @@ void publicarHwProfile() {
 }
 
 void publicarEsquema() {
-  if (!mqtt.connected()) return;
+  if (!mqttLinkUp()) return;
   StaticJsonDocument<2048> doc;
   doc["tipo"] = cfgTipo;
   doc["mac"] = macId;
@@ -389,7 +423,7 @@ void publicarEsquema() {
 }
 
 void publicarLogicaAck(bool ok, const char* detalle) {
-  if (!mqtt.connected()) return;
+  if (!mqttLinkUp()) return;
   StaticJsonDocument<256> doc;
   doc["mac"] = macId;
   doc["ack"] = ok ? "OK" : "ERROR";
@@ -401,7 +435,7 @@ void publicarLogicaAck(bool ok, const char* detalle) {
 }
 
 void publicarFotaStatus(const char* estado, const char* detalle) {
-  if (!mqtt.connected()) return;
+  if (!mqttLinkUp()) return;
   StaticJsonDocument<256> doc;
   doc["mac"] = macId;
   doc["fota"] = estado;
@@ -498,7 +532,7 @@ void escanearBusI2C() {
 
   char buf[1024];
   serializeJson(doc, buf);
-  if (mqtt.connected()) {
+  if (mqttLinkUp()) {
     mqttPublishSafe(topicI2CReport.c_str(), buf);
     mqttPublishSafe(topicHwScan.c_str(), buf);
   }
@@ -731,25 +765,114 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
   xQueueSend(xQueuePLC, &cmd, 0);
 }
 
+// =============================================================================
+// DESCUBRIMIENTO UDP :4210 — la placa pregunta, el Hub responde
+// {"biofleet":"discover"} → {"biofleet":"hub","mqtt":1883,"ws":9781}
+// Mientras haya Hub la placa se anuncia sola (la web lo descubre sin tocar nada).
+// =============================================================================
+void anunciarPresencia() {
+  StaticJsonDocument<256> d;
+  d["biofleet"] = "announce";
+  d["mac"] = macId;
+  d["alias"] = cfgAlias;
+  d["tipo"] = cfgTipo;
+  d["fw"] = SYS_VERSION;
+  char b[256];
+  size_t n = serializeJson(d, b);
+  udpDisc.beginPacket(IPAddress(255, 255, 255, 255), UDP_DISC_PORT);
+  udpDisc.write((const uint8_t*)b, n);
+  udpDisc.endPacket();
+}
+
+void procesarDiscovery() {
+  int sz = udpDisc.parsePacket();
+  while (sz > 0) {
+    char buf[384];
+    int n = udpDisc.read(buf, sizeof(buf) - 1);
+    if (n > 0) {
+      buf[n] = 0;
+      StaticJsonDocument<384> d;
+      if (deserializeJson(d, buf) == DeserializationError::Ok) {
+        const char* bf = d["biofleet"] | "";
+        if (strcmp(bf, "hub") == 0) {
+          IPAddress rip = udpDisc.remoteIP();
+          if (!hubKnown || rip != hubIp) {
+            Serial.printf("🏠 [LAN] Hub descubierto en %s\n", rip.toString().c_str());
+          }
+          hubIp = rip;
+          hubKnown = true;
+          lastHubMsg = millis();
+          if (d["mqtt"].is<int>()) hubMqttPort = d["mqtt"].as<int>();
+        }
+      }
+    }
+    sz = udpDisc.parsePacket();
+  }
+
+  if (!hubKnown && millis() - lastDiscoverTx >= DISCOVER_MS) {
+    lastDiscoverTx = millis();
+    StaticJsonDocument<128> d;
+    d["biofleet"] = "discover";
+    d["mac"] = macId;
+    d["ts"] = millis();
+    char b[128];
+    serializeJson(d, b);
+    udpDisc.beginPacket(IPAddress(255, 255, 255, 255), UDP_DISC_PORT);
+    udpDisc.write((const uint8_t*)b, strlen(b));
+    udpDisc.endPacket();
+  }
+  if (millis() - lastAnnounceTx >= ANNOUNCE_MS) {
+    lastAnnounceTx = millis();
+    anunciarPresencia();
+  }
+
+  // TTL: si el Hub se calla y el broker local ya no responde, olvidarlo
+  if (hubKnown && !mqttLocal.connected() && millis() - lastHubMsg > HUB_TTL_MS) {
+    hubKnown = false;
+    Serial.println("🏠 [LAN] Hub perdido — solo ruta nube.");
+  }
+}
+
+// ── Reconexión NO bloqueante: un intento por llamada, cooldown entre intentos.
+//    Si la nube no responde no congela la ruta local (y viceversa). ──
 void reconectarMQTT() {
-  if (!ethConnected) return;
-  while (!mqtt.connected() && ethConnected) {
-    String cid = "HKL_EA8_" + macId;
-    bool ok = false;
-    if (xSemaphoreTake(xMutexMqtt, pdMS_TO_TICKS(500)) == pdTRUE) {
-      ok = mqtt.connect(cid.c_str(), mqttUser, mqttPass);
-      if (ok) mqtt.subscribe(topicComando.c_str(), 1);
-      xSemaphoreGive(xMutexMqtt);
-    }
-    if (ok) {
-      Serial.printf("🚀 [MQTT] Conectado a HiveMQ. Suscrito a: %s\n", topicComando.c_str());
-      publicarMeta();
-      publicarHwProfile();
-      publicarEsquema();
-      emitirBeep(40);
-      break;
-    }
-    vTaskDelay(pdMS_TO_TICKS(2000));
+  if (!ethConnected || mqtt.connected()) return;
+  if (millis() < nextCloudTry) return;
+  nextCloudTry = millis() + RETRY_MS;
+  String cid = "HKL_EA8_" + macId;
+  bool ok = false;
+  if (xSemaphoreTake(xMutexMqtt, pdMS_TO_TICKS(500)) == pdTRUE) {
+    ok = mqtt.connect(cid.c_str(), mqttUser, mqttPass);
+    if (ok) mqtt.subscribe(topicComando.c_str(), 1);
+    xSemaphoreGive(xMutexMqtt);
+  }
+  if (ok) {
+    Serial.printf("🚀 [MQTT] Conectado a HiveMQ. Suscrito a: %s\n", topicComando.c_str());
+    publicarMeta();
+    publicarHwProfile();
+    publicarEsquema();
+    emitirBeep(40);
+  }
+}
+
+void reconectarLocal() {
+  if (!ethConnected || !hubKnown || mqttLocal.connected()) return;
+  if (millis() < nextLocalTry) return;
+  nextLocalTry = millis() + RETRY_MS;
+  mqttLocal.setServer(hubIp, hubMqttPort);
+  String cid = "HKL_EA8_L_" + macId;
+  bool ok = false;
+  if (xSemaphoreTake(xMutexMqtt, pdMS_TO_TICKS(500)) == pdTRUE) {
+    ok = mqttLocal.connect(cid.c_str());
+    if (ok) mqttLocal.subscribe(topicComando.c_str(), 1);
+    xSemaphoreGive(xMutexMqtt);
+  }
+  if (ok) {
+    lastHubMsg = millis();
+    Serial.printf("🏠 [LAN] Conectado al Hub (%s:%d) — ruta local ACTIVA.\n",
+                  hubIp.toString().c_str(), hubMqttPort);
+    publicarMeta();
+    publicarEsquema();
   }
 }
 
@@ -763,9 +886,12 @@ void TaskCore0_Comms(void* p) {
     actualizarEstadoRed();
 
     if (ethConnected) {
-      if (!mqtt.connected()) reconectarMQTT();
-      if (mqtt.connected() && xSemaphoreTake(xMutexMqtt, pdMS_TO_TICKS(50)) == pdTRUE) {
-        mqtt.loop();
+      procesarDiscovery();
+      reconectarMQTT();
+      reconectarLocal();
+      if (xSemaphoreTake(xMutexMqtt, pdMS_TO_TICKS(50)) == pdTRUE) {
+        if (mqtt.connected()) mqtt.loop();
+        if (mqttLocal.connected()) mqttLocal.loop();
         xSemaphoreGive(xMutexMqtt);
       }
 
@@ -1246,6 +1372,11 @@ void setup() {
   mqtt.setBufferSize(2560);
   mqtt.setServer(mqttServer, mqttPort);
   mqtt.setCallback(mqttCallback);
+
+  // Segundo cliente: broker local del Hub (TCP plano :1883, sin TLS)
+  mqttLocal.setBufferSize(2560);
+  mqttLocal.setCallback(mqttCallback);
+  udpDisc.begin(UDP_DISC_PORT);
 
   // Watchdog: IDF 5.x usa esp_task_wdt_config_t; si el core Arduino ya lo
   // inicializó, se reconfigura en su lugar

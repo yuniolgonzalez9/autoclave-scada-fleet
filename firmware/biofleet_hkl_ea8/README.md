@@ -1,6 +1,19 @@
-# BioFleet HKL-EA8 — Firmware v10.1
+# BioFleet HKL-EA8 — Firmware v12.0 HYBRID
 
-Motor clínico de autoclave con contrato completo contra la web SCADA.
+Motor clínico de autoclave con contrato completo contra la web SCADA **y ruta
+local híbrida ESP32↔Hub↔web**.
+
+## Ruta local (Hub en la LAN)
+
+- La placa emite `{"biofleet":"discover"}` por UDP broadcast `:4210` hasta que
+  el Hub responde `{"biofleet":"hub","mqtt":1883,"ws":9781}`.
+- Con Hub presente se conecta **en paralelo** a dos brokers:
+  - **Local**: `mqtt://<ip-del-hub>:1883` (TCP plano, sin credenciales)
+  - **Nube**: HiveMQ TLS `:8883` (como siempre)
+- Cada publicación sale por ambas rutas; los comandos se suscriben en ambas.
+- Si cae internet → la LAN sigue operando. Si no hay Hub → todo por la nube.
+- La placa se anuncia cada 12 s (`{"biofleet":"announce", mac, alias, tipo, fw}`)
+  para que el Hub la registre y la web la muestre al instante.
 
 ## Compilación (Arduino IDE)
 

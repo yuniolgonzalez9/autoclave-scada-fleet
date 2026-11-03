@@ -278,7 +278,7 @@ export function useMqttFleet(enabled = true) {
               : [...prevHistory, newPoint];
           }
 
-          if (channel === 'logica') {
+          if (channel === 'logica' || channel === 'logica/ack') {
             updated.logicaAck = { ...payload, timestamp: Date.now() };
           }
 

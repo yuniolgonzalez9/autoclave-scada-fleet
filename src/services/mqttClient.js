@@ -1,5 +1,6 @@
 
 import { supabase } from './supabase';
+import { connectLocalLink } from './localLink';
 
 // Las credenciales MQTT no viven en el código: se piden al servidor con la
 // sesión activa (solo lectura). Los comandos salen por /api/device-command,
@@ -54,6 +55,30 @@ export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
   let isDestroyed = false;
   let reconnectAttempts = 0;
   let reconnectTimer = null;
+  let localLink = null;
+  let cloudUp = false;
+  let localUp = false;
+
+  // Estado combinado: el enlace a la flota está vivo por la nube O por el Hub local
+  const reportStatus = () => {
+    const status = cloudUp || localUp;
+    if (onStatusChange) onStatusChange(status);
+    if (broadcast) broadcast.postMessage({ type: 'STATUS_UPDATE', status });
+  };
+
+  const dispatchPacket = (packetData) => {
+    if (isDestroyed) return;
+    if (onMessageReceived) onMessageReceived(packetData);
+    if (broadcast) broadcast.postMessage({ type: 'INCOMING_MQTT', packetData });
+  };
+
+  const startLocalLink = () => {
+    if (localLink || isDestroyed || typeof window === 'undefined' || typeof WebSocket === 'undefined') return;
+    localLink = connectLocalLink(dispatchPacket, (up) => {
+      localUp = up;
+      reportStatus();
+    });
+  };
 
   const hasBroadcastSupport = typeof window !== 'undefined' && 'BroadcastChannel' in window;
   if (hasBroadcastSupport) {
@@ -95,7 +120,8 @@ export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
       creds = await fetchViewerCredentials();
     } catch (e) {
       connecting = false;
-      if (onStatusChange) onStatusChange(false);
+      cloudUp = false;
+      reportStatus();
       if (!isDestroyed) setTimeout(startMqttConnection, 15000);
       return;
     }
@@ -128,31 +154,28 @@ export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
         clearTimeout(reconnectTimer);
         reconnectTimer = null;
       }
-      if (onStatusChange) onStatusChange(true);
+      cloudUp = true;
+      reportStatus();
 
       TOPICS_SUBSCRIPTION.forEach((top) => {
         mqttClient.subscribe(top, { qos: 1 });
       });
-
-      if (broadcast) {
-        broadcast.postMessage({ type: 'STATUS_UPDATE', status: true });
-      }
     });
 
     mqttClient.on('error', () => {
-      if (onStatusChange) onStatusChange(false);
-      if (broadcast) broadcast.postMessage({ type: 'STATUS_UPDATE', status: false });
+      cloudUp = false;
+      reportStatus();
     });
 
     mqttClient.on('close', () => {
-      if (onStatusChange) onStatusChange(false);
-      if (broadcast) broadcast.postMessage({ type: 'STATUS_UPDATE', status: false });
+      cloudUp = false;
+      reportStatus();
       scheduleReconnect();
     });
 
     mqttClient.on('offline', () => {
-      if (onStatusChange) onStatusChange(false);
-      if (broadcast) broadcast.postMessage({ type: 'STATUS_UPDATE', status: false });
+      cloudUp = false;
+      reportStatus();
     });
 
     mqttClient.on('message', (topic, message, packet) => {
@@ -162,16 +185,10 @@ export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
         const payload = JSON.parse(message.toString());
         const parts = topic.split('/');
         const mac = parts[1];
-        const channel = parts[2];
+        const channel = parts.slice(2).join('/');
         const isRetained = Boolean(packet && packet.retain);
 
-        const packetData = { mac, channel, payload, topic, isRetained };
-
-        if (onMessageReceived) onMessageReceived(packetData);
-
-        if (broadcast) {
-          broadcast.postMessage({ type: 'INCOMING_MQTT', packetData });
-        }
+        dispatchPacket({ mac, channel, payload, topic, isRetained });
       } catch (e) {}
     });
   };
@@ -180,6 +197,7 @@ export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
     if (isLeader || isDestroyed) return;
     isLeader = true;
     startMqttConnection();
+    startLocalLink();
 
     clearLeaderTimers();
     leaderHeartbeatTimer = setInterval(() => {
@@ -236,16 +254,34 @@ export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
     electAsLeader();
   }
 
-  const sendCommand = (mac, cmdObject, forceRetain = null) => {
+  // Comandos por AMBAS rutas: la nube queda como canal auditado y el Hub
+  // local entrega en LAN aunque no haya internet. Basta que una funcione.
+  const sendCommand = async (mac, cmdObject, forceRetain = null) => {
     const cleanMac = (mac || '').toUpperCase().replace(/[:-]/g, '');
     if (!cleanMac) return Promise.resolve();
-    return sendDeviceCommandSecure(cleanMac, cmdObject, forceRetain).catch((e) => {
-      console.warn('[COMANDO]', e.message);
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('biofleet:command-error', { detail: { mac: cleanMac, message: e.message } }));
-      }
-      throw e;
-    });
+
+    const localPromise = (localLink && localLink.isUp())
+      ? localLink.send(cleanMac, cmdObject).catch(() => false)
+      : Promise.resolve(false);
+
+    let cloudOk = false;
+    let cloudErr = null;
+    try {
+      await sendDeviceCommandSecure(cleanMac, cmdObject, forceRetain);
+      cloudOk = true;
+    } catch (e) {
+      cloudErr = e;
+    }
+    const localOk = await localPromise;
+
+    if (cloudOk || localOk) return { ok: true, cloud: cloudOk, local: localOk };
+
+    const err = cloudErr || new Error('Sin ruta disponible (ni Hub local ni nube).');
+    console.warn('[COMANDO]', err.message);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('biofleet:command-error', { detail: { mac: cleanMac, message: err.message } }));
+    }
+    throw err;
   };
 
   const destroy = () => {
@@ -258,6 +294,7 @@ export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
       broadcast.close();
     }
     if (mqttClient) mqttClient.end(true);
+    if (localLink) localLink.end();
   };
 
   return { client: { end: destroy }, sendCommand };
