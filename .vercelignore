@@ -1,0 +1,14 @@
+# Artefactos pesados que Vercel no necesita para buildear la web
+desktop/
+node_modules/
+dist/
+firmware/
+firmwares/
+.tmp-fw-build/
+.tmp-shots/
+temp_backup/
+e2e-shots/
+.vercel/
+*.log
+nul
+autoclave-scada-fleet/
