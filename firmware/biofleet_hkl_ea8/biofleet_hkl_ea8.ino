@@ -51,7 +51,7 @@
 #include "esp_task_wdt.h"
 #include "time.h"
 
-#define SYS_VERSION "v12.0-HYBRID-LAN"
+#define SYS_VERSION "v12.1-HYBRID-STABLE"
 #define WDT_TIMEOUT_S 8
 
 // Pines HKL-EA8
@@ -216,12 +216,13 @@ bool      hubKnown = false;
 unsigned long lastHubMsg = 0;
 unsigned long lastDiscoverTx = 0;
 unsigned long lastAnnounceTx = 0;
+const unsigned long RETRY_MS     = 5000;
 unsigned long nextLocalTry = 0;
 unsigned long nextCloudTry = 0;
+unsigned long cloudRetryMs = RETRY_MS;
 const unsigned long HUB_TTL_MS   = 45000;
 const unsigned long DISCOVER_MS  = 8000;
 const unsigned long ANNOUNCE_MS  = 12000;
-const unsigned long RETRY_MS     = 5000;
 
 static bool ethConnected = false;
 static bool ntpConfigured = false;
@@ -833,12 +834,14 @@ void procesarDiscovery() {
   }
 }
 
-// ── Reconexión NO bloqueante: un intento por llamada, cooldown entre intentos.
-//    Si la nube no responde no congela la ruta local (y viceversa). ──
+// ── Reconexión con cooldown y backoff exponencial: sin internet cada intento
+//    TLS se atasca hasta socketTimeout (5s); con backoff no ahoga el loop del
+//    cliente local (que necesita < keepalive 60s de holgura). ──
 void reconectarMQTT() {
   if (!ethConnected || mqtt.connected()) return;
   if (millis() < nextCloudTry) return;
-  nextCloudTry = millis() + RETRY_MS;
+  nextCloudTry = millis() + cloudRetryMs;
+  cloudRetryMs = min(cloudRetryMs * 2, (unsigned long)60000);
   String cid = "HKL_EA8_" + macId;
   bool ok = false;
   if (xSemaphoreTake(xMutexMqtt, pdMS_TO_TICKS(500)) == pdTRUE) {
@@ -847,6 +850,7 @@ void reconectarMQTT() {
     xSemaphoreGive(xMutexMqtt);
   }
   if (ok) {
+    cloudRetryMs = RETRY_MS;
     Serial.printf("🚀 [MQTT] Conectado a HiveMQ. Suscrito a: %s\n", topicComando.c_str());
     publicarMeta();
     publicarHwProfile();
@@ -887,11 +891,11 @@ void TaskCore0_Comms(void* p) {
 
     if (ethConnected) {
       procesarDiscovery();
-      reconectarMQTT();
       reconectarLocal();
+      reconectarMQTT();
       if (xSemaphoreTake(xMutexMqtt, pdMS_TO_TICKS(50)) == pdTRUE) {
-        if (mqtt.connected()) mqtt.loop();
         if (mqttLocal.connected()) mqttLocal.loop();
+        if (mqtt.connected()) mqtt.loop();
         xSemaphoreGive(xMutexMqtt);
       }
 
@@ -1372,10 +1376,14 @@ void setup() {
   mqtt.setBufferSize(2560);
   mqtt.setServer(mqttServer, mqttPort);
   mqtt.setCallback(mqttCallback);
+  mqtt.setSocketTimeout(5);   // acota el stall TLS sin internet (default 15s ahogaba el loop)
+  mqtt.setKeepAlive(30);
 
   // Segundo cliente: broker local del Hub (TCP plano :1883, sin TLS)
   mqttLocal.setBufferSize(2560);
   mqttLocal.setCallback(mqttCallback);
+  mqttLocal.setSocketTimeout(5);
+  mqttLocal.setKeepAlive(60); // holgura cuando la nube monopoliza Core 0
   udpDisc.begin(UDP_DISC_PORT);
 
   // Watchdog: IDF 5.x usa esp_task_wdt_config_t; si el core Arduino ya lo
