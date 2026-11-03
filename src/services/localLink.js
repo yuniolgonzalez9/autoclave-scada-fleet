@@ -34,9 +34,9 @@ export function connectLocalLink(onPacket, onStatus) {
     if (onStatus) onStatus(v);
   };
 
-  const emit = (mac, channel, payload, isRetained = false) => {
+  const emit = (mac, channel, payload, isRetained = false, hubReplay = false) => {
     if (!mac || !channel || payload === undefined) return;
-    onPacket({ mac, channel, payload, topic: topicOf(mac, channel), isRetained });
+    onPacket({ mac, channel, payload, topic: topicOf(mac, channel), isRetained, hubReplay });
   };
 
   const emitDeviceSnapshot = (d, retained) => {
@@ -48,7 +48,10 @@ export function connectLocalLink(onPacket, onStatus) {
   const handleMessage = (raw) => {
     const m = JSON.parse(raw);
     if (m.tipo === 'mqtt' && m.mac && m.channel) {
-      emit(m.mac, m.channel, m.payload, false);
+      // replay=true: reporte bufferado del Hub reenviado para sync a nube.
+      // Viaja como retenido para no marcar el equipo "vivo" ni pisar datos
+      // frescos, pero hubReplay permite persistirlo y acusar recibo.
+      emit(m.mac, m.channel, m.payload, Boolean(m.replay), Boolean(m.replay));
     } else if (m.tipo === 'telemetria' && m.mac) {
       emit(m.mac, 'telemetria', m.datos, false);
     } else if (m.tipo === 'hub_ok' && Array.isArray(m.devices)) {
@@ -109,8 +112,21 @@ export function connectLocalLink(onPacket, onStatus) {
     });
   };
 
+  // La web confirma al Hub que un reporte bufferado ya subió a la nube;
+  // el Hub lo marca synced y deja de reenviarlo.
+  const ackReporte = (sessionId) => {
+    if (!ws || ws.readyState !== WebSocket.OPEN || !sessionId) return false;
+    try {
+      ws.send(JSON.stringify({ tipo: 'reporte_synced', session_id: String(sessionId) }));
+      return true;
+    } catch (_) {
+      return false;
+    }
+  };
+
   return {
     send,
+    ackReporte,
     isUp: () => up,
     end: () => {
       destroyed = true;

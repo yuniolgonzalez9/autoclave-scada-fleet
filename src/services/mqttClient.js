@@ -297,5 +297,10 @@ export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
     if (localLink) localLink.end();
   };
 
-  return { client: { end: destroy }, sendCommand };
+  return {
+    client: { end: destroy },
+    sendCommand,
+    // Ack de reportes bufferados del Hub (sync offline→nube confirmada)
+    ackReporte: (sessionId) => (localLink && localLink.isUp()) ? localLink.ackReporte(sessionId) : false
+  };
 };

@@ -23,6 +23,7 @@ export function useMqttFleet(enabled = true) {
 
   const [mqttConnected, setMqttConnected] = useState(true);
   const sendCommandRef = useRef(null);
+  const ackReporteRef = useRef(null);
   const fleetRef = useRef(fleet);
 
   useEffect(() => {
@@ -107,12 +108,13 @@ export function useMqttFleet(enabled = true) {
     return () => { isMounted = false; };
   }, [enabled]);
 
+  // Devuelve el session_id persistido o null si el upsert falló (offline,
+  // sin permiso sobre la MAC…). El caller lo usa para el ack de replay.
   const persistSessionReport = useCallback(async (cleanMac, payload, currentMeta) => {
+    const ciclosAcum = Number(payload?.ciclos_acumulados || payload?.ciclos || 0);
+    const sessionId = payload?.session_id || `SES-${cleanMac}-${Date.now()}`;
     try {
-      const ciclosAcum = Number(payload?.ciclos_acumulados || payload?.ciclos || 0);
-      const sessionId = payload?.session_id || `SES-${cleanMac}-${Date.now()}`;
-
-      await supabase.from('reportes_autoclaves').upsert({
+      const { error } = await supabase.from('reportes_autoclaves').upsert({
         session_id: sessionId,
         mac: cleanMac,
         alias: currentMeta?.alias || cleanMac,
@@ -133,7 +135,10 @@ export function useMqttFleet(enabled = true) {
         ciclos_detalle: payload?.ciclos_detalle || payload?.fases_desglose || [],
         eventos: payload?.eventos || []
       }, { onConflict: 'session_id' });
-    } catch (e) {}
+      return error ? null : sessionId;
+    } catch (e) {
+      return null;
+    }
   }, []);
 
   useEffect(() => {
@@ -181,6 +186,7 @@ export function useMqttFleet(enabled = true) {
       );
       client = conn.client;
       sendCommandRef.current = conn.sendCommand;
+      ackReporteRef.current = conn.ackReporte || null;
     }).catch(() => {});
 
     const flushTimer = setInterval(() => {
@@ -226,7 +232,7 @@ export function useMqttFleet(enabled = true) {
           }
         };
 
-        batch.forEach(({ mac, channel, payload, isRetained }) => {
+        batch.forEach(({ mac, channel, payload, isRetained, hubReplay }) => {
           const cleanMac = (mac || '').toUpperCase().replace(/[:-]/g, '');
           if (!cleanMac) return;
 
@@ -305,9 +311,16 @@ export function useMqttFleet(enabled = true) {
 
             if (isFreshStream) {
               updated.ultimoReporte = { ...(payload || {}), recibidoEn: Date.now() };
+            } else if (hubReplay && !updated.ultimoReporte) {
+              // Reporte recuperado del buffer del Hub: visible offline
+              // sin marcar el equipo como vivo.
+              updated.ultimoReporte = { ...(payload || {}), recibidoEn: Date.now(), viaHubBuffer: true };
             }
 
-            persistSessionReport(cleanMac, payload, updated.meta);
+            persistSessionReport(cleanMac, payload, updated.meta).then((sid) => {
+              // Confirmación al Hub: el reporte ya está en la nube → deja de reenviarlo
+              if (sid && hubReplay && ackReporteRef.current) ackReporteRef.current(sid);
+            });
 
             const prevActivos = Number(currentDev.meta?.ciclos_activos || 0);
             if (isFreshStream && ciclosAcum > prevActivos && currentDev.meta?.updated_at) {

@@ -51,7 +51,7 @@
 #include "esp_task_wdt.h"
 #include "time.h"
 
-#define SYS_VERSION "v12.1-HYBRID-STABLE"
+#define SYS_VERSION "v12.2-HYBRID-SCAN"
 #define WDT_TIMEOUT_S 8
 
 // Pines HKL-EA8
@@ -221,8 +221,8 @@ unsigned long nextLocalTry = 0;
 unsigned long nextCloudTry = 0;
 unsigned long cloudRetryMs = RETRY_MS;
 const unsigned long HUB_TTL_MS   = 45000;
-const unsigned long DISCOVER_MS  = 8000;
-const unsigned long ANNOUNCE_MS  = 12000;
+const unsigned long DISCOVER_MS  = 3000;  // solo corre mientras !hubKnown: vinculación <3s
+const unsigned long ANNOUNCE_MS  = 8000;
 
 static bool ethConnected = false;
 static bool ntpConfigured = false;
@@ -804,6 +804,13 @@ void procesarDiscovery() {
           hubKnown = true;
           lastHubMsg = millis();
           if (d["mqtt"].is<int>()) hubMqttPort = d["mqtt"].as<int>();
+        } else if (strcmp(bf, "scan") == 0) {
+          // El Hub escanea la LAN: responder announce ya, sin esperar al
+          // tick periódico. Se reusa el rate-limit del announce normal.
+          if (millis() - lastAnnounceTx >= 500) {
+            lastAnnounceTx = millis();
+            anunciarPresencia();
+          }
         }
       }
     }

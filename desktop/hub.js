@@ -16,6 +16,12 @@ const WS_PORT = Number(process.env.BIOFLEET_WS_PORT) || 9781;
 const MQTT_PORT = Number(process.env.BIOFLEET_MQTT_PORT) || 1883;
 const TOPIC_PREFIX = 'autoclave_med_2026';
 const HUB_ANNOUNCE_MS = 15000;
+const HUB_ANNOUNCE_BURST_MS = 3000;   // arranque: presencia agresiva 45s
+const HUB_ANNOUNCE_BURST_S = 45;
+const MAX_DEVICES = 256;              // tope defensivo del directorio LAN
+const REPORT_REPLAY_MS = 45000;       // reintento de sync de reportes pendientes
+const REPORT_REPLAY_BATCH = 20;
+const TELEMETRY_TTL_MS = 24 * 3600 * 1000; // datalog local: conservar 24h
 
 exports.startHub = (cb) => {
   // ── SQLite: registro local completo ──
@@ -27,9 +33,25 @@ exports.startHub = (cb) => {
     recibido_at INTEGER DEFAULT (strftime('%s','now')*1000));
     CREATE TABLE IF NOT EXISTS eventos(
     id INTEGER PRIMARY KEY AUTOINCREMENT, mac TEXT, tipo TEXT, datos TEXT,
-    ts INTEGER DEFAULT (strftime('%s','now')*1000));`);
+    ts INTEGER DEFAULT (strftime('%s','now')*1000));
+    CREATE TABLE IF NOT EXISTS reportes(
+    session_id TEXT PRIMARY KEY, mac TEXT, payload TEXT,
+    ts INTEGER DEFAULT (strftime('%s','now')*1000),
+    synced INTEGER NOT NULL DEFAULT 0);`);
   const insTel = db.prepare('INSERT INTO telemetria(mac,datos) VALUES(?,?)');
   const insEvt = db.prepare('INSERT INTO eventos(mac,tipo,datos) VALUES(?,?,?)');
+  const insRep = db.prepare('INSERT OR REPLACE INTO reportes(session_id,mac,payload) VALUES(?,?,?)');
+  const markRep = db.prepare('UPDATE reportes SET synced=1 WHERE session_id=?');
+  const qPending = db.prepare('SELECT session_id,mac,payload FROM reportes WHERE synced=0 ORDER BY ts LIMIT ?');
+  const qPendingN = db.prepare('SELECT COUNT(*) n FROM reportes WHERE synced=0');
+
+  // Poda del datalog local: 1 fila por paquete crece sin freno si el Hub
+  // vive meses encendido. La telemetría histórica en nube no existe — el
+  // valor local es el diagnóstico reciente, 24h alcanza.
+  setInterval(() => {
+    try { db.prepare('DELETE FROM telemetria WHERE recibido_at < ?').run(Date.now() - TELEMETRY_TTL_MS); } catch (_) {}
+    try { db.prepare('DELETE FROM reportes WHERE synced=1 AND ts < ?').run(Date.now() - 7 * 24 * 3600 * 1000); } catch (_) {}
+  }, 3600 * 1000).unref();
 
   // ── Broker MQTT local (puerto LAN) ──
   const aedes = Aedes();
@@ -38,6 +60,15 @@ exports.startHub = (cb) => {
   mqttServer.listen(MQTT_PORT, () => console.log(`[HUB] MQTT local :${MQTT_PORT}`));
 
   const devices = new Map(); // mac → {mac,ip,alias,tipo,fw,lastSeen}
+  const rememberDevice = (mac, dev) => {
+    devices.set(mac, { ...(devices.get(mac) || {}), ...dev });
+    // Tope defensivo: si el mapa se llena, expulsa al más viejo (stale).
+    if (devices.size > MAX_DEVICES) {
+      let stalest = null;
+      devices.forEach((v, k) => { if (!stalest || v.lastSeen < stalest.v.lastSeen) stalest = { k, v }; });
+      if (stalest) devices.delete(stalest.k);
+    }
+  };
   const wsClients = new Set();
   const broadcast = (obj) => {
     const s = JSON.stringify(obj);
@@ -50,13 +81,18 @@ exports.startHub = (cb) => {
       const msg = JSON.parse(packet.payload.toString());
       const mac = (msg.mac || msg.id || '').toUpperCase();
       if (!mac) return;
-      const prev = devices.get(mac) || {};
-      devices.set(mac, { ...prev, mac, ip: prev.ip || '?', lastSeen: Date.now(), datos: msg });
+      rememberDevice(mac, { mac, ip: devices.get(mac)?.ip || '?', lastSeen: Date.now(), datos: msg });
       insTel.run(mac, JSON.stringify(msg));
       // Canal = tramo del topic tras autoclave_med_2026/<MAC>/ — la web
       // consume el mismo contrato que por la nube (telemetria, meta, esquema…)
       const parts = String(packet.topic || '').split('/');
       const channel = parts.length > 2 ? parts.slice(2).join('/') : 'telemetria';
+      // Reporte forense de fin de ciclo: buffer local para replay→sync a
+      // nube cuando vuelva internet (la web upsertea por session_id).
+      if (channel === 'reporte_paquete') {
+        const sid = msg.session_id || `SES-${mac}-${Date.now()}`;
+        insRep.run(sid, mac, JSON.stringify(msg));
+      }
       broadcast({ tipo: 'mqtt', mac, channel, payload: msg, topic: packet.topic });
       if (channel === 'telemetria') broadcast({ tipo: 'telemetria', mac, datos: msg });
     } catch (_) {}
@@ -79,9 +115,27 @@ exports.startHub = (cb) => {
   // ── WS: la web dentro del exe se conecta al hub ──
   const wss = new WebSocketServer({ port: WS_PORT });
   wss.on('error', (e) => console.log(`[HUB] WS :${WS_PORT} no disponible (${e.code || e.message}) — enlace web local deshabilitado`));
+  // Replay de reportes pendientes: la web los recibe como paquete normal
+  // (canal reporte_paquete, flag replay) y los upsertea a Supabase con la
+  // sesión del usuario — cumple RLS. Al confirmar manda reporte_synced y
+  // el Hub marca la fila como subida. Idempotente por session_id.
+  const replayPendingReports = () => {
+    if (!wsClients.size) return;
+    try {
+      qPending.all(REPORT_REPLAY_BATCH).forEach((r) => {
+        try {
+          broadcast({ tipo: 'mqtt', mac: r.mac, channel: 'reporte_paquete', payload: JSON.parse(r.payload), replay: true });
+        } catch (_) {}
+      });
+    } catch (_) {}
+  };
+  setInterval(replayPendingReports, REPORT_REPLAY_MS).unref();
+
   wss.on('connection', (ws) => {
     wsClients.add(ws);
-    ws.send(JSON.stringify({ tipo: 'hub_ok', devices: [...devices.values()] }));
+    let pendientes = 0;
+    try { pendientes = qPendingN.get().n; } catch (_) {}
+    ws.send(JSON.stringify({ tipo: 'hub_ok', devices: [...devices.values()], reportes_pendientes: pendientes }));
     ws.on('close', () => wsClients.delete(ws));
     ws.on('message', (raw) => {
       try {
@@ -89,6 +143,8 @@ exports.startHub = (cb) => {
         if (m.tipo === 'comando' && m.mac && m.comando) {
           const ok = sendCommand(m.mac, m.comando);
           try { ws.send(JSON.stringify({ tipo: 'comando_ack', mac: m.mac, ok })); } catch (_) {}
+        } else if (m.tipo === 'reporte_synced' && m.session_id) {
+          try { markRep.run(String(m.session_id)); } catch (_) {}
         }
       } catch (_) {}
     });
@@ -121,7 +177,7 @@ exports.startHub = (cb) => {
       if (m.biofleet === 'announce' || m.biofleet === 'hello') {
         const dev = { mac: m.mac, ip: rinfo.address, alias: m.alias || '', tipo: m.tipo || '', fw: m.fw || '', lastSeen: Date.now() };
         if (dev.mac) {
-          devices.set(dev.mac, { ...(devices.get(dev.mac) || {}), ...dev });
+          rememberDevice(dev.mac, dev);
           broadcast({ tipo: 'device_found', dev });
         }
         // Responder también a announces: así la placa nos descubre aunque
@@ -130,23 +186,37 @@ exports.startHub = (cb) => {
       }
     } catch (_) {}
   });
+  const hubStartedAt = Date.now();
   udp.bind(DISCOVERY_PORT, () => {
     try { udp.setBroadcast(true); } catch (_) {}
     console.log(`[HUB] UDP discovery :${DISCOVERY_PORT}`);
-    // Presencia periódica por broadcast: las placas que se conecten tarde
-    // nos encuentran sin tener que preguntar.
-    setInterval(() => {
+    // Presencia por broadcast: ráfaga cada 3s durante los primeros 45s
+    // (las placas que arrancan con el Hub se vinculan sin esperar su
+    // discover), luego cadencia normal cada 15s.
+    const announce = () => {
       const msg = Buffer.from(hubInfo());
       lanBroadcasts().forEach((b) => udp.send(msg, DISCOVERY_PORT, b, () => {}));
-    }, HUB_ANNOUNCE_MS).unref();
+    };
+    const burst = setInterval(() => {
+      announce();
+      if (Date.now() - hubStartedAt > HUB_ANNOUNCE_BURST_S * 1000) clearInterval(burst);
+    }, HUB_ANNOUNCE_BURST_MS);
+    burst.unref();
+    setInterval(announce, HUB_ANNOUNCE_MS).unref();
   });
 
-  // Escáner: broadcast de pregunta por toda la LAN
-  const scanLan = () => {
-    const ask = Buffer.from(JSON.stringify({ biofleet: 'discover', ts: Date.now() }));
-    lanBroadcasts().forEach((bcast) => udp.send(ask, DISCOVERY_PORT, bcast));
-    return { scanning: true, known: [...devices.values()] };
-  };
+  // Escáner real: {biofleet:'scan'} — el firmware responde announce al
+  // instante (v12.2+); 'discover' se mantiene por compatibilidad. Se
+  // esperan ~1.4s las respuestas y se devuelve la lista viva.
+  const scanLan = () => new Promise((resolve) => {
+    const scan = Buffer.from(JSON.stringify({ biofleet: 'scan', ts: Date.now() }));
+    const legacy = Buffer.from(JSON.stringify({ biofleet: 'discover', ts: Date.now() }));
+    lanBroadcasts().forEach((bcast) => {
+      udp.send(scan, DISCOVERY_PORT, bcast, () => {});
+      udp.send(legacy, DISCOVERY_PORT, bcast, () => {});
+    });
+    setTimeout(() => resolve({ scanning: true, known: [...devices.values()] }), 1400);
+  });
 
   cb({
     scanLan,
