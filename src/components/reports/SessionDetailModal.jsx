@@ -277,14 +277,10 @@ export default function SessionDetailModal({ isOpen, onClose, session }) {
     return result;
   }, [eventosEnriquecidos, eventCategory, eventSearch, isAscending]);
 
-  // Impresión Segura del Certificado ISO 17665 (Con escape HTML)
-  const handlePrintCertificate = () => {
-    const v = window.open('', '_blank');
-    if (!v) {
-      alert('Habilite las ventanas emergentes (pop-ups) en su navegador para imprimir el certificado.');
-      return;
-    }
-
+  // Impresión Segura del Certificado ISO 17665 (Con escape HTML).
+  // Dentro del Hub: impresión silenciosa a la impresora configurada.
+  // En navegador: popup + diálogo del sistema (comportamiento previo).
+  const handlePrintCertificate = async () => {
     const safeSessionId = escapeHtml(session.session_id);
     const safeAlias = escapeHtml(session.alias || 'Autoclave');
     const safeMac = escapeHtml(session.mac);
@@ -311,12 +307,7 @@ export default function SessionDetailModal({ isOpen, onClose, session }) {
       </li>
     `).join('');
 
-    v.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="UTF-8">
-          <title>CERTIFICADO CLÍNICO - ${safeSessionId}</title>
+    const certHtml = `
           <style>
             body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 32px; color: #0f172a; line-height: 1.4; }
             .header-cert { border-bottom: 2px solid #0f172a; padding-bottom: 8px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: flex-end; }
@@ -330,8 +321,6 @@ export default function SessionDetailModal({ isOpen, onClose, session }) {
             .sign-box { margin-top: 40px; display: grid; grid-template-columns: 1fr 1fr; gap: 30px; text-align: center; }
             .sign-line { border-top: 1px solid #0f172a; padding-top: 6px; font-size: 10px; font-weight: bold; }
           </style>
-        </head>
-        <body>
           <div class="header-cert">
             <div>
               <h1 class="title">CERTIFICADO CLÍNICO DE VALIDACIÓN TÉRMICA</h1>
@@ -379,6 +368,35 @@ export default function SessionDetailModal({ isOpen, onClose, session }) {
               <div class="sign-line">Supervisión Central de Esterilización (CEYE)<br><span style="font-size:9px; color:#64748b;">Sello de Liberación Paramétrica</span></div>
             </div>
           </div>
+    `;
+
+    // Hub: impresión silenciosa a la impresora configurada, sin diálogos.
+    if (window.biofleetHub?.isHub && window.biofleetHub.printHtml) {
+      try {
+        const ps = await import('../../services/printService');
+        const prefs = ps.getPrintPrefs();
+        const r = await ps.printDoc({ title: `CERTIFICADO CLÍNICO - ${safeSessionId}`, html: certHtml, printerName: prefs.printerName });
+        if (!r?.ok) alert(`Impresión falló: ${r?.err || 'error desconocido'}`);
+      } catch (e) {
+        alert(`Impresión falló: ${e?.message || 'error desconocido'}`);
+      }
+      return;
+    }
+
+    const v = window.open('', '_blank');
+    if (!v) {
+      alert('Habilite las ventanas emergentes (pop-ups) en su navegador para imprimir el certificado.');
+      return;
+    }
+    v.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="UTF-8">
+          <title>CERTIFICADO CLÍNICO - ${safeSessionId}</title>
+        </head>
+        <body>
+          ${certHtml}
           <script>
             window.onload = function() { window.print(); };
           </script>

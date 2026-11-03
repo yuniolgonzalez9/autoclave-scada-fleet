@@ -170,10 +170,54 @@ const createWindow = () => {
   mainWindow.loadURL(WEB_URL);
 };
 
+// Impresión silenciosa de documentos HTML: ventana oculta + spooler del SO.
+// Es la vía para auto-imprimir reportes/tickets sin diálogo del navegador.
+const printHtmlSilent = (html, { deviceName, landscape, copies } = {}) =>
+  new Promise((resolve) => {
+    if (!mainWindow || mainWindow.isDestroyed()) return resolve({ ok: false, err: 'ventana no lista' });
+    const win = new BrowserWindow({
+      show: false,
+      width: 800,
+      height: 600,
+      webPreferences: { contextIsolation: true, sandbox: true }
+    });
+    let done = false;
+    const finish = (r) => {
+      if (done) return;
+      done = true;
+      try { win.destroy(); } catch (_) {}
+      resolve(r);
+    };
+    win.webContents.on('did-finish-load', () => {
+      win.webContents.print(
+        {
+          silent: true,
+          printBackground: true,
+          deviceName: deviceName || undefined,
+          landscape: Boolean(landscape),
+          copies: Math.max(1, Number(copies) || 1),
+          margins: { marginType: 'printableArea' }
+        },
+        (ok, reason) => finish({ ok, err: ok ? undefined : reason })
+      );
+    });
+    win.webContents.on('did-fail-load', (e, code, desc) => finish({ ok: false, err: `carga ${code}: ${desc}` }));
+    setTimeout(() => finish({ ok: false, err: 'timeout de impresión' }), 30000);
+    win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html || '<p></p>'));
+  });
+
 // IPC: la web dentro del exe pide servicios del hub
 ipcMain.handle('hub:scanLan', () => global.hub?.scanLan() || []);
 ipcMain.handle('hub:serialPorts', () => listSerialPorts());
 ipcMain.handle('hub:printers', () => listPrinters());
+ipcMain.handle('hub:printersV2', (e) => {
+  if (!mainWindow || e.sender !== mainWindow.webContents) return [];
+  return mainWindow.webContents.getPrintersAsync().catch(() => []);
+});
+ipcMain.handle('hub:printHtml', (e, job) => {
+  if (!mainWindow || e.sender !== mainWindow.webContents) return { ok: false, err: 'origen no permitido' };
+  return printHtmlSilent(job?.html, job || {});
+});
 ipcMain.handle('hub:printLabel', (e, job) => printLabel(job));
 ipcMain.handle('hub:status', () => global.hub?.status() || { online: false });
 const HEX = /^#[0-9a-f]{6}$/i;

@@ -10,6 +10,8 @@ if (trusted) {
     scanLan: () => ipcRenderer.invoke('hub:scanLan'),
     serialPorts: () => ipcRenderer.invoke('hub:serialPorts'),
     printers: () => ipcRenderer.invoke('hub:printers'),
+    printersV2: () => ipcRenderer.invoke('hub:printersV2'),
+    printHtml: (job) => ipcRenderer.invoke('hub:printHtml', job),
     printLabel: (job) => ipcRenderer.invoke('hub:printLabel', job),
     status: () => ipcRenderer.invoke('hub:status'),
     sendCommand: (mac, cmd) => ipcRenderer.invoke('hub:command', { mac, cmd })

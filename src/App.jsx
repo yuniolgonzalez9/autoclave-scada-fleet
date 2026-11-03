@@ -33,6 +33,8 @@ const CloudDiagnosticsModal = lazy(() => import('./components/admin/CloudDiagnos
 const DeviceAssignmentModal = lazy(() => import('./components/admin/DeviceAssignmentModal'));
 const SurgicalQRLabel = lazy(() => import('./components/labels/SurgicalQRLabel'));
 const ClinicalAuditView = lazy(() => import('./components/reports/ClinicalAuditView'));
+const PackagesView = lazy(() => import('./components/packages/PackagesView'));
+const PackageStatusPublic = lazy(() => import('./components/packages/PackageStatusPublic'));
 
 const ViewLoader = () => (
   <div className="p-8 text-center text-slate-400 text-[10px] tracking-[0.3em] uppercase animate-pulse">
@@ -58,12 +60,13 @@ import {
   X,
   ChevronLeft,
   Wrench,
-  ClipboardList
+  ClipboardList,
+  Package
 } from 'lucide-react';
 
-const APP_SECTIONS = new Set(['flota', 'gestion', 'servicio', 'studio', 'usuarios', 'fota', 'auditoria', 'detalle']);
-const MOBILE_SECTIONS = ['flota', 'gestion', 'studio', 'usuarios', 'fota'];
-const DESKTOP_SECTIONS = ['flota', 'gestion', 'servicio', 'studio', 'usuarios', 'fota', 'auditoria'];
+const APP_SECTIONS = new Set(['flota', 'gestion', 'paquetes', 'servicio', 'studio', 'usuarios', 'fota', 'auditoria', 'detalle']);
+const MOBILE_SECTIONS = ['flota', 'gestion', 'paquetes', 'studio', 'usuarios', 'fota'];
+const DESKTOP_SECTIONS = ['flota', 'gestion', 'paquetes', 'servicio', 'studio', 'usuarios', 'fota', 'auditoria'];
 
 function getInitialActiveSection() {
   const urlParams = new URLSearchParams(window.location.search);
@@ -895,6 +898,7 @@ function ScadaAppContent() {
             {[
               { id: 'flota', label: 'Flota', Icon: Activity },
               { id: 'gestion', label: 'Gestión', Icon: Building2 },
+              { id: 'paquetes', label: 'Paquetes', Icon: Package },
               { id: 'servicio', label: 'Servicio', Icon: Wrench },
               ...(canEditHardware ? [{ id: 'studio', label: 'IA Studio', Icon: Sparkles }] : []),
               { id: 'usuarios', label: 'Personal', Icon: Shield },
@@ -920,9 +924,25 @@ function ScadaAppContent() {
 
         {/* Contenido Principal */}
         {!user ? (
-          <main className="flex-1 flex items-center justify-center p-4 android-view-transition">
-            <LoginModal />
-          </main>
+          // Sin sesión: consulta pública de paquete por código (QR del ticket)
+          // o el login normal.
+          (() => {
+            const consultaPkg = new URLSearchParams(window.location.search).get('consulta');
+            if (consultaPkg) {
+              return (
+                <main className="flex-1 p-4 android-view-transition">
+                  <Suspense fallback={<ViewLoader />}>
+                    <PackageStatusPublic codigoInicial={consultaPkg} />
+                  </Suspense>
+                </main>
+              );
+            }
+            return (
+              <main className="flex-1 flex items-center justify-center p-4 android-view-transition">
+                <LoginModal />
+              </main>
+            );
+          })()
         ) : (
           <ErrorBoundary>
           <main ref={mainRef} data-nav-dir={navDir} className="flex-1 p-3 md:p-6 max-w-7xl mx-auto w-full flex flex-col gap-4 android-view-transition">
@@ -1249,6 +1269,18 @@ function ScadaAppContent() {
                 </div>
               )}
 
+              {(visitedSections.has('paquetes') || activeSection === 'paquetes') && (
+                <div className="app-view-panel" hidden={activeSection !== 'paquetes'}>
+                  <Suspense fallback={<ViewLoader />}>
+                  <PackagesView
+                    fleet={fleet}
+                    sendCommand={sendDeviceCommand}
+                    operatorName={displayName}
+                  />
+                  </Suspense>
+                </div>
+              )}
+
               {(visitedSections.has('servicio') || activeSection === 'servicio') && (
                 <div className="app-view-panel" hidden={activeSection !== 'servicio'}>
                   <Suspense fallback={<ViewLoader />}>
@@ -1336,6 +1368,16 @@ function ScadaAppContent() {
             >
               <Building2 className={`w-5 h-5 ${activeSection === 'gestion' ? 'icon-glow' : ''}`} />
               <span>Gestión</span>
+            </button>
+
+            <button
+              onClick={() => goToSection('paquetes')}
+              className={`flex-1 flex flex-col items-center gap-1 py-1 px-1 rounded-lg text-[10px] font-mono transition-all ${
+                activeSection === 'paquetes' ? 'text-cyan-400 font-bold scale-110' : 'text-slate-400 hover:text-cyan-300'
+              }`}
+            >
+              <Package className={`w-5 h-5 ${activeSection === 'paquetes' ? 'icon-glow' : ''}`} />
+              <span>Paquetes</span>
             </button>
 
             {canEditHardware && (

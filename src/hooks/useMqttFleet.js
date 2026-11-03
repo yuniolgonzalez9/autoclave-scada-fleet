@@ -25,6 +25,7 @@ export function useMqttFleet(enabled = true) {
   const sendCommandRef = useRef(null);
   const ackReporteRef = useRef(null);
   const fleetRef = useRef(fleet);
+  const fasePorMac = useRef({}); // borde de fase para auto-impresión/paquetes
 
   useEffect(() => {
     fleetRef.current = fleet;
@@ -257,6 +258,31 @@ export function useMqttFleet(enabled = true) {
 
           if (channel === 'telemetria') {
             if (isFreshStream) updated.lastTelemetryAt = Date.now();
+
+            // Borde de fase: reposo → ciclo activo. Paquete REGISTRADO pasa
+            // a EN_PROCESO y (opción) se imprime el comprobante de inicio.
+            const faseNueva = payload?.fase;
+            if (isFreshStream && faseNueva) {
+              const fasePrevia = fasePorMac.current[cleanMac];
+              fasePorMac.current[cleanMac] = faseNueva;
+              const REPOSO = new Set(['ESPERA', 'APAGADO', 'FINALIZADO']);
+              if (fasePrevia && REPOSO.has(fasePrevia) && !REPOSO.has(faseNueva)) {
+                (async () => {
+                  try {
+                    const [{ markInProcessByMac }, ps] = await Promise.all([
+                      import('../services/packageService'),
+                      import('../services/printService')
+                    ]);
+                    const r = await markInProcessByMac(cleanMac);
+                    const prefs = ps.getPrintPrefs();
+                    if (r.matched && prefs.autoInicio) {
+                      ps.printDoc({ ...ps.buildStartSlipDoc(r.paquete, currentDev), printerName: prefs.printerName });
+                    }
+                  } catch (_) {}
+                })();
+              }
+            }
+
             updated.datos = {
               ...(currentDev.datos || {}),
               ...(payload || {})
@@ -321,6 +347,24 @@ export function useMqttFleet(enabled = true) {
               // Confirmación al Hub: el reporte ya está en la nube → deja de reenviarlo
               if (sid && hubReplay && ackReporteRef.current) ackReporteRef.current(sid);
             });
+
+            // Cierre de ciclo real (no replay): resuelve el paquete en
+            // seguimiento y auto-imprime el reporte forense si está activo.
+            if (isFreshStream) {
+              (async () => {
+                try {
+                  const [{ markCycleReport }, ps] = await Promise.all([
+                    import('../services/packageService'),
+                    import('../services/printService')
+                  ]);
+                  const prefs = ps.getPrintPrefs();
+                  if (prefs.autoFin) {
+                    ps.printDoc({ ...ps.buildCycleReportDoc(updated, payload), printerName: prefs.printerName });
+                  }
+                  await markCycleReport(cleanMac, payload);
+                } catch (_) {}
+              })();
+            }
 
             const prevActivos = Number(currentDev.meta?.ciclos_activos || 0);
             if (isFreshStream && ciclosAcum > prevActivos && currentDev.meta?.updated_at) {
