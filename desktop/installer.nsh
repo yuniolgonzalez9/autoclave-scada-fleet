@@ -26,6 +26,19 @@
   Var bfRadCancel
   Var bfChkData
 
+  ; ── Cierra la app en ejecución ANTES de instalar ──
+  ; El usuario jamás ve "cierre la aplicación": intento graceful (WM_CLOSE
+  ; permite al hub liberar :1883/:9781 limpio) y fuerzo bruta como fallback.
+  !macro bfKillApp
+    DetailPrint "Cerrando ${PRODUCT_NAME} en ejecución…"
+    nsExec::ExecToStack 'taskkill /IM "${PRODUCT_FILENAME}.exe"'
+    Pop $0
+    Sleep 1500
+    nsExec::ExecToStack 'taskkill /F /IM "${PRODUCT_FILENAME}.exe"'
+    Pop $0
+    Sleep 800
+  !macroend
+
   ; Detecta la instalación previa (initMultiUser ya pobló las vars de modo)
   !macro customInit
     StrCpy $bfPrevDir ""
@@ -47,6 +60,12 @@
     ; Actualizar/Modificar conservan la carpeta existente por defecto
     ${if} $bfPrevDir != ""
       StrCpy $INSTDIR $bfPrevDir
+    ${endif}
+
+    ; Flujo silencioso (/S, auto-updater): sin páginas donde elegir, así
+    ; que la app corriendo se cierra aquí antes de que empiece el copy.
+    ${if} ${Silent}
+      !insertmacro bfKillApp
     ${endif}
   !macroend
 
@@ -120,9 +139,12 @@
     ${if} $0 == 1
       StrCpy $bfMode "update"
       ; actualización directa: cierra la app vieja, instala y la reabre (customInstall)
+      !insertmacro bfKillApp
       SetSilent silent
     ${else}
       StrCpy $bfMode "modify"
+      ; Modificar también instala sobre la app — cerrarla primero igual
+      !insertmacro bfKillApp
     ${endif}
   FunctionEnd
 

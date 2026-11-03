@@ -1,6 +1,6 @@
 {
   "name": "biofleet-hub",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Biofleet Hub — app de escritorio: web empaquetada + hub local de dispositivos + puente de periféricos",
   "main": "main.js",
   "author": "Biofleet",
@@ -23,7 +23,9 @@
   "build": {
     "appId": "com.biofleet.hub",
     "productName": "Biofleet Hub",
-    "directories": { "output": "release" },
+    "directories": {
+      "output": "release"
+    },
     "files": [
       "main.js",
       "preload.js",
@@ -38,7 +40,9 @@
     ],
     "icon": "icon.ico",
     "win": {
-      "target": ["nsis"],
+      "target": [
+        "nsis"
+      ],
       "icon": "icon.ico"
     },
     "nsis": {
