@@ -19,6 +19,21 @@ const { startNodeRegistry } = require('./noderegistry');
 
 let mainWindow = null;
 
+// Instancia única: un segundo lanzamiento enfoca la ventana existente
+// en vez de abrir otra copia que chocaría con los puertos del hub.
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+}
+
 // La web en vivo (mismo origen que /api): MQTT, comandos y Telegram funcionan
 // y siempre está actualizada. Sin internet se usa la copia empaquetada.
 // BIOFLEET_WEB_URL permite apuntar el Hub a un dev server local
@@ -183,6 +198,7 @@ ipcMain.handle('hub:isMax', (e) => (mainWindow && e.sender === mainWindow.webCon
 ipcMain.handle('hub:command', (e, { mac, cmd }) => global.hub?.sendCommand(mac, cmd) ?? false);
 
 app.whenReady().then(() => {
+  if (!gotSingleInstanceLock) return;
   // Evita que el SO suspenda la app — la telemetría debe seguir viva.
   try { powerSaveBlocker.start('prevent-app-suspension'); } catch (_) {}
   startHub((h) => { global.hub = h; });

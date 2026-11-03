@@ -34,6 +34,7 @@ exports.startHub = (cb) => {
   // ── Broker MQTT local (puerto LAN) ──
   const aedes = Aedes();
   const mqttServer = net.createServer(aedes.handle);
+  mqttServer.on('error', (e) => console.log(`[HUB] MQTT :${MQTT_PORT} no disponible (${e.code || e.message}) — ruta local MQTT deshabilitada`));
   mqttServer.listen(MQTT_PORT, () => console.log(`[HUB] MQTT local :${MQTT_PORT}`));
 
   const devices = new Map(); // mac → {mac,ip,alias,tipo,fw,lastSeen}
@@ -77,6 +78,7 @@ exports.startHub = (cb) => {
 
   // ── WS: la web dentro del exe se conecta al hub ──
   const wss = new WebSocketServer({ port: WS_PORT });
+  wss.on('error', (e) => console.log(`[HUB] WS :${WS_PORT} no disponible (${e.code || e.message}) — enlace web local deshabilitado`));
   wss.on('connection', (ws) => {
     wsClients.add(ws);
     ws.send(JSON.stringify({ tipo: 'hub_ok', devices: [...devices.values()] }));
@@ -94,6 +96,7 @@ exports.startHub = (cb) => {
 
   // ── Descubrimiento UDP ──
   const udp = dgram.createSocket('udp4');
+  udp.on('error', (e) => console.log(`[HUB] UDP :${DISCOVERY_PORT} no disponible (${e.code || e.message})`));
   const hubInfo = () => JSON.stringify({ biofleet: 'hub', mqtt: MQTT_PORT, ws: WS_PORT, v: 1 });
 
   const lanBroadcasts = () => {
