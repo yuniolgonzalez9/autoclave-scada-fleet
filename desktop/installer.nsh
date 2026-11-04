@@ -112,6 +112,9 @@
 
     ${NSD_CreateLabel} 0u 0u 100% 30u "Se encontró una instalación existente de ${PRODUCT_NAME}.$\r$\nVersión instalada: $bfPrevVersion$\r$\nUbicación: $bfPrevDir"
     Pop $0
+    ; Título en negrita — tipografía de marca
+    CreateFont $R8 "Segoe UI" 11 700
+    SendMessage $0 ${WM_SETFONT} $R8 1
 
     ${NSD_CreateRadioButton} 0u 38u 100% 14u "Actualizar — instala la versión nueva conservando tu configuración (recomendado)"
     Pop $bfRadUpdate
@@ -124,6 +127,12 @@
 
     ${NSD_CreateCheckbox} 10u 112u 100% 12u "Al desinstalar, borrar también los datos guardados (registros y caché)"
     Pop $bfChkData
+
+    ; Firma de marca al pie — detalle premium
+    ${NSD_CreateLabel} 0u 128u 100% 10u "BIOFLEET · Control Industrial Local"
+    Pop $1
+    CreateFont $R9 "Segoe UI" 7 400
+    SendMessage $1 ${WM_SETFONT} $R9 1
 
     ; WS_GROUP (0x20000): el primer radio abre el grupo exclusivo,
     ; el checkbox lo cierra para no agruparse con ellos

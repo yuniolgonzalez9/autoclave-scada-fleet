@@ -1,6 +1,6 @@
 {
   "name": "biofleet-hub",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Biofleet Hub — app de escritorio: web empaquetada + hub local de dispositivos + puente de periféricos",
   "main": "main.js",
   "author": "Biofleet",
@@ -57,7 +57,8 @@
       "uninstallerIcon": "icon.ico",
       "installerHeaderIcon": "icon.ico",
       "installerSidebar": "build/installerSidebar.bmp",
-      "uninstallerSidebar": "build/uninstallerSidebar.bmp"
+      "uninstallerSidebar": "build/uninstallerSidebar.bmp",
+      "installerHeader": "build/installerHeader.bmp"
     }
   }
 }
