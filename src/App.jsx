@@ -1359,7 +1359,10 @@ function ScadaAppContent() {
               {(visitedSections.has('auditoria') || activeSection === 'auditoria') && (
                 <div className="app-view-panel" hidden={activeSection !== 'auditoria'}>
                   <Suspense fallback={<ViewLoader />}>
-                  <ClinicalAuditView />
+                  <ClinicalAuditView
+                    fleet={Object.fromEntries(allowedDevices.map((d) => [d.mac, d]))}
+                    onNavigate={setActiveSection}
+                  />
                   </Suspense>
                 </div>
               )}

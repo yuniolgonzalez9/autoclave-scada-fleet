@@ -12,7 +12,7 @@ import {
   Search 
 } from 'lucide-react';
 
-export default function ClinicalAuditView() {
+export default function ClinicalAuditView({ fleet = {}, onNavigate }) {
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedSession, setSelectedSession] = useState(null);
@@ -322,24 +322,34 @@ export default function ClinicalAuditView() {
         </div>
       </div>
 
-      {/* Tarjetas KPI */}
+      {/* Tarjetas KPI — cada una es un atajo real: sesiones resetea filtros,
+          conformes/alarmas filtran la tabla, equipos navega a Gestión de flota.
+          EQUIPOS cuenta dispositivos VIVOS de la flota, no MACs del historial. */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div className="ultra-glass p-3.5 rounded-xl border border-cyan-500/30 text-center">
+        <button type="button" onClick={() => { setFilterType('TODOS'); setFilterDevice('TODOS'); setFilterText(''); }}
+          title="Ver todas las sesiones"
+          className="ultra-glass p-3.5 rounded-xl border border-cyan-500/30 text-center hover:border-cyan-400/70 transition-all cursor-pointer">
           <span className="text-[10px] text-cyan-400 block mb-1">TOTAL SESIONES</span>
           <p className="text-2xl font-bold text-white">{reports.length}</p>
-        </div>
-        <div className="ultra-glass p-3.5 rounded-xl border border-emerald-500/30 text-center">
+        </button>
+        <button type="button" onClick={() => setFilterType('CICLO_OK')}
+          title="Filtrar solo ciclos conformes"
+          className="ultra-glass p-3.5 rounded-xl border border-emerald-500/30 text-center hover:border-emerald-400/70 transition-all cursor-pointer">
           <span className="text-[10px] text-emerald-400 block mb-1">CICLOS CONFORMES</span>
           <p className="text-2xl font-bold text-emerald-300">{totalCiclosConformes}</p>
-        </div>
-        <div className="ultra-glass p-3.5 rounded-xl border border-rose-500/30 text-center">
+        </button>
+        <button type="button" onClick={() => setFilterType('ALARMA')}
+          title="Filtrar sesiones con alarmas o fallos"
+          className="ultra-glass p-3.5 rounded-xl border border-rose-500/30 text-center hover:border-rose-400/70 transition-all cursor-pointer">
           <span className="text-[10px] text-rose-400 block mb-1">ALARMAS / FALLOS</span>
           <p className="text-2xl font-bold text-rose-400">{totalAlarmas}</p>
-        </div>
-        <div className="ultra-glass p-3.5 rounded-xl border border-amber-500/30 text-center">
+        </button>
+        <button type="button" onClick={() => onNavigate?.('gestion')}
+          title="Ir a Gestión de flota — equipos conectados ahora"
+          className="ultra-glass p-3.5 rounded-xl border border-amber-500/30 text-center hover:border-amber-400/70 transition-all cursor-pointer">
           <span className="text-[10px] text-amber-400 block mb-1">EQUIPOS ACTIVOS</span>
-          <p className="text-2xl font-bold text-amber-300">{uniqueMacs.length}</p>
-        </div>
+          <p className="text-2xl font-bold text-amber-300">{Object.keys(fleet).length}</p>
+        </button>
       </div>
 
       {/* Filtros */}
