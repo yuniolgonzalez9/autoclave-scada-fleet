@@ -2,6 +2,7 @@ import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import { readFileSync, existsSync } from 'fs';
+import { execSync } from 'child_process';
 
 // Carga .env local para que las funciones serverless /api tengan sus
 // variables de servidor (SUPABASE_SERVICE_ROLE_KEY, etc.) en desarrollo.
@@ -18,7 +19,9 @@ if (existsSync(path.resolve(__dirname, '.env'))) {
 // /version.json para recargarse sola cuando hay una versión nueva.
 // El commit SHA (Vercel lo inyecta) identifica el deploy estilo GitHub.
 const BUILD_ID = String(Date.now());
-const COMMIT_SHA = (process.env.VERCEL_GIT_COMMIT_SHA || 'local').slice(0, 7);
+let gitSha = 'local';
+try { gitSha = execSync('git rev-parse --short=7 HEAD', { encoding: 'utf8' }).trim() || 'local'; } catch (_) {}
+const COMMIT_SHA = (process.env.VERCEL_GIT_COMMIT_SHA || gitSha).slice(0, 7);
 const APP_VERSION = JSON.parse(readFileSync(path.resolve(__dirname, 'package.json'), 'utf8')).version;
 function buildVersionFile() {
   return {
