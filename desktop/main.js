@@ -122,8 +122,8 @@ const createWindow = () => {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      // Preload aislado: solo usa APIs de electron → sandbox completo.
-      sandbox: true,
+      // NOTA: NO usar sandbox:true — en paneles táctiles Windows el driver
+      // táctil no inyecta eventos al renderer de baja integridad (touch muerto).
       // Sin throttling de fondo: el keepalive MQTT y Realtime no pueden
       // suspenderse o la telemetría "cae" falsamente cada pocos segundos.
       backgroundThrottling: false
