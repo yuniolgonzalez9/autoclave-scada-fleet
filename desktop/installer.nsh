@@ -45,16 +45,22 @@
     StrCpy $bfMode ""
     StrCpy $bfDeleteData "0"
 
-    ${if} $hasPerUserInstallation == "1"
-      StrCpy $bfPrevDir $perUserInstallationFolder
-      ReadRegStr $bfPrevUninstaller HKCU "${UNINSTALL_REGISTRY_KEY}" "UninstallString"
-      ReadRegStr $bfPrevVersion HKCU "${UNINSTALL_REGISTRY_KEY}" "DisplayVersion"
-      StrCpy $bfPrevAllUsers "0"
-    ${elseif} $hasPerMachineInstallation == "1"
-      StrCpy $bfPrevDir $perMachineInstallationFolder
+    ; Detección por registro directo — válida en one-click y asistido
+    ReadRegStr $bfPrevUninstaller HKCU "${UNINSTALL_REGISTRY_KEY}" "UninstallString"
+    ReadRegStr $bfPrevVersion HKCU "${UNINSTALL_REGISTRY_KEY}" "DisplayVersion"
+    ReadRegStr $bfPrevDir HKCU "${UNINSTALL_REGISTRY_KEY}" "InstallLocation"
+    StrCpy $bfPrevAllUsers "0"
+    ${if} $bfPrevUninstaller == ""
       ReadRegStr $bfPrevUninstaller HKLM "${UNINSTALL_REGISTRY_KEY}" "UninstallString"
       ReadRegStr $bfPrevVersion HKLM "${UNINSTALL_REGISTRY_KEY}" "DisplayVersion"
+      ReadRegStr $bfPrevDir HKLM "${UNINSTALL_REGISTRY_KEY}" "InstallLocation"
       StrCpy $bfPrevAllUsers "1"
+    ${endif}
+    ; InstallLocation puede faltar: derivar la carpeta del propio uninstaller
+    ${if} $bfPrevDir == ""
+    ${if} $bfPrevUninstaller != ""
+      ${GetParent} $bfPrevUninstaller $bfPrevDir
+    ${endif}
     ${endif}
 
     ; Actualizar/Modificar conservan la carpeta existente por defecto
@@ -62,10 +68,18 @@
       StrCpy $INSTDIR $bfPrevDir
     ${endif}
 
-    ; Flujo silencioso (/S, auto-updater): sin páginas donde elegir, así
-    ; que la app corriendo se cierra aquí antes de que empiece el copy.
+    ; Flujo silencioso (/S, auto-updater, one-click): cierra la app y, si
+    ; existe instalación previa (p.ej. la vieja de Program Files), la
+    ; desinstala en silencio primero — migración limpia al modo per-user.
     ${if} ${Silent}
       !insertmacro bfKillApp
+      ${if} $bfPrevDir != ""
+        DetailPrint "Retirando instalación anterior…"
+        ${if} $bfPrevUninstaller == ""
+          StrCpy $bfPrevUninstaller '"$bfPrevDir\Uninstall ${PRODUCT_FILENAME}.exe"'
+        ${endif}
+        ExecWait '"$bfPrevUninstaller" /S _?=$bfPrevDir'
+      ${endif}
     ${endif}
   !macroend
 
