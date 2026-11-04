@@ -30,6 +30,7 @@
       "main.js",
       "preload.js",
       "hub.js",
+      "vault.js",
       "updater.js",
       "peripherals.js",
       "webcache.js",
@@ -54,7 +55,9 @@
       "createStartMenuShortcut": true,
       "installerIcon": "icon.ico",
       "uninstallerIcon": "icon.ico",
-      "installerHeaderIcon": "icon.ico"
+      "installerHeaderIcon": "icon.ico",
+      "installerSidebar": "build/installerSidebar.bmp",
+      "uninstallerSidebar": "build/uninstallerSidebar.bmp"
     }
   }
 }
