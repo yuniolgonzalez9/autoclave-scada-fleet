@@ -21,20 +21,38 @@ import HeaderLaserOrbit from './components/common/HeaderLaserOrbit';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import { applyMotionPrefs } from './services/motionPrefs';
 
-// Vistas pesadas: carga diferida para acelerar el arranque en móviles
-const DeviceDetailView = lazy(() => import('./components/dashboard/DeviceDetailView'));
-const FleetManagementView = lazy(() => import('./components/fleet/FleetManagementView'));
-const ServiceReportsView = lazy(() => import('./components/service/ServiceReportsView'));
-const AiAutomationStudio = lazy(() => import('./components/studio/AiAutomationStudio'));
-const UserManagementView = lazy(() => import('./components/admin/UserManagementView'));
-const FotaHubView = lazy(() => import('./components/fota/FotaHubView'));
-const UserManagementModal = lazy(() => import('./components/admin/UserManagementModal'));
-const CloudDiagnosticsModal = lazy(() => import('./components/admin/CloudDiagnosticsModal'));
-const DeviceAssignmentModal = lazy(() => import('./components/admin/DeviceAssignmentModal'));
-const SurgicalQRLabel = lazy(() => import('./components/labels/SurgicalQRLabel'));
-const ClinicalAuditView = lazy(() => import('./components/reports/ClinicalAuditView'));
-const PackagesView = lazy(() => import('./components/packages/PackagesView'));
-const PackageStatusPublic = lazy(() => import('./components/packages/PackageStatusPublic'));
+// Vistas pesadas: carga diferida para acelerar el arranque en móviles.
+// Si el chunk no carga (sin internet o hash viejo tras redeploy), se
+// reintenta una vez y como último recurso recarga la app — el index
+// fresco referencia los chunks nuevos. Evita el "Módulo interrumpido".
+const lazyRetry = (factory) => lazy(async () => {
+  try {
+    return await factory();
+  } catch (e) {
+    const KEY = 'scada_lazy_reload';
+    const last = Number(sessionStorage.getItem(KEY) || 0);
+    if (Date.now() - last > 30000) {
+      sessionStorage.setItem(KEY, String(Date.now()));
+      window.location.reload();
+      return new Promise(() => {}); // nunca resuelve: la página se recarga
+    }
+    throw e;
+  }
+});
+
+const DeviceDetailView = lazyRetry(() => import('./components/dashboard/DeviceDetailView'));
+const FleetManagementView = lazyRetry(() => import('./components/fleet/FleetManagementView'));
+const ServiceReportsView = lazyRetry(() => import('./components/service/ServiceReportsView'));
+const AiAutomationStudio = lazyRetry(() => import('./components/studio/AiAutomationStudio'));
+const UserManagementView = lazyRetry(() => import('./components/admin/UserManagementView'));
+const FotaHubView = lazyRetry(() => import('./components/fota/FotaHubView'));
+const UserManagementModal = lazyRetry(() => import('./components/admin/UserManagementModal'));
+const CloudDiagnosticsModal = lazyRetry(() => import('./components/admin/CloudDiagnosticsModal'));
+const DeviceAssignmentModal = lazyRetry(() => import('./components/admin/DeviceAssignmentModal'));
+const SurgicalQRLabel = lazyRetry(() => import('./components/labels/SurgicalQRLabel'));
+const ClinicalAuditView = lazyRetry(() => import('./components/reports/ClinicalAuditView'));
+const PackagesView = lazyRetry(() => import('./components/packages/PackagesView'));
+const PackageStatusPublic = lazyRetry(() => import('./components/packages/PackageStatusPublic'));
 
 const ViewLoader = () => (
   <div className="p-8 text-center text-slate-400 text-[10px] tracking-[0.3em] uppercase animate-pulse">
@@ -104,18 +122,30 @@ function ScadaAppContent() {
   const setCurrentBg = (background) => setAppearance((current) => ({ ...current, background }));
   const setOpacity = (nextOpacity) => setAppearance((current) => ({ ...current, opacity: nextOpacity }));
 
-  // Verificación periódica de conexión con Supabase (cada 15s)
+  // Verificación periódica de conexión con Supabase (cada 15s).
+  // Debounce: marca offline solo tras 2 fallos seguidos — un solo timeout
+  // de latencia no "tumba" el indicador ni la experiencia.
   const [supabaseConnected, setSupabaseConnected] = useState(true);
+  const supaFailsRef = useRef(0);
   useEffect(() => {
     let isMounted = true;
     const checkSupabase = async () => {
       try {
         const { error } = await supabase.rpc('resolve_login_email', { p_identifier: '__ping__' });
         if (isMounted) {
-          setSupabaseConnected(!error && navigator.onLine);
+          if (!error && navigator.onLine) {
+            supaFailsRef.current = 0;
+            setSupabaseConnected(true);
+          } else {
+            supaFailsRef.current += 1;
+            if (supaFailsRef.current >= 2) setSupabaseConnected(false);
+          }
         }
       } catch (e) {
-        if (isMounted) setSupabaseConnected(false);
+        if (isMounted) {
+          supaFailsRef.current += 1;
+          if (supaFailsRef.current >= 2) setSupabaseConnected(false);
+        }
       }
     };
 

@@ -1,57 +1,92 @@
 // =========================================================================
-// BIOFLEET OS v2.0 // SERVICE WORKER DE PURGA AUTOMÁTICA DE CACHÉ
+// BIOFLEET OS v2.0 // SERVICE WORKER — OFFLINE REAL + PURGA POR BUILD
+// =========================================================================
+// Estrategia:
+//  - /assets/* (chunks con hash inmutable): CACHE-FIRST — se guardan al
+//    primer uso y sirven offline para siempre hasta el próximo deploy.
+//  - Navegaciones / index.html: NETWORK-FIRST con fallback al shell
+//    cacheado → la app abre sin internet.
+//  - VERSION cambia en cada build → purga cachés viejos y reclama clientes.
 // =========================================================================
 const VERSION = 'biofleet-v2-build-__SW_BUILD__';
+const SHELL_CACHE = `${VERSION}-shell`;
+const ASSET_CACHE = `${VERSION}-assets`;
 
-// 1. Forzar activación inmediata
+const SHELL_URLS = ['./', './index.html', './manifest.json', './version.json'];
+
 self.addEventListener('install', (event) => {
-  self.skipWaiting();
-});
-
-// 2. Al activarse: BORRA TODAS LAS CACHÉS VIEJAS DE RAÍZ (elimina v1.0 y previas)
-// y obliga a las pestañas abiertas a recargar con la versión nueva —
-// así un deploy que cambie sw.js se auto-propaga a dispositivos atascados.
-self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) => {
-      return Promise.all(
-        keys.map((key) => {
-          console.log('[AUTO-PURGA] Eliminando caché obsoleta:', key);
-          return caches.delete(key);
-        })
-      );
-    }).then(() => self.clients.claim())
-      .then(() => self.clients.matchAll({ type: 'window' }))
-      .then((clients) => {
-        clients.forEach((client) => {
-          client.navigate(client.url).catch(() => {});
-        });
-      })
+    caches.open(SHELL_CACHE)
+      .then((c) => c.addAll(SHELL_URLS).catch(() => {}))
+      .then(() => self.skipWaiting())
   );
 });
 
-// 3. Estrategia Network-First Absoluta (Siempre consulta la red primero)
+// Purga cachés de builds anteriores (los assets viejos ya no se referencian)
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys()
+      .then((keys) => Promise.all(
+        keys.filter((k) => k !== SHELL_CACHE && k !== ASSET_CACHE)
+            .map((k) => caches.delete(k))
+      ))
+      .then(() => self.clients.claim())
+  );
+});
+
+const isAsset = (url) => url.pathname.startsWith('/assets/');
+
 self.addEventListener('fetch', (event) => {
-  // Ignorar llamadas en tiempo real
+  if (event.request.method !== 'GET') return;
+
+  const url = new URL(event.request.url);
+  // Nunca interceptar APIs en vivo
   if (
-    event.request.method !== 'GET' ||
-    event.request.url.includes('supabase.co') ||
-    event.request.url.includes('hivemq.cloud') ||
-    event.request.url.includes('api.telegram.org')
+    url.origin !== self.location.origin ||
+    url.hostname.includes('supabase.co') ||
+    url.hostname.includes('hivemq.cloud') ||
+    url.hostname.includes('api.telegram.org') ||
+    url.hostname.includes('qrserver.com')
   ) {
     return;
   }
 
-  // Siempre pide la versión fresca de la red
+  // Assets hasheados: cache-first (son inmutables por build)
+  if (isAsset(url)) {
+    event.respondWith(
+      caches.match(event.request).then((hit) => {
+        if (hit) return hit;
+        return fetch(event.request).then((res) => {
+          if (res.ok) {
+            const clone = res.clone();
+            caches.open(ASSET_CACHE).then((c) => c.put(event.request, clone));
+          }
+          return res;
+        });
+      }).catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
+  // Navegación / shell: network-first, fallback al index cacheado (offline)
   event.respondWith(
     fetch(event.request, { cache: 'no-cache' })
-      .then((response) => {
-        return response;
+      .then((res) => {
+        if (res.ok && (url.pathname === '/' || url.pathname.endsWith('.html') || url.pathname.endsWith('.js') || url.pathname.endsWith('.json'))) {
+          const clone = res.clone();
+          caches.open(SHELL_CACHE).then((c) => c.put(event.request, clone));
+        }
+        return res;
       })
       .catch(async () => {
-        // Solo si no hay internet en absoluto busca en la copia local
         const cached = await caches.match(event.request);
-        return cached || new Response('Sin conexión', { status: 503 });
+        if (cached) return cached;
+        // Petición de navegación → entrega el shell (SPA offline)
+        if (event.request.mode === 'navigate') {
+          const shell = await caches.match('./index.html');
+          if (shell) return shell;
+        }
+        return new Response('Sin conexión', { status: 503 });
       })
   );
 });
