@@ -467,7 +467,9 @@ export function useMqttFleet(enabled = true) {
         seen.add(e.id);
         try { e.fn(); } catch (_) {}
       }
-    }, 250);
+      // Flush cada 500ms (antes 250): mitad de renders de la flota sin cambio
+      // perceptible — la telemetría ya se deduplica por MAC dentro del batch.
+    }, 500);
 
     return () => {
       cancelled = true;
