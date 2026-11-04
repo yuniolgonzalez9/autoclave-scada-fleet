@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { supabase } from '../services/supabase';
 import { sendTelegramEvent } from '../services/telegram';
+import { saveOfflineCredential, syncProfilesToVault, verifyOfflineLogin, offlineAuthAvailable } from '../services/offlineAuth';
 
 const AuthContext = createContext({});
 
@@ -172,19 +173,42 @@ export const AuthProvider = ({ children }) => {
       throw new Error('Introduce tu usuario y contraseña.');
     }
 
-    // Resolver usuario/correo → email interno de Supabase Auth
-    const { data: authEmail, error: resolveError } = await supabase
-      .rpc('resolve_login_email', { p_identifier: cleanId });
+    // Resolver usuario/correo → email interno de Supabase Auth.
+    // Falla de RED (no de credenciales) → bóveda cifrada local del Hub.
+    const tryOfflineVault = async () => {
+      if (!offlineAuthAvailable()) {
+        throw new Error('Sin conexión a internet y sin bóveda local (requiere la app Hub con sesión previa).');
+      }
+      const r = await verifyOfflineLogin(cleanId, cleanPass);
+      if (!r.ok) throw new Error(r.err === 'credenciales no válidas' ? 'Credenciales no válidas.' : `Offline: ${r.err}`);
+      const p = r.profile;
+      setUser({ ...p, offline: true });
+      setProfile({ ...p, offline: true });
+      if (isPrivileged(p.rol)) loadPendingRequests().catch(() => {});
+      return p;
+    };
 
-    if (resolveError) throw new Error('No se pudo verificar el acceso.');
-    if (!authEmail) throw new Error('El usuario o correo no se encuentra registrado.');
-
-    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-      email: authEmail,
-      password: cleanPass
-    });
+    let authEmail, signInData, signInError;
+    try {
+      if (!navigator.onLine) return await tryOfflineVault();
+      const resolved = await supabase.rpc('resolve_login_email', { p_identifier: cleanId });
+      if (resolved.error) throw resolved.error;
+      authEmail = resolved.data;
+      if (!authEmail) throw new Error('El usuario o correo no se encuentra registrado.');
+      const signIn = await supabase.auth.signInWithPassword({ email: authEmail, password: cleanPass });
+      signInData = signIn.data;
+      signInError = signIn.error;
+    } catch (e) {
+      // Error de transporte/red → intentar bóveda; error propio → relanzar
+      if (/fetch|network|Failed to fetch|ERR_|timeout|load failed|status.*5\d\d/i.test(e?.message || '')) {
+        return await tryOfflineVault();
+      }
+      throw e;
+    }
 
     if (signInError || !signInData?.user) {
+      const msg = signInError?.message || '';
+      if (/fetch|network|Failed to fetch|ERR_|timeout|load failed/i.test(msg)) return await tryOfflineVault();
       throw new Error('Credenciales no válidas.');
     }
 
@@ -218,6 +242,13 @@ export const AuthProvider = ({ children }) => {
         rol: matchedUser.rol || 'OPERADOR',
         dispositivo: navigator.userAgent.slice(0, 80)
       }]);
+    } catch (_) {}
+
+    // Bóveda offline (solo Hub): guarda credencial cifrada y sincroniza
+    // el directorio de usuarios para futuros logins sin internet.
+    try {
+      saveOfflineCredential(matchedUser, cleanId, cleanPass);
+      syncProfilesToVault();
     } catch (_) {}
 
     return matchedUser;

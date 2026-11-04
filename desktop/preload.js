@@ -14,7 +14,11 @@ if (trusted) {
     printHtml: (job) => ipcRenderer.invoke('hub:printHtml', job),
     printLabel: (job) => ipcRenderer.invoke('hub:printLabel', job),
     status: () => ipcRenderer.invoke('hub:status'),
-    sendCommand: (mac, cmd) => ipcRenderer.invoke('hub:command', { mac, cmd })
+    sendCommand: (mac, cmd) => ipcRenderer.invoke('hub:command', { mac, cmd }),
+    vaultSave: (p) => ipcRenderer.invoke('vault:save', p),
+    vaultVerify: (p) => ipcRenderer.invoke('vault:verify', p),
+    vaultSync: (profiles) => ipcRenderer.invoke('vault:sync', profiles),
+    vaultStats: () => ipcRenderer.invoke('vault:stats')
   });
 
   // ── Botones de ventana propios con el estilo del tema activo ──

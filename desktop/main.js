@@ -12,6 +12,7 @@ app.commandLine.appendSwitch('disable-background-timer-throttling');
 app.commandLine.appendSwitch('js-flags', '--max-old-space-size=4096');
 app.commandLine.appendSwitch('enable-zero-copy');
 const { startHub } = require('./hub');
+const { initVault } = require('./vault');
 const { listSerialPorts, listPrinters, printLabel } = require('./peripherals');
 const { syncWebCache, installHandler } = require('./webcache');
 const { startPeerServer, startPeerDiscovery } = require('./peerserver');
@@ -241,11 +242,19 @@ ipcMain.on('hub:kiosk', (e, on) => {
 ipcMain.handle('hub:isMax', (e) => (mainWindow && e.sender === mainWindow.webContents ? mainWindow.isMaximized() : false));
 ipcMain.handle('hub:command', (e, { mac, cmd }) => global.hub?.sendCommand(mac, cmd) ?? false);
 
+// Bóveda cifrada: login offline con perfiles sincronizados de la nube
+const fromMain = (e) => mainWindow && e.sender === mainWindow.webContents;
+ipcMain.handle('vault:save', (e, payload) => fromMain(e) ? global.vault?.save(payload) : { ok: false });
+ipcMain.handle('vault:verify', (e, payload) => fromMain(e) ? global.vault?.verify(payload) : { ok: false });
+ipcMain.handle('vault:sync', (e, profiles) => fromMain(e) ? global.vault?.syncProfiles(profiles || []) : { ok: false });
+ipcMain.handle('vault:stats', (e) => fromMain(e) ? global.vault?.stats() : { usuarios: 0 });
+
 app.whenReady().then(() => {
   if (!gotSingleInstanceLock) return;
   // Evita que el SO suspenda la app — la telemetría debe seguir viva.
   try { powerSaveBlocker.start('prevent-app-suspension'); } catch (_) {}
   startHub((h) => { global.hub = h; });
+  try { global.vault = initVault(); } catch (e) { console.log('[VAULT] init error:', e?.message || e); }
   createWindow();
 
 
