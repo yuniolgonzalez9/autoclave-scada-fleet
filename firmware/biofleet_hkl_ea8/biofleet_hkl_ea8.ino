@@ -51,7 +51,7 @@
 #include "esp_task_wdt.h"
 #include "time.h"
 
-#define SYS_VERSION "v12.2-HYBRID-SCAN"
+#define SYS_VERSION "v12.3-DUALCORE"
 #define WDT_TIMEOUT_S 8
 
 // Pines HKL-EA8
@@ -197,7 +197,9 @@ static char txMqttBuffer[2048];
 
 QueueHandle_t     xQueuePLC;
 SemaphoreHandle_t xMutexSnap;
-SemaphoreHandle_t xMutexMqtt;   // serializa publish/connect/loop entre cores
+SemaphoreHandle_t xMutexMqtt;   // serializa ops del cliente NUBE (mqtt)
+SemaphoreHandle_t xMutexLocal;  // serializa ops del cliente LOCAL (mqttLocal)
+// v12.3: un mutex por cliente — el TLS de la nube jamás bloquea la ruta local
 PLCSnapshot       globalSnap;
 
 WiFiClientSecure ethSecureClient;
@@ -332,12 +334,16 @@ bool mqttLinkUp() {
 }
 
 bool mqttPublishSafe(const char* topic, const char* payload, bool retained = false) {
-  if (xMutexMqtt == NULL) return false;
   bool ok = false;
-  if (xSemaphoreTake(xMutexMqtt, pdMS_TO_TICKS(150)) == pdTRUE) {
-    if (mqtt.connected())      ok = mqtt.publish(topic, payload, retained) || ok;
-    if (mqttLocal.connected()) ok = mqttLocal.publish(topic, payload, retained) || ok;
+  // Nube: mutex propio — un stall TLS nunca frena una publicación local
+  if (xMutexMqtt != NULL && xSemaphoreTake(xMutexMqtt, pdMS_TO_TICKS(150)) == pdTRUE) {
+    if (mqtt.connected()) ok = mqtt.publish(topic, payload, retained) || ok;
     xSemaphoreGive(xMutexMqtt);
+  }
+  // Local: mutex propio — la ruta LAN jamás espera a la nube
+  if (xMutexLocal != NULL && xSemaphoreTake(xMutexLocal, pdMS_TO_TICKS(150)) == pdTRUE) {
+    if (mqttLocal.connected()) ok = mqttLocal.publish(topic, payload, retained) || ok;
+    xSemaphoreGive(xMutexLocal);
   }
   return ok;
 }
@@ -873,10 +879,10 @@ void reconectarLocal() {
   mqttLocal.setServer(hubIp, hubMqttPort);
   String cid = "HKL_EA8_L_" + macId;
   bool ok = false;
-  if (xSemaphoreTake(xMutexMqtt, pdMS_TO_TICKS(500)) == pdTRUE) {
+  if (xSemaphoreTake(xMutexLocal, pdMS_TO_TICKS(500)) == pdTRUE) {
     ok = mqttLocal.connect(cid.c_str());
     if (ok) mqttLocal.subscribe(topicComando.c_str(), 1);
-    xSemaphoreGive(xMutexMqtt);
+    xSemaphoreGive(xMutexLocal);
   }
   if (ok) {
     lastHubMsg = millis();
@@ -888,7 +894,26 @@ void reconectarLocal() {
 }
 
 // =========================================================================
-// CORE 0: RED, MQTT Y TELEMETRÍA CONTINUA (800ms)
+// CORE 1: NUBE AISLADA — reconexión + loop de HiveMQ TLS
+// El connect() TLS puede bloquear 5-13s sin internet; aquí NUNCA toca
+// la ruta local (otro core, otro mutex, otro cliente). El loop del PLC
+// y la telemetría LAN siguen respirando en sus cores.
+// =========================================================================
+void TaskCore1_Cloud(void* p) {
+  for (;;) {
+    if (ethConnected) {
+      reconectarMQTT();
+      if (xSemaphoreTake(xMutexMqtt, pdMS_TO_TICKS(50)) == pdTRUE) {
+        if (mqtt.connected()) mqtt.loop();
+        xSemaphoreGive(xMutexMqtt);
+      }
+    }
+    vTaskDelay(pdMS_TO_TICKS(200));
+  }
+}
+
+// =========================================================================
+// CORE 0: RED, MQTT LOCAL Y TELEMETRÍA CONTINUA (800ms)
 // =========================================================================
 void TaskCore0_Comms(void* p) {
   unsigned long lastTelemetryMillis = 0;
@@ -899,11 +924,10 @@ void TaskCore0_Comms(void* p) {
     if (ethConnected) {
       procesarDiscovery();
       reconectarLocal();
-      reconectarMQTT();
-      if (xSemaphoreTake(xMutexMqtt, pdMS_TO_TICKS(50)) == pdTRUE) {
+      // v12.3: la nube vive en TaskCore1_Cloud — aquí SOLO la ruta local.
+      if (xSemaphoreTake(xMutexLocal, pdMS_TO_TICKS(50)) == pdTRUE) {
         if (mqttLocal.connected()) mqttLocal.loop();
-        if (mqtt.connected()) mqtt.loop();
-        xSemaphoreGive(xMutexMqtt);
+        xSemaphoreGive(xMutexLocal);
       }
 
       if (forceTelemetryFlag || millis() - lastTelemetryMillis >= 800) {
@@ -1344,6 +1368,7 @@ void setup() {
   xQueuePLC  = xQueueCreate(16, sizeof(PLCCommand));
   xMutexSnap = xSemaphoreCreateMutex();
   xMutexMqtt = xSemaphoreCreateMutex();
+  xMutexLocal = xSemaphoreCreateMutex();
 
   // Arranque de Red Ethernet Industrial — idéntico al original
   WiFi.onEvent(onWiFiEvent);
@@ -1405,6 +1430,7 @@ void setup() {
   }
 
   xTaskCreatePinnedToCore(TaskCore1_PLC, "TaskCore1_PLC", 8192, NULL, 5, NULL, 1);
+  xTaskCreatePinnedToCore(TaskCore1_Cloud, "TaskCore1_Cloud", 8192, NULL, 1, NULL, 1);
   xTaskCreatePinnedToCore(TaskCore0_Comms, "TaskCore0_Comms", 8192, NULL, 2, NULL, 0);
 }
 
