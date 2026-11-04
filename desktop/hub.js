@@ -45,6 +45,28 @@ exports.startHub = (cb) => {
   const qPending = db.prepare('SELECT session_id,mac,payload FROM reportes WHERE synced=0 ORDER BY ts LIMIT ?');
   const qPendingN = db.prepare('SELECT COUNT(*) n FROM reportes WHERE synced=0');
 
+  // ── Registro permanente del enlace (data/link.log) ──
+  // Diagnóstico offline: quien se cae, cuándo, cuánto dura el gap.
+  // Rotación a ~2MB → link.log.1 (se conserva un respaldo).
+  const LINK_LOG = path.join(dbDir, 'link.log');
+  const linkLog = (tipo, detalle) => {
+    try {
+      try { if (fs.statSync(LINK_LOG).size > 2 * 1024 * 1024) fs.renameSync(LINK_LOG, `${LINK_LOG}.1`); } catch (_) {}
+      fs.appendFileSync(LINK_LOG, `${new Date().toISOString()}|${tipo}|${detalle}\n`);
+    } catch (_) {}
+  };
+  const gapFlagged = new Set();           // macs con gap ya reportado
+  const GAP_MS = 10 * 1000;               // >10s sin telemetría = gap
+  setInterval(() => {
+    const now = Date.now();
+    devices.forEach((v, mac) => {
+      if (!gapFlagged.has(mac) && v.lastSeen && now - v.lastSeen > GAP_MS) {
+        gapFlagged.add(mac);
+        linkLog('GAP_INICIO', `mac=${mac} sin_telemetria>${(now - v.lastSeen) / 1000 | 0}s`);
+      }
+    });
+  }, 5000).unref();
+
   // Poda del datalog local: 1 fila por paquete crece sin freno si el Hub
   // vive meses encendido. La telemetría histórica en nube no existe — el
   // valor local es el diagnóstico reciente, 24h alcanza.
@@ -58,9 +80,16 @@ exports.startHub = (cb) => {
   const mqttServer = net.createServer(aedes.handle);
   mqttServer.on('error', (e) => console.log(`[HUB] MQTT :${MQTT_PORT} no disponible (${e.code || e.message}) — ruta local MQTT deshabilitada`));
   mqttServer.listen(MQTT_PORT, () => console.log(`[HUB] MQTT local :${MQTT_PORT}`));
+  aedes.on('client', (c) => linkLog('MQTT_CONN', `client=${c?.id || '?'}`));
+  aedes.on('clientDisconnect', (c) => linkLog('MQTT_DISC', `client=${c?.id || '?'}`));
+  aedes.on('clientError', (c, e) => linkLog('MQTT_CLI_ERR', `client=${c?.id || '?'} ${e?.message || e}`));
 
   const devices = new Map(); // mac → {mac,ip,alias,tipo,fw,lastSeen}
   const rememberDevice = (mac, dev) => {
+    if (gapFlagged.has(mac) && dev.lastSeen) {
+      gapFlagged.delete(mac);
+      linkLog('GAP_FIN', `mac=${mac} volvio`);
+    }
     devices.set(mac, { ...(devices.get(mac) || {}), ...dev });
     // Tope defensivo: si el mapa se llena, expulsa al más viejo (stale).
     if (devices.size > MAX_DEVICES) {
@@ -109,6 +138,7 @@ exports.startHub = (cb) => {
       retain: !(cmd && cmd.cmd) // legado sin "cmd" viaja retained, igual que /api/device-command
     });
     insEvt.run(cleanMac, 'cmd', JSON.stringify(cmd));
+    linkLog('CMD', `mac=${cleanMac} ${JSON.stringify(cmd)}`);
     return true;
   };
 
