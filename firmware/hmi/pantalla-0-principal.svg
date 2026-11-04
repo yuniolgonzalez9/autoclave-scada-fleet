@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="320" viewBox="0 0 480 320" font-family="Arial,Helvetica,sans-serif">
+  <!-- ====== PANTALLA 0: CICLO ACTIVO (principal) ====== -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0b1a2e"/>
+      <stop offset="1" stop-color="#060d18"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#d4af37"/>
+      <stop offset="1" stop-color="#f0d060"/>
+    </linearGradient>
+  </defs>
+  <rect width="480" height="320" fill="url(#bg)"/>
+
+  <!-- Header -->
+  <rect width="480" height="34" fill="#0e2440"/>
+  <text x="14" y="23" fill="#d4af37" font-size="16" font-weight="bold">BIOFLEET</text>
+  <text x="470" y="23" fill="#9fb3c8" font-size="13" text-anchor="end">HKL-EA8 · AUTOCLAVE 1</text>
+
+  <!-- Temp grande -->
+  <text x="30" y="105" fill="#e8f0f8" font-size="72" font-weight="bold">134.2</text>
+  <text x="30" y="135" fill="#9fb3c8" font-size="16">°C cámara</text>
+
+  <!-- Presión + F0 -->
+  <rect x="268" y="58" width="96" height="58" rx="8" fill="#10233c" stroke="#1e3a5f"/>
+  <text x="316" y="84" fill="#e8f0f8" font-size="22" font-weight="bold" text-anchor="middle">2.13</text>
+  <text x="316" y="104" fill="#9fb3c8" font-size="12" text-anchor="middle">bar</text>
+
+  <rect x="372" y="58" width="96" height="58" rx="8" fill="#10233c" stroke="#1e3a5f"/>
+  <text x="420" y="84" fill="#e8f0f8" font-size="22" font-weight="bold" text-anchor="middle">4.2</text>
+  <text x="420" y="104" fill="#9fb3c8" font-size="12" text-anchor="middle">F0 min</text>
+
+  <!-- Fase -->
+  <rect x="30" y="158" width="420" height="40" rx="8" fill="#0d2a1f" stroke="#1f6b45"/>
+  <text x="240" y="185" fill="#4ade80" font-size="19" font-weight="bold" text-anchor="middle">▶ ESTERILIZACIÓN — PROGRAMA 134°C</text>
+
+  <!-- Tiempo -->
+  <text x="30" y="238" fill="#e8f0f8" font-size="26" font-weight="bold">07:42</text>
+  <text x="30" y="258" fill="#9fb3c8" font-size="13">min en fase</text>
+  <text x="450" y="238" fill="#9fb3c8" font-size="20" text-anchor="end">~ 18:00</text>
+  <text x="450" y="258" fill="#6b8299" font-size="13" text-anchor="end">fin estimado</text>
+
+  <!-- Barra progreso -->
+  <rect x="30" y="274" width="420" height="14" rx="7" fill="#10233c" stroke="#1e3a5f"/>
+  <rect x="30" y="274" width="180" height="14" rx="7" fill="url(#gold)"/>
+  <text x="240" y="285" fill="#0b1a2e" font-size="11" font-weight="bold" text-anchor="middle">43%</text>
+
+  <!-- Botones -->
+  <rect x="30" y="296" width="130" height="22" rx="6" fill="#15304f" stroke="#d4af37"/>
+  <text x="95" y="312" fill="#d4af37" font-size="13" font-weight="bold" text-anchor="middle">DETALLE</text>
+  <rect x="175" y="296" width="130" height="22" rx="6" fill="#15304f"/>
+  <text x="240" y="312" fill="#9fb3c8" font-size="13" text-anchor="middle">PUERTA ✓</text>
+  <rect x="320" y="296" width="130" height="22" rx="6" fill="#4a1420" stroke="#c0392b"/>
+  <text x="385" y="312" fill="#ff6b6b" font-size="13" font-weight="bold" text-anchor="middle">PARAR</text>
+</svg>
