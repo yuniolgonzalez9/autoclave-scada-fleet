@@ -79,6 +79,19 @@ export default function ClinicalAuditView() {
     return () => clearTimeout(t);
   }, [fetchReports]);
 
+  // Sync en segundo plano: cualquier INSERT nuevo en reportes_autoclaves
+  // (replay offline del Hub, nube en vivo, otra estación) refresca la lista
+  // sin tocar el botón manual. Realtime también cubre UPDATE/DELETE.
+  useEffect(() => {
+    const channel = supabase
+      .channel('audit-reportes-live')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'reportes_autoclaves' }, () => {
+        fetchReports();
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [fetchReports]);
+
   // Selección múltiple
   const toggleSelectAll = () => {
     if (selectedIds.length === reports.length) {
