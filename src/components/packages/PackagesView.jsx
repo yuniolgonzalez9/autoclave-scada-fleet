@@ -11,6 +11,7 @@ import {
   getPrintPrefs, setPrintPrefs, listAvailablePrinters, printDoc,
   buildPackageTicketDoc, buildDeliveryDoc
 } from '../../services/printService';
+import PrintOptionsModal from '../common/PrintOptionsModal';
 
 const ESTADO_STYLE = {
   REGISTRADO: 'bg-sky-500/15 text-sky-300 border-sky-500/40',
@@ -145,6 +146,11 @@ export default function PackagesView({ fleet = {}, sendCommand, operatorName }) 
     return r?.ok;
   };
 
+  // Prints MANUALES: abren el modal de opciones (impresora / PDF / diálogo)
+  const [printJob, setPrintJob] = useState(null);
+  const openPrint = (doc, fallbackTitle = 'Documento') =>
+    setPrintJob({ title: doc?.title || fallbackTitle, html: doc?.html || '', landscape: doc?.landscape });
+
   const handleCreate = async (e) => {
     e.preventDefault();
     setMsg(''); setErrorMsg('');
@@ -172,7 +178,7 @@ export default function PackagesView({ fleet = {}, sendCommand, operatorName }) 
     const { error } = await markDelivered(pkg.id);
     if (error) { setErrorMsg(error.message); return; }
     setMsg(`Paquete ${pkg.codigo} entregado — código liberado.`);
-    doPrint(buildDeliveryDoc(pkg));
+    openPrint(buildDeliveryDoc(pkg), `COMPROBANTE DE ENTREGA - ${pkg.codigo}`);
     refresh();
   };
 
@@ -184,7 +190,7 @@ export default function PackagesView({ fleet = {}, sendCommand, operatorName }) 
     refresh();
   };
 
-  const reprintTicket = (pkg) => doPrint(buildPackageTicketDoc(pkg));
+  const reprintTicket = (pkg) => openPrint(buildPackageTicketDoc(pkg), `TICKET PAQUETE - ${pkg.codigo}`);
 
   const vivos = paquetes.filter((p) => VIVOS.includes(estadoEfectivo(p)));
   const historial = paquetes.filter((p) => !VIVOS.includes(estadoEfectivo(p)));
@@ -359,6 +365,7 @@ export default function PackagesView({ fleet = {}, sendCommand, operatorName }) 
           </div>
         )}
       </div>
+      {printJob && <PrintOptionsModal doc={printJob} onClose={() => setPrintJob(null)} />}
     </div>
   );
 }

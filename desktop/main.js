@@ -207,6 +207,42 @@ const printHtmlSilent = (html, { deviceName, landscape, copies } = {}) =>
     win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html || '<p></p>'));
   });
 
+// PDF real: el mismo render oculto, pero con webContents.printToPDF —
+// devuelve el documento en base64 para que la web lo guarde/descargue.
+const htmlToPdf = (html, { landscape, pageSize } = {}) =>
+  new Promise((resolve) => {
+    if (!mainWindow || mainWindow.isDestroyed()) return resolve({ ok: false, err: 'ventana no lista' });
+    const win = new BrowserWindow({
+      show: false,
+      width: 800,
+      height: 600,
+      webPreferences: { contextIsolation: true, sandbox: true }
+    });
+    let done = false;
+    const finish = (r) => {
+      if (done) return;
+      done = true;
+      try { win.destroy(); } catch (_) {}
+      resolve(r);
+    };
+    win.webContents.on('did-finish-load', async () => {
+      try {
+        const data = await win.webContents.printToPDF({
+          printBackground: true,
+          landscape: Boolean(landscape),
+          pageSize: pageSize || 'A4',
+          margins: { marginType: 'printableArea' }
+        });
+        finish({ ok: true, pdf: data.toString('base64') });
+      } catch (e) {
+        finish({ ok: false, err: e?.message || String(e) });
+      }
+    });
+    win.webContents.on('did-fail-load', (e, code, desc) => finish({ ok: false, err: `carga ${code}: ${desc}` }));
+    setTimeout(() => finish({ ok: false, err: 'timeout generando PDF' }), 30000);
+    win.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html || '<p></p>'));
+  });
+
 // IPC: la web dentro del exe pide servicios del hub
 ipcMain.handle('hub:scanLan', () => global.hub?.scanLan() || []);
 ipcMain.handle('hub:serialPorts', () => listSerialPorts());
@@ -218,6 +254,10 @@ ipcMain.handle('hub:printersV2', (e) => {
 ipcMain.handle('hub:printHtml', (e, job) => {
   if (!mainWindow || e.sender !== mainWindow.webContents) return { ok: false, err: 'origen no permitido' };
   return printHtmlSilent(job?.html, job || {});
+});
+ipcMain.handle('hub:printToPdf', (e, job) => {
+  if (!mainWindow || e.sender !== mainWindow.webContents) return { ok: false, err: 'origen no permitido' };
+  return htmlToPdf(job?.html, job || {});
 });
 ipcMain.handle('hub:printLabel', (e, job) => printLabel(job));
 ipcMain.handle('hub:status', () => global.hub?.status() || { online: false });

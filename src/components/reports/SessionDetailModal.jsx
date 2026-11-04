@@ -13,6 +13,7 @@ import {
   AlertTriangle,
   CheckCircle2
 } from 'lucide-react';
+import PrintOptionsModal from '../common/PrintOptionsModal';
 
 /**
  * Escapa caracteres HTML para prevenir Cross-Site Scripting (XSS)
@@ -50,6 +51,7 @@ export default function SessionDetailModal({ isOpen, onClose, session }) {
   const [eventCategory, setEventCategory] = useState('ALL');
   const [eventSearch, setEventSearch] = useState('');
   const [isAscending, setIsAscending] = useState(true);
+  const [printJob, setPrintJob] = useState(null);
 
   // Volver con Escape
   const handleKeyDown = useCallback((e) => {
@@ -370,40 +372,8 @@ export default function SessionDetailModal({ isOpen, onClose, session }) {
           </div>
     `;
 
-    // Hub: impresión silenciosa a la impresora configurada, sin diálogos.
-    if (window.biofleetHub?.isHub && window.biofleetHub.printHtml) {
-      try {
-        const ps = await import('../../services/printService');
-        const prefs = ps.getPrintPrefs();
-        const r = await ps.printDoc({ title: `CERTIFICADO CLÍNICO - ${safeSessionId}`, html: certHtml, printerName: prefs.printerName });
-        if (!r?.ok) alert(`Impresión falló: ${r?.err || 'error desconocido'}`);
-      } catch (e) {
-        alert(`Impresión falló: ${e?.message || 'error desconocido'}`);
-      }
-      return;
-    }
-
-    const v = window.open('', '_blank');
-    if (!v) {
-      alert('Habilite las ventanas emergentes (pop-ups) en su navegador para imprimir el certificado.');
-      return;
-    }
-    v.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="UTF-8">
-          <title>CERTIFICADO CLÍNICO - ${safeSessionId}</title>
-        </head>
-        <body>
-          ${certHtml}
-          <script>
-            window.onload = function() { window.print(); };
-          </script>
-        </body>
-      </html>
-    `);
-    v.document.close();
+    // Opciones de impresión: impresora elegida / PDF real / diálogo del SO
+    setPrintJob({ title: `CERTIFICADO CLÍNICO - ${safeSessionId}`, html: certHtml });
   };
 
   if (!isOpen || !session) return null;
@@ -671,6 +641,7 @@ export default function SessionDetailModal({ isOpen, onClose, session }) {
 
         </div>
       </div>
+      {printJob && <PrintOptionsModal doc={printJob} onClose={() => setPrintJob(null)} />}
     </div>
   );
 }

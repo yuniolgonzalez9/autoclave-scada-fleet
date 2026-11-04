@@ -52,17 +52,46 @@ export async function listAvailablePrinters() {
   return [];
 }
 
-// Imprime un documento HTML. En el Hub es silencioso (impresora elegida);
-// en navegador abre el diálogo del sistema desde un iframe oculto.
-export async function printDoc({ title = 'Documento', html = '', printerName } = {}) {
-  if (typeof window !== 'undefined' && window.biofleetHub?.isHub && window.biofleetHub.printHtml) {
+// Imprime un documento HTML.
+//   output: 'printer' → silencioso a la impresora elegida (Hub) / diálogo (web)
+//           'dialog'  → fuerza el diálogo del sistema aun en el Hub
+//           'pdf'     → genera PDF real (Hub) o diálogo "guardar como PDF" (web)
+export async function printDoc({ title = 'Documento', html = '', printerName, output = 'printer', landscape = false, pageSize = 'A4' } = {}) {
+  const inHub = typeof window !== 'undefined' && window.biofleetHub?.isHub;
+  if (output === 'pdf') return saveAsPdf({ title, html, landscape, pageSize });
+  if (inHub && output === 'printer' && window.biofleetHub.printHtml) {
     try {
-      const r = await window.biofleetHub.printHtml({ html, deviceName: printerName || undefined });
+      const r = await window.biofleetHub.printHtml({ html, deviceName: printerName || undefined, landscape });
       return { ok: Boolean(r?.ok), err: r?.err };
     } catch (e) {
       return { ok: false, err: e?.message };
     }
   }
+  return printViaIframe(title, html);
+}
+
+// PDF real: en el Hub usa printToPDF nativo y descarga el archivo;
+// en navegador cae al diálogo del sistema (el usuario elige "Guardar PDF").
+export async function saveAsPdf({ title = 'Documento', html = '', landscape = false, pageSize = 'A4' } = {}) {
+  if (typeof window !== 'undefined' && window.biofleetHub?.isHub && window.biofleetHub.printToPdf) {
+    try {
+      const r = await window.biofleetHub.printToPdf({ html, landscape, pageSize });
+      if (!r?.ok || !r.pdf) return { ok: false, err: r?.err || 'PDF vacío' };
+      const bin = atob(r.pdf);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const blob = new Blob([bytes], { type: 'application/pdf' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `${title.replace(/[^\w\- ]/g, '').replace(/\s+/g, '_') || 'documento'}.pdf`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      return { ok: true };
+    } catch (e) {
+      return { ok: false, err: e?.message };
+    }
+  }
+  // Fallback navegador: diálogo del sistema (elegir "Guardar como PDF")
   return printViaIframe(title, html);
 }
 
