@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, GripVertical, LayoutGrid, Move, Pencil, Plus, RotateCcw, Save, Trash2, X } from 'lucide-react';
 import {
@@ -354,7 +354,6 @@ function WidgetEditor({ widget, onChange, onApplySize, onClose }) {
 
 export default function WidgetBoard({ device, canEdit, sendCommand, onConfirm, enCicloActivo, odometer, onSaved }) {
   const config = device?.meta?.config_deseada || {};
-  const tipo = device?.meta?.tipo || config.tipo;
   const relesCount = Object.keys(device?.datos?.reles || {}).length;
   const entradasCount = Object.keys(device?.datos?.entradas || {}).length;
   const stored = useMemo(() => {

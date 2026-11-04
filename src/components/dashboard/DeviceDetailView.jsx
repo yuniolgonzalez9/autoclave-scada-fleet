@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useSwipe, stepThrough } from '../../hooks/useSwipe';
 import SwipeDots from '../common/SwipeDots';
 import SterilizationChart from '../graphics/SterilizationChart';
@@ -18,7 +18,6 @@ import { useNow } from '../../hooks/useNow';
 import { 
   Activity, 
   Flame, 
-  Wind, 
   Lock, 
   ShieldCheck, 
   ShieldAlert, 
@@ -37,9 +36,7 @@ import {
   Settings2,
   ClipboardList,
   Wifi,
-  WifiOff,
-  AlertTriangle,
-  RefreshCw
+  WifiOff
 } from 'lucide-react';
 
 // Catálogo normativo de programas clínicos (EN 13060)

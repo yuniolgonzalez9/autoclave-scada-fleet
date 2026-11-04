@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 // Velocidad constante ~7.5ms por píxel: el láser tarda lo mismo en
 // recorrer cada píxel en móvil y PC — en pantallas anchas el ciclo

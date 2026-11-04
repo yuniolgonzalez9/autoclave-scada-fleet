@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { X, Printer, FileDown, MonitorSmartphone } from 'lucide-react';
 import { listAvailablePrinters, printDoc, getPrintPrefs, setPrintPrefs } from '../../services/printService';
 

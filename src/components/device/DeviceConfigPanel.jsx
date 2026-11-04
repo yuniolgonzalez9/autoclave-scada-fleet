@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, Save, Search } from 'lucide-react';
 import { TIPOS_EQUIPO, fetchCatalog, fetchUsersLite, mergeDeviceConfig, updateDeviceRow } from '../../services/deviceService';
 

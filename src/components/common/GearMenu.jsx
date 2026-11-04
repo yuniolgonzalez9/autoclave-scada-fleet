@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   Activity,
@@ -11,8 +11,6 @@ import {
   Image as ImageIcon,
   X,
   Unlock,
-  CheckCircle2,
-  HardDrive,
   Zap,
   Orbit,
   MoveRight,
@@ -315,7 +313,7 @@ export default function GearMenu({
                   key: 'transOn', speedKey: 'transSpeed', icon: MoveRight, label: 'Transiciones de Sección',
                   hint: 'Cambio animado entre apartados', suffix: '%'
                 }
-              ].map(({ key, speedKey, icon: Icon, label, hint, suffix, min = 10, max = 300, step = 5 }) => {
+              ].map(({ key, speedKey, icon: Icon, label, suffix, min = 10, max = 300, step = 5 }) => {
                 const on = motion[key] !== false;
                 const isOpacity = speedKey === 'opacity';
                 const speed = isOpacity ? opacity : (motion[speedKey] || 100);

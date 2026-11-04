@@ -18,7 +18,7 @@ function sanitizarJson(textoCrudo) {
     } catch (_) {
       try {
         return JSON.parse(limpio.substring(inicio, fin + 1));
-      } catch (e) {
+      } catch (_e) {
         return null;
       }
     }

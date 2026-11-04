@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Save, Cpu, Car, Activity, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { supabase } from '../../services/supabase';

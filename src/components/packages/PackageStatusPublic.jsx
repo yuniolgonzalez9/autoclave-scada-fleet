@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Package, Search, CheckCircle2, Clock, XCircle, Truck, RefreshCw, Ban, AlertTriangle } from 'lucide-react';
 import { getPublicStatus } from '../../services/packageService';
 

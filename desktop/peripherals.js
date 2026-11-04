@@ -13,11 +13,23 @@ exports.listSerialPorts = async () => {
   } catch (e) { return { error: e.message }; }
 };
 
-// ── Impresoras instaladas (Windows wmic / CUPS en linux) ──
+// ── Impresoras instaladas ──
+// wmic está deprecado y ausente en Windows 11 recientes: se intenta
+// PowerShell (Get-Printer) primero y wmic como respaldo.
 exports.listPrinters = async () => {
   try {
     if (process.platform === 'win32') {
-      const out = execSync('wmic printer get name,portname,drivername,default /format:csv', { encoding: 'utf8' });
+      try {
+        const out = execSync(
+          'powershell -NoProfile -Command "Get-Printer | Select-Object Name,PortName,DriverName,PrinterStatus | ConvertTo-Json -Compress"',
+          { encoding: 'utf8', timeout: 8000 }
+        );
+        let rows = JSON.parse(out || '[]');
+        if (!Array.isArray(rows)) rows = [rows];
+        const list = rows.map((p) => ({ name: p.Name || '', port: p.PortName || '', driver: p.DriverName || '', default: false }));
+        if (list.length) return list;
+      } catch (_) {}
+      const out = execSync('wmic printer get name,portname,drivername,default /format:csv', { encoding: 'utf8', timeout: 8000 });
       return out.split('\n').slice(1).filter(l => l.trim()).map((l) => {
         const cols = l.split(',');
         return { name: cols[2] || '', port: cols[3] || '', driver: cols[1] || '', default: /TRUE/i.test(cols[4] || '') };
@@ -57,6 +69,8 @@ exports.printLabel = async (job = {}) => {
     });
   }
   // Windows spooler: copia el payload a la cola de la impresora.
+  // El nombre va al shell: whitelist estricta o sería inyección de comandos.
+  if (!/^[A-Za-z0-9 _.\-()]{1,80}$/.test(target)) return { ok: false, err: 'nombre de impresora no válido' };
   try {
     const tmp = require('path').join(os.tmpdir(), `lbl_${Date.now()}.prn`);
     fs.writeFileSync(tmp, payload);

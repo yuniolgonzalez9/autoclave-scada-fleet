@@ -1,10 +1,9 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from '../../services/supabase';
 import { 
   Database, 
   Radio, 
-  CheckCircle2, 
   X, 
   RefreshCw, 
   HardDrive, 
@@ -14,8 +13,6 @@ import {
   Layers,
   Wrench,
   ShieldAlert,
-  Wifi,
-  WifiOff,
   AlertTriangle
 } from 'lucide-react';
 
@@ -125,7 +122,7 @@ export default function CloudDiagnosticsModal({
       const end = performance.now();
       const rtt = Math.round(end - start);
       setBrokerLatencyMs(rtt > 0 ? rtt : 1);
-    } catch (err) {
+    } catch (_err) {
       setBrokerError('No se pudo verificar RTT directo por bloqueo de red o timeout.');
     } finally {
       setTestingPing(false);

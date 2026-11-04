@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Printer,
   X,
@@ -7,11 +7,7 @@ import {
   ShieldCheck,
   Search, 
   ArrowUpDown, 
-  Layers,
-  Thermometer,
-  Gauge,
-  AlertTriangle,
-  CheckCircle2
+  Layers
 } from 'lucide-react';
 import PrintOptionsModal from '../common/PrintOptionsModal';
 

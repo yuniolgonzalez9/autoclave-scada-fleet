@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   Package, Printer, Plus, RefreshCw, CheckCircle2, AlertTriangle,
   Clock, XCircle, Truck, Ban, Settings2, QrCode, Search
@@ -81,7 +81,7 @@ function PrintSettings({ prefs, onChange, printers, loadingPrinters }) {
   );
 }
 
-export default function PackagesView({ fleet = {}, sendCommand, operatorName }) {
+export default function PackagesView({ fleet = {}, operatorName }) {
   const [paquetes, setPaquetes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState('');

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspense } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import LoginModal from './components/auth/LoginModal';
 import GearMenu, { WALLPAPERS_LIST } from './components/common/GearMenu';
@@ -18,8 +18,11 @@ import { startIndustrialSiren, stopIndustrialSiren, initAudioUnlock, playBellChi
 import { sendCriticalAlarmWithButtons } from './services/telegram';
 import { supabase } from './services/supabase';
 import HeaderLaserOrbit from './components/common/HeaderLaserOrbit';
+import HeaderClock from './components/common/HeaderClock';
+import FleetDeviceCard from './components/fleet/FleetDeviceCard';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import { applyMotionPrefs } from './services/motionPrefs';
+import { getDeviceHealth } from './utils/deviceHealth';
 
 // Vistas pesadas: carga diferida para acelerar el arranque en móviles.
 // Si el chunk no carga (sin internet o hash viejo tras redeploy), se
@@ -40,6 +43,7 @@ const lazyRetry = (factory) => lazy(async () => {
   }
 });
 
+
 const DeviceDetailView = lazyRetry(() => import('./components/dashboard/DeviceDetailView'));
 const FleetManagementView = lazyRetry(() => import('./components/fleet/FleetManagementView'));
 const ServiceReportsView = lazyRetry(() => import('./components/service/ServiceReportsView'));
@@ -59,18 +63,15 @@ const ViewLoader = () => (
     Cargando módulo…
   </div>
 );
-import { 
-  Activity, 
-  Flame, 
-  ChevronRight, 
-  Volume2, 
-  Bell, 
-  Clock, 
-  Unlock, 
-  Shield, 
+import {
+  Activity,
+  ChevronRight,
+  Volume2,
+  Bell,
+  Clock,
+  Unlock,
+  Shield,
   Sparkles,
-  Car,
-  Cpu,
   Building2,
   Rocket,
   Search,
@@ -141,7 +142,7 @@ function ScadaAppContent() {
             if (supaFailsRef.current >= 2) setSupabaseConnected(false);
           }
         }
-      } catch (e) {
+      } catch (_e) {
         if (isMounted) {
           supaFailsRef.current += 1;
           if (supaFailsRef.current >= 2) setSupabaseConnected(false);
@@ -293,6 +294,11 @@ function ScadaAppContent() {
     };
   }, []);
   const sirenActiveRef = useRef(false);
+
+  const handleOpenDevice = useCallback((mac) => {
+    setSelectedMac(mac);
+    setActiveSection('detalle');
+  }, []);
 
   const handleDeviceContextMenu = useCallback((e, dev) => {
     e.preventDefault();
@@ -500,16 +506,17 @@ function ScadaAppContent() {
   });
   const bellCount = notificationCenter.counts.unattended;
   const bellCritical = notificationCenter.counts.criticalNew > 0;
+  const hasBell = bellCount > 0;
 
   // Timbre de campana acorde al sacudir — suena mientras haya alertas
   // sin atender (sincronizado con la animación de la campanita).
   useEffect(() => {
-    if (!user || bellCount <= 0) return undefined;
+    if (!user || !hasBell) return undefined;
     const chime = () => playBellChime();
     chime();
     const id = setInterval(chime, 3000);
     return () => clearInterval(id);
-  }, [user, bellCount > 0]);
+  }, [user, hasBell]);
 
   // Persistencia tipo app nativa: el botón Atrás nunca cierra la app —
   // navega hacia Flota en su lugar (centinela de historial re-pushed).
@@ -527,30 +534,7 @@ function ScadaAppContent() {
     return () => window.removeEventListener('popstate', onPop);
   }, [user, activeSection, kioskMac]);
 
-  // Reloj en vivo — hora y fecha siempre visibles en el header
-  const [clockNow, setClockNow] = useState(() => new Date());
-  const [clockOpen, setClockOpen] = useState(false);
   const [nyeOn, setNyeOn] = useState(false);
-  useEffect(() => {
-    const id = setInterval(() => setClockNow(new Date()), 1000);
-    return () => clearInterval(id);
-  }, []);
-
-  const getDeviceHealthData = useCallback((dev) => {
-    if (!dev || !dev.lastSeen || dev.lastSeen === 0) {
-      return { status: 'OFFLINE', text: 'DESCONECTADO', timeAgo: 'Sin señal', colorClass: 'bg-rose-500/15 text-rose-400 border-rose-500/30' };
-    }
-    const diffSegundos = Math.max(0, Math.floor((Date.now() - dev.lastSeen) / 1000));
-
-    if (diffSegundos <= 8) {
-      return { status: 'ONLINE', text: 'EN LÍNEA', timeAgo: '', colorClass: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' };
-    } else if (diffSegundos <= 15) {
-      return { status: 'LATENCY', text: 'LATENCIA', timeAgo: `Hace ${diffSegundos}s`, colorClass: 'bg-amber-500/15 text-amber-300 border-amber-500/30' };
-    } else {
-      const mins = Math.floor(diffSegundos / 60);
-      return { status: 'OFFLINE', text: 'DESCONECTADO', timeAgo: mins > 0 ? `Hace ${mins}m` : `Hace ${diffSegundos}s`, colorClass: 'bg-rose-500/15 text-rose-400 border-rose-500/30' };
-    }
-  }, []);
 
   const { countOn, countLat, countOff, filteredDevices } = useMemo(() => {
     let cOn = 0, cLat = 0, cOff = 0;
@@ -558,7 +542,7 @@ function ScadaAppContent() {
     const query = fleetSearch.trim().toLocaleLowerCase();
 
     for (const dev of allowedDevices) {
-      const health = getDeviceHealthData(dev);
+      const health = getDeviceHealth(dev);
       if (health.status === 'ONLINE') cOn++;
       else if (health.status === 'LATENCY') cLat++;
       else cOff++;
@@ -588,11 +572,11 @@ function ScadaAppContent() {
       if (fleetSort === 'RECENT') return Number(b?.lastSeen || 0) - Number(a?.lastSeen || 0) || nameA.localeCompare(nameB, 'es');
 
       const statusRank = { ONLINE: 0, LATENCY: 1, OFFLINE: 2 };
-      return statusRank[getDeviceHealthData(a).status] - statusRank[getDeviceHealthData(b).status] || nameA.localeCompare(nameB, 'es');
+      return statusRank[getDeviceHealth(a).status] - statusRank[getDeviceHealth(b).status] || nameA.localeCompare(nameB, 'es');
     });
 
     return { countOn: cOn, countLat: cLat, countOff: cOff, filteredDevices: filtered };
-  }, [allowedDevices, healthFilter, fleetSearch, fleetSort, getDeviceHealthData]);
+  }, [allowedDevices, healthFilter, fleetSearch, fleetSort]);
 
   const inspectingMacToUse = kioskMac || selectedMac;
   const inspectingDevice = useMemo(() => {
@@ -781,38 +765,7 @@ function ScadaAppContent() {
           <div className="header-actions flex items-center gap-1.5 sm:gap-2.5 shrink-0 ml-auto">
             {/* Reloj — solo la hora grande; hover/click despliega la fecha completa */}
             {user && <NyeCountdown globalOn={nyeOn} />}
-            {user && (
-              <div className="relative group hidden md:block shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setClockOpen((o) => !o)}
-                  className="header-clock ultra-glass flex items-center justify-center px-6 h-11 sm:h-12 rounded-xl border border-cyan-500/30 leading-none select-none"
-                  aria-expanded={clockOpen}
-                  aria-label="Ver fecha completa"
-                >
-                  <span className="font-mono text-2xl font-bold tracking-[0.14em] text-cyan-300">
-                    {clockNow.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                  </span>
-                </button>
-                <div
-                  className={`clock-dropdown absolute right-0 top-full mt-2 z-[9999] ultra-glass rounded-2xl border border-cyan-500/30 px-5 py-4 text-center transition-all duration-300 ${
-                    clockOpen ? 'opacity-100 visible translate-y-0' : 'opacity-0 invisible -translate-y-1'
-                  } group-hover:opacity-100 group-hover:visible group-hover:translate-y-0`}
-                >
-                  <p className="font-mono text-3xl font-bold text-cyan-300 tracking-[0.1em] leading-none">
-                    {clockNow.toLocaleDateString('es-ES', { day: '2-digit' })}
-                    <span className="text-slate-500 text-xl mx-1">/</span>
-                    {clockNow.toLocaleDateString('es-ES', { month: '2-digit' })}
-                  </p>
-                  <p className="font-mono text-[11px] text-white font-bold tracking-[0.28em] uppercase mt-2">
-                    {clockNow.toLocaleDateString('es-ES', { weekday: 'long' })}
-                  </p>
-                  <p className="font-mono text-[10px] text-slate-400 tracking-[0.2em] uppercase mt-1">
-                    {clockNow.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}
-                  </p>
-                </div>
-              </div>
-            )}
+            {user && <HeaderClock />}
             {kioskMac && (
               <button
                 onClick={() => toggleKioskMode(null)}
@@ -1129,156 +1082,14 @@ function ScadaAppContent() {
                               : `No hay equipos registrados en el estado [${healthFilter}].`}
                         </div>
                       ) : (
-                        filteredDevices.map((dev) => {
-                          const dDev = dev.datos || {};
-                          const health = getDeviceHealthData(dev);
-
-                          const devTipo = (
-                            dev.meta?.config_deseada?.tipo || 
-                            dev.meta?.tipo || 
-                            dev.datos?.tipo || 
-                            'AUTOCLAVE'
-                          ).toUpperCase();
-
-                          const isVeh = devTipo === 'VEHICULO';
-                          const isPlc = devTipo === 'UNIVERSAL_PLC' || devTipo === 'PLC_GENERICO';
-
-                          const fase = String(dDev.fase || 'EN ESPERA').toUpperCase();
-                          const faseActiva = !/^(EN[ _]?ESPERA|ESPERA|APAGADO|CANCELADO|FINALIZADO.*|LISTO|IDLE)$/.test(fase.trim());
-                          const faseTone = /ALARM|ERROR|FALL|ABORT|CANCEL/.test(fase)
-                            ? 'border-rose-500/40 bg-rose-500/10 text-rose-200'
-                            : /FINALIZ|EXITO|ÉXITO/.test(fase)
-                              ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200'
-                              : faseActiva
-                                ? 'border-amber-500/40 bg-amber-500/10 text-amber-200'
-                                : 'border-slate-700 bg-slate-900/60 text-slate-300';
-                          const segRest = Number(dDev.seg_restantes || 0);
-
-                          const tempNum = parseFloat(dDev.temp_camara ?? 25.0);
-                          const presNum = parseFloat(dDev.presion ?? 0.0);
-
-                          return (
-                            <div
-                              key={dev.mac}
-                              role="button"
-                              tabIndex={0}
-                              aria-label={`Abrir equipo ${dev.meta?.alias || dev.mac}`}
-                              onClick={() => { setSelectedMac(dev.mac); setActiveSection('detalle'); }}
-                              onKeyDown={(event) => {
-                                if (event.key === 'Enter' || event.key === ' ') {
-                                  event.preventDefault();
-                                  setSelectedMac(dev.mac);
-                                  setActiveSection('detalle');
-                                }
-                              }}
-                              onContextMenu={(e) => handleDeviceContextMenu(e, dev)}
-                              className="fleet-device-card ultra-glass glow-border scale-3d p-5 rounded-2xl cursor-pointer flex flex-col justify-between"
-                            >
-                              <div>
-                                <div className="flex justify-between items-start mb-3">
-                                  <div>
-                                    <div className="flex items-center gap-1.5">
-                                      <h3 className="font-bold text-sm text-white">{dev.meta?.alias || `EQUIPO [${dev.mac.slice(-4)}]`}</h3>
-                                      <span className={`px-1.5 py-0.2 rounded text-[9px] font-mono font-bold border flex items-center gap-1 ${
-                                        isVeh 
-                                          ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' 
-                                          : isPlc
-                                          ? 'bg-purple-500/20 text-purple-300 border-purple-500/40'
-                                          : 'bg-cyan-500/20 text-cyan-300 border-cyan-400'
-                                      }`}>
-                                        {isVeh ? <Car className="w-2.5 h-2.5" /> : isPlc ? <Cpu className="w-2.5 h-2.5" /> : <Activity className="w-2.5 h-2.5" />}
-                                        {devTipo}
-                                      </span>
-                                    </div>
-                                    <p className="text-[11px] text-slate-400 font-mono mt-0.5">{dev.meta?.cliente || 'Cliente'} • {dev.mac}</p>
-                                  </div>
-                                  
-                                  <div className="text-right">
-                                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono border font-bold ${health.colorClass} status-indicator`}>
-                                      <span className={`w-1.5 h-1.5 rounded-full ${
-                                        health.status === 'ONLINE' ? 'bg-emerald-400 pulse-organic' :
-                                        health.status === 'LATENCY' ? 'bg-amber-400 pulse-organic' :
-                                        'bg-rose-400'
-                                      }`}></span>
-                                      {health.text}
-                                    </span>
-                                    <span className="block text-[9px] text-slate-400 font-mono mt-0.5">
-                                      {health.timeAgo}
-                                    </span>
-                                  </div>
-                                </div>
-
-                                {isVeh ? (
-                                  <div className="grid grid-cols-2 gap-2 my-3">
-                                    <div className="p-2.5 rounded-xl glass-cell hologram text-center w-full scale-3d">
-                                      <span className="text-[10px] font-mono text-emerald-400 block">BATERÍA 12V</span>
-                                      <span className="text-xl font-bold font-mono text-emerald-300">
-                                        {(dDev.bateria_v || 12.6).toFixed(1)} V
-                                      </span>
-                                    </div>
-                                    <div className="p-2.5 rounded-xl glass-cell hologram text-center w-full scale-3d">
-                                      <span className="text-[10px] font-mono text-amber-400 block">ESTADO</span>
-                                      <span className="text-sm font-bold font-mono text-white truncate block mt-1">
-                                        {dDev.fase || 'APAGADO'}
-                                      </span>
-                                    </div>
-                                  </div>
-                                ) : isPlc ? (
-                                  <div className="grid grid-cols-2 gap-2 my-3 font-mono">
-                                    <div className="p-2.5 rounded-xl glass-cell hologram text-center w-full scale-3d">
-                                      <span className="text-[10px] text-cyan-400 block">RELÉS</span>
-                                      <span className="text-xl font-bold text-white">
-                                        {Object.values(dDev.reles || {}).filter(Boolean).length} / 8
-                                      </span>
-                                    </div>
-                                    <div className="p-2.5 rounded-xl glass-cell hologram text-center w-full scale-3d">
-                                      <span className="text-[10px] text-emerald-400 block">ENTRADAS</span>
-                                      <span className="text-xl font-bold text-white">
-                                        {Object.values(dDev.entradas || {}).filter(Boolean).length} / 8
-                                      </span>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <div className="grid grid-cols-2 gap-2 my-3">
-                                    <div className="p-2.5 rounded-xl glass-cell hologram text-center w-full scale-3d">
-                                      <span className="text-[10px] font-mono text-cyan-400 block">TEMPERATURA</span>
-                                      <span className="text-xl font-bold font-mono text-white">
-                                        {isNaN(tempNum) ? '25.0' : tempNum.toFixed(1)}°C
-                                      </span>
-                                    </div>
-                                    <div className="p-2.5 rounded-xl glass-cell hologram text-center w-full scale-3d">
-                                      <span className="text-[10px] font-mono text-pink-400 block">PRESIÓN</span>
-                                      <span className="text-xl font-bold font-mono text-white">
-                                        {isNaN(presNum) ? '0.00' : presNum.toFixed(2)}b
-                                      </span>
-                                    </div>
-                                  </div>
-                                )}
-
-                                <div className={`flex items-center justify-between gap-2 mb-3 px-3 py-2 rounded-xl border ${faseTone}`}>
-                                  <span className="flex items-center gap-2 min-w-0">
-                                    <span className="relative flex w-2.5 h-2.5 shrink-0">
-                                      {faseActiva && <span className="absolute inset-0 rounded-full bg-current opacity-60 animate-ping" />}
-                                      <span className="relative w-2.5 h-2.5 rounded-full bg-current" />
-                                    </span>
-                                    <span className="text-[10px] font-mono uppercase tracking-wider opacity-70">Fase</span>
-                                    <span className="text-xs font-bold font-mono truncate">{fase}</span>
-                                  </span>
-                                  {segRest > 0 && (
-                                    <span className="text-[11px] font-mono font-bold tabular-nums shrink-0">
-                                      {Math.floor(segRest / 60)}:{String(segRest % 60).padStart(2, '0')}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-
-                              <div className="fleet-device-cta pt-3 border-t border-white/10 flex items-center justify-between text-xs font-mono text-cyan-400 font-bold w-full rounded-b-xl">
-                                <span>ENTRAR A CABINA DE CONTROL</span>
-                                <ChevronRight className="w-4 h-4" />
-                              </div>
-                            </div>
-                          );
-                        })
+                        filteredDevices.map((dev) => (
+                          <FleetDeviceCard
+                            key={dev.mac}
+                            dev={dev}
+                            onOpen={handleOpenDevice}
+                            onContextMenu={handleDeviceContextMenu}
+                          />
+                        ))
                       )}
                     </div>
                   </div>

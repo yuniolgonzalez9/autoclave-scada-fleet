@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
+import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { supabase } from '../../services/supabase';
 import SessionDetailModal from './SessionDetailModal';
 import ClinicalTooltip from '../common/ClinicalTooltip';

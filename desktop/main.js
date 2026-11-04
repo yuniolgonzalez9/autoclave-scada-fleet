@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Menu, powerSaveBlocker } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, powerSaveBlocker, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -122,6 +122,8 @@ const createWindow = () => {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      // Preload aislado: solo usa APIs de electron → sandbox completo.
+      sandbox: true,
       // Sin throttling de fondo: el keepalive MQTT y Realtime no pueden
       // suspenderse o la telemetría "cae" falsamente cada pocos segundos.
       backgroundThrottling: false
@@ -130,13 +132,31 @@ const createWindow = () => {
   Menu.setApplicationMenu(null);
   mainWindow.setMenuBarVisibility(false);
 
+  // La web no puede abrir ventanas nuevas de Electron ni navegar la
+  // ventana fuera de su origen confiable — los enlaces externos van al
+  // navegador del sistema.
+  const trustedOrigin = new URL(WEB_URL).origin;
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) shell.openExternal(url).catch(() => {});
+    return { action: 'deny' };
+  });
+  mainWindow.webContents.on('will-navigate', (e, url) => {
+    try {
+      const u = new URL(url);
+      if (u.origin !== trustedOrigin && u.protocol !== 'file:') {
+        e.preventDefault();
+        if (/^https?:$/.test(u.protocol)) shell.openExternal(url).catch(() => {});
+      }
+    } catch (_) { e.preventDefault(); }
+  });
+
   // Revelado: espera a que la web esté lista + mínimo de marca, completa
   // la barra del splash, hace fade-out y recién ahí muestra la ventana.
   let revealed = false;
-  const reveal = () => {
+  const reveal = (skipMinWait = false) => {
     if (revealed) return;
     revealed = true;
-    const wait = Math.max(0, SPLASH_MIN_MS - (Date.now() - splashAt));
+    const wait = skipMinWait ? 0 : Math.max(0, SPLASH_MIN_MS - (Date.now() - splashAt));
     setTimeout(() => {
       if (!splash.isDestroyed()) splash.webContents.executeJavaScript('window.__biofleetFinish&&window.__biofleetFinish()').catch(() => {});
       setTimeout(() => {
@@ -148,6 +168,8 @@ const createWindow = () => {
   mainWindow.once('ready-to-show', reveal);
   mainWindow.webContents.on('did-finish-load', reveal);
   setTimeout(reveal, SPLASH_FAILSAFE_MS);
+  // Clic/tecla en el splash = salta la espera de marca si la web ya cargó.
+  splash.webContents.on('before-input-event', () => { if (mainWindow.webContents && !mainWindow.webContents.isLoading()) reveal(true); });
 
   mainWindow.webContents.on('did-fail-load', (e, code, desc, url, isMainFrame) => {
     if (isMainFrame && code !== -3 && url.startsWith('http')) mainWindow.loadFile(LOCAL_INDEX);
@@ -261,6 +283,12 @@ ipcMain.handle('hub:printToPdf', (e, job) => {
 });
 ipcMain.handle('hub:printLabel', (e, job) => printLabel(job));
 ipcMain.handle('hub:status', () => global.hub?.status() || { online: false });
+// Token del enlace local: solo la ventana principal (origen confiable
+// por el preload) puede pedirlo — autentica los comandos por WS :9781.
+ipcMain.handle('hub:localToken', (e) => {
+  if (!mainWindow || e.sender !== mainWindow.webContents) return null;
+  return global.hub?.token?.() || null;
+});
 const HEX = /^#[0-9a-f]{6}$/i;
 ipcMain.on('hub:theme', (e, t) => {
   if (!mainWindow || e.sender !== mainWindow.webContents || !t) return;

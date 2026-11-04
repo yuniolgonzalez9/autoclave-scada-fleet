@@ -15,6 +15,7 @@ if (trusted) {
     printToPdf: (job) => ipcRenderer.invoke('hub:printToPdf', job),
     printLabel: (job) => ipcRenderer.invoke('hub:printLabel', job),
     status: () => ipcRenderer.invoke('hub:status'),
+    localToken: () => ipcRenderer.invoke('hub:localToken'),
     sendCommand: (mac, cmd) => ipcRenderer.invoke('hub:command', { mac, cmd }),
     vaultSave: (p) => ipcRenderer.invoke('vault:save', p),
     vaultVerify: (p) => ipcRenderer.invoke('vault:verify', p),

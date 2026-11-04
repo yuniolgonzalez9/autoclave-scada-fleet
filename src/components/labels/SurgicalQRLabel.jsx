@@ -1,7 +1,7 @@
-import React, { useRef, useMemo, useEffect, useCallback } from 'react';
+import { useRef, useMemo, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { QRCodeSVG } from 'qrcode.react';
-import { QrCode, Printer, X, ShieldCheck, Calendar, Tag, CheckCircle2 } from 'lucide-react';
+import { QrCode, Printer, X } from 'lucide-react';
 
 /**
  * Escapa cadenas para prevenir inyecciones HTML en ventanas de impresión.

@@ -58,11 +58,25 @@ export async function requireActor(req, { roles = null } = {}) {
   return { admin, profile };
 }
 
-export function canAccessMac(profile, mac) {
+// Mismo cierre estricto que la UI: un no privilegiado solo actúa sobre
+// equipos listados en authorized_devices o con usuario_asignado = su
+// usuario. Antes, sin lista, un operador podía comandar TODA la flota
+// por API aunque la interfaz se la ocultara.
+export async function canAccessMac(admin, profile, mac) {
   if (PRIVILEGED_ROLES.includes(profile.role)) return true;
+  const target = cleanMac(mac);
   const list = Array.isArray(profile.authorized_devices) ? profile.authorized_devices : [];
-  if (list.length === 0) return profile.role !== 'CLIENTE';
-  return list.includes(cleanMac(mac));
+  if (list.map(cleanMac).includes(target)) return true;
+  try {
+    const { data } = await admin
+      .from('asignaciones_equipos')
+      .select('usuario_asignado')
+      .eq('mac', target)
+      .maybeSingle();
+    const assigned = String(data?.usuario_asignado || '').trim().toLowerCase();
+    if (assigned && assigned === String(profile.username || '').trim().toLowerCase()) return true;
+  } catch (_) {}
+  return false;
 }
 
 export function sendError(res, err) {

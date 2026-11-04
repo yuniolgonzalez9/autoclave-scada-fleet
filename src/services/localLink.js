@@ -26,7 +26,24 @@ export function connectLocalLink(onPacket, onStatus) {
   let idx = 0;
   let retryTimer = null;
   let up = false;
+  // El Hub exige autenticar el socket antes de aceptar comandos (un
+  // cliente LAN cualquiera ya no puede actuar sobre los equipos).
+  // El token solo se expone a la web dentro del exe vía preload.
+  let needsAuth = false;
+  let authed = false;
   const pendingAcks = new Map(); // mac -> resolve
+
+  const requestAuth = () => {
+    try {
+      const get = window.biofleetHub?.localToken;
+      if (typeof get !== 'function') return;
+      Promise.resolve(get()).then((token) => {
+        if (token && ws && ws.readyState === WebSocket.OPEN && !authed) {
+          ws.send(JSON.stringify({ tipo: 'auth', token }));
+        }
+      }).catch(() => {});
+    } catch (_) {}
+  };
 
   const setUp = (v) => {
     if (v === up) return;
@@ -55,8 +72,14 @@ export function connectLocalLink(onPacket, onStatus) {
     } else if (m.tipo === 'telemetria' && m.mac) {
       emit(m.mac, 'telemetria', m.datos, false);
     } else if (m.tipo === 'hub_ok' && Array.isArray(m.devices)) {
+      // Hubs actualizados exigen auth; los antiguos no anuncian el flag
+      // y aceptan comandos directamente (compatibilidad hacia atrás).
+      needsAuth = Boolean(m.auth_required);
+      if (needsAuth) requestAuth();
       // Snapshot del Hub: datos en caché, no marca el equipo como "vivo"
       m.devices.forEach((d) => emitDeviceSnapshot(d, true));
+    } else if (m.tipo === 'auth_ok') {
+      authed = true;
     } else if (m.tipo === 'device_found') {
       emitDeviceSnapshot(m.dev, true);
     } else if (m.tipo === 'comando_ack' && m.mac) {
@@ -87,6 +110,7 @@ export function connectLocalLink(onPacket, onStatus) {
     ws.onopen = () => setUp(true);
     ws.onclose = () => {
       setUp(false);
+      authed = false;
       ws = null;
       idx += 1;
       schedule();
@@ -98,7 +122,9 @@ export function connectLocalLink(onPacket, onStatus) {
   open();
 
   const send = (mac, comando) => {
-    if (!ws || ws.readyState !== WebSocket.OPEN) return Promise.resolve(false);
+    // Sin auth el Hub rechaza el comando: se devuelve false para que el
+    // emisor use la ruta de nube (que sí verifica usuario y permiso).
+    if (!ws || ws.readyState !== WebSocket.OPEN || (needsAuth && !authed)) return Promise.resolve(false);
     try {
       ws.send(JSON.stringify({ tipo: 'comando', mac, comando }));
     } catch (_) {

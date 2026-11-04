@@ -4,6 +4,35 @@ import { OPERATOR_ROLES, PRIVILEGED_ROLES, HttpError, applyCors, canAccessMac, c
 const TOPIC_PREFIX = 'autoclave_med_2026';
 const MAX_PAYLOAD = 16 * 1024;
 
+// Cliente MQTT reutilizado entre invocaciones "calientes": antes cada
+// comando abría una conexión nueva (cientos de ms de handshake y un
+// clientId distinto por comando en el broker).
+let pooled = null;
+let pooledKey = '';
+
+function getPooledClient(url, username, password) {
+  const key = `${url}|${username}`;
+  if (pooled && pooledKey === key && !pooled.disconnected && !pooled.ended) return pooled;
+  try { pooled?.end(true); } catch (_) {}
+  pooledKey = key;
+  pooled = mqtt.connect(url, {
+    clientId: `SRV_${Math.random().toString(36).slice(2, 10)}`,
+    username,
+    password,
+    clean: true,
+    keepalive: 30,
+    connectTimeout: 6000,
+    reconnectPeriod: 5000
+  });
+  // 'error' sin listener tumba el proceso: el handler vive aquí y cada
+  // publicación añade el suyo para el intento concreto.
+  pooled.on('error', () => {});
+  pooled.on('close', () => {
+    if (pooled && (pooled.ended || pooled.disconnected)) pooled = null;
+  });
+  return pooled;
+}
+
 function publishOnce({ topic, payload, retain }) {
   const url = process.env.MQTT_BROKER_URL || process.env.VITE_MQTT_BROKER_URL;
   const username = process.env.MQTT_SERVER_USER || process.env.VITE_MQTT_USER;
@@ -11,31 +40,33 @@ function publishOnce({ topic, payload, retain }) {
   if (!url || !username || !password) throw new HttpError(503, 'MQTT no está configurado en el servidor.');
 
   return new Promise((resolve, reject) => {
-    const client = mqtt.connect(url, {
-      clientId: `SRV_${Math.random().toString(36).slice(2, 10)}`,
-      username,
-      password,
-      clean: true,
-      connectTimeout: 6000,
-      reconnectPeriod: 0
-    });
+    const client = getPooledClient(url, username, password);
     const timer = setTimeout(() => {
-      client.end(true);
+      cleanup();
       reject(new HttpError(504, 'El broker MQTT no respondió.'));
     }, 9000);
-    client.on('error', (err) => {
+    const cleanup = () => {
       clearTimeout(timer);
-      client.end(true);
-      reject(new HttpError(502, `Broker MQTT: ${err.message}`));
-    });
-    client.on('connect', () => {
+      client.off('connect', onConnect);
+      client.off('error', onError);
+    };
+    const publish = () => {
       client.publish(topic, payload, { qos: 1, retain }, (err) => {
-        clearTimeout(timer);
-        client.end();
+        cleanup();
         if (err) reject(new HttpError(502, `No se pudo publicar: ${err.message}`));
         else resolve();
       });
-    });
+    };
+    const onConnect = () => publish();
+    const onError = (err) => {
+      cleanup();
+      reject(new HttpError(502, `Broker MQTT: ${err.message}`));
+    };
+    if (client.connected) publish();
+    else {
+      client.once('connect', onConnect);
+      client.once('error', onError);
+    }
   });
 }
 
@@ -54,7 +85,7 @@ export default async function handler(req, res) {
     }
     if (target === 'ALL') {
       if (!PRIVILEGED_ROLES.includes(profile.role)) throw new HttpError(403, 'Solo administración puede enviar a toda la flota.');
-    } else if (!canAccessMac(profile, target)) {
+    } else if (!(await canAccessMac(admin, profile, target))) {
       throw new HttpError(403, 'No tienes permiso sobre este equipo.');
     }
 

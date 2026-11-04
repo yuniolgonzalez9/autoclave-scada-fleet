@@ -205,7 +205,6 @@ const upsertRow = (rows, row) => {
 
 export function useNotificationCenter({
   enabled,
-  fleet,
   allowedDevices,
   isAdmin,
   profile,

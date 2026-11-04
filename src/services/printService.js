@@ -113,7 +113,7 @@ function printViaIframe(title, html) {
       const cleanup = () => { try { document.body.removeChild(iframe); } catch (_) {} };
       iframe.contentWindow.onafterprint = cleanup;
       setTimeout(() => {
-        try { iframe.contentWindow.focus(); iframe.contentWindow.print(); } catch (e) {}
+        try { iframe.contentWindow.focus(); iframe.contentWindow.print(); } catch (_) {}
         setTimeout(cleanup, 60000);
       }, 250);
       resolve({ ok: true });

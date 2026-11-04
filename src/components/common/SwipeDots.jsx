@@ -1,4 +1,3 @@
-import React, { useMemo } from 'react';
 
 const MAX_VISIBLE_DOTS = 12; // Límite estético para evitar desbordamiento horizontal en móviles
 

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { supabase } from '../services/supabase';
 import { sendTelegramEvent } from '../services/telegram';
 import { saveOfflineCredential, syncProfilesToVault, verifyOfflineLogin, offlineAuthAvailable } from '../services/offlineAuth';

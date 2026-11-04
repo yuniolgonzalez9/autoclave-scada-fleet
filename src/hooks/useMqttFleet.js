@@ -9,6 +9,10 @@ import {
 
 const CACHE_KEY = 'biofleet_fleet_cache_v2';
 const PERSIST_INTERVAL_MS = 4000;
+const HISTORY_WINDOW_MS = 60 * 60 * 1000; // un ciclo de autoclave cabe entero
+const HISTORY_MAX_POINTS = 1800;
+const REPORT_RETRY_MAX = 40;
+const REPORT_RETRY_MS = 10000;
 
 export function useMqttFleet(enabled = true) {
   const [fleet, setFleet] = useState(() => {
@@ -24,8 +28,12 @@ export function useMqttFleet(enabled = true) {
   const [mqttConnected, setMqttConnected] = useState(true);
   const sendCommandRef = useRef(null);
   const ackReporteRef = useRef(null);
+  const meshLeaderRef = useRef(null); // () => bool: líder por navegador
   const fleetRef = useRef(fleet);
   const fasePorMac = useRef({}); // borde de fase para auto-impresión/paquetes
+  const reportRetryRef = useRef([]); // reportes cuyo upsert a nube falló
+  const lastDrainRef = useRef(0);
+  const batchSeqRef = useRef(0);
 
   useEffect(() => {
     fleetRef.current = fleet;
@@ -38,7 +46,7 @@ export function useMqttFleet(enabled = true) {
         if (Object.keys(currentData).length > 0) {
           sessionStorage.setItem(CACHE_KEY, JSON.stringify(currentData));
         }
-      } catch (e) {}
+      } catch (_) {}
     }, PERSIST_INTERVAL_MS);
 
     return () => clearInterval(timer);
@@ -102,7 +110,7 @@ export function useMqttFleet(enabled = true) {
             return nextFleet;
           });
         }
-      } catch (err) {}
+      } catch (_) {}
     };
 
     if (enabled) loadRegisteredDevices();
@@ -137,7 +145,7 @@ export function useMqttFleet(enabled = true) {
         eventos: payload?.eventos || []
       }, { onConflict: 'session_id' });
       return error ? null : sessionId;
-    } catch (e) {
+    } catch (_e) {
       return null;
     }
   }, []);
@@ -188,9 +196,44 @@ export function useMqttFleet(enabled = true) {
       client = conn.client;
       sendCommandRef.current = conn.sendCommand;
       ackReporteRef.current = conn.ackReporte || null;
+      meshLeaderRef.current = conn.isMeshLeader || null;
     }).catch(() => {});
 
+    // Reportes cuyo upsert a la nube falló (offline/RLS): cola local con
+    // reintento cada ~10s — antes se perdían en silencio por la ruta nube.
+    const drainReportRetries = (isLeaderNow) => {
+      const q = reportRetryRef.current;
+      if (!q.length || !isLeaderNow()) return;
+      if (Date.now() - lastDrainRef.current < REPORT_RETRY_MS) return;
+      lastDrainRef.current = Date.now();
+      reportRetryRef.current = [];
+      q.forEach((item) => {
+        persistSessionReport(item.cleanMac, item.payload, item.meta).then((sid) => {
+          if (!sid) {
+            if (reportRetryRef.current.length < REPORT_RETRY_MAX) reportRetryRef.current.push(item);
+          } else if (item.hubReplay && ackReporteRef.current) {
+            ackReporteRef.current(sid);
+          }
+        });
+      });
+    };
+
+    const persistReportOrQueue = (cleanMac, payload, meta, hubReplay) => {
+      persistSessionReport(cleanMac, payload, meta).then((sid) => {
+        if (sid) {
+          if (hubReplay && ackReporteRef.current) ackReporteRef.current(sid);
+        } else if (reportRetryRef.current.length < REPORT_RETRY_MAX) {
+          reportRetryRef.current.push({ cleanMac, payload, meta, hubReplay });
+        }
+      });
+    };
+
     const flushTimer = setInterval(() => {
+      // Solo la pestaña líder del mesh ejecuta efectos de escritura
+      // (persistencia, impresión, marcas de paquete): antes cada pestaña
+      // abierta duplicaba upserts e impresiones.
+      const isLeaderNow = () => (meshLeaderRef.current ? meshLeaderRef.current() : true);
+      drainReportRetries(isLeaderNow);
       if (pendingPackets.length === 0) return;
       const rawBatch = pendingPackets;
       pendingPackets = [];
@@ -204,69 +247,81 @@ export function useMqttFleet(enabled = true) {
         (p, i) => p.channel !== 'telemetria' || lastTeleIdx[p.mac] === i
       );
 
-      setFleet((prevFleet) => {
-        let nextFleet = prevFleet;
+      // Los efectos (Supabase, impresión, imports dinámicos) se
+      // recolectan durante el cálculo del estado y corren DESPUÉS del
+      // commit — nunca se ejecutan dentro del updater, que React puede
+      // invocar más de una vez (StrictMode/concurrent). El batchId los
+      // deduplica si eso ocurre.
+      const effects = [];
+      const batchId = ++batchSeqRef.current;
 
-        // ── UNA SOLA VERDAD: el líder publica su telemetría consolidada;
-        // todos adoptan la fila remota cuando su flujo local envejece. ──
-        const STALE_MS = 15000;
-        const publishAndMerge = (dev) => {
-          if (!dev?.mac) return;
-          const teleFresh = dev.lastTelemetryAt && (Date.now() - dev.lastTelemetryAt < STALE_MS);
-          if (isFleetLeader() && teleFresh) {
-            queueDeviceState(dev.mac, dev.datos, dev.f0Score, dev.lastTelemetryAt, dev.lastSeen);
+      const computeNext = (prevFleet) => {
+      const ownEffects = [];
+      const pushEffect = (fn) => ownEffects.push({ id: `${batchId}:${ownEffects.length}`, fn });
+      let nextFleet = prevFleet;
+
+      // ── UNA SOLA VERDAD: el líder publica su telemetría consolidada;
+      // todos adoptan la fila remota cuando su flujo local envejece. ──
+      const STALE_MS = 15000;
+      const publishAndMerge = (dev) => {
+        if (!dev?.mac) return;
+        const teleFresh = dev.lastTelemetryAt && (Date.now() - dev.lastTelemetryAt < STALE_MS);
+        if (isFleetLeader() && teleFresh) {
+          queueDeviceState(dev.mac, dev.datos, dev.f0Score, dev.lastTelemetryAt, dev.lastSeen);
+        }
+        if (!teleFresh) {
+          const remote = getRemoteDeviceState(dev.mac);
+          if (remote && remote.last_telemetry_at > (dev.lastTelemetryAt || 0)) {
+            nextFleet = {
+              ...nextFleet,
+              [dev.mac]: {
+                ...dev,
+                datos: { ...(dev.datos || {}), ...(remote.datos || {}) },
+                f0Score: remote.f0_score || 0,
+                lastTelemetryAt: remote.last_telemetry_at,
+                lastSeen: remote.last_seen || remote.last_telemetry_at
+              }
+            };
           }
-          if (!teleFresh) {
-            const remote = getRemoteDeviceState(dev.mac);
-            if (remote && remote.last_telemetry_at > (dev.lastTelemetryAt || 0)) {
-              nextFleet = {
-                ...nextFleet,
-                [dev.mac]: {
-                  ...dev,
-                  datos: { ...(dev.datos || {}), ...(remote.datos || {}) },
-                  f0Score: remote.f0_score || 0,
-                  lastTelemetryAt: remote.last_telemetry_at,
-                  lastSeen: remote.last_seen || remote.last_telemetry_at
-                }
-              };
-            }
-          }
+        }
+      };
+
+      batch.forEach(({ mac, channel, payload, isRetained, hubReplay }) => {
+        const cleanMac = (mac || '').toUpperCase().replace(/[:-]/g, '');
+        if (!cleanMac) return;
+
+        const currentDev = nextFleet[cleanMac] || {
+          mac: cleanMac,
+          lastSeen: Date.now(),
+          datos: {},
+          esquema: null,
+          i2cReport: null,
+          hwProfile: null,
+          logicaAck: null,
+          meta: { alias: `EQUIPO [${cleanMac.slice(-4)}]`, cliente: 'Central', modelo: 'Universal' },
+          f0Score: 0.0,
+          history: []
         };
 
-        batch.forEach(({ mac, channel, payload, isRetained, hubReplay }) => {
-          const cleanMac = (mac || '').toUpperCase().replace(/[:-]/g, '');
-          if (!cleanMac) return;
+        const isFreshStream = !isRetained;
+        const updated = {
+          ...currentDev,
+          lastSeen: isFreshStream ? Date.now() : (currentDev.lastSeen || Date.now())
+        };
 
-          const currentDev = nextFleet[cleanMac] || {
-            mac: cleanMac,
-            lastSeen: Date.now(),
-            datos: {},
-            esquema: null,
-            i2cReport: null,
-            hwProfile: null,
-            logicaAck: null,
-            meta: { alias: `EQUIPO [${cleanMac.slice(-4)}]`, cliente: 'Central', modelo: 'Universal' },
-            f0Score: 0.0,
-            history: []
-          };
+        if (channel === 'telemetria') {
+          const prevTeleAt = currentDev.lastTelemetryAt || 0;
+          if (isFreshStream) updated.lastTelemetryAt = Date.now();
 
-          const isFreshStream = !isRetained;
-          const updated = {
-            ...currentDev,
-            lastSeen: isFreshStream ? Date.now() : (currentDev.lastSeen || Date.now())
-          };
-
-          if (channel === 'telemetria') {
-            if (isFreshStream) updated.lastTelemetryAt = Date.now();
-
-            // Borde de fase: reposo → ciclo activo. Paquete REGISTRADO pasa
-            // a EN_PROCESO y (opción) se imprime el comprobante de inicio.
-            const faseNueva = payload?.fase;
-            if (isFreshStream && faseNueva) {
-              const fasePrevia = fasePorMac.current[cleanMac];
-              fasePorMac.current[cleanMac] = faseNueva;
-              const REPOSO = new Set(['ESPERA', 'APAGADO', 'FINALIZADO']);
-              if (fasePrevia && REPOSO.has(fasePrevia) && !REPOSO.has(faseNueva)) {
+          // Borde de fase: reposo → ciclo activo. Paquete REGISTRADO pasa
+          // a EN_PROCESO y (opción) se imprime el comprobante de inicio.
+          const faseNueva = payload?.fase;
+          if (isFreshStream && faseNueva) {
+            const fasePrevia = fasePorMac.current[cleanMac];
+            fasePorMac.current[cleanMac] = faseNueva;
+            const REPOSO = new Set(['ESPERA', 'APAGADO', 'FINALIZADO']);
+            if (fasePrevia && REPOSO.has(fasePrevia) && !REPOSO.has(faseNueva) && isLeaderNow()) {
+              pushEffect(() => {
                 (async () => {
                   try {
                     const [{ markInProcessByMac }, ps] = await Promise.all([
@@ -280,114 +335,144 @@ export function useMqttFleet(enabled = true) {
                     }
                   } catch (_) {}
                 })();
-              }
+              });
             }
-
-            updated.datos = {
-              ...(currentDev.datos || {}),
-              ...(payload || {})
-            };
-
-            const currentTemp = parseFloat(payload?.temp_camara ?? 25.0);
-            const currentPres = parseFloat(payload?.presion ?? 0.0);
-
-            if (payload?.fase === 'ESTERILIZANDO' || payload?.fase === 'MESETA') {
-              updated.f0Score = accumulateF0(currentDev.f0Score || 0, currentTemp, 2);
-            } else if (payload?.fase === 'ESPERA' || payload?.fase === 'APAGADO') {
-              updated.f0Score = 0.0;
-            }
-
-            const nowTime = new Date().toTimeString().slice(3, 8);
-            const newPoint = {
-              time: nowTime,
-              temperature: currentTemp,
-              pressure: currentPres
-            };
-
-            const prevHistory = currentDev.history || [];
-            updated.history = prevHistory.length >= 30 
-              ? [...prevHistory.slice(1), newPoint]
-              : [...prevHistory, newPoint];
           }
 
-          if (channel === 'logica' || channel === 'logica/ack') {
-            updated.logicaAck = { ...payload, timestamp: Date.now() };
+          updated.datos = {
+            ...(currentDev.datos || {}),
+            ...(payload || {})
+          };
+
+          const currentTemp = parseFloat(payload?.temp_camara ?? 25.0);
+          const currentPres = parseFloat(payload?.presion ?? 0.0);
+
+          // F0 con el intervalo REAL entre paquetes — hardcodear 2s
+          // falseaba la letalidad cuando la telemetría cambia de ritmo.
+          const nowMs = Date.now();
+          const dtSeg = Math.min(10, Math.max(0.5, (nowMs - (prevTeleAt || nowMs - 2000)) / 1000));
+          if (payload?.fase === 'ESTERILIZANDO' || payload?.fase === 'MESETA') {
+            updated.f0Score = accumulateF0(currentDev.f0Score || 0, currentTemp, dtSeg);
+          } else if (payload?.fase === 'ESPERA' || payload?.fase === 'APAGADO') {
+            updated.f0Score = 0.0;
           }
 
-          if (channel === 'i2c_report' || channel === 'hardware_scan') {
-            updated.i2cReport = payload;
+          const newPoint = {
+            t: nowMs,
+            time: new Date(nowMs).toTimeString().slice(0, 8),
+            temperature: currentTemp,
+            pressure: currentPres
+          };
+
+          // Ventana de 60 min: la de 30 puntos solo cubría ~1 min y la
+          // gráfica no mostraba el ciclo completo.
+          const cutoff = nowMs - HISTORY_WINDOW_MS;
+          const kept = (currentDev.history || []).filter((p) => (p.t ?? 0) >= cutoff);
+          updated.history = kept.length >= HISTORY_MAX_POINTS
+            ? [...kept.slice(kept.length - HISTORY_MAX_POINTS + 1), newPoint]
+            : [...kept, newPoint];
+        }
+
+        if (channel === 'logica' || channel === 'logica/ack') {
+          updated.logicaAck = { ...payload, timestamp: Date.now() };
+        }
+
+        if (channel === 'i2c_report' || channel === 'hardware_scan') {
+          updated.i2cReport = payload;
+        }
+
+        if (channel === 'hw_profile') {
+          updated.hwProfile = payload;
+        }
+
+        if (channel === 'esquema') {
+          updated.esquema = payload;
+        }
+
+        if (channel === 'meta') {
+          updated.meta = Object.assign({}, currentDev.meta || {}, payload, { mac: cleanMac });
+        }
+
+        if (channel === 'reporte_paquete') {
+          const ciclosAcum = Number(payload?.ciclos_acumulados || payload?.ciclos || 0);
+          if (!updated.datos.cfg) updated.datos.cfg = {};
+          updated.datos.cfg.ciclos = ciclosAcum;
+
+          if (isFreshStream) {
+            updated.ultimoReporte = { ...(payload || {}), recibidoEn: Date.now() };
+          } else if (hubReplay && !updated.ultimoReporte) {
+            // Reporte recuperado del buffer del Hub: visible offline
+            // sin marcar el equipo como vivo.
+            updated.ultimoReporte = { ...(payload || {}), recibidoEn: Date.now(), viaHubBuffer: true };
           }
 
-          if (channel === 'hw_profile') {
-            updated.hwProfile = payload;
-          }
-
-          if (channel === 'esquema') {
-            updated.esquema = payload;
-          }
-
-          if (channel === 'meta') {
-            updated.meta = Object.assign({}, currentDev.meta || {}, payload, { mac: cleanMac });
-          }
-
-          if (channel === 'reporte_paquete') {
-            const ciclosAcum = Number(payload?.ciclos_acumulados || payload?.ciclos || 0);
-            if (!updated.datos.cfg) updated.datos.cfg = {};
-            updated.datos.cfg.ciclos = ciclosAcum;
-
-            if (isFreshStream) {
-              updated.ultimoReporte = { ...(payload || {}), recibidoEn: Date.now() };
-            } else if (hubReplay && !updated.ultimoReporte) {
-              // Reporte recuperado del buffer del Hub: visible offline
-              // sin marcar el equipo como vivo.
-              updated.ultimoReporte = { ...(payload || {}), recibidoEn: Date.now(), viaHubBuffer: true };
-            }
-
-            persistSessionReport(cleanMac, payload, updated.meta).then((sid) => {
-              // Confirmación al Hub: el reporte ya está en la nube → deja de reenviarlo
-              if (sid && hubReplay && ackReporteRef.current) ackReporteRef.current(sid);
-            });
+          if (isLeaderNow()) {
+            const metaSnap = updated.meta;
+            const updatedSnap = updated;
+            pushEffect(() => persistReportOrQueue(cleanMac, payload, metaSnap, hubReplay));
 
             // Cierre de ciclo real (no replay): resuelve el paquete en
             // seguimiento y auto-imprime el reporte forense si está activo.
             if (isFreshStream) {
-              (async () => {
-                try {
-                  const [{ markCycleReport }, ps] = await Promise.all([
-                    import('../services/packageService'),
-                    import('../services/printService')
-                  ]);
-                  const prefs = ps.getPrintPrefs();
-                  if (prefs.autoFin) {
-                    ps.printDoc({ ...ps.buildCycleReportDoc(updated, payload), printerName: prefs.printerName });
-                  }
-                  await markCycleReport(cleanMac, payload);
-                } catch (_) {}
-              })();
-            }
-
-            const prevActivos = Number(currentDev.meta?.ciclos_activos || 0);
-            if (isFreshStream && ciclosAcum > prevActivos && currentDev.meta?.updated_at) {
-              const historicos = Number(currentDev.meta?.ciclos_historicos || 0) + (ciclosAcum - prevActivos);
-              updated.meta = { ...updated.meta, ciclos_activos: ciclosAcum, ciclos_historicos: historicos };
-              supabase.from('asignaciones_equipos')
-                .update({ ciclos_activos: ciclosAcum, ciclos_historicos: historicos })
-                .eq('mac', cleanMac)
-                .then(() => {}, () => {});
+              pushEffect(() => {
+                (async () => {
+                  try {
+                    const [{ markCycleReport }, ps] = await Promise.all([
+                      import('../services/packageService'),
+                      import('../services/printService')
+                    ]);
+                    const prefs = ps.getPrintPrefs();
+                    if (prefs.autoFin) {
+                      ps.printDoc({ ...ps.buildCycleReportDoc(updatedSnap, payload), printerName: prefs.printerName });
+                    }
+                    await markCycleReport(cleanMac, payload);
+                  } catch (_) {}
+                })();
+              });
             }
           }
 
-          nextFleet = { ...nextFleet, [cleanMac]: updated };
-        });
+          const prevActivos = Number(currentDev.meta?.ciclos_activos || 0);
+          if (isFreshStream && ciclosAcum > prevActivos && currentDev.meta?.updated_at) {
+            const historicos = Number(currentDev.meta?.ciclos_historicos || 0) + (ciclosAcum - prevActivos);
+            updated.meta = { ...updated.meta, ciclos_activos: ciclosAcum, ciclos_historicos: historicos };
+            if (isLeaderNow()) {
+              const write = { ciclos_activos: ciclosAcum, ciclos_historicos: historicos };
+              pushEffect(() => {
+                supabase.from('asignaciones_equipos')
+                  .update(write)
+                  .eq('mac', cleanMac)
+                  .then(() => {}, () => {});
+              });
+            }
+          }
+        }
 
-        Object.values(nextFleet).forEach(publishAndMerge);
+        nextFleet = { ...nextFleet, [cleanMac]: updated };
+      });
+
+      Object.values(nextFleet).forEach(publishAndMerge);
+      return { nextFleet, effects: ownEffects };
+      };
+
+      setFleet((prev) => {
+        const { nextFleet, effects: own } = computeNext(prev);
+        fleetRef.current = nextFleet;
+        effects.push(...own);
         return nextFleet;
       });
+      const seen = new Set();
+      for (const e of effects) {
+        if (seen.has(e.id)) continue;
+        seen.add(e.id);
+        try { e.fn(); } catch (_) {}
+      }
     }, 250);
 
     return () => {
       cancelled = true;
       sendCommandRef.current = null;
+      meshLeaderRef.current = null;
       clearInterval(flushTimer);
       clearInterval(remoteMergeTimer);
       leaveFleetPresence();
@@ -397,8 +482,6 @@ export function useMqttFleet(enabled = true) {
 
   const sendDeviceCommand = useCallback((mac, cmd) => {
     const cleanMac = (mac || '').toUpperCase().replace(/[:-]/g, '');
-    if (!cleanMac) return;
-
     if (!cleanMac) return Promise.resolve({ ok: false, error: 'Equipo no indicado.' });
     if (!sendCommandRef.current) return Promise.resolve({ ok: false, error: 'Sin conexión con el servidor.' });
 

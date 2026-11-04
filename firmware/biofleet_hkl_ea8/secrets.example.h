@@ -28,3 +28,9 @@
  * aceptable en banco de pruebas, NUNCA en producción.
  */
 #define HIVEMQ_ROOT_CA ""
+
+// Credenciales OPCIONALES del broker local del Hub Biofleet (:1883).
+// Solo necesarias si el Hub corre con BIOFLEET_HUB_USER/PASS definidos;
+// deben coincidir con esos valores. Dejar "" mientras el Hub esté abierto.
+#define MQTT_HUB_USER ""
+#define MQTT_HUB_PASS ""

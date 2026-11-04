@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { conversarYCompilarConIA, detectarProveedorApiKey } from '../../services/aiStudioService';
 import { supabase } from '../../services/supabase';
@@ -21,7 +21,6 @@ import {
   GripHorizontal,
   Bot,
   User, 
-  ShieldCheck, 
   Mic, 
   MicOff, 
   AlertTriangle 
@@ -91,7 +90,7 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
   const [tipoEquipo, setTipoEquipo] = useState('AUTOCLAVE');
   const [widgets, setWidgets] = useState([]);
   const [recetaActiva, setRecetaActiva] = useState(null);
-  const [halPayload, setHalPayload] = useState(null);
+  const [, setHalPayload] = useState(null);
   const [jsonRaw, setJsonRaw] = useState('');
 
   // Selección de Placa Física
@@ -105,7 +104,6 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
   const cleanMac = (selectedMac || '').toUpperCase().replace(/[:-]/g, '');
   const activeDevice = fleet[cleanMac] || null;
   const dDev = activeDevice?.datos || {};
-  const relesFisicos = dDev.reles || {};
   const adcFisico = dDev.adc || {};
 
   const [transmitting, setTransmitting] = useState(false);
@@ -113,11 +111,11 @@ export default function AiAutomationStudio({ fleet = {}, sendCommand = null, ini
 
   const [rolesReles, setRolesReles] = useState({});
   const [nombresReles, setNombresReles] = useState({});
-  const [chipsDetectados, setChipsDetectados] = useState([]);
-  const [scanningI2C, setScanningI2C] = useState(false);
+  const [, setChipsDetectados] = useState([]);
+  const [, setScanningI2C] = useState(false);
 
   const [perfilesGuardados, setPerfilesGuardados] = useState([]);
-  const [loadingLib, setLoadingLib] = useState(false);
+  const [, setLoadingLib] = useState(false);
 
   // Pointer Events Suaves
   const canvasRef = useRef(null);

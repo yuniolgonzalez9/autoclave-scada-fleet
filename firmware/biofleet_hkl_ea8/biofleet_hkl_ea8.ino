@@ -82,6 +82,20 @@ const int   mqttPort    = MQTT_PORT;
 const char* mqttUser    = MQTT_USER;
 const char* mqttPass    = MQTT_PASS;
 
+// Credenciales OPCIONALES del broker MQTT local del Hub (:1883).
+// Si el Hub corre sin auth (por defecto), enviarlas no estorba; cuando el
+// Hub la active (BIOFLEET_HUB_USER/PASS), solo entran placas con las
+// mismas credenciales. Definirlas en secrets.h — sin ellas, "" funciona
+// contra hubs abiertos.
+#ifndef MQTT_HUB_USER
+  #define MQTT_HUB_USER ""
+  #define MQTT_HUB_PASS ""
+#endif
+// Si no hay credencial de Hub dedicada, la placa presenta la misma
+// identidad MQTT que usa contra la nube — el Hub la espera igual.
+const char* mqttHubUser = (MQTT_HUB_USER[0] != '\0') ? MQTT_HUB_USER : MQTT_USER;
+const char* mqttHubPass = (MQTT_HUB_PASS[0] != '\0') ? MQTT_HUB_PASS : MQTT_PASS;
+
 const char* ntpServer   = "pool.ntp.org";
 const long  gmtOffset_sec = -14400; // GMT-4 AST
 const int   daylightOffset_sec = 0;
@@ -880,7 +894,7 @@ void reconectarLocal() {
   String cid = "HKL_EA8_L_" + macId;
   bool ok = false;
   if (xSemaphoreTake(xMutexLocal, pdMS_TO_TICKS(500)) == pdTRUE) {
-    ok = mqttLocal.connect(cid.c_str());
+    ok = mqttLocal.connect(cid.c_str(), mqttHubUser, mqttHubPass);
     if (ok) mqttLocal.subscribe(topicComando.c_str(), 1);
     xSemaphoreGive(xMutexLocal);
   }

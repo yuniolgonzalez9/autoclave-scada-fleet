@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNow } from '../../hooks/useNow';
 import { 
   AlertTriangle, 
@@ -7,7 +7,6 @@ import {
   Clock, 
   RefreshCw, 
   Thermometer,
-  Layers,
   Calendar
 } from 'lucide-react';
 import { 

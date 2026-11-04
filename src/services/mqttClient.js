@@ -50,7 +50,10 @@ export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
   let leaderHeartbeatTimer = null;
   let checkLeaderTimer = null;
   let fastCheckTimer = null;
-  let lastLeaderPulse = 0;
+  // Se inicia "al día" para dar gracia: una pestaña nueva espera el
+  // primer pulso (o la respuesta a WHO_LEADER) antes de auto-elegirse.
+  // Con 0, casi todas las pestañas se declaraban líder al abrir.
+  let lastLeaderPulse = Date.now();
   let mqttClient = null;
   let isDestroyed = false;
   let reconnectAttempts = 0;
@@ -104,7 +107,7 @@ export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
       if (isDestroyed || !mqttClient || mqttClient.connected) return;
       try {
         mqttClient.reconnect();
-      } catch (e) {
+      } catch (_e) {
         scheduleReconnect();
       }
     }, delay);
@@ -118,7 +121,7 @@ export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
     let creds;
     try {
       creds = await fetchViewerCredentials();
-    } catch (e) {
+    } catch (_e) {
       connecting = false;
       cloudUp = false;
       reportStatus();
@@ -189,7 +192,7 @@ export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
         const isRetained = Boolean(packet && packet.retain);
 
         dispatchPacket({ mac, channel, payload, topic, isRetained });
-      } catch (e) {}
+      } catch (_) {}
     });
   };
 
@@ -202,7 +205,9 @@ export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
     clearLeaderTimers();
     leaderHeartbeatTimer = setInterval(() => {
       if (broadcast && !isDestroyed) {
-        broadcast.postMessage({ type: 'LEADER_PULSE', leaderId: tabId });
+        // El pulso lleva el estado real del enlace: las seguidoras lo
+        // muestran tal cual, sin asumir "conectado" por latido vivo.
+        broadcast.postMessage({ type: 'LEADER_PULSE', leaderId: tabId, status: cloudUp || localUp });
       }
     }, 1000);
   };
@@ -221,7 +226,15 @@ export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
 
       if (msg.type === 'LEADER_PULSE') {
         lastLeaderPulse = Date.now();
-        if (onStatusChange) onStatusChange(true);
+        if (!isLeader && typeof msg.status === 'boolean' && onStatusChange) {
+          onStatusChange(msg.status);
+        }
+      }
+
+      // Una pestaña nueva pregunta quién lidera: el líder responde al
+      // instante y la nueva no se auto-elige por error.
+      if (msg.type === 'WHO_LEADER' && isLeader) {
+        broadcast.postMessage({ type: 'LEADER_PULSE', leaderId: tabId, status: cloudUp || localUp });
       }
 
       if (msg.type === 'INCOMING_MQTT' && !isLeader) {
@@ -237,11 +250,14 @@ export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
       }
     };
 
+    // Anuncio de llegada: el líder vigente responde con un pulso
+    // inmediato; si nadie responde en ~500ms, esta pestaña lidera.
+    try { broadcast.postMessage({ type: 'WHO_LEADER' }); } catch (_) {}
     fastCheckTimer = setTimeout(() => {
-      if (!isDestroyed && Date.now() - lastLeaderPulse > 400) {
+      if (!isDestroyed && Date.now() - lastLeaderPulse > 500) {
         electAsLeader();
       }
-    }, 90);
+    }, 550);
 
     checkLeaderTimer = setInterval(() => {
       if (!isDestroyed && !isLeader && Date.now() - lastLeaderPulse > 2200) {
@@ -258,7 +274,7 @@ export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
   // local entrega en LAN aunque no haya internet. Basta que una funcione.
   const sendCommand = async (mac, cmdObject, forceRetain = null) => {
     const cleanMac = (mac || '').toUpperCase().replace(/[:-]/g, '');
-    if (!cleanMac) return Promise.resolve();
+    if (!cleanMac) return Promise.reject(new Error('Equipo no indicado.'));
 
     const localPromise = (localLink && localLink.isUp())
       ? localLink.send(cleanMac, cmdObject).catch(() => false)
@@ -300,6 +316,7 @@ export const connectMqttFleet = (onMessageReceived, onStatusChange) => {
   return {
     client: { end: destroy },
     sendCommand,
+    isMeshLeader: () => isLeader,
     // Ack de reportes bufferados del Hub (sync offline→nube confirmada)
     ackReporte: (sessionId) => (localLink && localLink.isUp()) ? localLink.ackReporte(sessionId) : false
   };

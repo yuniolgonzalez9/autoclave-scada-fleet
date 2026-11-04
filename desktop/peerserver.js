@@ -8,6 +8,7 @@ const http = require('http');
 const dgram = require('dgram');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const PEER_PORT = 9782;
 const DISC_PORT = 4211;
@@ -31,6 +32,15 @@ const readMeta = () => {
 };
 
 const peers = new Map(); // "ip:port" -> { ip, port, build, ts }
+
+// Los pares deben firmar su anuncio con la clave compartida de la
+// distribución: un dispositivo cualquiera en la LAN ya no puede
+// presentarse como Hub e inyectar archivos en la caché web (que se
+// sirve como origen confiable). La clave puede rotarse por env.
+const PEER_KEY = process.env.BIOFLEET_PEER_KEY || 'biofleet-peer-mesh-v1';
+const sig = (port, build) =>
+  crypto.createHmac('sha256', PEER_KEY).update(`${port}:${build || ''}`).digest('hex');
+const validPeer = (m) => typeof m.sig === 'string' && m.sig === sig(m.port || PEER_PORT, m.build);
 
 // ── Servidor de archivos de la caché (solo GET, confinado a web-cache) ──
 function startPeerServer() {
@@ -74,7 +84,7 @@ function startPeerDiscovery() {
   sock.on('message', (buf, rinfo) => {
     try {
       const m = JSON.parse(buf.toString());
-      if (m.t !== 'bf-hub') return;
+      if (m.t !== 'bf-hub' || !validPeer(m)) return;
       const key = `${rinfo.address}:${m.port || PEER_PORT}`;
       peers.set(key, { ip: rinfo.address, port: m.port || PEER_PORT, build: m.build || null, ts: Date.now() });
     } catch (_) {}
@@ -83,7 +93,8 @@ function startPeerDiscovery() {
     try { sock.setBroadcast(true); } catch (_) {}
     const announce = () => {
       try {
-        const msg = Buffer.from(JSON.stringify({ t: 'bf-hub', port: PEER_PORT, build: readMeta().build || null }));
+        const build = readMeta().build || null;
+        const msg = Buffer.from(JSON.stringify({ t: 'bf-hub', port: PEER_PORT, build, sig: sig(PEER_PORT, build) }));
         sock.send(msg, 0, msg.length, DISC_PORT, '255.255.255.255', () => {});
       } catch (_) {}
     };
@@ -133,6 +144,9 @@ async function syncFromPeers() {
       const v = JSON.parse(vbuf.toString());
       const meta = readMeta();
       if (!v.build || v.build === meta.build) continue;
+      // El build servido debe coincidir con el anunciado (firmado):
+      // un par verificado no puede servir otra versión de la declarada.
+      if (p.build && v.build !== p.build) continue;
 
       const hbuf = await peerGet(p, '/', 2000);
       if (!hbuf) continue;

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNow } from '../../hooks/useNow';
 import { 
   CalendarClock, 
@@ -12,8 +12,7 @@ import {
   Trash2, 
   Wrench, 
   X,
-  AlertTriangle,
-  Clock
+  AlertTriangle
 } from 'lucide-react';
 import {
   DEFAULT_PLANES, 

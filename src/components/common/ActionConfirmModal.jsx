@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback } from 'react';
+import { useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   ShieldCheck, 
@@ -7,7 +7,6 @@ import {
   RotateCcw, 
   Square, 
   UserCheck,
-  AlertTriangle,
   X
 } from 'lucide-react';
 

@@ -10,6 +10,7 @@ const Database = require('better-sqlite3');
 const os = require('os');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 
 const DISCOVERY_PORT = Number(process.env.BIOFLEET_DISC_PORT) || 4210;
 const WS_PORT = Number(process.env.BIOFLEET_WS_PORT) || 9781;
@@ -23,7 +24,24 @@ const REPORT_REPLAY_MS = 45000;       // reintento de sync de reportes pendiente
 const REPORT_REPLAY_BATCH = 20;
 const TELEMETRY_TTL_MS = 24 * 3600 * 1000; // datalog local: conservar 24h
 
+// Config del Hub: process.env + .env en userData (instalado) o repo (dev),
+// mismo patrón que noderegistry.js — el exe no recibe env del SO.
+function loadHubEnv() {
+  const out = {};
+  for (const p of [path.join(app.getPath('userData'), '.env'), path.join(__dirname, '..', '.env')]) {
+    try {
+      for (const line of fs.readFileSync(p, 'utf8').split(/\r?\n/)) {
+        const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
+        if (m && out[m[1]] === undefined) out[m[1]] = m[2].replace(/^["']|["']$/g, '');
+      }
+    } catch (_) {}
+  }
+  return out;
+}
+
 exports.startHub = (cb) => {
+  const env = loadHubEnv();
+  const envOr = (...keys) => keys.map((k) => process.env[k] || env[k]).find(Boolean) || '';
   // ── SQLite: registro local completo ──
   const dbDir = path.join(app.getPath('userData'), 'data');
   fs.mkdirSync(dbDir, { recursive: true });
@@ -44,6 +62,19 @@ exports.startHub = (cb) => {
   const markRep = db.prepare('UPDATE reportes SET synced=1 WHERE session_id=?');
   const qPending = db.prepare('SELECT session_id,mac,payload FROM reportes WHERE synced=0 ORDER BY ts LIMIT ?');
   const qPendingN = db.prepare('SELECT COUNT(*) n FROM reportes WHERE synced=0');
+
+  // Token compartido Hub↔web: los comandos que llegan por WS solo se
+  // ejecutan si el socket se autenticó. El token se genera una vez y se
+  // persiste en userData (la web lo obtiene por IPC, que solo el origen
+  // confiable ve). Sockets sin auth siguen recibiendo telemetría
+  // (read-only) pero no pueden actuar sobre los equipos.
+  const tokenFile = path.join(dbDir, 'hub.token');
+  let hubToken = '';
+  try { hubToken = fs.readFileSync(tokenFile, 'utf8').trim(); } catch (_) {}
+  if (!/^[0-9a-f]{48,}$/.test(hubToken)) {
+    hubToken = crypto.randomBytes(24).toString('hex');
+    try { fs.writeFileSync(tokenFile, hubToken, { mode: 0o600 }); } catch (_) {}
+  }
 
   // ── Registro permanente del enlace (data/link.log) ──
   // Diagnóstico offline: quien se cae, cuándo, cuánto dura el gap.
@@ -77,6 +108,27 @@ exports.startHub = (cb) => {
 
   // ── Broker MQTT local (puerto LAN) ──
   const aedes = Aedes();
+  // Auth del broker: se activa con BIOFLEET_HUB_AUTH=1 en el .env del Hub
+  // (o definiendo BIOFLEET_HUB_USER). Las credenciales esperadas son, en
+  // orden, BIOFLEET_HUB_USER/PASS o las de la flota (VITE_MQTT_USER/PASS)
+  // que ya viven en el .env — las placas las presentan igual que a la
+  // nube, sin provisionar nada nuevo. Sin auth explícita, broker abierto.
+  const authExplicit = Boolean(envOr('BIOFLEET_HUB_USER'));
+  const authOn = authExplicit || /^1|true|yes$/i.test(envOr('BIOFLEET_HUB_AUTH'));
+  const brokerUser = envOr('BIOFLEET_HUB_USER', 'VITE_MQTT_USER', 'MQTT_SERVER_USER');
+  const brokerPass = envOr('BIOFLEET_HUB_PASS', 'VITE_MQTT_PASS', 'MQTT_SERVER_PASS');
+  if (authOn && brokerUser) {
+    aedes.authenticate = (client, username, password, done) => {
+      const ok = username === brokerUser && password && password.toString() === brokerPass;
+      done(null, Boolean(ok));
+      if (!ok) linkLog('MQTT_AUTH_FAIL', `client=${client?.id || '?'} user=${username || '?'}`);
+    };
+    aedes.authorizePublish = (client, packet, done) => done(client?.authenticated ? null : new Error('unauthorized'));
+    aedes.authorizeSubscribe = (client, sub, done) => done(client?.authenticated ? null : new Error('unauthorized'), client?.authenticated ? sub : null);
+    console.log('[HUB] Broker MQTT con autenticación');
+  } else {
+    console.log('[HUB] Broker MQTT SIN autenticación — BIOFLEET_HUB_AUTH=1 en .env la activa');
+  }
   const mqttServer = net.createServer(aedes.handle);
   mqttServer.on('error', (e) => console.log(`[HUB] MQTT :${MQTT_PORT} no disponible (${e.code || e.message}) — ruta local MQTT deshabilitada`));
   mqttServer.listen(MQTT_PORT, () => console.log(`[HUB] MQTT local :${MQTT_PORT}`));
@@ -163,14 +215,30 @@ exports.startHub = (cb) => {
 
   wss.on('connection', (ws) => {
     wsClients.add(ws);
+    ws.authed = false;
     let pendientes = 0;
     try { pendientes = qPendingN.get().n; } catch (_) {}
-    ws.send(JSON.stringify({ tipo: 'hub_ok', devices: [...devices.values()], reportes_pendientes: pendientes }));
+    ws.send(JSON.stringify({ tipo: 'hub_ok', devices: [...devices.values()], reportes_pendientes: pendientes, auth_required: true }));
     ws.on('close', () => wsClients.delete(ws));
     ws.on('message', (raw) => {
       try {
         const m = JSON.parse(raw);
+        if (m.tipo === 'auth') {
+          // Comparación en tiempo constante: no filtrar el token por timing.
+          const ok = typeof m.token === 'string' && m.token.length === hubToken.length &&
+            crypto.timingSafeEqual(Buffer.from(m.token), Buffer.from(hubToken));
+          ws.authed = ok;
+          try { ws.send(JSON.stringify({ tipo: ok ? 'auth_ok' : 'auth_fail' })); } catch (_) {}
+          if (!ok) linkLog('WS_AUTH_FAIL', 'token incorrecto');
+          return;
+        }
         if (m.tipo === 'comando' && m.mac && m.comando) {
+          // Solo sockets autenticados pueden actuar sobre los equipos.
+          if (!ws.authed) {
+            linkLog('CMD_REJECTED', `mac=${m.mac} socket sin auth`);
+            try { ws.send(JSON.stringify({ tipo: 'comando_ack', mac: m.mac, ok: false, err: 'no autenticado' })); } catch (_) {}
+            return;
+          }
           const ok = sendCommand(m.mac, m.comando);
           try { ws.send(JSON.stringify({ tipo: 'comando_ack', mac: m.mac, ok })); } catch (_) {}
         } else if (m.tipo === 'reporte_synced' && m.session_id) {
@@ -251,6 +319,7 @@ exports.startHub = (cb) => {
   cb({
     scanLan,
     sendCommand,
+    token: () => hubToken,
     status: () => ({ online: true, devices: devices.size, mqtt: MQTT_PORT, ws: WS_PORT, udp: DISCOVERY_PORT }),
     db
   });

@@ -14,8 +14,8 @@ export async function conversarYCompilarConIA({
   mensajeUsuario,
   apiKey,
   proveedor,
-  historial = [],
-  contextoEquipo = {}
+  historial: _historial = [],
+  contextoEquipo: _contextoEquipo = {}
 }) {
   const prompt = (mensajeUsuario || '').trim();
   const prov = proveedor || detectarProveedorApiKey(apiKey);

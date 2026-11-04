@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from '../../services/supabase';
 import { useAuth } from '../../context/AuthContext';
@@ -8,7 +8,6 @@ import SwipeDots from '../common/SwipeDots';
 import { 
   Users, 
   UserPlus, 
-  Shield, 
   Key, 
   Check, 
   X, 
