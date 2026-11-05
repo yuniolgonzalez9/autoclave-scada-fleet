@@ -33,9 +33,14 @@ const lazyRetry = (factory) => lazy(async () => {
     return await factory();
   } catch (e) {
     const KEY = 'scada_lazy_reload';
+    const now = Date.now();
     const last = Number(sessionStorage.getItem(KEY) || 0);
-    if (Date.now() - last > 30000) {
-      sessionStorage.setItem(KEY, String(Date.now()));
+    let tries = Number(sessionStorage.getItem(KEY + ':n') || 0);
+    if (now - last > 60000) tries = 0; // ventana nueva: reinicia contador
+    if (tries < 3) {
+      // hasta 3 recargas por ventana: cubre dos deploys seguidos
+      sessionStorage.setItem(KEY, String(now));
+      sessionStorage.setItem(KEY + ':n', String(tries + 1));
       window.location.reload();
       return new Promise(() => {}); // nunca resuelve: la página se recarga
     }
