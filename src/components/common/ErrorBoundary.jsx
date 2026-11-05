@@ -24,6 +24,13 @@ export default class ErrorBoundary extends Component {
   }
 
   handleReset() {
+    // Chunk de deploy viejo: el remount reutiliza el mismo index con
+    // hashes muertos y vuelve a fallar — recarga dura del documento.
+    const msg = String(this.state.error?.message || this.state.error || '');
+    if (/dynamically imported|Loading chunk|ChunkLoadError/i.test(msg)) {
+      window.location.reload();
+      return;
+    }
     this.setState({ error: null });
     this.props.onReset?.();
   }
