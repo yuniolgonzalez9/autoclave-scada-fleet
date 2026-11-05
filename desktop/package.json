@@ -1,6 +1,6 @@
 {
   "name": "biofleet-hub",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Biofleet Hub — app de escritorio: web empaquetada + hub local de dispositivos + puente de periféricos",
   "main": "main.js",
   "author": "Biofleet",
